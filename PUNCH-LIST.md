@@ -23,22 +23,26 @@ re-derive context from scratch.
     (8080), so the public domain's **target port must be 8080**, not 4000. A
     4000 target gives a 502 "Application failed to respond". If you ever
     regenerate the domain and get a 502, this is why.
-- **Frontend: ⬜ NOT deployed yet** — the last remaining step. `unplug-shared.js`
-  already defaults its API base to the live Railway URL (committed), so the
-  moment it's on Netlify it'll talk to the live backend. Steps below.
+- **Frontend: ✅ LIVE on Netlify** at `https://relaxed-cupcake-2e5b2e.netlify.app`
+  (Netlify project name `relaxed-cupcake-2e5b2e` — can be renamed in Netlify →
+  Project configuration). Settings used: import from GitHub repo, branch `main`,
+  no build command, publish directory `.`. Auto-deploys on every push to `main`.
+  Verified end-to-end: root URL redirects into the magazine, and a
+  cross-origin API call from the Netlify origin to Railway returns 200 with the
+  right `Access-Control-Allow-Origin` header (CORS passes).
+- **`index.html`** at repo root is a tiny redirect to `unplug-magazine.html`
+  (the real homepage), so the bare Netlify URL opens the site cleanly instead
+  of 404ing (Netlify serves `index.html` at `/` by default).
 
-### ⬜ Remaining deploy step — Netlify (frontend), ~5 min, needs Pierre's Netlify account
-1. Netlify → **Add new site → Import from Git** → the `Unplug-ecosystem` repo
-2. **Build command:** leave EMPTY (plain static HTML, no build step)
-3. **Publish directory:** `.` (repo root — the HTML/CSS/JS sit at the top level)
-4. Deploy → Netlify gives a URL like `something.netlify.app`
-5. **Then tighten CORS (optional but recommended):** on Railway → Variables, add
-   `CORS_ORIGINS` = the Netlify URL (e.g. `https://something.netlify.app`) so the
-   API only accepts calls from the real site instead of everywhere. Redeploys
-   automatically.
-6. Visit the Netlify URL, open the site, click into Directory/Top 10/etc — they'll
-   show empty states (DB is empty by design) but should load with no console
-   errors, proving frontend→Railway→Supabase works end to end.
+### ⬜ Optional deploy polish (not blocking — site works now)
+- **Tighten CORS:** currently `CORS_ORIGINS` is unset on Railway = accepts ALL
+  origins. Fine and working, but to lock it down, add `CORS_ORIGINS` on Railway =
+  the live site origin(s), comma-separated, e.g.
+  `https://relaxed-cupcake-2e5b2e.netlify.app` (and later the real
+  `https://www.unplugnews.com` once a custom domain is attached). Redeploys auto.
+- **Custom domain / rename:** the `relaxed-cupcake-2e5b2e` name is a random
+  Netlify default — rename the Netlify project, and/or attach a real domain
+  (unplugnews.com) when ready to actually replace the WordPress site.
 
 ### 🔴 SECURITY — do this ASAP
 - The **GitHub Personal Access Token** (`ghp_...`) used to push was pasted in
