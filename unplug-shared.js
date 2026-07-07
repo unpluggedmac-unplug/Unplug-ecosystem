@@ -4,7 +4,10 @@
 // independently.
 
 const UnplugAPI = (function () {
-  let apiBase = localStorage.getItem('unplug_api_base') || 'http://localhost:4000';
+  // Defaults to the live Railway backend. For local development, either set
+  // localStorage.unplug_api_base to 'http://localhost:4000', or use the API
+  // base input on the admin/checkout/member dashboards.
+  let apiBase = localStorage.getItem('unplug_api_base') || 'https://unplug-ecosystem-production.up.railway.app';
   let token = null;
 
   function setApiBase(value) {
