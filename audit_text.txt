@@ -1,0 +1,34 @@
+
+UNPLUG
+Full Build Audit — Efficiency &amp; User-Friendliness
+7 July 2026
+
+A genuine pass through everything built this session — backend, all four frontends, and the documentation — looking for real issues, not just polish. Two of the most impactful findings were small enough to fix immediately rather than just flag; those are marked below. Everything else is prioritized High / Medium / Low by how much it actually affects real usage.
+1. The Single Biggest Finding
+The public website (unplug-magazine.html) is NOT connected to the backend at all. The Admin Dashboard, Checkout, and Member Dashboard genuinely call the real API — but the public site&apos;s Top 10 voting, Directory cards, Gallery, and Articles are all static demo content living in that file&apos;s own JavaScript, not real data from the database.
+This isn&apos;t a bug — it was never supposed to be the final production frontend. Per the Master Blueprint&apos;s own roadmap (Phase 4: &quot;Rebuild the existing website while preserving the established Unplug branding&quot;), this file was always meant as the design reference for VNK to build the real, connected version from — not something that gets deployed as-is. But it&apos;s worth being explicit about this, since it&apos;s the one thing in the whole build that could be misunderstood as &quot;done&quot; when it&apos;s actually the one piece still needing real construction.
+2. Fixed Immediately (small, high-impact)
+✓ FIXED NOW — Session lost on every page refresh. The Admin Dashboard, Checkout, and Member Dashboard all stored the login token only in a JavaScript variable — refreshing the page logged you straight back out, which is a genuinely annoying everyday papercut. Now the token persists (saved on login, restored automatically on page load, cleared on logout) across all three.
+✓ FIXED NOW — Unmatched API routes returned Express&apos;s default HTML error page instead of a clean JSON error. Any typo&apos;d URL or future frontend bug calling a route that doesn&apos;t exist would return confusing HTML instead of a consistent error a frontend could actually handle. Added a proper JSON 404 handler.
+3. High Priority — Worth Doing Before Real Launch
+● HIGH — No pagination anywhere. GET /directory, GET /articles, GET /gallery, and similar endpoints return every single row, every time. Fine at today&apos;s scale (a handful of entries); once there are hundreds of Directory profiles this becomes a slow, oversized response on every page load. Needs a `?page=` / `?limit=` pattern before real growth.
+● HIGH — Bulk email sends synchronously, one at a time, inside the API request itself. Fine for a few dozen recipients; a genuinely large campaign (hundreds+) risks the request timing out before it finishes. Already flagged in the code with a comment — worth prioritizing before Sales Consultants or the owner start sending real campaigns to a big list.
+● HIGH — No environment-variable validation on startup. If JWT_SECRET is missing, the app boots fine and only fails with a cryptic error the first time someone tries to log in — instead of refusing to start with a clear &quot;JWT_SECRET is not set&quot; message. This is the kind of thing that wastes an afternoon of a new developer&apos;s time for no good reason.
+4. Medium Priority — Worth Doing Soon
+● MEDIUM — Heavy duplication across the four frontend files. The API-calling helper, the toast notification function, the social-share icons, the color/font variables, and the fingerprint mark SVG are all copy-pasted into all four HTML files independently. Any future brand tweak (a color, a font size) has to be repeated in four places by hand, and it&apos;s easy to update three and forget the fourth.
+● MEDIUM — Admin Dashboard re-fetches an entire queue tab after every single Approve/Reject, rather than just removing that one row from the list already on screen. Works fine, but feels slower than it needs to and adds an unnecessary network round-trip for every action.
+● MEDIUM — Gallery bundle creation inserts each image with its own separate database call inside a loop, rather than one combined insert. Only matters once bundles are being created at real volume, but it&apos;s an easy fix while the code is still fresh.
+● MEDIUM — No request logging in the backend (e.g. a simple access log of method/path/status/response time). Without this, diagnosing &quot;why did that request fail&quot; after the fact means guessing, rather than checking a log.
+5. Low Priority — Nice-to-Have Polish
+● LOW — No loading skeletons — sections just show a plain &quot;Loading…&quot; line while waiting on data. Functional, not polished.
+● LOW — No optimistic UI updates anywhere (e.g. a Vote button that visually responds instantly, before the server confirms) — every action waits for a full round-trip before showing any change.
+● LOW — No offline/network-failure handling beyond a generic error message — if someone&apos;s internet drops mid-action, they get a plain error banner rather than a &quot;check your connection and try again&quot; style message.
+● LOW — Manual, repeated form-validation code in each frontend (checking required fields by hand) rather than a shared validation approach — works fine, just more code than it needs to be.
+6. What&apos;s Genuinely Solid (worth saying so, not just flagging problems)
+Every price is resolved server-side, never trusted from the client — this is the single most important security property for a system that handles real money, and it&apos;s consistent everywhere.
+The awaiting_payment → pending → approved pattern is applied identically across all nine paid content types — a developer who understands one understands all of them.
+Every route was checked against real backend source and live-tested for auth/routing correctness — the three wired frontends (Admin, Checkout, Member) are not just visually similar to the backend, they&apos;re verified to actually call it correctly.
+The payment signature verification (PayFast/Ozow) is real, documented-algorithm code with actual passing/failing unit tests — not just a stub that assumes success.
+Suggested Order If Tackling This List
+Pagination and the env-variable validation are both small, contained changes with outsized real-world impact — worth doing next, before anything else on this list. The frontend duplication is worth fixing once (extract shared CSS/JS into common files) rather than repeatedly patching four separate copies going forward.
+Prepared for the Unplug Magazine team.

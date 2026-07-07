@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unplug — Checkout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="unplug-shared.css">
+<style>
+body{ min-height:100vh; }
+
+.topbar{ background:var(--black); color:#fff; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.topbar .word{ font-family:'Playfair Display',serif; font-weight:700; color:var(--red); font-size:17px; }
+.topbar .status{ font-size:11.5px; color:#cfcac0; }
+
+.wrap{ max-width:640px; margin:0 auto; padding:40px 24px; }
+.card{ background:var(--cream); border:1px solid var(--paper-line); padding:32px; margin-bottom:24px; }
+.card h2{ font-size:20px; font-weight:700; margin-bottom:6px; }
+.card p.sub{ font-size:13px; color:var(--slate); margin-bottom:20px; }
+
+.card .btn{ width:100%; padding:12px 22px; font-size:12.5px; }
+
+.tier-options{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:4px; }
+@media(max-width:560px){ .tier-options{ grid-template-columns:1fr; } }
+.tier-option{ border:1px solid var(--paper-line); padding:14px; text-align:center; cursor:pointer; }
+.tier-option.selected{ border-color:var(--red); background:rgba(210,7,9,0.05); }
+.tier-option .name{ font-weight:700; font-size:14px; }
+.tier-option .price{ font-family:'Playfair Display',serif; color:var(--red); font-size:20px; font-weight:700; margin-top:4px; }
+
+.step-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--red); font-weight:700; margin-bottom:8px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="word">Unplug — Checkout</div>
+  <div class="status" id="statusLine">Not signed in</div>
+</div>
+
+<div class="wrap">
+
+  <!-- STEP 0: connect + sign in -->
+  <div class="card" id="loginCard">
+    <div class="step-label">Step 1</div>
+    <h2>Sign In</h2>
+    <p class="sub">Sign in with your Unplug account to continue to checkout.</p>
+    <div class="error-banner" id="loginError"></div>
+    <div class="field"><label>API Base URL</label><input id="apiBaseInput" value="http://localhost:4000"></div>
+    <div class="field-row">
+      <div class="field"><label>Email</label><input id="loginEmail" type="email"></div>
+      <div class="field"><label>Password</label><input id="loginPassword" type="password"></div>
+    </div>
+    <button class="btn btn-solid" id="loginBtn">Sign In</button>
+  </div>
+
+  <!-- STEP 1: choose a Directory package -->
+  <div class="card section-hidden" id="packageCard">
+    <div class="step-label">Step 2</div>
+    <h2>Choose Your Directory Package</h2>
+    <p class="sub">Once-off payment. You can upgrade later for a flat R250 admin fee.</p>
+    <div class="error-banner" id="packageError"></div>
+    <div class="field"><label>Display Name</label><input id="displayName" placeholder="e.g. Naledi Mokoena"></div>
+    <div class="tier-options" id="tierOptions">
+      <div class="tier-option" data-tier="basic"><div class="name">Basic</div><div class="price">R150</div></div>
+      <div class="tier-option" data-tier="pro"><div class="name">Pro</div><div class="price">R280</div></div>
+      <div class="tier-option" data-tier="premium"><div class="name">Premium</div><div class="price">R400</div></div>
+    </div>
+    <br>
+    <button class="btn btn-solid" id="createProfileBtn">Continue to Payment</button>
+  </div>
+
+  <!-- STEP 2: payment window with referral source -->
+  <div class="card section-hidden" id="paymentCard">
+    <div class="step-label">Step 3</div>
+    <h2>Payment</h2>
+    <p class="sub" id="paymentSummary"></p>
+    <div class="error-banner" id="paymentError"></div>
+
+    <div class="field">
+      <label>How did you hear about us?</label>
+      <select id="referralSource">
+        <option value="">Select one…</option>
+        <option value="google">Google</option>
+        <option value="facebook">Facebook</option>
+        <option value="instagram">Instagram</option>
+        <option value="linkedin">LinkedIn</option>
+        <option value="tiktok">TikTok</option>
+        <option value="sales_consultant">Sales Consultant</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+
+    <div class="field section-hidden" id="consultantField">
+      <label>Which Sales Consultant?</label>
+      <select id="consultantSelect"><option value="">Loading…</option></select>
+    </div>
+
+    <div class="field">
+      <label>Payment Method</label>
+      <select id="paymentMethod">
+        <option value="eft" selected>Manual EFT</option>
+        <option value="payfast" disabled>PayFast — coming soon</option>
+        <option value="ozow" disabled>Ozow — coming soon</option>
+      </select>
+      <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT — you'll get bank details and a reference to pay against.</p>
+    </div>
+
+    <button class="btn btn-solid" id="payBtn">Pay Now</button>
+  </div>
+
+  <!-- STEP 3: result -->
+  <div class="card section-hidden" id="resultCard">
+    <div class="step-label">Step 4</div>
+    <h2 id="resultTitle">Payment Initiated</h2>
+    <div class="success-banner" id="resultSuccess"></div>
+    <div class="instructions-box" id="resultInstructions"></div>
+  </div>
+
+</div>
+
+<script src="unplug-shared.js"></script>
+<script>
+let SELECTED_TIER = null;
+let CURRENT_PROFILE_ID = null;
+let CURRENT_PAYMENT_LINKED_TYPE = 'profile_package';
+
+const TIER_PRICES = { basic: 150, pro: 280, premium: 400 };
+const api = UnplugAPI.api;
+
+function showError(id, message) {
+  const el = document.getElementById(id);
+  el.textContent = message;
+  el.classList.add('show');
+}
+function hideError(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: Sign in
+// ---------------------------------------------------------------------------
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  hideError('loginError');
+  UnplugAPI.setApiBase(document.getElementById('apiBaseInput').value);
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+
+  if (!email || !password) {
+    showError('loginError', 'Email and password are required.');
+    return;
+  }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Signing in...';
+
+  try {
+    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+    UnplugAPI.setToken(data.token);
+    enterCheckout(data.user);
+  } catch (err) {
+    showError('loginError', err.message + ' (Is the API running at that URL?)');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+});
+
+function enterCheckout(user){
+  document.getElementById('statusLine').textContent = `Signed in as ${user.email}`;
+  document.getElementById('loginCard').classList.add('section-hidden');
+  document.getElementById('packageCard').classList.remove('section-hidden');
+}
+
+// On page load, restore a saved session rather than forcing a fresh
+// login after every refresh.
+UnplugAPI.restoreSession((user) => enterCheckout(user));
+
+// ---------------------------------------------------------------------------
+// Step 2: Choose package, create the profile
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.tier-option').forEach((el) => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.tier-option').forEach((o) => o.classList.remove('selected'));
+    el.classList.add('selected');
+    SELECTED_TIER = el.dataset.tier;
+  });
+});
+
+document.getElementById('createProfileBtn').addEventListener('click', async () => {
+  hideError('packageError');
+  const displayName = document.getElementById('displayName').value.trim();
+
+  if (!displayName) {
+    showError('packageError', 'Display name is required.');
+    return;
+  }
+  if (!SELECTED_TIER) {
+    showError('packageError', 'Choose a package.');
+    return;
+  }
+
+  const btn = document.getElementById('createProfileBtn');
+  btn.disabled = true; btn.textContent = 'Creating...';
+
+  try {
+    const data = await api('/profiles', {
+      method: 'POST',
+      body: JSON.stringify({ displayName, packageTier: SELECTED_TIER }),
+    });
+    CURRENT_PROFILE_ID = data.profile.id;
+    document.getElementById('paymentSummary').textContent =
+      `${displayName} — ${SELECTED_TIER.charAt(0).toUpperCase() + SELECTED_TIER.slice(1)} package, R${TIER_PRICES[SELECTED_TIER]}`;
+    document.getElementById('packageCard').classList.add('section-hidden');
+    document.getElementById('paymentCard').classList.remove('section-hidden');
+    loadConsultants();
+  } catch (err) {
+    showError('packageError', err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Continue to Payment';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Step 3: Payment window — referral source + consultant + method
+// ---------------------------------------------------------------------------
+document.getElementById('referralSource').addEventListener('change', (e) => {
+  const field = document.getElementById('consultantField');
+  if (e.target.value === 'sales_consultant') {
+    field.classList.remove('section-hidden');
+  } else {
+    field.classList.add('section-hidden');
+  }
+});
+
+async function loadConsultants() {
+  const select = document.getElementById('consultantSelect');
+  try {
+    const data = await api('/sales-consultants');
+    select.innerHTML = '<option value="">Select a consultant…</option>' +
+      data.consultants.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+  } catch (err) {
+    select.innerHTML = '<option value="">Could not load consultants</option>';
+  }
+}
+
+document.getElementById('payBtn').addEventListener('click', async () => {
+  hideError('paymentError');
+  const referralSource = document.getElementById('referralSource').value;
+  const consultantId = document.getElementById('consultantSelect').value;
+  const method = document.getElementById('paymentMethod').value;
+
+  if (!referralSource) {
+    showError('paymentError', 'Please let us know how you heard about us.');
+    return;
+  }
+  if (referralSource === 'sales_consultant' && !consultantId) {
+    showError('paymentError', 'Please select which sales consultant.');
+    return;
+  }
+
+  const btn = document.getElementById('payBtn');
+  btn.disabled = true; btn.textContent = 'Processing...';
+
+  try {
+    const payload = {
+      linkedType: CURRENT_PAYMENT_LINKED_TYPE,
+      linkedId: CURRENT_PROFILE_ID,
+      method,
+      referralSource,
+    };
+    if (referralSource === 'sales_consultant') payload.salesConsultantId = parseInt(consultantId, 10);
+
+    const data = await api('/payments/initiate', { method: 'POST', body: JSON.stringify(payload) });
+
+    document.getElementById('paymentCard').classList.add('section-hidden');
+    document.getElementById('resultCard').classList.remove('section-hidden');
+
+    if (method === 'eft') {
+      document.getElementById('resultSuccess').classList.add('show');
+      document.getElementById('resultSuccess').textContent = 'Payment request created — pay via EFT using the details below.';
+      const i = data.instructions;
+      document.getElementById('resultInstructions').innerHTML = `
+        <b>Bank:</b> ${i.bank}<br>
+        <b>Account Name:</b> ${i.accountName}<br>
+        <b>Account Number:</b> ${i.accountNumber}<br>
+        <b>Branch Code:</b> ${i.branchCode}<br>
+        <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>
+        ${i.note}`;
+    } else {
+      document.getElementById('resultSuccess').classList.add('show');
+      document.getElementById('resultSuccess').textContent = `Redirecting you to ${method === 'payfast' ? 'PayFast' : 'Ozow'}...`;
+      document.getElementById('resultInstructions').innerHTML = `
+        ${data.note}<br><br>
+        <a href="${data.redirectUrl}" target="_blank">${data.redirectUrl}</a>`;
+    }
+  } catch (err) {
+    showError('paymentError', err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Pay Now';
+  }
+});
+</script>
+</body>
+</html>

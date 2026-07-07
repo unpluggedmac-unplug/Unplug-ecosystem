@@ -1,0 +1,10 @@
+unplug-backend/node_modules/
+unplug-backend/.env
+unplug-backend/uploads/*
+!unplug-backend/uploads/.gitkeep
+*.log
+
+# Local artifacts, not needed in the repo
+.claude/
+audit_unpacked/
+unplug-backend.zip

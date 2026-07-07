@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unplug — My Account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="unplug-shared.css">
+<style>
+.topbar{ background:var(--black); color:#fff; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.topbar .word{ font-family:'Playfair Display',serif; font-weight:700; color:var(--red); font-size:17px; }
+.topbar .right{ display:flex; align-items:center; gap:14px; font-size:12px; color:#cfcac0; }
+.topbar button{ background:none; border:none; color:#cfcac0; text-decoration:underline; cursor:pointer; font-size:12px; }
+
+.wrap{ max-width:900px; margin:0 auto; padding:32px 24px; }
+.card{ background:var(--cream); border:1px solid var(--paper-line); padding:28px; margin-bottom:22px; }
+.card h2{ font-size:19px; font-weight:700; margin-bottom:4px; }
+.card p.sub{ font-size:13px; color:var(--slate); margin-bottom:18px; }
+
+.tier-badge{ display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; background:var(--maroon); color:#fff; padding:5px 12px; }
+
+.profile-head{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.profile-head .name{ font-family:'Playfair Display',serif; font-size:24px; font-weight:700; }
+
+.tier-upgrade-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="word">Unplug — My Account</div>
+  <div class="right" id="topRight">Not signed in</div>
+</div>
+
+<div class="wrap">
+
+  <!-- LOGIN -->
+  <div class="card" id="loginCard">
+    <h2>Sign In</h2>
+    <p class="sub">Sign in to manage your Directory profile, submissions, and entries.</p>
+    <div class="error-banner" id="loginError"></div>
+    <div class="field"><label>API Base URL</label><input id="apiBaseInput" value="http://localhost:4000"></div>
+    <div class="field-row">
+      <div class="field"><label>Email</label><input id="loginEmail" type="email"></div>
+      <div class="field"><label>Password</label><input id="loginPassword" type="password"></div>
+    </div>
+    <button class="btn btn-solid" id="loginBtn">Sign In</button>
+  </div>
+
+  <!-- MAIN DASHBOARD (hidden until logged in) -->
+  <div id="dashboard" class="section-hidden">
+
+    <!-- MY PROFILE -->
+    <div class="card">
+      <div class="error-banner" id="profileError"></div>
+      <div id="profileContent"><div class="loading-state">Loading your profile…</div></div>
+    </div>
+
+    <!-- SUBMIT & PAY -->
+    <div class="card">
+      <h2>Submit &amp; Pay</h2>
+      <p class="sub">Create a new submission, then pay to send it for approval.</p>
+      <div class="error-banner" id="submitError"></div>
+
+      <div class="field">
+        <label>What are you submitting?</label>
+        <select id="submitType">
+          <option value="article">Article — R95 once-off</option>
+          <option value="event">Event Listing — R300 once-off</option>
+          <option value="gallery">Gallery Bundle — R100 for up to 3 photos</option>
+          <option value="top10">Top 10 Entry — R100</option>
+          <option value="marketplace">Marketplace Poster — R500 for 30 days</option>
+        </select>
+      </div>
+
+      <!-- Article fields -->
+      <div id="fields-article">
+        <div class="field"><label>Title</label><input id="art-title"></div>
+        <div class="field"><label>Story</label><textarea id="art-body" rows="4"></textarea></div>
+        <div class="field"><label>Supplied By (kicker byline)</label><input id="art-kicker"></div>
+      </div>
+
+      <!-- Event fields -->
+      <div id="fields-event" class="section-hidden">
+        <div class="field-row">
+          <div class="field"><label>Event Name</label><input id="evt-name"></div>
+          <div class="field"><label>Event Date</label><input id="evt-date" type="date"></div>
+        </div>
+        <div class="field"><label>Venue</label><input id="evt-venue"></div>
+        <div class="field"><label>Description</label><textarea id="evt-desc" rows="3"></textarea></div>
+        <div class="field"><label>Calendar Promotion Start Date (optional)</label><input id="evt-display-start" type="date"></div>
+      </div>
+
+      <!-- Gallery fields -->
+      <div id="fields-gallery" class="section-hidden">
+        <p class="sub" style="margin-top:0;">Provide up to 3 image URLs (upload elsewhere and paste the links here).</p>
+        <div class="field"><label>Image 1 URL</label><input id="gal-url-1"></div>
+        <div class="field"><label>Caption 1 (optional)</label><input id="gal-cap-1"></div>
+        <div class="field"><label>Image 2 URL (optional)</label><input id="gal-url-2"></div>
+        <div class="field"><label>Caption 2 (optional)</label><input id="gal-cap-2"></div>
+        <div class="field"><label>Image 3 URL (optional)</label><input id="gal-url-3"></div>
+        <div class="field"><label>Caption 3 (optional)</label><input id="gal-cap-3"></div>
+      </div>
+
+      <!-- Top 10 fields -->
+      <div id="fields-top10" class="section-hidden">
+        <p class="sub" style="margin-top:0;">Submits your existing Directory profile for Top 10 consideration. No extra details needed.</p>
+      </div>
+
+      <!-- Marketplace fields -->
+      <div id="fields-marketplace" class="section-hidden">
+        <div class="field"><label>Business Name (first-time advertisers only)</label><input id="mkt-business"></div>
+        <div class="field"><label>Poster Image URL</label><input id="mkt-poster"></div>
+        <div class="field"><label>Headline</label><input id="mkt-headline"></div>
+        <div class="field"><label>Requested Start Date (optional — defaults to today)</label><input id="mkt-start" type="date"></div>
+      </div>
+
+      <div class="field">
+        <label>Payment Method</label>
+        <select id="submitPaymentMethod">
+          <option value="eft" selected>Manual EFT</option>
+          <option value="payfast" disabled>PayFast — coming soon</option>
+          <option value="ozow" disabled>Ozow — coming soon</option>
+        </select>
+        <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT.</p>
+      </div>
+
+      <button class="btn btn-solid" id="submitAndPayBtn">Create &amp; Pay</button>
+
+      <div class="instructions-box section-hidden" id="submitResultBox" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- MY ARTICLES -->
+    <div class="card">
+      <h2>My Articles</h2>
+      <p class="sub">Every story you've submitted, at any stage.</p>
+      <div id="articlesContent"><div class="loading-state">Loading…</div></div>
+    </div>
+
+    <!-- MY GALLERY -->
+    <div class="card">
+      <h2>My Gallery Submissions</h2>
+      <p class="sub">Photos you've submitted to the community gallery.</p>
+      <div id="galleryContent"><div class="loading-state">Loading…</div></div>
+    </div>
+
+    <!-- MY COMPETITION ENTRIES -->
+    <div class="card">
+      <h2>My Competition Entries</h2>
+      <p class="sub">Live vote counts update as people vote.</p>
+      <div id="entriesContent"><div class="loading-state">Loading…</div></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="unplug-shared.js"></script>
+<script>
+const api = UnplugAPI.api;
+
+// ---------------------------------------------------------------------------
+// Login
+// ---------------------------------------------------------------------------
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('loginError');
+  errorBanner.classList.remove('show');
+  UnplugAPI.setApiBase(document.getElementById('apiBaseInput').value);
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+
+  if (!email || !password) {
+    errorBanner.textContent = 'Email and password are required.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Signing in...';
+
+  try {
+    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+    UnplugAPI.setToken(data.token);
+    enterMemberDashboard(data.user);
+  } catch (err) {
+    errorBanner.textContent = err.message + ' (Is the API running at that URL?)';
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+});
+
+function enterMemberDashboard(user){
+  document.getElementById('topRight').innerHTML = `Signed in as ${user.email} &nbsp;·&nbsp; <button id="logoutBtn">Log out</button>`;
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    UnplugAPI.setToken(null);
+    location.reload();
+  });
+  document.getElementById('loginCard').classList.add('section-hidden');
+  document.getElementById('dashboard').classList.remove('section-hidden');
+  loadProfile();
+  loadArticles();
+  loadGallery();
+  loadEntries();
+}
+
+// On page load, restore a saved session rather than forcing a fresh
+// login after every refresh.
+UnplugAPI.restoreSession((user) => enterMemberDashboard(user));
+
+// ---------------------------------------------------------------------------
+// My Profile — view, edit, request upgrade
+// ---------------------------------------------------------------------------
+const TIER_ORDER = ['basic', 'pro', 'premium'];
+const TIER_PRICES = { basic: 150, pro: 280, premium: 400 };
+
+async function loadProfile() {
+  const content = document.getElementById('profileContent');
+  try {
+    const data = await api('/profiles/me');
+    const p = data.profile;
+    const higherTiers = TIER_ORDER.slice(TIER_ORDER.indexOf(p.package_tier) + 1);
+
+    content.innerHTML = `
+      <div class="profile-head">
+        <div>
+          <div class="name">${p.display_name}</div>
+          <span class="tier-badge">${p.package_tier}</span>
+          <span class="status-pill ${p.status}" style="margin-left:8px;">${p.status.replace('_',' ')}</span>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Bio</label><textarea id="editBio" rows="3">${p.bio || ''}</textarea></div>
+        <div class="field"><label>Quote</label><textarea id="editQuote" rows="3">${p.quote || ''}</textarea></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Contact Email</label><input id="editEmail" value="${p.contact_email || ''}"></div>
+        <div class="field"><label>Contact Phone</label><input id="editPhone" value="${p.contact_phone || ''}"></div>
+      </div>
+      <button class="btn btn-line" id="saveProfileBtn">Save Changes</button>
+      ${higherTiers.length > 0 ? `
+        <div class="tier-upgrade-row">
+          <span style="font-size:13px;">Upgrade to:</span>
+          ${higherTiers.map((t) => `<button class="btn btn-solid upgrade-btn" data-tier="${t}" style="width:auto;">${t.charAt(0).toUpperCase() + t.slice(1)} (R250 fee)</button>`).join('')}
+        </div>` : ''}
+      ${p.status === 'awaiting_payment' ? `<p style="font-size:12.5px; color:var(--red); margin-top:12px;">Your profile is awaiting payment — use the Unplug checkout to complete it before it can be reviewed.</p>` : ''}
+    `;
+
+    document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+      try {
+        await api(`/profiles/${p.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            bio: document.getElementById('editBio').value,
+            quote: document.getElementById('editQuote').value,
+            contactEmail: document.getElementById('editEmail').value,
+            contactPhone: document.getElementById('editPhone').value,
+          }),
+        });
+        showToast('Profile updated.');
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+
+    document.querySelectorAll('.upgrade-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const result = await api(`/profiles/${p.id}/upgrade`, {
+            method: 'POST',
+            body: JSON.stringify({ toTier: btn.dataset.tier }),
+          });
+          showToast(result.message);
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+    });
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state">${err.message === 'No profile found for this account yet.' ? 'You haven\\'t created a Directory profile yet — do that through the Unplug checkout.' : 'Could not load: ' + err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// My Articles
+// ---------------------------------------------------------------------------
+async function loadArticles() {
+  const content = document.getElementById('articlesContent');
+  try {
+    const data = await api('/articles/mine');
+    if (!data.articles || data.articles.length === 0) {
+      content.innerHTML = '<div class="empty-state">You haven\'t submitted any stories yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Title</th><th>Category</th><th>Status</th><th>Submitted</th></tr>';
+    data.articles.forEach((a) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${a.title}</td><td>${a.category || '—'}</td><td><span class="status-pill ${a.status}">${a.status}</span></td><td>${new Date(a.created_at).toLocaleDateString()}</td>`;
+      table.appendChild(tr);
+    });
+    content.innerHTML = '';
+    content.appendChild(table);
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// My Gallery
+// ---------------------------------------------------------------------------
+async function loadGallery() {
+  const content = document.getElementById('galleryContent');
+  try {
+    const data = await api('/gallery/mine');
+    if (!data.images || data.images.length === 0) {
+      content.innerHTML = '<div class="empty-state">You haven\'t submitted any photos yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Caption</th><th>Status</th><th>Submitted</th></tr>';
+    data.images.forEach((img) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${img.caption || '—'}</td><td><span class="status-pill ${img.status}">${img.status}</span></td><td>${new Date(img.created_at).toLocaleDateString()}</td>`;
+      table.appendChild(tr);
+    });
+    content.innerHTML = '';
+    content.appendChild(table);
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// My Competition Entries
+// ---------------------------------------------------------------------------
+async function loadEntries() {
+  const content = document.getElementById('entriesContent');
+  try {
+    const data = await api('/entries/mine');
+    if (!data.entries || data.entries.length === 0) {
+      content.innerHTML = '<div class="empty-state">You haven\'t entered any competitions yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Competition</th><th>Status</th><th>Votes</th><th>Entered</th></tr>';
+    data.entries.forEach((e) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${e.competition_name}</td><td><span class="status-pill ${e.status}">${e.status.replace('_',' ')}</span></td><td>${e.vote_count}</td><td>${new Date(e.created_at).toLocaleDateString()}</td>`;
+      table.appendChild(tr);
+    });
+    content.innerHTML = '';
+    content.appendChild(table);
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+// ---------------------------------------------------------------------------
+// Submit & Pay — one form covering Article, Event, Gallery, Top 10, Marketplace
+// ---------------------------------------------------------------------------
+const SUBMIT_FIELD_IDS = ['article', 'event', 'gallery', 'top10', 'marketplace'];
+
+document.getElementById('submitType').addEventListener('change', (e) => {
+  SUBMIT_FIELD_IDS.forEach((type) => {
+    document.getElementById('fields-' + type).classList.toggle('section-hidden', type !== e.target.value);
+  });
+});
+
+function showSubmitError(message) {
+  const el = document.getElementById('submitError');
+  el.textContent = message;
+  el.classList.add('show');
+}
+function hideSubmitError() {
+  document.getElementById('submitError').classList.remove('show');
+}
+
+// Creates the underlying record for whichever type is selected, and
+// returns { linkedType, linkedId } to hand straight to /payments/initiate.
+async function createSubmission(type) {
+  if (type === 'article') {
+    const title = document.getElementById('art-title').value.trim();
+    const body = document.getElementById('art-body').value.trim();
+    if (!title || !body) throw new Error('Title and story are required.');
+    const data = await api('/articles', {
+      method: 'POST',
+      body: JSON.stringify({ title, body, kickerSuppliedBy: document.getElementById('art-kicker').value.trim() || undefined }),
+    });
+    return { linkedType: 'article_publish', linkedId: data.article.id, label: 'Article' };
+  }
+
+  if (type === 'event') {
+    const name = document.getElementById('evt-name').value.trim();
+    const eventDate = document.getElementById('evt-date').value;
+    if (!name || !eventDate) throw new Error('Event name and date are required.');
+    const data = await api('/events', {
+      method: 'POST',
+      body: JSON.stringify({
+        name, eventDate,
+        venue: document.getElementById('evt-venue').value.trim() || undefined,
+        description: document.getElementById('evt-desc').value.trim() || undefined,
+        displayStartDate: document.getElementById('evt-display-start').value || undefined,
+      }),
+    });
+    return { linkedType: 'event_listing', linkedId: data.event.id, label: 'Event' };
+  }
+
+  if (type === 'gallery') {
+    const images = [1, 2, 3]
+      .map((i) => ({
+        imageUrl: document.getElementById(`gal-url-${i}`).value.trim(),
+        caption: document.getElementById(`gal-cap-${i}`).value.trim() || undefined,
+      }))
+      .filter((img) => img.imageUrl);
+    if (images.length === 0) throw new Error('At least one image URL is required.');
+    const data = await api('/gallery', { method: 'POST', body: JSON.stringify({ images }) });
+    return { linkedType: 'gallery_bundle', linkedId: data.bundle.id, label: 'Gallery Bundle' };
+  }
+
+  if (type === 'top10') {
+    const data = await api('/top10/enter', { method: 'POST' });
+    return { linkedType: 'top10_entry', linkedId: data.entry.id, label: 'Top 10 Entry' };
+  }
+
+  if (type === 'marketplace') {
+    const posterImageUrl = document.getElementById('mkt-poster').value.trim();
+    if (!posterImageUrl) throw new Error('Poster image URL is required.');
+    const data = await api('/marketplace/listings', {
+      method: 'POST',
+      body: JSON.stringify({
+        businessName: document.getElementById('mkt-business').value.trim() || undefined,
+        posterImageUrl,
+        headline: document.getElementById('mkt-headline').value.trim() || undefined,
+        requestedStartDate: document.getElementById('mkt-start').value || undefined,
+      }),
+    });
+    return { linkedType: 'marketplace_listing', linkedId: data.listing.id, label: 'Marketplace Poster' };
+  }
+
+  throw new Error('Unknown submission type.');
+}
+
+document.getElementById('submitAndPayBtn').addEventListener('click', async () => {
+  hideSubmitError();
+  const type = document.getElementById('submitType').value;
+  const method = document.getElementById('submitPaymentMethod').value;
+  const btn = document.getElementById('submitAndPayBtn');
+  btn.disabled = true; btn.textContent = 'Processing...';
+
+  try {
+    const { linkedType, linkedId, label } = await createSubmission(type);
+    const payment = await api('/payments/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ linkedType, linkedId, method }),
+    });
+
+    const resultBox = document.getElementById('submitResultBox');
+    resultBox.classList.remove('section-hidden');
+
+    if (method === 'eft') {
+      const i = payment.instructions;
+      resultBox.innerHTML = `<strong>${label} created.</strong> Pay via EFT using the details below.<br><br>
+        <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
+        <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br>
+        <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>${i.note}`;
+    } else {
+      resultBox.innerHTML = `<strong>${label} created.</strong> ${payment.note}<br><br>
+        <a href="${payment.redirectUrl}" target="_blank">${payment.redirectUrl}</a>`;
+    }
+
+    showToast(`${label} submitted — see payment details below.`);
+    loadArticles(); loadGallery(); loadEntries();
+  } catch (err) {
+    showSubmitError(err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create & Pay';
+  }
+});
+</script>
+</body>
+</html>

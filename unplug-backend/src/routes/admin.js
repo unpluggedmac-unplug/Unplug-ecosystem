@@ -1,0 +1,694 @@
+const express = require('express');
+const pool = require('../db');
+const { requireRole } = require('../middleware/auth');
+const { getPagination, paginationMeta } = require('../utils/pagination');
+
+const router = express.Router();
+
+// GET /admin/users
+// Admin-only — lists every user account. This is a working example of how
+// every other /admin/* route from the Backend Spec (Section 3) should be
+// wired: requireRole('admin') first, then the actual query.
+router.get('/users', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query('SELECT COUNT(*) FROM users');
+    const result = await pool.query(
+      'SELECT id, email, phone, role, created_at FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    res.json({
+      users: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/profiles/pending
+// Admin-only — the Directory tab of the Approval Queue.
+router.get('/profiles/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM profiles WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT p.id, p.display_name, p.package_tier, p.status, p.created_at, c.name AS category, u.email AS submitted_by
+       FROM profiles p
+       LEFT JOIN categories c ON c.id = p.category_id
+       JOIN users u ON u.id = p.user_id
+       WHERE p.status = 'pending'
+       ORDER BY p.created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      profiles: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/profiles/:id/approve
+router.patch('/profiles/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE profiles SET status = 'approved', updated_at = now() WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found.' });
+    }
+    res.json({ profile: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/profiles/:id/reject
+router.patch('/profiles/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE profiles SET status = 'rejected', updated_at = now() WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found.' });
+    }
+    res.json({ profile: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/gallery/pending
+// Admin-only — the Gallery tab of the Approval Queue (covers profile,
+// investor, and general gallery submissions in one list).
+router.get('/gallery/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM gallery_images WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT id, owner_type, owner_id, image_url, caption, supplied_by, created_at
+       FROM gallery_images
+       WHERE status = 'pending'
+       ORDER BY created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      images: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/gallery/:id/approve
+router.patch('/gallery/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE gallery_images SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Image not found.' });
+    }
+    res.json({ image: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/gallery/:id/reject
+router.patch('/gallery/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE gallery_images SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Image not found.' });
+    }
+    res.json({ image: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/articles/pending — the Latest News tab of the Approval Queue.
+router.get('/articles/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM articles WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT a.id, a.title, a.kicker_supplied_by, a.created_at, c.name AS category, u.email AS submitted_by
+       FROM articles a
+       LEFT JOIN categories c ON c.id = a.category_id
+       JOIN users u ON u.id = a.author_user_id
+       WHERE a.status = 'pending'
+       ORDER BY a.created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      articles: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/articles/:id/approve — sets published_at so it appears
+// immediately in the public /articles feed.
+router.patch('/articles/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE articles SET status = 'approved', published_at = now() WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Article not found.' });
+    }
+    res.json({ article: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/articles/:id/reject
+router.patch('/articles/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE articles SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Article not found.' });
+    }
+    res.json({ article: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/events/pending — the Events tab of the Approval Queue.
+router.get('/events/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM events WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT e.id, e.name, e.event_date, e.venue, e.created_at, u.email AS organizer
+       FROM events e
+       JOIN users u ON u.id = e.organizer_user_id
+       WHERE e.status = 'pending'
+       ORDER BY e.event_date ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      events: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/events/:id/approve
+router.patch('/events/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE events SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+    res.json({ event: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/events/:id/reject
+router.patch('/events/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE events SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+    res.json({ event: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/entries/pending — the Competitions tab of the Approval Queue.
+// Only shows entries that have already been paid for (status 'pending') —
+// entries still 'awaiting_payment' aren't an admin's problem yet.
+router.get('/entries/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM competition_entries WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT ce.id, ce.competition_id, ce.entry_fee, ce.created_at, p.display_name, c.name AS competition_name
+       FROM competition_entries ce
+       JOIN profiles p ON p.id = ce.profile_id
+       JOIN competitions c ON c.id = ce.competition_id
+       WHERE ce.status = 'pending'
+       ORDER BY ce.created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      entries: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/entries/:id/approve
+router.patch('/entries/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE competition_entries SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Entry not found.' });
+    }
+    res.json({ entry: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/entries/:id/reject
+router.patch('/entries/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE competition_entries SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Entry not found.' });
+    }
+    res.json({ entry: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/investors/pending — the Investors tab of the Approval Queue.
+router.get('/investors/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM investors WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT i.id, i.name, i.contact_email, i.created_at, u.email AS submitted_by
+       FROM investors i
+       JOIN users u ON u.id = i.user_id
+       WHERE i.status = 'pending'
+       ORDER BY i.created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      investors: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/investors/:id/approve
+router.patch('/investors/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE investors SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Investor not found.' });
+    }
+    res.json({ investor: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/investors/:id/reject
+router.patch('/investors/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE investors SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Investor not found.' });
+    }
+    res.json({ investor: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/marketplace/pending — the Marketplace tab of the Approval
+// Queue (banners and ads submitted by advertisers).
+router.get('/marketplace/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM marketplace_listings WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT l.id, l.headline, l.duration_days, l.created_at, a.business_name
+       FROM marketplace_listings l
+       JOIN advertisers a ON a.id = l.advertiser_id
+       WHERE l.status = 'pending'
+       ORDER BY l.created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      listings: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/marketplace/:id/approve
+router.patch('/marketplace/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE marketplace_listings SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Listing not found.' });
+    }
+    res.json({ listing: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/marketplace/:id/reject
+router.patch('/marketplace/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE marketplace_listings SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Listing not found.' });
+    }
+    res.json({ listing: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/highlights/pending — the Highlights & Promotions tab.
+router.get('/highlights/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM highlights WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT id, target_type, target_id, duration_days, created_at
+       FROM highlights
+       WHERE status = 'pending'
+       ORDER BY created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      highlights: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/highlights/:id/approve
+router.patch('/highlights/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE highlights SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Highlight not found.' });
+    }
+    res.json({ highlight: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/highlights/:id/reject
+router.patch('/highlights/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE highlights SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Highlight not found.' });
+    }
+    res.json({ highlight: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/sales-consultants — full list (active + inactive).
+router.get('/sales-consultants', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(`SELECT * FROM sales_consultants ORDER BY name ASC`);
+    res.json({ consultants: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/sales-consultants — add a new consultant.
+router.post('/sales-consultants', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { name, email, commissionPct } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'name is required.' });
+    }
+    const result = await pool.query(
+      `INSERT INTO sales_consultants (name, email, commission_pct)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [name.trim(), email || null, commissionPct != null ? commissionPct : 10.00]
+    );
+    res.status(201).json({ consultant: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/sales-consultants/:id — edit name/email/commission/active.
+router.patch('/sales-consultants/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const bodyKeyMap = { name: 'name', email: 'email', commissionPct: 'commission_pct', active: 'active' };
+    const setClauses = [];
+    const values = [];
+    for (const [bodyKey, column] of Object.entries(bodyKeyMap)) {
+      if (req.body[bodyKey] !== undefined) {
+        values.push(req.body[bodyKey]);
+        setClauses.push(`${column} = $${values.length}`);
+      }
+    }
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'No editable fields provided.' });
+    }
+    values.push(req.params.id);
+
+    const result = await pool.query(
+      `UPDATE sales_consultants SET ${setClauses.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Consultant not found.' });
+    }
+    res.json({ consultant: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/sales-consultants/:id/payments — every confirmed payment
+// attributed to this consultant, for commission calculation. The
+// commission amount is computed here (amount × commission_pct) rather
+// than stored on each payment, so changing a consultant's rate later
+// doesn't require rewriting historical records.
+router.get('/sales-consultants/:id/payments', requireRole('admin'), async (req, res, next) => {
+  try {
+    const consultantResult = await pool.query('SELECT * FROM sales_consultants WHERE id = $1', [req.params.id]);
+    if (consultantResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Consultant not found.' });
+    }
+    const consultant = consultantResult.rows[0];
+
+    const payments = await pool.query(
+      `SELECT id, amount, method, linked_type, linked_id, status, confirmed_at, created_at
+       FROM payments
+       WHERE sales_consultant_id = $1 AND status = 'confirmed'
+       ORDER BY confirmed_at DESC`,
+      [req.params.id]
+    );
+
+    const totalSales = payments.rows.reduce((sum, p) => sum + Number(p.amount), 0);
+    const totalCommission = totalSales * (Number(consultant.commission_pct) / 100);
+
+    res.json({
+      consultant,
+      payments: payments.rows,
+      totalSales,
+      totalCommission: Math.round(totalCommission * 100) / 100,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/notifications — unread-first feed. A sales-consultant-linked
+// payment automatically creates one of these (see payments.js) so the
+// admin doesn't have to go hunting through the full payments table.
+router.get('/notifications', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM admin_notifications ORDER BY read ASC, created_at DESC LIMIT 50`
+    );
+    res.json({ notifications: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/notifications/:id/read
+router.patch('/notifications/:id/read', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE admin_notifications SET read = true WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notification not found.' });
+    }
+    res.json({ notification: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/settings — every platform setting (currently just the Bundle
+// Vote price, but this grows into a general config screen over time).
+router.get('/settings', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(`SELECT key, value, updated_at FROM settings ORDER BY key ASC`);
+    res.json({ settings: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/settings/:key — update a single setting. Kept generic
+// (rather than a dedicated bundle-vote-price endpoint) so future settings
+// don't each need their own route.
+router.patch('/settings/:key', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { value } = req.body;
+    if (value === undefined || value === null || value === '') {
+      return res.status(400).json({ error: 'value is required.' });
+    }
+    if (req.params.key === 'bundle_vote_price' && isNaN(parseFloat(value))) {
+      return res.status(400).json({ error: 'bundle_vote_price must be a number.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE settings SET value = $1, updated_at = now() WHERE key = $2 RETURNING *`,
+      [String(value), req.params.key]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: `Setting "${req.params.key}" does not exist.` });
+    }
+    res.json({ setting: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/top10-entries/pending — paid Top 10 consideration requests
+// waiting on admin review (separate from publishing the actual rankings).
+router.get('/top10-entries/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { page, limit, offset } = getPagination(req);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM top10_entries WHERE status = 'pending'`);
+    const result = await pool.query(
+      `SELECT te.id, te.entry_fee, te.created_at, p.display_name
+       FROM top10_entries te
+       JOIN profiles p ON p.id = te.profile_id
+       WHERE te.status = 'pending'
+       ORDER BY te.created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({
+      entries: result.rows,
+      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/top10-entries/:id/approve
+router.patch('/top10-entries/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE top10_entries SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Entry not found.' });
+    }
+    res.json({ entry: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/top10-entries/:id/reject
+router.patch('/top10-entries/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE top10_entries SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Entry not found.' });
+    }
+    res.json({ entry: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;
