@@ -1,9 +1,55 @@
 # Unplug Magazine — Punch List
-*Last updated: 2026-07-07 (updated same day, phase 2)*
+*Last updated: 2026-07-08 (deployment session)*
 
 This is the working status doc for the Unplug Ecosystem build (backend + public
 site). Read this first before picking work back up — it replaces having to
 re-derive context from scratch.
+
+---
+
+## 🚀 DEPLOYMENT STATUS (as of 2026-07-08, ~1am)
+
+- **GitHub:** https://github.com/unpluggedmac-unplug/Unplug-ecosystem (private).
+  `main` branch. Auto-deploys to Railway on every push.
+- **Backend: ✅ LIVE on Railway** at
+  `https://unplug-ecosystem-production.up.railway.app` — verified reading real
+  data from Supabase (`/health` → `{"status":"ok"}`, `/competitions/top-10`
+  returns the seeded competition). Railway service settings:
+  - **Root Directory:** `unplug-backend` (the app is in a subfolder)
+  - **Variables set:** `DATABASE_URL` (Supabase pooled string) + `JWT_SECRET`.
+    Nothing else — `CORS_ORIGINS` deliberately left unset (= allow all origins
+    for now), `PORT` is auto-injected by Railway.
+  - **GOTCHA — target port:** the app listens on Railway's injected `PORT`
+    (8080), so the public domain's **target port must be 8080**, not 4000. A
+    4000 target gives a 502 "Application failed to respond". If you ever
+    regenerate the domain and get a 502, this is why.
+- **Frontend: ⬜ NOT deployed yet** — the last remaining step. `unplug-shared.js`
+  already defaults its API base to the live Railway URL (committed), so the
+  moment it's on Netlify it'll talk to the live backend. Steps below.
+
+### ⬜ Remaining deploy step — Netlify (frontend), ~5 min, needs Pierre's Netlify account
+1. Netlify → **Add new site → Import from Git** → the `Unplug-ecosystem` repo
+2. **Build command:** leave EMPTY (plain static HTML, no build step)
+3. **Publish directory:** `.` (repo root — the HTML/CSS/JS sit at the top level)
+4. Deploy → Netlify gives a URL like `something.netlify.app`
+5. **Then tighten CORS (optional but recommended):** on Railway → Variables, add
+   `CORS_ORIGINS` = the Netlify URL (e.g. `https://something.netlify.app`) so the
+   API only accepts calls from the real site instead of everywhere. Redeploys
+   automatically.
+6. Visit the Netlify URL, open the site, click into Directory/Top 10/etc — they'll
+   show empty states (DB is empty by design) but should load with no console
+   errors, proving frontend→Railway→Supabase works end to end.
+
+### 🔴 SECURITY — do this ASAP
+- The **GitHub Personal Access Token** (`ghp_...`) used to push was pasted in
+  plaintext during setup. Now that the push is done and the credential is cached
+  in Windows Credential Manager, **revoke that token** on GitHub (Settings →
+  Developer settings → Personal access tokens) and, if needed later, generate a
+  fresh one. Leaving an exposed token active is a standing risk.
+- The **Supabase database password** also appeared in chat + is stored in
+  Railway's variables and the local `.env`. Lower urgency (it's not in a public
+  place), but worth rotating eventually via Supabase → Settings → Database →
+  Reset password, then updating Railway's `DATABASE_URL` + local `.env` to match.
 
 ---
 
@@ -22,7 +68,9 @@ re-derive context from scratch.
   ```
 - **Public site:** `unplug-magazine.html` (plus `unplug-shared.js` for the
   `UnplugAPI` helper) — serve the folder with any static server and open the
-  file. It talks to the backend at `http://localhost:4000` by default.
+  file. **It now defaults to the LIVE Railway backend** (changed at deploy). For
+  local dev against a local backend, run this in the browser console once:
+  `localStorage.setItem('unplug_api_base','http://localhost:4000')`.
 - **Admin login (seeded):** `admin@unplugnews.com` / password set via
   `ADMIN_PASSWORD` in `.env` at migration time — check with Darius/Pierre for
   the actual value, it isn't stored in this file.
