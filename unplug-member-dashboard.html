@@ -6,8 +6,16 @@
 <title>Unplug — My Account</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="unplug-shared.css">
 <style>
+:root{
+  --ink:#272626; --slate:#454545; --black:#0f0e0e;
+  --cream:#ffffff; --paper:#f1f0ef; --paper-line: rgba(15,14,14,0.14);
+  --red:#d20709; --maroon:#721415; --green:#2e7d32;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{ font-family:'Inter',sans-serif; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+h1,h2,h3{ font-family:'Playfair Display', serif; }
+
 .topbar{ background:var(--black); color:#fff; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
 .topbar .word{ font-family:'Playfair Display',serif; font-weight:700; color:var(--red); font-size:17px; }
 .topbar .right{ display:flex; align-items:center; gap:14px; font-size:12px; color:#cfcac0; }
@@ -18,12 +26,43 @@
 .card h2{ font-size:19px; font-weight:700; margin-bottom:4px; }
 .card p.sub{ font-size:13px; color:var(--slate); margin-bottom:18px; }
 
+.field{ margin-bottom:14px; }
+.field label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:6px; }
+.field input, .field select, .field textarea{ width:100%; border:1px solid var(--paper-line); padding:9px 12px; font-size:14px; font-family:'Inter',sans-serif; background:#fff; }
+.field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media(max-width:560px){ .field-row{ grid-template-columns:1fr; } }
+
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
+.btn-solid{ background:var(--red); color:#fff; border-color:var(--red); }
+.btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
+.btn-line:hover{ background:var(--ink); color:#fff; }
+
+.error-banner{ background:rgba(210,7,9,0.08); border:1px solid var(--red); color:var(--maroon); padding:10px 12px; font-size:12.5px; margin-bottom:14px; display:none; }
+.error-banner.show{ display:block; }
+
 .tier-badge{ display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; background:var(--maroon); color:#fff; padding:5px 12px; }
+.status-pill{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:3px 9px; border-radius:20px; display:inline-block; }
+.status-pill.awaiting_payment{ background:rgba(210,7,9,0.1); color:var(--red); }
+.status-pill.pending{ background:rgba(210,7,9,0.1); color:var(--red); }
+.status-pill.approved{ background:rgba(46,125,50,0.1); color:var(--green); }
+.status-pill.rejected{ background:rgba(114,20,21,0.1); color:var(--maroon); }
 
 .profile-head{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
 .profile-head .name{ font-family:'Playfair Display',serif; font-size:24px; font-weight:700; }
 
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+th{ text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); padding:9px 10px; border-bottom:2px solid var(--ink); }
+td{ padding:10px; border-bottom:1px solid var(--paper-line); }
+.empty-state{ padding:16px 0; color:var(--slate); font-size:13px; }
+.loading-state{ padding:16px 0; color:var(--slate); font-size:13px; }
+
 .tier-upgrade-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
+.section-hidden{ display:none; }
+.toast{ position:fixed; bottom:20px; right:20px; background:var(--ink); color:#fff; padding:12px 18px; font-size:13px; z-index:999; display:none; }
+.toast.show{ display:block; }
+.toast.error{ background:var(--maroon); }
+.instructions-box{ background:var(--paper); border:1px solid var(--paper-line); padding:16px; font-size:13px; line-height:1.7; }
+.instructions-box .ref{ font-family:'Courier New',monospace; background:#fff; padding:3px 8px; border:1px solid var(--paper-line); display:inline-block; }
 </style>
 </head>
 <body>
@@ -157,9 +196,31 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="unplug-shared.js"></script>
 <script>
-const api = UnplugAPI.api;
+let API_BASE = localStorage.getItem('unplug_api_base') || 'http://localhost:4000';
+let AUTH_TOKEN = null;
+
+async function api(path, options = {}) {
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(AUTH_TOKEN ? { Authorization: 'Bearer ' + AUTH_TOKEN } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  let body = null;
+  try { body = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error((body && body.error) || `Request failed (${res.status})`);
+  return body;
+}
+
+function showToast(message, isError = false) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
 
 // ---------------------------------------------------------------------------
 // Login
@@ -167,7 +228,7 @@ const api = UnplugAPI.api;
 document.getElementById('loginBtn').addEventListener('click', async () => {
   const errorBanner = document.getElementById('loginError');
   errorBanner.classList.remove('show');
-  UnplugAPI.setApiBase(document.getElementById('apiBaseInput').value);
+  API_BASE = document.getElementById('apiBaseInput').value.trim().replace(/\/$/, '');
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
 
@@ -182,7 +243,9 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 
   try {
     const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-    UnplugAPI.setToken(data.token);
+    AUTH_TOKEN = data.token;
+    localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
+    localStorage.setItem('unplug_api_base', API_BASE);
     enterMemberDashboard(data.user);
   } catch (err) {
     errorBanner.textContent = err.message + ' (Is the API running at that URL?)';
@@ -195,7 +258,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 function enterMemberDashboard(user){
   document.getElementById('topRight').innerHTML = `Signed in as ${user.email} &nbsp;·&nbsp; <button id="logoutBtn">Log out</button>`;
   document.getElementById('logoutBtn').addEventListener('click', () => {
-    UnplugAPI.setToken(null);
+    localStorage.removeItem('unplug_auth_token');
     location.reload();
   });
   document.getElementById('loginCard').classList.add('section-hidden');
@@ -208,7 +271,18 @@ function enterMemberDashboard(user){
 
 // On page load, restore a saved session rather than forcing a fresh
 // login after every refresh.
-UnplugAPI.restoreSession((user) => enterMemberDashboard(user));
+(async function restoreSession(){
+  const savedToken = localStorage.getItem('unplug_auth_token');
+  if (!savedToken) return;
+  AUTH_TOKEN = savedToken;
+  try {
+    const data = await api('/auth/me');
+    enterMemberDashboard(data.user);
+  } catch (err) {
+    AUTH_TOKEN = null;
+    localStorage.removeItem('unplug_auth_token');
+  }
+})();
 
 // ---------------------------------------------------------------------------
 // My Profile — view, edit, request upgrade
@@ -279,7 +353,7 @@ async function loadProfile() {
       });
     });
   } catch (err) {
-    content.innerHTML = `<div class="empty-state">${err.message === 'No profile found for this account yet.' ? 'You haven\\'t created a Directory profile yet — do that through the Unplug checkout.' : 'Could not load: ' + err.message}</div>`;
+    content.innerHTML = `<div class="empty-state">${err.message === 'No profile found for this account yet.' ? 'You have not created a Directory profile yet — do that through the Unplug checkout.' : 'Could not load: ' + err.message}</div>`;
   }
 }
 
