@@ -92,6 +92,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .top-page-row{ display:flex; align-items:center; justify-content:space-between; padding:10px 18px; border-bottom:1px solid var(--paper-line); font-size:13px; }
 .top-page-row:last-child{ border-bottom:none; }
 .top-page-row .views{ font-weight:700; color:var(--red); }
+.pill{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:3px 9px; border-radius:20px; display:inline-block; }
+.pill.pending{ background:rgba(210,7,9,0.1); color:var(--red); }
+.pill.approved{ background:rgba(46,125,50,0.1); color:var(--green, #2e7d32); }
 </style>
 </head>
 <body>
@@ -154,6 +157,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="consultants">Sales Consultants</a>
     <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="analytics">Analytics</a>
+    <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="activitylog">Activity Log</a>
     <div class="foot">
       Signed in as <span id="currentUserEmail"></span>
       <br><button id="logoutBtn">Log out</button>
@@ -261,6 +266,22 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel">
         <div class="panel-head"><h3>Top Pages</h3></div>
         <div class="panel-body" id="topPagesBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- INQUIRIES -->
+    <div class="admin-section" id="section-inquiries">
+      <div class="main-head"><div><h1>Inquiries</h1><p>Messages submitted through the site's Contact form.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="inquiriesBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- ACTIVITY LOG -->
+    <div class="admin-section" id="section-activitylog">
+      <div class="main-head"><div><h1>Activity Log</h1><p>The most recent 100 admin actions — who did what, and when.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="activityLogBody" style="padding:0;"></div>
       </div>
     </div>
   </div>
@@ -473,6 +494,8 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'consultants') loadConsultants();
     if (section === 'notifications') loadNotifications();
     if (section === 'analytics') loadAnalytics(7);
+    if (section === 'inquiries') loadInquiries();
+    if (section === 'activitylog') loadActivityLog();
   });
 });
 
@@ -948,6 +971,85 @@ async function loadAnalytics(range) {
     }
   } catch (err) {
     chartEl.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Inquiries
+// ---------------------------------------------------------------------------
+async function loadInquiries() {
+  const body = document.getElementById('inquiriesBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/inquiries');
+    const badge = document.getElementById('inquiriesBadge');
+    const newCount = data.inquiries.filter((i) => i.status === 'new').length;
+    if (newCount > 0) { badge.textContent = newCount; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+
+    if (!data.inquiries || data.inquiries.length === 0) {
+      body.innerHTML = '<div class="empty-state">No inquiries yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>From</th><th>Subject</th><th>Message</th><th>Status</th><th>Received</th><th></th></tr>';
+    data.inquiries.forEach((inq) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${inq.name}<br><span style="color:var(--slate); font-size:11px;">${inq.email}</span></td>
+        <td>${inq.subject || '—'}</td>
+        <td style="max-width:280px;">${inq.message}</td>
+        <td><span class="pill ${inq.status === 'new' ? 'pending' : 'approved'}">${inq.status}</span></td>
+        <td>${new Date(inq.created_at).toLocaleDateString()}</td>
+        <td></td>`;
+      const actionTd = tr.lastElementChild;
+      if (inq.status !== 'replied') {
+        const markBtn = document.createElement('button');
+        markBtn.className = 'approve';
+        markBtn.textContent = inq.status === 'new' ? 'Mark Read' : 'Mark Replied';
+        markBtn.addEventListener('click', async () => {
+          try {
+            const nextStatus = inq.status === 'new' ? 'read' : 'replied';
+            await api(`/inquiries/${inq.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus }) });
+            loadInquiries();
+          } catch (err) {
+            showToast(err.message, true);
+          }
+        });
+        actionTd.appendChild(markBtn);
+      }
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Activity Log
+// ---------------------------------------------------------------------------
+async function loadActivityLog() {
+  const body = document.getElementById('activityLogBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/activity-log');
+    if (!data.activity || data.activity.length === 0) {
+      body.innerHTML = '<div class="empty-state">No activity recorded yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Action</th><th>Details</th><th>By</th><th>When</th></tr>';
+    data.activity.forEach((a) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${a.action.replace(/_/g, ' ')}</td><td>${a.details || '—'}</td><td>${a.admin_email || '—'}</td><td>${new Date(a.created_at).toLocaleString()}</td>`;
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
 
