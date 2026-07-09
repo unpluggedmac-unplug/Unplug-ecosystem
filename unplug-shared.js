@@ -76,3 +76,28 @@ function showToast(message, isError = false) {
   toast.className = 'toast show' + (isError ? ' error' : '');
   setTimeout(() => { toast.className = 'toast'; }, 3000);
 }
+
+
+// Unplug — Page View Tracking
+// Sends one lightweight "someone viewed this page" ping to the backend
+// each time this script runs. No personal data — sessionId is just a
+// random ID this browser makes up for itself and stores locally, purely
+// to count "unique visitors" without identifying anyone.
+(function () {
+  const API_BASE = 'https://unplug-ecosystem-production.up.railway.app';
+
+  let sessionId = localStorage.getItem('unplug_analytics_session');
+  if (!sessionId) {
+    sessionId = 'sess-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('unplug_analytics_session', sessionId);
+  }
+
+  fetch(API_BASE + '/analytics/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pagePath: window.location.pathname, sessionId }),
+  }).catch(() => {
+    // Silently ignore failures — tracking should never disrupt the
+    // actual page for a visitor, even if the backend is briefly down.
+  });
+})();
