@@ -4,11 +4,6 @@ const { requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Call this from any admin route to record what happened. Kept as a
-// simple, reusable one-liner rather than middleware, so it's obvious
-// exactly which actions get logged just by reading the route file.
-//
-// Usage: await logActivity(req.user.id, 'profile_approved', `Profile #${id}`);
 async function logActivity(adminUserId, action, details) {
   try {
     await pool.query(
@@ -16,26 +11,29 @@ async function logActivity(adminUserId, action, details) {
       [adminUserId, action, details || null]
     );
   } catch (err) {
-    // Logging should never break the actual action it's attached to —
-    // if this fails, just note it in the server console and move on.
     console.error('[activity log] failed to record:', err.message);
   }
 }
 
-// GET /admin/activity-log — most recent 100 actions, newest first.
-router.get('/', requireRole('admin'), async (req, res, next) => {
+// Simplified — no JOIN, just the log table itself, to remove any risk
+// from the users table relationship. If this still fails, the error
+// detail below will show exactly why.
+router.get('/', requireRole('admin'), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT l.id, l.action, l.details, l.created_at, u.email AS admin_email
-       FROM admin_activity_log l
-       LEFT JOIN users u ON u.id = l.admin_user_id
-       ORDER BY l.created_at DESC
+      `SELECT id, admin_user_id, action, details, created_at
+       FROM admin_activity_log
+       ORDER BY created_at DESC
        LIMIT 100`
     );
     res.json({ activity: result.rows });
   } catch (err) {
-    next(err);
+    console.error('[activity log] query failed:', err);
+    // TEMPORARY — includes the real error message in the response so we
+    // can see exactly what's wrong, instead of a generic failure.
+    // Remove this detail once it's confirmed working.
+    res.status(500).json({ error: 'Could not load activity log.', detail: err.message, code: err.code });
   }
 });
 
-module.exports = { router, logActivity }
+module.exports = { router, logActivity };
