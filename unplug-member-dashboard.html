@@ -63,6 +63,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .toast.error{ background:var(--maroon); }
 .instructions-box{ background:var(--paper); border:1px solid var(--paper-line); padding:16px; font-size:13px; line-height:1.7; }
 .instructions-box .ref{ font-family:'Courier New',monospace; background:#fff; padding:3px 8px; border:1px solid var(--paper-line); display:inline-block; }
+.gate-options{ display:flex; flex-direction:column; gap:10px; }
+.gate-option{ display:block; width:100%; text-align:left; border:1px solid var(--paper-line); background:#fff; padding:16px; cursor:pointer; font-family:'Inter',sans-serif; text-decoration:none; color:var(--ink); }
+.gate-option:hover{ border-color:var(--red); }
+.gate-option h3{ font-family:'Playfair Display',serif; font-size:16px; font-weight:700; margin-bottom:4px; color:var(--ink); }
+.gate-option p{ font-size:12.5px; color:var(--slate); margin:0; }
 </style>
 </head>
 <body>
@@ -74,8 +79,52 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
 <div class="wrap">
 
+  <!-- ENTRY GATE — first thing anyone sees -->
+  <div class="card" id="gateCard">
+    <h2>Welcome to Unplug</h2>
+    <p class="sub">Browse the site freely, or sign in / create a free account to manage your own profile and submissions.</p>
+    <div class="gate-options">
+      <a class="gate-option" href="https://relaxed-cupcake-2e5b2e.netlify.app/" target="_blank">
+        <h3>Visit Site</h3>
+        <p>Browse Unplug Magazine — no account needed.</p>
+      </a>
+      <button class="gate-option" id="showRegisterBtn">
+        <h3>Become a Member</h3>
+        <p>Free to join. You only pay when you use a paid service (like publishing an article).</p>
+      </button>
+      <button class="gate-option" id="showLoginBtn">
+        <h3>Sign In</h3>
+        <p>Already have an account? Sign in here.</p>
+      </button>
+    </div>
+  </div>
+
+  <!-- BECOME A MEMBER (free registration — no payment involved) -->
+  <div class="card section-hidden" id="registerCard">
+    <h2>Become a Member</h2>
+    <p class="sub">Completely free. This just creates your account — nothing here costs anything. You'll only pay later, and only if you choose to use a paid service like publishing an article.</p>
+    <div class="error-banner" id="registerError"></div>
+    <div class="field"><label>API Base URL</label><input id="registerApiBaseInput" value="http://localhost:4000"></div>
+    <div class="field-row">
+      <div class="field"><label>Email</label><input id="registerEmail" type="email"></div>
+      <div class="field"><label>Password (8+ characters)</label><input id="registerPassword" type="password"></div>
+    </div>
+    <button class="btn btn-solid" id="registerBtn">Create Free Account</button>
+    <button class="btn btn-line" id="backFromRegisterBtn" style="margin-top:10px;">← Back</button>
+  </div>
+
+  <!-- VERIFY EMAIL (after registering) -->
+  <div class="card section-hidden" id="verifyCard">
+    <h2>Check Your Email</h2>
+    <p class="sub" id="verifySub">We sent a 6-digit code to your email. Enter it below to activate your account.</p>
+    <div class="error-banner" id="verifyError"></div>
+    <div class="field"><label>6-Digit Code</label><input id="verifyCode" maxlength="6" placeholder="000000"></div>
+    <button class="btn btn-solid" id="verifyBtn">Activate Account</button>
+    <button class="btn btn-line" id="resendCodeBtn" style="margin-top:10px;">Resend Code</button>
+  </div>
+
   <!-- LOGIN -->
-  <div class="card" id="loginCard">
+  <div class="card section-hidden" id="loginCard">
     <h2>Sign In</h2>
     <p class="sub">Sign in to manage your Directory profile, submissions, and entries.</p>
     <div class="error-banner" id="loginError"></div>
@@ -85,6 +134,26 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="field"><label>Password</label><input id="loginPassword" type="password"></div>
     </div>
     <button class="btn btn-solid" id="loginBtn">Sign In</button>
+    <button class="btn btn-line" id="showForgotBtn" style="margin-top:10px;">Forgot Password?</button>
+    <button class="btn btn-line" id="backFromLoginBtn" style="margin-top:10px;">← Back</button>
+  </div>
+
+  <!-- FORGOT PASSWORD -->
+  <div class="card section-hidden" id="forgotCard">
+    <h2>Reset Your Password</h2>
+    <p class="sub" id="forgotSub">Enter your email — we'll send a reset code you can use to set a new password.</p>
+    <div class="error-banner" id="forgotError"></div>
+    <div class="field"><label>API Base URL</label><input id="forgotApiBaseInput" value="http://localhost:4000"></div>
+    <div class="field"><label>Email</label><input id="forgotEmail" type="email"></div>
+    <button class="btn btn-solid" id="requestResetBtn">Send Reset Code</button>
+
+    <div id="resetStep2" class="section-hidden" style="margin-top:16px;">
+      <div class="field"><label>Reset Code (from your email)</label><input id="resetToken"></div>
+      <div class="field"><label>New Password (8+ characters)</label><input id="resetNewPassword" type="password"></div>
+      <button class="btn btn-solid" id="submitResetBtn">Set New Password</button>
+    </div>
+
+    <button class="btn btn-line" id="backFromForgotBtn" style="margin-top:10px;">← Back to Sign In</button>
   </div>
 
   <!-- MAIN DASHBOARD (hidden until logged in) -->
@@ -223,6 +292,169 @@ function showToast(message, isError = false) {
 }
 
 // ---------------------------------------------------------------------------
+// Entry Gate — Visit Site / Become Member / Sign In
+// ---------------------------------------------------------------------------
+function showCard(cardId){
+  ['gateCard', 'registerCard', 'verifyCard', 'loginCard', 'forgotCard'].forEach((id) => {
+    document.getElementById(id).classList.toggle('section-hidden', id !== cardId);
+  });
+}
+
+document.getElementById('showRegisterBtn').addEventListener('click', () => showCard('registerCard'));
+document.getElementById('showLoginBtn').addEventListener('click', () => showCard('loginCard'));
+document.getElementById('backFromRegisterBtn').addEventListener('click', () => showCard('gateCard'));
+document.getElementById('backFromLoginBtn').addEventListener('click', () => showCard('gateCard'));
+document.getElementById('showForgotBtn').addEventListener('click', () => {
+  document.getElementById('forgotApiBaseInput').value = document.getElementById('apiBaseInput').value;
+  showCard('forgotCard');
+});
+document.getElementById('backFromForgotBtn').addEventListener('click', () => showCard('loginCard'));
+
+// ---------------------------------------------------------------------------
+// Forgot Password — request a reset code, then set a new password with it.
+// Uses the same API_BASE already set from wherever the user came from.
+// ---------------------------------------------------------------------------
+document.getElementById('requestResetBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('forgotError');
+  errorBanner.classList.remove('show');
+  API_BASE = document.getElementById('forgotApiBaseInput').value.trim().replace(/\/$/, '');
+  const email = document.getElementById('forgotEmail').value.trim();
+
+  if (!email) {
+    errorBanner.textContent = 'Enter your email first.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('requestResetBtn');
+  btn.disabled = true; btn.textContent = 'Sending...';
+
+  try {
+    await api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+    document.getElementById('forgotSub').textContent = 'If that account exists, a reset code has been sent — enter it below along with your new password.';
+    document.getElementById('resetStep2').classList.remove('section-hidden');
+  } catch (err) {
+    errorBanner.textContent = err.message;
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send Reset Code';
+  }
+});
+
+document.getElementById('submitResetBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('forgotError');
+  errorBanner.classList.remove('show');
+  const token = document.getElementById('resetToken').value.trim();
+  const newPassword = document.getElementById('resetNewPassword').value;
+
+  if (!token || !newPassword) {
+    errorBanner.textContent = 'Enter both the reset code and a new password.';
+    errorBanner.classList.add('show');
+    return;
+  }
+  if (newPassword.length < 8) {
+    errorBanner.textContent = 'New password must be at least 8 characters.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('submitResetBtn');
+  btn.disabled = true; btn.textContent = 'Updating...';
+
+  try {
+    await api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }) });
+    showToast('Password updated — sign in with your new password.');
+    document.getElementById('loginEmail').value = document.getElementById('forgotEmail').value.trim();
+    document.getElementById('resetStep2').classList.add('section-hidden');
+    showCard('loginCard');
+  } catch (err) {
+    errorBanner.textContent = err.message;
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Set New Password';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Become a Member — free registration, no payment involved at all.
+// This just creates the account; payment only ever happens later, and only
+// for specific paid actions (publishing an article, etc.) via Submit & Pay.
+// ---------------------------------------------------------------------------
+let PENDING_VERIFY_EMAIL = null;
+
+document.getElementById('registerBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('registerError');
+  errorBanner.classList.remove('show');
+  API_BASE = document.getElementById('registerApiBaseInput').value.trim().replace(/\/$/, '');
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+
+  if (!email || !password) {
+    errorBanner.textContent = 'Email and password are required.';
+    errorBanner.classList.add('show');
+    return;
+  }
+  if (password.length < 8) {
+    errorBanner.textContent = 'Password must be at least 8 characters.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('registerBtn');
+  btn.disabled = true; btn.textContent = 'Creating account...';
+
+  try {
+    await api('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) });
+    localStorage.setItem('unplug_api_base', API_BASE);
+    PENDING_VERIFY_EMAIL = email;
+    document.getElementById('verifySub').textContent = `We sent a 6-digit code to ${email}. Enter it below to activate your free account.`;
+    showCard('verifyCard');
+  } catch (err) {
+    errorBanner.textContent = err.message;
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Free Account';
+  }
+});
+
+document.getElementById('verifyBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('verifyError');
+  errorBanner.classList.remove('show');
+  const code = document.getElementById('verifyCode').value.trim();
+
+  if (!code) {
+    errorBanner.textContent = 'Enter the 6-digit code from your email.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('verifyBtn');
+  btn.disabled = true; btn.textContent = 'Activating...';
+
+  try {
+    await api('/auth/verify-email', { method: 'POST', body: JSON.stringify({ email: PENDING_VERIFY_EMAIL, code }) });
+    showToast('Account activated! You can now sign in.');
+    document.getElementById('loginEmail').value = PENDING_VERIFY_EMAIL;
+    document.getElementById('apiBaseInput').value = API_BASE;
+    showCard('loginCard');
+  } catch (err) {
+    errorBanner.textContent = err.message;
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Activate Account';
+  }
+});
+
+document.getElementById('resendCodeBtn').addEventListener('click', async () => {
+  try {
+    await api('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email: PENDING_VERIFY_EMAIL }) });
+    showToast('A new code has been sent, if that account needs verifying.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Login
 // ---------------------------------------------------------------------------
 document.getElementById('loginBtn').addEventListener('click', async () => {
@@ -261,7 +493,9 @@ function enterMemberDashboard(user){
     localStorage.removeItem('unplug_auth_token');
     location.reload();
   });
-  document.getElementById('loginCard').classList.add('section-hidden');
+  ['gateCard', 'registerCard', 'verifyCard', 'loginCard', 'forgotCard'].forEach((id) => {
+    document.getElementById(id).classList.add('section-hidden');
+  });
   document.getElementById('dashboard').classList.remove('section-hidden');
   loadProfile();
   loadArticles();
