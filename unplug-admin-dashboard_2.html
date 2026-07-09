@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unplug Admin Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#272626; --slate:#454545; --black:#0f0e0e;
+  --cream:#ffffff; --paper:#f1f0ef; --paper-line: rgba(15,14,14,0.14);
+  --red:#d20709; --maroon:#721415; --green:#2e7d32;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{ font-family:'Inter',sans-serif; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+h1,h2,h3{ font-family:'Playfair Display', serif; }
+
+/* ---- login screen ---- */
+.login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--black); }
+.login-card{ background:var(--cream); padding:40px; width:100%; max-width:380px; }
+.login-card .word{ font-family:'Playfair Display',serif; font-weight:700; font-size:22px; color:var(--red); margin-bottom:4px; }
+.login-card .sub{ font-size:12.5px; color:var(--slate); margin-bottom:24px; }
+.field{ margin-bottom:16px; }
+.field label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:6px; }
+.field input{ width:100%; border:1px solid var(--paper-line); padding:10px 12px; font-size:14px; font-family:'Inter',sans-serif; }
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
+.btn-solid{ background:var(--red); color:#fff; border-color:var(--red); width:100%; }
+.btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
+.error-banner{ background:rgba(210,7,9,0.08); border:1px solid var(--red); color:var(--maroon); padding:10px 12px; font-size:12.5px; margin-bottom:16px; display:none; }
+.error-banner.show{ display:block; }
+.section-hidden{ display:none; }
+
+/* ---- app shell ---- */
+.app-shell{ display:none; grid-template-columns:240px 1fr; min-height:100vh; }
+.app-shell.active{ display:grid; }
+.sidebar{ background:var(--ink); color:var(--cream); padding:24px 16px; display:flex; flex-direction:column; gap:2px; }
+.sidebar .brand{ font-family:'Playfair Display',serif; font-weight:700; font-size:17px; color:var(--red); margin-bottom:20px; }
+.sidebar a{ display:flex; align-items:center; justify-content:space-between; padding:9px 12px; color:#cfcac0; text-decoration:none; font-size:13px; font-weight:500; cursor:pointer; }
+.sidebar a.active{ background:rgba(210,7,9,0.16); color:var(--cream); border-left:3px solid var(--red); padding-left:9px; }
+.sidebar .foot{ margin-top:auto; font-size:11px; color:#8a8580; }
+.sidebar .foot button{ background:none; border:none; color:#cfcac0; font-size:11px; text-decoration:underline; cursor:pointer; padding:0; margin-top:6px; }
+
+.main{ padding:30px 38px; }
+.main-head{ display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:14px; }
+.main-head h1{ font-size:25px; font-weight:700; }
+.main-head p{ color:var(--slate); font-size:13px; margin-top:4px; }
+
+.panel{ background:var(--cream); border:1px solid var(--paper-line); margin-bottom:20px; }
+.panel-head{ padding:14px 18px; border-bottom:1px solid var(--paper-line); }
+.panel-head h3{ font-size:15px; font-weight:700; }
+.panel-body{ padding:16px; }
+
+.queue-tabs{ display:flex; gap:2px; border-bottom:1px solid var(--paper-line); flex-wrap:wrap; }
+.queue-tabs button{ background:none; border:none; padding:12px 14px; font-size:12px; font-weight:600; color:var(--slate); cursor:pointer; }
+.queue-tabs button.active{ color:var(--red); border-bottom:2px solid var(--red); }
+
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+th{ text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); padding:9px 10px; border-bottom:2px solid var(--ink); }
+td{ padding:10px; border-bottom:1px solid var(--paper-line); }
+.row-actions{ display:flex; gap:6px; }
+.row-actions button{ font-size:10px; font-weight:700; text-transform:uppercase; padding:5px 9px; border:1px solid var(--ink); background:none; cursor:pointer; }
+.row-actions button.approve{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.row-actions button.reject{ color:var(--red); border-color:var(--red); }
+.empty-state{ padding:24px; text-align:center; color:var(--slate); font-size:13px; }
+.loading-state{ padding:24px; text-align:center; color:var(--slate); font-size:13px; }
+
+.form-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+.form-row label{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:5px; }
+.form-row input{ width:100%; border:1px solid var(--paper-line); padding:8px 10px; font-size:12.5px; font-family:'Inter',sans-serif; }
+
+.admin-section{ display:none; }
+.admin-section.active{ display:block; }
+.toast{ position:fixed; bottom:20px; right:20px; background:var(--ink); color:#fff; padding:12px 18px; font-size:13px; z-index:999; display:none; }
+.toast.show{ display:block; }
+.toast.error{ background:var(--maroon); }
+/* ---- responsive ---- */
+@media (max-width:800px){
+  .app-shell.active{ grid-template-columns:1fr; }
+  .sidebar{ display:flex; flex-direction:row; flex-wrap:wrap; overflow-x:auto; gap:14px; padding:14px 16px; align-items:center; }
+  .sidebar .brand{ width:100%; margin-bottom:0; }
+  .sidebar .foot{ margin-top:0; margin-left:auto; }
+  .main{ padding:20px 16px; }
+  .form-row{ grid-template-columns:1fr; }
+  .panel-body{ overflow-x:auto; }
+  table{ min-width:480px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="word">Unplug Admin</div>
+    <div class="sub">Sign in with your admin account to manage the platform.</div>
+    <div class="error-banner" id="loginError"></div>
+    <div class="field">
+      <label>API Base URL</label>
+      <input id="apiBaseInput" value="http://localhost:4000" placeholder="http://localhost:4000">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input id="loginEmail" type="email" placeholder="admin@unplugnews.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="loginPassword" type="password" placeholder="••••••••">
+    </div>
+    <button class="btn btn-solid" id="loginBtn">Sign In</button>
+    <button class="btn btn-line" id="showForgotBtn" style="width:100%; margin-top:10px;">Forgot Password?</button>
+  </div>
+
+  <!-- FORGOT PASSWORD -->
+  <div class="login-card section-hidden" id="forgotCard">
+    <div class="word">Unplug Admin</div>
+    <div class="sub" id="forgotSub">Enter your admin email — we'll send a reset code you can use to set a new password.</div>
+    <div class="error-banner" id="forgotError"></div>
+    <div class="field">
+      <label>API Base URL</label>
+      <input id="forgotApiBaseInput" value="http://localhost:4000">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input id="forgotEmail" type="email" placeholder="admin@unplugnews.com">
+    </div>
+    <button class="btn btn-solid" id="requestResetBtn">Send Reset Code</button>
+
+    <div id="resetStep2" class="section-hidden" style="margin-top:16px;">
+      <div class="field"><label>Reset Code (from email)</label><input id="resetToken"></div>
+      <div class="field"><label>New Password (8+ characters)</label><input id="resetNewPassword" type="password"></div>
+      <button class="btn btn-solid" id="submitResetBtn">Set New Password</button>
+    </div>
+
+    <button class="btn btn-line" id="backFromForgotBtn" style="width:100%; margin-top:10px;">← Back to Sign In</button>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div class="app-shell" id="appShell">
+  <div class="sidebar">
+    <div class="brand">Unplug Admin</div>
+    <a class="active" data-section="queue">Approval Queue</a>
+    <a data-section="birthdays">Birthdays</a>
+    <a data-section="payments">Payments (EFT)</a>
+    <a data-section="users">Users</a>
+    <a data-section="consultants">Sales Consultants</a>
+    <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <div class="foot">
+      Signed in as <span id="currentUserEmail"></span>
+      <br><button id="logoutBtn">Log out</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- APPROVAL QUEUE -->
+    <div class="admin-section active" id="section-queue">
+      <div class="main-head"><div><h1>Approval Queue</h1><p>Live data from the Unplug API — approve or reject moves it immediately.</p></div></div>
+      <div class="panel">
+        <div class="queue-tabs" id="queueTabs"></div>
+        <div class="panel-body" id="queueBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- BIRTHDAYS -->
+    <div class="admin-section" id="section-birthdays">
+      <div class="main-head"><div><h1>Birthdays</h1><p>Schedule a once-off birthday — it recurs automatically each year on the homepage.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Add a Birthday</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Name</label><input id="bdayName" placeholder="e.g. Naledi Mokoena"></div>
+            <div><label>Month (1-12)</label><input id="bdayMonth" type="number" min="1" max="12"></div>
+            <div><label>Day</label><input id="bdayDay" type="number" min="1" max="31"></div>
+            <div><label>Message (optional)</label><input id="bdayMessage" placeholder="Custom shout-out"></div>
+          </div>
+          <button class="btn btn-solid" style="width:auto;" id="addBirthdayBtn">Schedule Birthday</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>This Month</h3></div>
+        <div class="panel-body" id="birthdaysBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- PAYMENTS (EFT) -->
+    <div class="admin-section" id="section-payments">
+      <div class="main-head"><div><h1>Payments — Manual EFT</h1><p>Confirm after checking your bank statement. PayFast and Ozow confirm automatically via webhook and won't appear here.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="paymentsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="admin-section" id="section-users">
+      <div class="main-head"><div><h1>Users</h1><p>Everyone with an account on Unplug.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="usersBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- SALES CONSULTANTS -->
+    <div class="admin-section" id="section-consultants">
+      <div class="main-head"><div><h1>Sales Consultants</h1><p>Add consultants here — they'll appear in the "How did you hear about us?" dropdown at checkout. Click a name to see their attributed sales and commission.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Add a Consultant</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Name</label><input id="consultantName" placeholder="e.g. Thabo Nkosi"></div>
+            <div><label>Email</label><input id="consultantEmail" placeholder="thabo@unplugnews.com"></div>
+            <div><label>Commission %</label><input id="consultantCommission" type="number" step="0.5" value="10"></div>
+            <div style="display:flex; align-items:flex-end;"><button class="btn btn-solid" style="width:100%;" id="addConsultantBtn">Add</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>All Consultants</h3></div>
+        <div class="panel-body" id="consultantsBody" style="padding:0;"></div>
+      </div>
+      <div class="panel" id="consultantReportPanel" style="display:none;">
+        <div class="panel-head"><h3 id="consultantReportTitle">Commission Report</h3></div>
+        <div class="panel-body" id="consultantReportBody"></div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div class="admin-section" id="section-notifications">
+      <div class="main-head"><div><h1>Notifications</h1><p>Sales-consultant-linked payments show up here automatically once confirmed.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="notificationsBody" style="padding:0;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let API_BASE = localStorage.getItem('unplug_api_base') || 'http://localhost:4000';
+let AUTH_TOKEN = null;
+let CURRENT_USER = null;
+
+// ---------------------------------------------------------------------------
+// API helper — every call goes through here so the Authorization header
+// and error handling are consistent.
+// ---------------------------------------------------------------------------
+async function api(path, options = {}) {
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(AUTH_TOKEN ? { Authorization: 'Bearer ' + AUTH_TOKEN } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  let body = null;
+  try { body = await res.json(); } catch (e) { /* no JSON body */ }
+  if (!res.ok) {
+    throw new Error((body && body.error) || `Request failed (${res.status})`);
+  }
+  return body;
+}
+
+function showToast(message, isError = false) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+
+// ---------------------------------------------------------------------------
+// Forgot Password
+// ---------------------------------------------------------------------------
+document.getElementById('showForgotBtn').addEventListener('click', () => {
+  document.getElementById('forgotApiBaseInput').value = document.getElementById('apiBaseInput').value;
+  document.querySelector('.login-card:not(#forgotCard)').classList.add('section-hidden');
+  document.getElementById('forgotCard').classList.remove('section-hidden');
+});
+
+document.getElementById('backFromForgotBtn').addEventListener('click', () => {
+  document.getElementById('forgotCard').classList.add('section-hidden');
+  document.querySelector('.login-card:not(#forgotCard)').classList.remove('section-hidden');
+});
+
+document.getElementById('requestResetBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('forgotError');
+  errorBanner.classList.remove('show');
+  API_BASE = document.getElementById('forgotApiBaseInput').value.trim().replace(/\/$/, '');
+  const email = document.getElementById('forgotEmail').value.trim();
+
+  if (!email) {
+    errorBanner.textContent = 'Enter your admin email first.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('requestResetBtn');
+  btn.disabled = true; btn.textContent = 'Sending...';
+
+  try {
+    await api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+    document.getElementById('forgotSub').textContent = 'If that account exists, a reset code has been sent — enter it below along with your new password.';
+    document.getElementById('resetStep2').classList.remove('section-hidden');
+  } catch (err) {
+    errorBanner.textContent = err.message;
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send Reset Code';
+  }
+});
+
+document.getElementById('submitResetBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('forgotError');
+  errorBanner.classList.remove('show');
+  const token = document.getElementById('resetToken').value.trim();
+  const newPassword = document.getElementById('resetNewPassword').value;
+
+  if (!token || !newPassword) {
+    errorBanner.textContent = 'Enter both the reset code and a new password.';
+    errorBanner.classList.add('show');
+    return;
+  }
+  if (newPassword.length < 8) {
+    errorBanner.textContent = 'New password must be at least 8 characters.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('submitResetBtn');
+  btn.disabled = true; btn.textContent = 'Updating...';
+
+  try {
+    await api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }) });
+    showToast('Password updated — sign in with your new password.');
+    document.getElementById('loginEmail').value = document.getElementById('forgotEmail').value.trim();
+    document.getElementById('resetStep2').classList.add('section-hidden');
+    document.getElementById('forgotCard').classList.add('section-hidden');
+    document.querySelector('.login-card:not(#forgotCard)').classList.remove('section-hidden');
+  } catch (err) {
+    errorBanner.textContent = err.message;
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Set New Password';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Login
+// ---------------------------------------------------------------------------
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('loginError');
+  errorBanner.classList.remove('show');
+
+  API_BASE = document.getElementById('apiBaseInput').value.trim().replace(/\/$/, '');
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+
+  if (!email || !password) {
+    errorBanner.textContent = 'Email and password are required.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+
+  try {
+    const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+    if (data.user.role !== 'admin') {
+      throw new Error('This dashboard is for admin accounts only.');
+    }
+    AUTH_TOKEN = data.token;
+    CURRENT_USER = data.user;
+    // Persist so a page refresh doesn't log the admin straight back out.
+    localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
+    localStorage.setItem('unplug_api_base', API_BASE);
+    enterDashboard(data.user);
+  } catch (err) {
+    errorBanner.textContent = err.message + ' (Is the API running at that URL?)';
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+});
+
+function enterDashboard(user){
+  document.getElementById('currentUserEmail').textContent = user.email;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appShell').classList.add('active');
+  loadQueueTab('news');
+  refreshNotifBadge();
+}
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  AUTH_TOKEN = null;
+  CURRENT_USER = null;
+  localStorage.removeItem('unplug_auth_token');
+  document.getElementById('appShell').classList.remove('active');
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPassword').value = '';
+});
+
+// On page load, if a token was saved from a previous session, try to
+// restore it automatically rather than forcing a fresh login every time
+// the page is refreshed.
+(async function restoreSession(){
+  const savedToken = localStorage.getItem('unplug_auth_token');
+  if (!savedToken) return;
+  AUTH_TOKEN = savedToken;
+  try {
+    const data = await api('/auth/me');
+    if (data.user.role !== 'admin') throw new Error('Not an admin account.');
+    CURRENT_USER = data.user;
+    enterDashboard(data.user);
+  } catch (err) {
+    // Saved token is invalid/expired — clear it and fall back to the login screen.
+    AUTH_TOKEN = null;
+    localStorage.removeItem('unplug_auth_token');
+  }
+})();
+
+// ---------------------------------------------------------------------------
+// Sidebar section switching
+// ---------------------------------------------------------------------------
+document.querySelectorAll('[data-section]').forEach((link) => {
+  link.addEventListener('click', () => {
+    document.querySelectorAll('[data-section]').forEach((l) => l.classList.remove('active'));
+    link.classList.add('active');
+    document.querySelectorAll('.admin-section').forEach((s) => s.classList.remove('active'));
+    const section = link.dataset.section;
+    document.getElementById('section-' + section).classList.add('active');
+    if (section === 'birthdays') loadBirthdays();
+    if (section === 'payments') loadPendingEft();
+    if (section === 'users') loadUsers();
+    if (section === 'consultants') loadConsultants();
+    if (section === 'notifications') loadNotifications();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Approval Queue — one config object per tab, so adding a new content
+// type later is just one more entry here, not new rendering code.
+// ---------------------------------------------------------------------------
+const QUEUE_TABS = {
+  news: {
+    label: 'Latest News', listPath: '/admin/articles/pending', resource: 'articles',
+    columns: [
+      { header: 'Title', render: (r) => r.title },
+      { header: 'Supplied By', render: (r) => r.kicker_supplied_by || '—' },
+      { header: 'Category', render: (r) => r.category || '—' },
+      { header: 'Submitted By', render: (r) => r.submitted_by },
+    ],
+  },
+  directory: {
+    label: 'Directory', listPath: '/admin/profiles/pending', resource: 'profiles',
+    columns: [
+      { header: 'Name', render: (r) => r.display_name },
+      { header: 'Package', render: (r) => r.package_tier },
+      { header: 'Category', render: (r) => r.category || '—' },
+      { header: 'Submitted By', render: (r) => r.submitted_by },
+    ],
+  },
+  gallery: {
+    label: 'Gallery', listPath: '/admin/gallery/pending', resource: 'gallery',
+    columns: [
+      { header: 'Caption', render: (r) => r.caption || '—' },
+      { header: 'Supplied By', render: (r) => r.supplied_by || '—' },
+      { header: 'Type', render: (r) => r.owner_type },
+    ],
+  },
+  events: {
+    label: 'Events', listPath: '/admin/events/pending', resource: 'events',
+    columns: [
+      { header: 'Name', render: (r) => r.name },
+      { header: 'Date', render: (r) => r.event_date },
+      { header: 'Venue', render: (r) => r.venue || '—' },
+      { header: 'Organizer', render: (r) => r.organizer },
+    ],
+  },
+  competitions: {
+    label: 'Competitions', listPath: '/admin/entries/pending', resource: 'entries',
+    columns: [
+      { header: 'Entrant', render: (r) => r.display_name },
+      { header: 'Competition', render: (r) => r.competition_name },
+      { header: 'Entry Fee', render: (r) => 'R' + r.entry_fee },
+    ],
+  },
+  investors: {
+    label: 'Investors', listPath: '/admin/investors/pending', resource: 'investors',
+    columns: [
+      { header: 'Name', render: (r) => r.name },
+      { header: 'Contact', render: (r) => r.contact_email || '—' },
+      { header: 'Submitted By', render: (r) => r.submitted_by },
+    ],
+  },
+  marketplace: {
+    label: 'Marketplace', listPath: '/admin/marketplace/pending', resource: 'marketplace',
+    columns: [
+      { header: 'Business', render: (r) => r.business_name },
+      { header: 'Headline', render: (r) => r.headline || '—' },
+      { header: 'Duration', render: (r) => r.duration_days + ' days' },
+    ],
+  },
+  highlights: {
+    label: 'Highlights', listPath: '/admin/highlights/pending', resource: 'highlights',
+    columns: [
+      { header: 'Target', render: (r) => r.target_type + ' #' + r.target_id },
+      { header: 'Duration', render: (r) => r.duration_days + ' days' },
+    ],
+  },
+};
+
+// Build the tab bar once.
+const queueTabsEl = document.getElementById('queueTabs');
+Object.entries(QUEUE_TABS).forEach(([key, cfg], i) => {
+  const btn = document.createElement('button');
+  btn.textContent = cfg.label;
+  if (i === 0) btn.classList.add('active');
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#queueTabs button').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadQueueTab(key);
+  });
+  queueTabsEl.appendChild(btn);
+});
+
+async function loadQueueTab(key) {
+  const cfg = QUEUE_TABS[key];
+  const body = document.getElementById('queueBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+
+  try {
+    const data = await api(cfg.listPath);
+    const rows = data[Object.keys(data)[0]]; // each endpoint's single top-level array
+    if (!rows || rows.length === 0) {
+      body.innerHTML = '<div class="empty-state">Nothing pending here right now.</div>';
+      return;
+    }
+
+    const table = document.createElement('table');
+    const thead = document.createElement('tr');
+    cfg.columns.forEach((c) => {
+      const th = document.createElement('th');
+      th.textContent = c.header;
+      thead.appendChild(th);
+    });
+    thead.appendChild(document.createElement('th'));
+    table.appendChild(thead);
+
+    rows.forEach((row) => {
+      const tr = document.createElement('tr');
+      cfg.columns.forEach((c) => {
+        const td = document.createElement('td');
+        td.textContent = c.render(row);
+        tr.appendChild(td);
+      });
+      const actionTd = document.createElement('td');
+      actionTd.innerHTML = `
+        <div class="row-actions">
+          <button class="approve">Approve</button>
+          <button class="reject">Reject</button>
+        </div>`;
+      actionTd.querySelector('.approve').addEventListener('click', () => actOnQueueItem(cfg, row.id, 'approve'));
+      actionTd.querySelector('.reject').addEventListener('click', () => actOnQueueItem(cfg, row.id, 'reject'));
+      tr.appendChild(actionTd);
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+async function actOnQueueItem(cfg, id, action) {
+  try {
+    await api(`/admin/${cfg.resource}/${id}/${action}`, { method: 'PATCH' });
+    showToast(`${cfg.label} item ${action}d.`);
+    const activeTabBtn = Array.from(queueTabsEl.children).find((b) => b.classList.contains('active'));
+    const activeKey = Object.keys(QUEUE_TABS).find((k) => QUEUE_TABS[k].label === activeTabBtn.textContent);
+    loadQueueTab(activeKey);
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Birthdays
+// ---------------------------------------------------------------------------
+document.getElementById('addBirthdayBtn').addEventListener('click', async () => {
+  const name = document.getElementById('bdayName').value.trim();
+  const birthMonth = parseInt(document.getElementById('bdayMonth').value, 10);
+  const birthDay = parseInt(document.getElementById('bdayDay').value, 10);
+  const message = document.getElementById('bdayMessage').value.trim();
+
+  if (!name || !birthMonth || !birthDay) {
+    showToast('Name, month, and day are required.', true);
+    return;
+  }
+
+  try {
+    await api('/birthdays', {
+      method: 'POST',
+      body: JSON.stringify({ name, birthMonth, birthDay, message: message || undefined }),
+    });
+    showToast('Birthday scheduled.');
+    document.getElementById('bdayName').value = '';
+    document.getElementById('bdayMonth').value = '';
+    document.getElementById('bdayDay').value = '';
+    document.getElementById('bdayMessage').value = '';
+    loadBirthdays();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+async function loadBirthdays() {
+  const body = document.getElementById('birthdaysBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/birthdays/month');
+    if (!data.birthdays || data.birthdays.length === 0) {
+      body.innerHTML = '<div class="empty-state">No birthdays scheduled this month.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Name</th><th>Date</th><th></th></tr>';
+    data.birthdays.forEach((b) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${b.name}</td><td>${b.birth_month}/${b.birth_day}</td><td><div class="row-actions"><button class="reject">Remove</button></div></td>`;
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try {
+          await api(`/birthdays/${b.id}`, { method: 'DELETE' });
+          showToast('Removed.');
+          loadBirthdays();
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Payments — manual EFT confirmation
+// ---------------------------------------------------------------------------
+async function loadPendingEft() {
+  const body = document.getElementById('paymentsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/payments/pending-eft');
+    if (!data.payments || data.payments.length === 0) {
+      body.innerHTML = '<div class="empty-state">No manual EFT payments waiting.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Reference</th><th>Amount</th><th>For</th><th></th></tr>';
+    data.payments.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${p.gateway_reference}</td><td>R${p.amount}</td><td>${p.linked_type} #${p.linked_id}</td><td><div class="row-actions"><button class="approve">Confirm</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        try {
+          await api(`/payments/${p.id}/confirm-eft`, { method: 'PATCH' });
+          showToast('Payment confirmed — linked item moved into the approval queue.');
+          loadPendingEft();
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Users (read-only)
+// ---------------------------------------------------------------------------
+async function loadUsers() {
+  const body = document.getElementById('usersBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/users');
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Email</th><th>Role</th><th>Joined</th></tr>';
+    data.users.forEach((u) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${u.email}</td><td>${u.role}</td><td>${new Date(u.created_at).toLocaleDateString()}</td>`;
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sales Consultants
+// ---------------------------------------------------------------------------
+document.getElementById('addConsultantBtn').addEventListener('click', async () => {
+  const name = document.getElementById('consultantName').value.trim();
+  const email = document.getElementById('consultantEmail').value.trim();
+  const commissionPct = parseFloat(document.getElementById('consultantCommission').value) || 10;
+
+  if (!name) {
+    showToast('Name is required.', true);
+    return;
+  }
+  try {
+    await api('/admin/sales-consultants', {
+      method: 'POST',
+      body: JSON.stringify({ name, email: email || undefined, commissionPct }),
+    });
+    showToast('Consultant added.');
+    document.getElementById('consultantName').value = '';
+    document.getElementById('consultantEmail').value = '';
+    document.getElementById('consultantCommission').value = '10';
+    loadConsultants();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+async function loadConsultants() {
+  const body = document.getElementById('consultantsBody');
+  document.getElementById('consultantReportPanel').style.display = 'none';
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/sales-consultants');
+    if (!data.consultants || data.consultants.length === 0) {
+      body.innerHTML = '<div class="empty-state">No consultants added yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Name</th><th>Email</th><th>Commission</th><th>Status</th><th></th></tr>';
+    data.consultants.forEach((c) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><a href="#" style="color:var(--red); font-weight:600; text-decoration:none;">${c.name}</a></td>
+        <td>${c.email || '—'}</td>
+        <td>${c.commission_pct}%</td>
+        <td>${c.active ? 'Active' : 'Inactive'}</td>
+        <td><div class="row-actions"><button class="${c.active ? 'reject' : 'approve'}">${c.active ? 'Deactivate' : 'Activate'}</button></div></td>`;
+      tr.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadConsultantReport(c.id, c.name); });
+      tr.querySelector('.row-actions button').addEventListener('click', async () => {
+        try {
+          await api(`/admin/sales-consultants/${c.id}`, { method: 'PATCH', body: JSON.stringify({ active: !c.active }) });
+          showToast(c.active ? 'Consultant deactivated.' : 'Consultant activated.');
+          loadConsultants();
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+async function loadConsultantReport(id, name) {
+  const panel = document.getElementById('consultantReportPanel');
+  const titleEl = document.getElementById('consultantReportTitle');
+  const bodyEl = document.getElementById('consultantReportBody');
+  titleEl.textContent = `Commission Report — ${name}`;
+  bodyEl.innerHTML = '<div class="loading-state">Loading…</div>';
+  panel.style.display = 'block';
+
+  try {
+    const data = await api(`/admin/sales-consultants/${id}/payments`);
+    if (!data.payments || data.payments.length === 0) {
+      bodyEl.innerHTML = '<div class="empty-state">No confirmed sales attributed to this consultant yet.</div>';
+      return;
+    }
+    const summary = document.createElement('p');
+    summary.style.cssText = 'font-size:13px; margin-bottom:14px;';
+    summary.innerHTML = `<strong>Total sales: R${data.totalSales.toFixed(2)}</strong> &nbsp;·&nbsp; <strong style="color:var(--red);">Commission owed: R${data.totalCommission.toFixed(2)}</strong> (${data.consultant.commission_pct}%)`;
+
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Date</th><th>For</th><th>Method</th><th>Amount</th></tr>';
+    data.payments.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${new Date(p.confirmed_at).toLocaleDateString()}</td><td>${p.linked_type} #${p.linked_id}</td><td>${p.method}</td><td>R${p.amount}</td>`;
+      table.appendChild(tr);
+    });
+
+    bodyEl.innerHTML = '';
+    bodyEl.appendChild(summary);
+    bodyEl.appendChild(table);
+  } catch (err) {
+    bodyEl.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+async function refreshNotifBadge() {
+  try {
+    const data = await api('/admin/notifications');
+    const unreadCount = data.notifications.filter((n) => !n.read).length;
+    const badge = document.getElementById('notifBadge');
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (err) {
+    // Silently skip — the badge just won't update if this fails.
+  }
+}
+
+async function loadNotifications() {
+  const body = document.getElementById('notificationsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/notifications');
+    if (!data.notifications || data.notifications.length === 0) {
+      body.innerHTML = '<div class="empty-state">No notifications yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Message</th><th>Date</th><th></th></tr>';
+    data.notifications.forEach((n) => {
+      const tr = document.createElement('tr');
+      tr.style.fontWeight = n.read ? 'normal' : '600';
+      tr.innerHTML = `<td>${n.message}</td><td>${new Date(n.created_at).toLocaleString()}</td><td>${n.read ? '' : '<div class="row-actions"><button class="approve">Mark Read</button></div>'}</td>`;
+      const markBtn = tr.querySelector('.approve');
+      if (markBtn) {
+        markBtn.addEventListener('click', async () => {
+          try {
+            await api(`/admin/notifications/${n.id}/read`, { method: 'PATCH' });
+            loadNotifications();
+            refreshNotifBadge();
+          } catch (err) {
+            showToast(err.message, true);
+          }
+        });
+      }
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+</script>
+</body>
+</html>
