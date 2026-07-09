@@ -3,10 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
-const validateEnv = require('./utils/validateEnv');
-validateEnv();
-
-const requestLogger = require('./middleware/requestLogger');
 const { attachUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -26,13 +22,14 @@ const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
 const analyticsRoutes = require('./routes/analytics');
+const inquiryRoutes = require('./routes/inquiries');
+const { router: activityLogRoutes } = require('./routes/activityLog');
 
 const app = express();
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 app.use(express.json());
-app.use(requestLogger);
 
 // Reads the bearer token (if any) on every request and attaches req.user.
 // Individual routes then use requireAuth / requireRole to enforce access.
@@ -63,6 +60,8 @@ app.use('/agreements', agreementRoutes);
 app.use('/admin/bulk-email', bulkEmailRoutes);
 app.use('/editions', editionRoutes);
 app.use('/analytics', analyticsRoutes);
+app.use('/inquiries', inquiryRoutes);
+app.use('/admin/activity-log', activityLogRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,
