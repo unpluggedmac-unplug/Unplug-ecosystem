@@ -6,15 +6,30 @@
 <title>Unplug Admin Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="unplug-shared.css">
 <style>
+:root{
+  --ink:#272626; --slate:#454545; --black:#0f0e0e;
+  --cream:#ffffff; --paper:#f1f0ef; --paper-line: rgba(15,14,14,0.14);
+  --red:#d20709; --maroon:#721415; --green:#2e7d32;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{ font-family:'Inter',sans-serif; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+h1,h2,h3{ font-family:'Playfair Display', serif; }
+
 /* ---- login screen ---- */
 .login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--black); }
 .login-card{ background:var(--cream); padding:40px; width:100%; max-width:380px; }
 .login-card .word{ font-family:'Playfair Display',serif; font-weight:700; font-size:22px; color:var(--red); margin-bottom:4px; }
 .login-card .sub{ font-size:12.5px; color:var(--slate); margin-bottom:24px; }
-.login-card .field input{ padding:10px 12px; }
-.login-card .btn-solid{ width:100%; }
+.field{ margin-bottom:16px; }
+.field label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:6px; }
+.field input{ width:100%; border:1px solid var(--paper-line); padding:10px 12px; font-size:14px; font-family:'Inter',sans-serif; }
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
+.btn-solid{ background:var(--red); color:#fff; border-color:var(--red); width:100%; }
+.btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
+.error-banner{ background:rgba(210,7,9,0.08); border:1px solid var(--red); color:var(--maroon); padding:10px 12px; font-size:12.5px; margin-bottom:16px; display:none; }
+.error-banner.show{ display:block; }
+.section-hidden{ display:none; }
 
 /* ---- app shell ---- */
 .app-shell{ display:none; grid-template-columns:240px 1fr; min-height:100vh; }
@@ -40,8 +55,15 @@
 .queue-tabs button{ background:none; border:none; padding:12px 14px; font-size:12px; font-weight:600; color:var(--slate); cursor:pointer; }
 .queue-tabs button.active{ color:var(--red); border-bottom:2px solid var(--red); }
 
-/* .row-actions, table/th/td, .toast base rules come from unplug-shared.css */
-.empty-state, .loading-state{ padding:24px; text-align:center; }
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+th{ text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); padding:9px 10px; border-bottom:2px solid var(--ink); }
+td{ padding:10px; border-bottom:1px solid var(--paper-line); }
+.row-actions{ display:flex; gap:6px; }
+.row-actions button{ font-size:10px; font-weight:700; text-transform:uppercase; padding:5px 9px; border:1px solid var(--ink); background:none; cursor:pointer; }
+.row-actions button.approve{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.row-actions button.reject{ color:var(--red); border-color:var(--red); }
+.empty-state{ padding:24px; text-align:center; color:var(--slate); font-size:13px; }
+.loading-state{ padding:24px; text-align:center; color:var(--slate); font-size:13px; }
 
 .form-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
 .form-row label{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:5px; }
@@ -49,6 +71,9 @@
 
 .admin-section{ display:none; }
 .admin-section.active{ display:block; }
+.toast{ position:fixed; bottom:20px; right:20px; background:var(--ink); color:#fff; padding:12px 18px; font-size:13px; z-index:999; display:none; }
+.toast.show{ display:block; }
+.toast.error{ background:var(--maroon); }
 /* ---- responsive ---- */
 @media (max-width:800px){
   .app-shell.active{ grid-template-columns:1fr; }
@@ -60,6 +85,13 @@
   .panel-body{ overflow-x:auto; }
   table{ min-width:480px; }
 }
+.chart-bars{ display:flex; align-items:flex-end; gap:4px; height:160px; min-width:100%; padding-top:10px; }
+.chart-bar-col{ flex:1; min-width:16px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+.chart-bar{ width:100%; background:var(--red); border-radius:2px 2px 0 0; min-height:2px; }
+.chart-bar-label{ font-size:9px; color:var(--slate); white-space:nowrap; transform:rotate(-45deg); transform-origin:top left; margin-top:6px; }
+.top-page-row{ display:flex; align-items:center; justify-content:space-between; padding:10px 18px; border-bottom:1px solid var(--paper-line); font-size:13px; }
+.top-page-row:last-child{ border-bottom:none; }
+.top-page-row .views{ font-weight:700; color:var(--red); }
 </style>
 </head>
 <body>
@@ -83,6 +115,31 @@
       <input id="loginPassword" type="password" placeholder="••••••••">
     </div>
     <button class="btn btn-solid" id="loginBtn">Sign In</button>
+    <button class="btn btn-line" id="showForgotBtn" style="width:100%; margin-top:10px;">Forgot Password?</button>
+  </div>
+
+  <!-- FORGOT PASSWORD -->
+  <div class="login-card section-hidden" id="forgotCard">
+    <div class="word">Unplug Admin</div>
+    <div class="sub" id="forgotSub">Enter your admin email — we'll send a reset code you can use to set a new password.</div>
+    <div class="error-banner" id="forgotError"></div>
+    <div class="field">
+      <label>API Base URL</label>
+      <input id="forgotApiBaseInput" value="http://localhost:4000">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input id="forgotEmail" type="email" placeholder="admin@unplugnews.com">
+    </div>
+    <button class="btn btn-solid" id="requestResetBtn">Send Reset Code</button>
+
+    <div id="resetStep2" class="section-hidden" style="margin-top:16px;">
+      <div class="field"><label>Reset Code (from email)</label><input id="resetToken"></div>
+      <div class="field"><label>New Password (8+ characters)</label><input id="resetNewPassword" type="password"></div>
+      <button class="btn btn-solid" id="submitResetBtn">Set New Password</button>
+    </div>
+
+    <button class="btn btn-line" id="backFromForgotBtn" style="width:100%; margin-top:10px;">← Back to Sign In</button>
   </div>
 </div>
 
@@ -96,6 +153,7 @@
     <a data-section="users">Users</a>
     <a data-section="consultants">Sales Consultants</a>
     <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="analytics">Analytics</a>
     <div class="foot">
       Signed in as <span id="currentUserEmail"></span>
       <br><button id="logoutBtn">Log out</button>
@@ -180,18 +238,147 @@
         <div class="panel-body" id="notificationsBody" style="padding:0;"></div>
       </div>
     </div>
+
+    <!-- ANALYTICS -->
+    <div class="admin-section" id="section-analytics">
+      <div class="main-head">
+        <div><h1>Site Analytics</h1><p>See which pages are being visited. Views are tracked automatically each time a visitor opens a page.</p></div>
+        <div class="row-actions" id="analyticsRangeButtons">
+          <button class="approve" data-range="7">Last 7 Days</button>
+          <button data-range="30">Last 30 Days</button>
+          <button data-range="90">Last 90 Days</button>
+        </div>
+      </div>
+      <div class="stat-row" id="analyticsStats">
+        <div class="stat-card"><div class="num" id="statTotalViews">—</div><div class="label">Total Page Views</div></div>
+        <div class="stat-card"><div class="num" id="statUniqueVisitors">—</div><div class="label">Unique Visitors</div></div>
+        <div class="stat-card"><div class="num" id="statPagesTracked">—</div><div class="label">Pages Tracked</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Daily Views</h3></div>
+        <div class="panel-body" id="dailyViewsChart" style="overflow-x:auto;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Top Pages</h3></div>
+        <div class="panel-body" id="topPagesBody" style="padding:0;"></div>
+      </div>
+    </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<script src="unplug-shared.js"></script>
 <script>
 // ---------------------------------------------------------------------------
-// State — API base/token/toast are handled by unplug-shared.js (UnplugAPI).
+// State
 // ---------------------------------------------------------------------------
+let API_BASE = localStorage.getItem('unplug_api_base') || 'http://localhost:4000';
+let AUTH_TOKEN = null;
 let CURRENT_USER = null;
-const api = UnplugAPI.api;
+
+// ---------------------------------------------------------------------------
+// API helper — every call goes through here so the Authorization header
+// and error handling are consistent.
+// ---------------------------------------------------------------------------
+async function api(path, options = {}) {
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(AUTH_TOKEN ? { Authorization: 'Bearer ' + AUTH_TOKEN } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  let body = null;
+  try { body = await res.json(); } catch (e) { /* no JSON body */ }
+  if (!res.ok) {
+    throw new Error((body && body.error) || `Request failed (${res.status})`);
+  }
+  return body;
+}
+
+function showToast(message, isError = false) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+
+// ---------------------------------------------------------------------------
+// Forgot Password
+// ---------------------------------------------------------------------------
+document.getElementById('showForgotBtn').addEventListener('click', () => {
+  document.getElementById('forgotApiBaseInput').value = document.getElementById('apiBaseInput').value;
+  document.querySelector('.login-card:not(#forgotCard)').classList.add('section-hidden');
+  document.getElementById('forgotCard').classList.remove('section-hidden');
+});
+
+document.getElementById('backFromForgotBtn').addEventListener('click', () => {
+  document.getElementById('forgotCard').classList.add('section-hidden');
+  document.querySelector('.login-card:not(#forgotCard)').classList.remove('section-hidden');
+});
+
+document.getElementById('requestResetBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('forgotError');
+  errorBanner.classList.remove('show');
+  API_BASE = document.getElementById('forgotApiBaseInput').value.trim().replace(/\/$/, '');
+  const email = document.getElementById('forgotEmail').value.trim();
+
+  if (!email) {
+    errorBanner.textContent = 'Enter your admin email first.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('requestResetBtn');
+  btn.disabled = true; btn.textContent = 'Sending...';
+
+  try {
+    await api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+    document.getElementById('forgotSub').textContent = 'If that account exists, a reset code has been sent — enter it below along with your new password.';
+    document.getElementById('resetStep2').classList.remove('section-hidden');
+  } catch (err) {
+    errorBanner.textContent = err.message;
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send Reset Code';
+  }
+});
+
+document.getElementById('submitResetBtn').addEventListener('click', async () => {
+  const errorBanner = document.getElementById('forgotError');
+  errorBanner.classList.remove('show');
+  const token = document.getElementById('resetToken').value.trim();
+  const newPassword = document.getElementById('resetNewPassword').value;
+
+  if (!token || !newPassword) {
+    errorBanner.textContent = 'Enter both the reset code and a new password.';
+    errorBanner.classList.add('show');
+    return;
+  }
+  if (newPassword.length < 8) {
+    errorBanner.textContent = 'New password must be at least 8 characters.';
+    errorBanner.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('submitResetBtn');
+  btn.disabled = true; btn.textContent = 'Updating...';
+
+  try {
+    await api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }) });
+    showToast('Password updated — sign in with your new password.');
+    document.getElementById('loginEmail').value = document.getElementById('forgotEmail').value.trim();
+    document.getElementById('resetStep2').classList.add('section-hidden');
+    document.getElementById('forgotCard').classList.add('section-hidden');
+    document.querySelector('.login-card:not(#forgotCard)').classList.remove('section-hidden');
+  } catch (err) {
+    errorBanner.textContent = err.message;
+    errorBanner.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Set New Password';
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Login
@@ -200,7 +387,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   const errorBanner = document.getElementById('loginError');
   errorBanner.classList.remove('show');
 
-  UnplugAPI.setApiBase(document.getElementById('apiBaseInput').value);
+  API_BASE = document.getElementById('apiBaseInput').value.trim().replace(/\/$/, '');
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
 
@@ -219,9 +406,11 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     if (data.user.role !== 'admin') {
       throw new Error('This dashboard is for admin accounts only.');
     }
-    // Persisted so a page refresh doesn't log the admin straight back out.
-    UnplugAPI.setToken(data.token);
+    AUTH_TOKEN = data.token;
     CURRENT_USER = data.user;
+    // Persist so a page refresh doesn't log the admin straight back out.
+    localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
+    localStorage.setItem('unplug_api_base', API_BASE);
     enterDashboard(data.user);
   } catch (err) {
     errorBanner.textContent = err.message + ' (Is the API running at that URL?)';
@@ -241,23 +430,32 @@ function enterDashboard(user){
 }
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
-  UnplugAPI.setToken(null);
+  AUTH_TOKEN = null;
   CURRENT_USER = null;
+  localStorage.removeItem('unplug_auth_token');
   document.getElementById('appShell').classList.remove('active');
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPassword').value = '';
 });
 
-// On page load, restore a saved session rather than forcing a fresh
-// login after every refresh.
-UnplugAPI.restoreSession((user) => {
-  if (user.role !== 'admin') {
-    UnplugAPI.setToken(null);
-    return;
+// On page load, if a token was saved from a previous session, try to
+// restore it automatically rather than forcing a fresh login every time
+// the page is refreshed.
+(async function restoreSession(){
+  const savedToken = localStorage.getItem('unplug_auth_token');
+  if (!savedToken) return;
+  AUTH_TOKEN = savedToken;
+  try {
+    const data = await api('/auth/me');
+    if (data.user.role !== 'admin') throw new Error('Not an admin account.');
+    CURRENT_USER = data.user;
+    enterDashboard(data.user);
+  } catch (err) {
+    // Saved token is invalid/expired — clear it and fall back to the login screen.
+    AUTH_TOKEN = null;
+    localStorage.removeItem('unplug_auth_token');
   }
-  CURRENT_USER = user;
-  enterDashboard(user);
-});
+})();
 
 // ---------------------------------------------------------------------------
 // Sidebar section switching
@@ -274,6 +472,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'users') loadUsers();
     if (section === 'consultants') loadConsultants();
     if (section === 'notifications') loadNotifications();
+    if (section === 'analytics') loadAnalytics(7);
   });
 });
 
@@ -696,6 +895,59 @@ async function loadNotifications() {
     body.appendChild(table);
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+document.querySelectorAll('#analyticsRangeButtons button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#analyticsRangeButtons button').forEach((b) => b.classList.remove('approve'));
+    btn.classList.add('approve');
+    loadAnalytics(Number(btn.dataset.range));
+  });
+});
+
+async function loadAnalytics(range) {
+  const chartEl = document.getElementById('dailyViewsChart');
+  const topPagesEl = document.getElementById('topPagesBody');
+  chartEl.innerHTML = '<div class="loading-state">Loading…</div>';
+  topPagesEl.innerHTML = '';
+
+  try {
+    const data = await api(`/analytics/summary?range=${range}`);
+
+    document.getElementById('statTotalViews').textContent = data.totalViews.toLocaleString();
+    document.getElementById('statUniqueVisitors').textContent = data.uniqueVisitors.toLocaleString();
+    document.getElementById('statPagesTracked').textContent = data.pagesTracked.toLocaleString();
+
+    // Daily views bar chart
+    if (data.daily.length === 0) {
+      chartEl.innerHTML = '<div class="empty-state">No page views recorded in this period yet.</div>';
+    } else {
+      const maxViews = Math.max(...data.daily.map((d) => d.views), 1);
+      const bars = data.daily.map((d) => {
+        const heightPct = Math.max(4, Math.round((d.views / maxViews) * 100));
+        const dateLabel = new Date(d.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        return `<div class="chart-bar-col" title="${d.views} views on ${dateLabel}">
+          <div class="chart-bar" style="height:${heightPct}%;"></div>
+          <span class="chart-bar-label">${dateLabel}</span>
+        </div>`;
+      }).join('');
+      chartEl.innerHTML = `<div class="chart-bars">${bars}</div>`;
+    }
+
+    // Top pages list
+    if (data.topPages.length === 0) {
+      topPagesEl.innerHTML = '<div class="empty-state">No page views recorded in this period yet.</div>';
+    } else {
+      topPagesEl.innerHTML = data.topPages.map((p) =>
+        `<div class="top-page-row"><span>${p.path}</span><span class="views">${p.views.toLocaleString()} views</span></div>`
+      ).join('');
+    }
+  } catch (err) {
+    chartEl.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
 
