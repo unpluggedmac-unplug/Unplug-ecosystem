@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
-const { getPagination, paginationMeta } = require('../utils/pagination');
+const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
@@ -11,16 +11,10 @@ const router = express.Router();
 // wired: requireRole('admin') first, then the actual query.
 router.get('/users', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query('SELECT COUNT(*) FROM users');
     const result = await pool.query(
-      'SELECT id, email, phone, role, created_at FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT id, email, phone, role, created_at FROM users ORDER BY created_at DESC'
     );
-    res.json({
-      users: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ users: result.rows });
   } catch (err) {
     next(err);
   }
@@ -30,22 +24,15 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
 // Admin-only — the Directory tab of the Approval Queue.
 router.get('/profiles/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM profiles WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT p.id, p.display_name, p.package_tier, p.status, p.created_at, c.name AS category, u.email AS submitted_by
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
        JOIN users u ON u.id = p.user_id
        WHERE p.status = 'pending'
-       ORDER BY p.created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY p.created_at ASC`
     );
-    res.json({
-      profiles: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ profiles: result.rows });
   } catch (err) {
     next(err);
   }
@@ -61,6 +48,7 @@ router.patch('/profiles/:id/approve', requireRole('admin'), async (req, res, nex
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Profile not found.' });
     }
+    await logActivity(req.user.id, 'profile_approved', `Profile #${req.params.id} — ${result.rows[0].display_name}`);
     res.json({ profile: result.rows[0] });
   } catch (err) {
     next(err);
@@ -77,6 +65,7 @@ router.patch('/profiles/:id/reject', requireRole('admin'), async (req, res, next
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Profile not found.' });
     }
+    await logActivity(req.user.id, 'profile_rejected', `Profile #${req.params.id} — ${result.rows[0].display_name}`);
     res.json({ profile: result.rows[0] });
   } catch (err) {
     next(err);
@@ -88,20 +77,13 @@ router.patch('/profiles/:id/reject', requireRole('admin'), async (req, res, next
 // investor, and general gallery submissions in one list).
 router.get('/gallery/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM gallery_images WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT id, owner_type, owner_id, image_url, caption, supplied_by, created_at
        FROM gallery_images
        WHERE status = 'pending'
-       ORDER BY created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY created_at ASC`
     );
-    res.json({
-      images: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ images: result.rows });
   } catch (err) {
     next(err);
   }
@@ -142,22 +124,15 @@ router.patch('/gallery/:id/reject', requireRole('admin'), async (req, res, next)
 // GET /admin/articles/pending — the Latest News tab of the Approval Queue.
 router.get('/articles/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM articles WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT a.id, a.title, a.kicker_supplied_by, a.created_at, c.name AS category, u.email AS submitted_by
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
        JOIN users u ON u.id = a.author_user_id
        WHERE a.status = 'pending'
-       ORDER BY a.created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY a.created_at ASC`
     );
-    res.json({
-      articles: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ articles: result.rows });
   } catch (err) {
     next(err);
   }
@@ -174,6 +149,7 @@ router.patch('/articles/:id/approve', requireRole('admin'), async (req, res, nex
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Article not found.' });
     }
+    await logActivity(req.user.id, 'article_approved', `Article #${req.params.id} — ${result.rows[0].title}`);
     res.json({ article: result.rows[0] });
   } catch (err) {
     next(err);
@@ -190,6 +166,7 @@ router.patch('/articles/:id/reject', requireRole('admin'), async (req, res, next
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Article not found.' });
     }
+    await logActivity(req.user.id, 'article_rejected', `Article #${req.params.id} — ${result.rows[0].title}`);
     res.json({ article: result.rows[0] });
   } catch (err) {
     next(err);
@@ -199,21 +176,14 @@ router.patch('/articles/:id/reject', requireRole('admin'), async (req, res, next
 // GET /admin/events/pending — the Events tab of the Approval Queue.
 router.get('/events/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM events WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT e.id, e.name, e.event_date, e.venue, e.created_at, u.email AS organizer
        FROM events e
        JOIN users u ON u.id = e.organizer_user_id
        WHERE e.status = 'pending'
-       ORDER BY e.event_date ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY e.event_date ASC`
     );
-    res.json({
-      events: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ events: result.rows });
   } catch (err) {
     next(err);
   }
@@ -256,22 +226,15 @@ router.patch('/events/:id/reject', requireRole('admin'), async (req, res, next) 
 // entries still 'awaiting_payment' aren't an admin's problem yet.
 router.get('/entries/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM competition_entries WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT ce.id, ce.competition_id, ce.entry_fee, ce.created_at, p.display_name, c.name AS competition_name
        FROM competition_entries ce
        JOIN profiles p ON p.id = ce.profile_id
        JOIN competitions c ON c.id = ce.competition_id
        WHERE ce.status = 'pending'
-       ORDER BY ce.created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY ce.created_at ASC`
     );
-    res.json({
-      entries: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ entries: result.rows });
   } catch (err) {
     next(err);
   }
@@ -312,21 +275,14 @@ router.patch('/entries/:id/reject', requireRole('admin'), async (req, res, next)
 // GET /admin/investors/pending — the Investors tab of the Approval Queue.
 router.get('/investors/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM investors WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT i.id, i.name, i.contact_email, i.created_at, u.email AS submitted_by
        FROM investors i
        JOIN users u ON u.id = i.user_id
        WHERE i.status = 'pending'
-       ORDER BY i.created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY i.created_at ASC`
     );
-    res.json({
-      investors: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ investors: result.rows });
   } catch (err) {
     next(err);
   }
@@ -368,21 +324,14 @@ router.patch('/investors/:id/reject', requireRole('admin'), async (req, res, nex
 // Queue (banners and ads submitted by advertisers).
 router.get('/marketplace/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM marketplace_listings WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT l.id, l.headline, l.duration_days, l.created_at, a.business_name
        FROM marketplace_listings l
        JOIN advertisers a ON a.id = l.advertiser_id
        WHERE l.status = 'pending'
-       ORDER BY l.created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY l.created_at ASC`
     );
-    res.json({
-      listings: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ listings: result.rows });
   } catch (err) {
     next(err);
   }
@@ -423,20 +372,13 @@ router.patch('/marketplace/:id/reject', requireRole('admin'), async (req, res, n
 // GET /admin/highlights/pending — the Highlights & Promotions tab.
 router.get('/highlights/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM highlights WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT id, target_type, target_id, duration_days, created_at
        FROM highlights
        WHERE status = 'pending'
-       ORDER BY created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY created_at ASC`
     );
-    res.json({
-      highlights: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ highlights: result.rows });
   } catch (err) {
     next(err);
   }
@@ -639,21 +581,14 @@ router.patch('/settings/:key', requireRole('admin'), async (req, res, next) => {
 // waiting on admin review (separate from publishing the actual rankings).
 router.get('/top10-entries/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const { page, limit, offset } = getPagination(req);
-    const countResult = await pool.query(`SELECT COUNT(*) FROM top10_entries WHERE status = 'pending'`);
     const result = await pool.query(
       `SELECT te.id, te.entry_fee, te.created_at, p.display_name
        FROM top10_entries te
        JOIN profiles p ON p.id = te.profile_id
        WHERE te.status = 'pending'
-       ORDER BY te.created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       ORDER BY te.created_at ASC`
     );
-    res.json({
-      entries: result.rows,
-      pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
-    });
+    res.json({ entries: result.rows });
   } catch (err) {
     next(err);
   }
