@@ -25,6 +25,7 @@ const uploadRoutes = require('./routes/uploads');
 const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
+const analyticsRoutes = require('./routes/analytics');
 
 const app = express();
 
@@ -61,6 +62,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/agreements', agreementRoutes);
 app.use('/admin/bulk-email', bulkEmailRoutes);
 app.use('/editions', editionRoutes);
+app.use('/analytics', analyticsRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,
