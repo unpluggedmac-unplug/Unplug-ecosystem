@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+const requestLogger = require('./middleware/requestLogger');
 const { attachUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -30,6 +31,7 @@ const app = express();
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 app.use(express.json());
+app.use(requestLogger);
 
 // Reads the bearer token (if any) on every request and attaches req.user.
 // Individual routes then use requireAuth / requireRole to enforce access.
