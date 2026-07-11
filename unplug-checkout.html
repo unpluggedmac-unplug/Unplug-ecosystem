@@ -215,13 +215,16 @@ UnplugAPI.restoreSession((user) => enterCheckout(user));
 // ---------------------------------------------------------------------------
 // Step 2: Choose package, create the profile
 // ---------------------------------------------------------------------------
-document.querySelectorAll('.tier-option').forEach((el) => {
+document.querySelectorAll('#tierOptions .tier-option').forEach((el) => {
   el.addEventListener('click', () => {
-    document.querySelectorAll('.tier-option').forEach((o) => o.classList.remove('selected'));
+    document.querySelectorAll('#tierOptions .tier-option').forEach((o) => o.classList.remove('selected'));
     el.classList.add('selected');
     SELECTED_TIER = el.dataset.tier;
   });
 });
+
+renderTierPrices();
+loadCategories();
 
 document.getElementById('createProfileBtn').addEventListener('click', async () => {
   hideError('packageError');
