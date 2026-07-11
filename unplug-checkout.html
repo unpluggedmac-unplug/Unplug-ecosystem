@@ -243,13 +243,14 @@ document.getElementById('createProfileBtn').addEventListener('click', async () =
   btn.disabled = true; btn.textContent = 'Creating...';
 
   try {
+    const categoryId = document.getElementById('profileCategory').value || null;
     const data = await api('/profiles', {
       method: 'POST',
-      body: JSON.stringify({ displayName, packageTier: SELECTED_TIER }),
+      body: JSON.stringify({ displayName, packageTier: SELECTED_TIER, type: SELECTED_TYPE, categoryId }),
     });
     CURRENT_PROFILE_ID = data.profile.id;
     document.getElementById('paymentSummary').textContent =
-      `${displayName} — ${SELECTED_TIER.charAt(0).toUpperCase() + SELECTED_TIER.slice(1)} package, R${TIER_PRICES[SELECTED_TIER]}`;
+      `${displayName} — ${SELECTED_TYPE} ${SELECTED_TIER.charAt(0).toUpperCase() + SELECTED_TIER.slice(1)} package, R${TIER_PRICES[SELECTED_TYPE][SELECTED_TIER]}`;
     document.getElementById('packageCard').classList.add('section-hidden');
     document.getElementById('paymentCard').classList.remove('section-hidden');
     loadConsultants();
