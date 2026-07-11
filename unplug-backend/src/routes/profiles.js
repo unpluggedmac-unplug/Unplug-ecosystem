@@ -32,7 +32,7 @@ async function getProfileOwnerId(req) {
 // ---------------------------------------------------------------------------
 router.get('/directory', async (req, res, next) => {
   try {
-    const { category, package: packageTier, ids } = req.query;
+   const { category, package: packageTier, type, ids } = req.query;
     const conditions = [`p.status = 'approved'`];
     const values = [];
 
@@ -43,6 +43,10 @@ router.get('/directory', async (req, res, next) => {
     if (packageTier) {
       values.push(packageTier);
       conditions.push(`p.package_tier = $${values.length}`);
+    }
+    if (type) {
+      values.push(type);
+      conditions.push(`p.type = $${values.length}`);
     }
     if (ids) {
       const idList = ids.split(',').map((id) => parseInt(id, 10)).filter(Number.isInteger);
@@ -66,15 +70,29 @@ router.get('/directory', async (req, res, next) => {
       `SELECT p.id, p.slug, p.display_name, p.package_tier, p.bio, c.name AS category
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY p.created_at DESC
+WHERE ${conditions.join(' AND ')}
+       ORDER BY CASE p.package_tier WHEN 'premium' THEN 0 WHEN 'pro' THEN 1 ELSE 2 END, p.display_name ASC
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
-      [...values, limit, offset]
     );
     res.json({
       profiles: result.rows,
       pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /directory/categories — public. Powers the category dropdown on
+// signup and the category filter buttons on the Directory page.
+// ---------------------------------------------------------------------------
+router.get('/directory/categories', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name FROM categories WHERE type = 'directory' ORDER BY name ASC`
+    );
+    res.json({ categories: result.rows });
   } catch (err) {
     next(err);
   }
@@ -153,6 +171,7 @@ router.post('/profiles', requireAuth, async (req, res, next) => {
     if (!TIERS.includes(packageTier)) {
       return res.status(400).json({ error: `packageTier must be one of: ${TIERS.join(', ')}` });
     }
+    
     if (!displayName || !displayName.trim()) {
       return res.status(400).json({ error: 'displayName is required.' });
     }
