@@ -60,7 +60,15 @@ body{ min-height:100vh; }
     <h2>Choose Your Directory Package</h2>
     <p class="sub">Once-off payment. You can upgrade later for a flat R250 admin fee.</p>
     <div class="error-banner" id="packageError"></div>
+    <div class="field">
+      <label>Are you listing yourself or a business?</label>
+      <div class="tier-options" id="profileTypeOptions" style="grid-template-columns:repeat(2,1fr);">
+        <div class="tier-option selected" data-type="individual"><div class="name">Individual</div></div>
+        <div class="tier-option" data-type="business"><div class="name">Business</div></div>
+      </div>
+    </div>
     <div class="field"><label>Display Name</label><input id="displayName" placeholder="e.g. Naledi Mokoena"></div>
+    <div class="field"><label>Category</label><select id="profileCategory"><option value="">Loading…</option></select></div>
     <div class="tier-options" id="tierOptions">
       <div class="tier-option" data-tier="basic"><div class="name">Basic</div><div class="price">R150</div></div>
       <div class="tier-option" data-tier="pro"><div class="name">Pro</div><div class="price">R280</div></div>
