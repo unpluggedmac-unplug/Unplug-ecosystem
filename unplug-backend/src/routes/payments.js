@@ -70,10 +70,10 @@ function verifyOzowHash(body) {
   return computedHash === receivedHash;
 }
 
-// Server-side source of truth for prices — never trust an amount sent by
-// the client, since that would let someone pay R1 for a Premium package.
-const PACKAGE_PRICES = { basic: 150.00, pro: 280.00, premium: 400.00 };
-const UPGRADE_FEE = 250.00;
+const PACKAGE_PRICES = {
+  individual: { basic: 150.00, pro: 280.00, premium: 400.00 },
+  business:   { basic: 500.00, pro: 700.00, premium: 1000.00 },
+};
 
 // Highlights & Promotions pricing — optional homepage boost, unchanged
 // from the original locked pricing.
@@ -99,11 +99,12 @@ function generateReference() {
 
 // Works out the correct amount for a given linked_type/linked_id, from the
 // database rather than the request body.
-async function resolveAmount(linkedType, linkedId) {
-  if (linkedType === 'profile_package') {
-    const result = await pool.query('SELECT package_tier FROM profiles WHERE id = $1', [linkedId]);
+if (linkedType === 'profile_package') {
+    const result = await pool.query('SELECT package_tier, type FROM profiles WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Profile not found.');
-    return PACKAGE_PRICES[result.rows[0].package_tier];
+    const { package_tier, type } = result.rows[0];
+    return PACKAGE_PRICES[type][package_tier];
+  }
   }
   if (linkedType === 'profile_upgrade') {
     const result = await pool.query('SELECT fee_paid FROM profile_upgrades WHERE id = $1', [linkedId]);
