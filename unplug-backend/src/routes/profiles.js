@@ -6,6 +6,7 @@ const { getPagination, paginationMeta } = require('../utils/pagination');
 const router = express.Router();
 
 const TIERS = ['basic', 'pro', 'premium']; // order matters — index = rank
+const PROFILE_TYPES = ['individual', 'business'];
 const UPGRADE_FEE = 250.00;
 
 function slugify(name) {
