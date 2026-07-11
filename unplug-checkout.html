@@ -133,7 +133,36 @@ let SELECTED_TIER = null;
 let SELECTED_TYPE = 'individual';
 let CURRENT_PROFILE_ID = null;
 
-const TIER_PRICES = { basic: 150, pro: 280, premium: 400 };
+const TIER_PRICES = {
+  individual: { basic: 150, pro: 280, premium: 400 },
+  business: { basic: 500, pro: 700, premium: 1000 },
+};
+
+function renderTierPrices() {
+  document.querySelectorAll('#tierOptions .tier-option').forEach((el) => {
+    el.querySelector('.price').textContent = 'R' + TIER_PRICES[SELECTED_TYPE][el.dataset.tier];
+  });
+}
+
+async function loadCategories() {
+  const select = document.getElementById('profileCategory');
+  try {
+    const data = await api('/directory/categories');
+    select.innerHTML = '<option value="">Select a category…</option>' +
+      data.categories.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+  } catch (err) {
+    select.innerHTML = '<option value="">Couldn\'t load categories</option>';
+  }
+}
+
+document.getElementById('profileTypeOptions').addEventListener('click', (e) => {
+  const el = e.target.closest('.tier-option[data-type]');
+  if (!el) return;
+  document.querySelectorAll('#profileTypeOptions .tier-option').forEach((o) => o.classList.remove('selected'));
+  el.classList.add('selected');
+  SELECTED_TYPE = el.dataset.type;
+  renderTierPrices();
+});
 const api = UnplugAPI.api;
 
 function showError(id, message) {
