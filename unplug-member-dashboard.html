@@ -522,7 +522,10 @@ function enterMemberDashboard(user){
 // My Profile — view, edit, request upgrade
 // ---------------------------------------------------------------------------
 const TIER_ORDER = ['basic', 'pro', 'premium'];
-const TIER_PRICES = { basic: 150, pro: 280, premium: 400 };
+const TIER_PRICES = {
+  individual: { basic: 150, pro: 280, premium: 400 },
+  business: { basic: 500, pro: 700, premium: 1000 },
+};
   let MY_PROFILE_ID = null;
 
 async function loadProfile() {
