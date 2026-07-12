@@ -24,6 +24,21 @@ router.post('/track', async (req, res, next) => {
   }
 });
 
+// GET /analytics/live-visitors — public. Counts distinct visitor sessions
+// seen in the last 5 minutes, for the homepage "X people here right now" stat.
+router.get('/live-visitors', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(DISTINCT session_id) AS live_count
+       FROM page_views
+       WHERE viewed_at >= now() - interval '5 minutes'`
+    );
+    res.json({ liveVisitors: Number(result.rows[0].live_count) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /analytics/summary?range=7|30|90 — admin-only. Total views, unique
 // visitors (by session_id), pages tracked, a daily breakdown for the
 // chart, and the top pages — everything the Site Analytics screen needs
