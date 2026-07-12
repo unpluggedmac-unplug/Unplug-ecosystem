@@ -314,6 +314,8 @@ document.getElementById('payBtn').addEventListener('click', async () => {
       referralSource,
     };
     if (referralSource === 'sales_consultant') payload.salesConsultantId = parseInt(consultantId, 10);
+    const voucherCode = document.getElementById('voucherCode').value.trim();
+    if (voucherCode) payload.voucherCode = voucherCode;
 
     const data = await api('/payments/initiate', { method: 'POST', body: JSON.stringify(payload) });
 
