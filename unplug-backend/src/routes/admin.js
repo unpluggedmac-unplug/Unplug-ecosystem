@@ -95,6 +95,31 @@ router.patch('/profiles/:id/verify', requireRole('admin'), async (req, res, next
     next(err);
   }
 });
+
+// PATCH /admin/profiles/:id/renew — call this once a year (manually, for
+// now) to refresh a profile's included credits and push its renewal date
+// out another year. No downgrade path exists, so this always re-grants
+// whatever the profile's CURRENT tier includes.
+router.patch('/profiles/:id/renew', requireRole('admin'), async (req, res, next) => {
+  try {
+    const profileResult = await pool.query('SELECT * FROM profiles WHERE id = $1', [req.params.id]);
+    if (profileResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found.' });
+    }
+    const profile = profileResult.rows[0];
+    const credits = creditsForTier(profile.type, profile.package_tier);
+    const result = await pool.query(
+      `UPDATE profiles SET free_article_credits = $1, free_event_credits = $2, free_arena_credits = $3,
+              free_gallery_credits = $4, renews_at = now() + interval '1 year', updated_at = now()
+       WHERE id = $5 RETURNING *`,
+      [credits.article, credits.event, credits.arena, credits.gallery, req.params.id]
+    );
+    await logActivity(req.user.id, 'profile_renewed', `Profile #${req.params.id} — ${profile.display_name} — credits refreshed for another year`);
+    res.json({ profile: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Profile not found.' });
     }
