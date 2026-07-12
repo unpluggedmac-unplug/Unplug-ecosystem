@@ -50,6 +50,26 @@ router.get('/profiles/pending', requireRole('admin'), async (req, res, next) => 
   }
 });
 
+// GET /admin/profiles/approved
+// Admin-only — lists all approved Directory profiles, with verification
+// and credit-renewal status, so there's somewhere to use the Verify and
+// Renew actions after a profile has already been approved.
+router.get('/profiles/approved', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.display_name, p.type, p.package_tier, p.verified, p.renews_at, c.name AS category, u.email AS submitted_by
+       FROM profiles p
+       LEFT JOIN categories c ON c.id = p.category_id
+       JOIN users u ON u.id = p.user_id
+       WHERE p.status = 'approved'
+       ORDER BY p.display_name ASC`
+    );
+    res.json({ profiles: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PATCH /admin/profiles/:id/approve
 router.patch('/profiles/:id/approve', requireRole('admin'), async (req, res, next) => {
   try {
