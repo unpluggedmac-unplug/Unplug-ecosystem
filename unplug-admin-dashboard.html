@@ -278,6 +278,39 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- VOUCHERS -->
+    <div class="admin-section" id="section-vouchers">
+      <div class="main-head"><div><h1>Vouchers</h1><p>Create and manage voucher codes members can redeem at checkout.</p></div></div>
+      <div class="panel" style="padding:20px;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:20px;">
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Code</label><input id="voucherCodeInput" placeholder="e.g. UNPLUG2026" style="padding:8px;"></div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Discount Type</label>
+            <select id="voucherDiscountType" style="padding:8px;">
+              <option value="percent">Percent (%)</option>
+              <option value="fixed">Fixed (R)</option>
+            </select>
+          </div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Discount Value</label><input id="voucherDiscountValue" type="number" placeholder="e.g. 20" style="padding:8px; width:100px;"></div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Service (optional)</label>
+            <select id="voucherServiceRestriction" style="padding:8px;">
+              <option value="">Any service</option>
+              <option value="profile_package">Directory Package</option>
+              <option value="article_publish">Article Publishing</option>
+              <option value="event_listing">Event Listing</option>
+              <option value="gallery_bundle">Gallery Bundle</option>
+              <option value="competition_entry">Competition Entry</option>
+              <option value="marketplace_listing">Marketplace Listing</option>
+              <option value="top10_entry">Top 10 Entry</option>
+            </select>
+          </div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Expires On</label><input id="voucherExpiresAt" type="date" style="padding:8px;"></div>
+          <button class="approve" id="createVoucherBtn" style="padding:9px 16px;">Create Voucher</button>
+        </div>
+        <div id="voucherFormError" style="color:var(--red); margin-bottom:12px; display:none;"></div>
+        <div class="panel-body" id="vouchersBody" style="padding:0;"></div>
+      </div>
+    </div>
+    
     <!-- ACTIVITY LOG -->
     <div class="admin-section" id="section-activitylog">
       <div class="main-head"><div><h1>Activity Log</h1><p>The most recent 100 admin actions — who did what, and when.</p></div></div>
