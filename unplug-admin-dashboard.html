@@ -617,13 +617,18 @@ async function loadQueueTab(key) {
         tr.appendChild(td);
       });
       const actionTd = document.createElement('td');
+      const verifyBtn = cfg.resource === 'profiles' ? '<button class="approve" style="opacity:0.85;">Verify</button>' : '';
       actionTd.innerHTML = `
         <div class="row-actions">
           <button class="approve">Approve</button>
+          ${verifyBtn}
           <button class="reject">Reject</button>
         </div>`;
       actionTd.querySelector('.approve').addEventListener('click', () => actOnQueueItem(cfg, row.id, 'approve'));
       actionTd.querySelector('.reject').addEventListener('click', () => actOnQueueItem(cfg, row.id, 'reject'));
+      if (cfg.resource === 'profiles') {
+        actionTd.querySelectorAll('.approve')[1].addEventListener('click', () => actOnQueueItem(cfg, row.id, 'verify'));
+      }
       tr.appendChild(actionTd);
       table.appendChild(tr);
     });
