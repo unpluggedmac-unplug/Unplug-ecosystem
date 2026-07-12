@@ -171,8 +171,8 @@ router.get('/profiles/:slug', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 router.post('/profiles', requireAuth, async (req, res, next) => {
   try {
-    const { type, categoryId, packageTier, displayName, bio, achievements, career, quote, contactEmail, contactPhone, contactWebsite } = req.body;
-
+    const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, achievements, career, quote, contactEmail, contactPhone, contactWebsite } = req.body;
+    const allowSecondCategory = type === 'business' && packageTier === 'premium';
     if (!TIERS.includes(packageTier)) {
       return res.status(400).json({ error: `packageTier must be one of: ${TIERS.join(', ')}` });
     }
