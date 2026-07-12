@@ -261,7 +261,7 @@ document.getElementById('createProfileBtn').addEventListener('click', async () =
     const secondaryCategoryId = document.getElementById('profileSecondCategory').value || null;
     const data = await api('/profiles', {
       method: 'POST',
-      body: JSON.stringify({ displayName, packageTier: SELECTED_TIER, type: SELECTED_TYPE, categoryId }),
+body: JSON.stringify({ displayName, packageTier: SELECTED_TIER, type: SELECTED_TYPE, categoryId, secondaryCategoryId }),
     });
     CURRENT_PROFILE_ID = data.profile.id;
     document.getElementById('paymentSummary').textContent =
