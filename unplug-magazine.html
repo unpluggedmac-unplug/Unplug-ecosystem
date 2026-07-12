@@ -2046,7 +2046,8 @@ function dirCardHtml(profile) {
   const name = escapeHtml(profile.display_name);
   const category = escapeHtml(profile.category || '');
   const slug = escapeHtml(profile.slug);
-  return `<a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}</p></a>`;
+  const secondCategory = escapeHtml(profile.secondary_category || '');
+  return `<a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}${secondCategory ? ' + ' + secondCategory : ''}</p></a>`;
 }
 
 async function loadDirectory(reset) {
