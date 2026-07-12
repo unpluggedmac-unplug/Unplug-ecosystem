@@ -109,9 +109,10 @@ router.get('/directory/categories', async (req, res, next) => {
 router.get('/profiles/me', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT p.*, c.name AS category
+      `SELECT p.*, c.name AS category, c2.name AS secondary_category
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
+       LEFT JOIN categories c2 ON c2.id = p.secondary_category_id
        WHERE p.user_id = $1`,
       [req.user.id]
     );
