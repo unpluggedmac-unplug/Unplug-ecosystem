@@ -80,17 +80,19 @@ router.post('/competitions', requireRole('admin'), async (req, res, next) => {
 // (e.g. The Arena = R250), not a single global amount.
 router.post('/competitions/:id/entries', requireAuth, async (req, res, next) => {
   try {
-    const profileResult = await pool.query('SELECT id FROM profiles WHERE user_id = $1', [req.user.id]);
+    const profileResult = await pool.query('SELECT id, free_arena_credits FROM profiles WHERE user_id = $1', [req.user.id]);
     if (profileResult.rows.length === 0) {
       return res.status(400).json({ error: 'You need a Directory profile before entering a competition.' });
     }
     const profileId = profileResult.rows[0].id;
 
-    const competitionResult = await pool.query('SELECT entry_fee FROM competitions WHERE id = $1', [req.params.id]);
+    const competitionResult = await pool.query('SELECT entry_fee, slug FROM competitions WHERE id = $1', [req.params.id]);
     if (competitionResult.rows.length === 0) {
       return res.status(404).json({ error: 'Competition not found.' });
     }
     const entryFee = Number(competitionResult.rows[0].entry_fee);
+    const isArena = competitionResult.rows[0].slug === 'the-arena';
+    const hasCredit = isArena && profileResult.rows[0].free_arena_credits > 0;
 
     const existing = await pool.query(
       'SELECT id FROM competition_entries WHERE competition_id = $1 AND profile_id = $2',
@@ -101,15 +103,21 @@ router.post('/competitions/:id/entries', requireAuth, async (req, res, next) => 
     }
 
     const result = await pool.query(
-      `INSERT INTO competition_entries (competition_id, profile_id, entry_fee)
-       VALUES ($1, $2, $3)
+      `INSERT INTO competition_entries (competition_id, profile_id, entry_fee, status)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [req.params.id, profileId, entryFee]
+      [req.params.id, profileId, entryFee, hasCredit ? 'pending' : 'awaiting_payment']
     );
+
+    if (hasCredit) {
+      await pool.query('UPDATE profiles SET free_arena_credits = free_arena_credits - 1 WHERE id = $1', [profileId]);
+    }
 
     res.status(201).json({
       entry: result.rows[0],
-      message: `Entry created — call POST /payments/initiate with linkedType "competition_entry" and this entry's id (R${entryFee.toFixed(2)}) to proceed.`,
+      message: hasCredit
+        ? 'Entry created using your free Arena credit — no payment needed.'
+        : `Entry created — call POST /payments/initiate with linkedType "competition_entry" and this entry's id (R${entryFee.toFixed(2)}) to proceed.`,
     });
   } catch (err) {
     if (err.code === '23505') { // unique_violation, belt-and-braces
