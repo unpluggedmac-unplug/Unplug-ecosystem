@@ -151,13 +151,20 @@ function renderTierPrices() {
 
 async function loadCategories() {
   const select = document.getElementById('profileCategory');
+  const secondSelect = document.getElementById('profileSecondCategory');
   try {
     const data = await api('/directory/categories');
-    select.innerHTML = '<option value="">Select a category…</option>' +
-      data.categories.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+    const options = data.categories.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+    select.innerHTML = '<option value="">Select a category…</option>' + options;
+    secondSelect.innerHTML = '<option value="">None</option>' + options;
   } catch (err) {
     select.innerHTML = '<option value="">Couldn\'t load categories</option>';
   }
+}
+
+function updateSecondCategoryVisibility() {
+  const show = SELECTED_TYPE === 'business' && SELECTED_TIER === 'premium';
+  document.getElementById('secondCategoryField').classList.toggle('section-hidden', !show);
 }
 
 document.getElementById('profileTypeOptions').addEventListener('click', (e) => {
