@@ -99,12 +99,12 @@ function generateReference() {
 
 // Works out the correct amount for a given linked_type/linked_id, from the
 // database rather than the request body.
-if (linkedType === 'profile_package') {
+async function resolveAmount(linkedType, linkedId) {
+  if (linkedType === 'profile_package') {
     const result = await pool.query('SELECT package_tier, type FROM profiles WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Profile not found.');
     const { package_tier, type } = result.rows[0];
     return PACKAGE_PRICES[type][package_tier];
-  }
   }
   if (linkedType === 'profile_upgrade') {
     const result = await pool.query('SELECT fee_paid FROM profile_upgrades WHERE id = $1', [linkedId]);
