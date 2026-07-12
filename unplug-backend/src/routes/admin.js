@@ -5,6 +5,18 @@ const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
+// Tier + type → free credits granted on approval, per the locked Master Plan.
+function creditsForTier(type, tier) {
+  if (type === 'individual') {
+    if (tier === 'pro') return { article: 1, event: 0, arena: 0 };
+    if (tier === 'premium') return { article: 1, event: 1, arena: 1 };
+  } else if (type === 'business') {
+    if (tier === 'pro') return { article: 1, event: 0, arena: 0 };
+    if (tier === 'premium') return { article: 1, event: 1, arena: 0 };
+  }
+  return { article: 0, event: 0, arena: 0 };
+}
+
 // GET /admin/users
 // Admin-only — lists every user account. This is a working example of how
 // every other /admin/* route from the Backend Spec (Section 3) should be
@@ -45,6 +57,43 @@ router.patch('/profiles/:id/approve', requireRole('admin'), async (req, res, nex
       `UPDATE profiles SET status = 'approved', updated_at = now() WHERE id = $1 RETURNING *`,
       [req.params.id]
     );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found.' });
+    }
+    const profile = result.rows[0];
+    const credits = creditsForTier(profile.type, profile.package_tier);
+    const credited = await pool.query(
+      `UPDATE profiles SET free_article_credits = $1, free_event_credits = $2, free_arena_credits = $3, credits_renewed_at = now()
+       WHERE id = $4 RETURNING *`,
+      [credits.article, credits.event, credits.arena, profile.id]
+    );
+    await logActivity(req.user.id, 'profile_approved', `Profile #${req.params.id} — ${profile.display_name}`);
+    res.json({ profile: credited.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/profiles/:id/verify — admin confirms the ID document or
+// business registration number checked outside this system, then flips
+// the Verified badge on. `note` is a free-text reference (e.g. document
+// type or registration number), not the document itself.
+router.patch('/profiles/:id/verify', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { note } = req.body;
+    const result = await pool.query(
+      `UPDATE profiles SET verified = true, verification_note = $1, updated_at = now() WHERE id = $2 RETURNING *`,
+      [note || null, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found.' });
+    }
+    await logActivity(req.user.id, 'profile_verified', `Profile #${req.params.id} — ${result.rows[0].display_name}`);
+    res.json({ profile: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Profile not found.' });
     }
