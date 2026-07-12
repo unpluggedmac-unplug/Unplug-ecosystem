@@ -2104,6 +2104,7 @@ function profileDetailHtml(profile, socials, gallery) {
       <div class="profile-photo-lg"></div>
       <div class="profile-header-copy">
         <span class="tier-pill">${escapeHtml(TIER_LABELS[tier] || tier)}</span>
+        ${profile.verified ? '<span class="tier-pill" style="background:var(--red); color:#fff; margin-left:6px;">✓ Verified</span>' : ''}
         <h1 style="font-size:clamp(28px,4vw,42px); margin:10px 0 4px;">${escapeHtml(profile.display_name)}</h1>
         <p style="color:var(--red); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; font-size:13px;">${escapeHtml(profile.category || '')}</p>
         ${showExtras && profile.quote ? `<p class="profile-quote">"${escapeHtml(profile.quote)}"</p>` : ''}
