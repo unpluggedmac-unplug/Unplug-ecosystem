@@ -163,6 +163,44 @@ async function resolveAmount(linkedType, linkedId) {
   throw new Error(`Payments for linkedType "${linkedType}" are not implemented yet.`);
 }
 
+// Validates a voucher code for a given user + service + amount, and
+// returns the discounted amount. Does NOT record the redemption — call
+// recordVoucherRedemption() only after the payment record is created,
+// so a failed payment attempt doesn't burn the code.
+async function applyVoucher(code, userId, linkedType, amount) {
+  const result = await pool.query(
+    `SELECT * FROM vouchers WHERE code = $1 AND active = true AND expires_at > now()`,
+    [code.toUpperCase().trim()]
+  );
+  if (result.rows.length === 0) {
+    throw new Error('This voucher code is invalid, expired, or no longer active.');
+  }
+  const voucher = result.rows[0];
+  if (voucher.service_restriction && voucher.service_restriction !== linkedType) {
+    throw new Error('This voucher code does not apply to this service.');
+  }
+  const alreadyUsed = await pool.query(
+    `SELECT id FROM voucher_redemptions WHERE voucher_id = $1 AND user_id = $2`,
+    [voucher.id, userId]
+  );
+  if (alreadyUsed.rows.length > 0) {
+    throw new Error('You have already used this voucher code.');
+  }
+  const discountAmount = voucher.discount_type === 'percent'
+    ? Math.min(amount, (amount * Number(voucher.discount_value)) / 100)
+    : Math.min(amount, Number(voucher.discount_value));
+  const finalAmount = Math.max(0, amount - discountAmount);
+  return { voucher, discountAmount, finalAmount };
+}
+
+async function recordVoucherRedemption(voucherId, userId, linkedType, linkedId, discountAmount) {
+  await pool.query(
+    `INSERT INTO voucher_redemptions (voucher_id, user_id, linked_type, linked_id, discount_amount)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [voucherId, userId, linkedType, linkedId, discountAmount]
+  );
+}
+
 // Applies the real-world effect once a payment is confirmed — moves a
 // profile out of 'awaiting_payment' into the Approval Queue, or completes
 // a package upgrade. Called by both webhooks and the manual EFT route so
