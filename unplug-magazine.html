@@ -664,6 +664,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </div>
 
+  // GET /analytics/live-visitors — public. Counts distinct visitor sessions
+// seen in the last 5 minutes, for the homepage "X people here right now" stat.
+router.get('/live-visitors', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(DISTINCT session_id) AS live_count
+       FROM page_views
+       WHERE viewed_at >= now() - interval '5 minutes'`
+    );
+    res.json({ liveVisitors: Number(result.rows[0].live_count) });
+  } catch (err) {
+    next(err);
+  }
+});
   <!-- SHOUTOUT BANNER -->
   <section class="home-section">
     <div class="wrap">
