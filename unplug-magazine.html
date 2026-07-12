@@ -1107,6 +1107,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </section>
 
   <section class="wrap">
+    
     <div class="dir-filters" id="dirFilters">
       <button class="active" data-category="">All</button>
       <button data-category="Activists">Activists</button>
@@ -1992,8 +1993,34 @@ function goToMemberDashboard() {
 // the next page onto whatever's already rendered.
 // ---------------------------------------------------------------------------
 let dirCategory = '';
+let dirType = '';
 let dirPage = 1;
 let dirLoading = false;
+
+const DIRECTORY_PRICES = {
+  individual: { basic: 150, pro: 280, premium: 400 },
+  business: { basic: 500, pro: 700, premium: 1000 },
+};
+
+document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
+  const el = e.target.closest('.tier-option[data-type]');
+  if (!el) return;
+  document.querySelectorAll('#pkgTypeToggle .tier-option').forEach((o) => o.classList.remove('selected'));
+  el.classList.add('selected');
+  const t = el.dataset.type;
+  document.querySelectorAll('.tier-price[data-tier]').forEach((p) => {
+    p.firstChild.textContent = 'R' + DIRECTORY_PRICES[t][p.dataset.tier] + ' ';
+  });
+});
+
+document.getElementById('dirTypeTabs').addEventListener('click', (e) => {
+  const el = e.target.closest('.tier-option[data-type]');
+  if (!el) return;
+  document.querySelectorAll('#dirTypeTabs .tier-option').forEach((o) => o.classList.remove('selected'));
+  el.classList.add('selected');
+  dirType = el.dataset.type;
+  loadDirectory(true);
+});
 
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -2020,6 +2047,7 @@ async function loadDirectory(reset) {
   try {
     const params = new URLSearchParams({ page: dirPage, limit: 12 });
     if (dirCategory) params.set('category', dirCategory);
+    if (dirType) params.set('type', dirType);
     const data = await api('/directory?' + params.toString());
 
     if (reset) grid.innerHTML = '';
