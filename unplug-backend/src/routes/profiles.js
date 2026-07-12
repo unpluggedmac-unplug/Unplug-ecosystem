@@ -38,7 +38,7 @@ router.get('/directory', async (req, res, next) => {
 
     if (category) {
       values.push(category);
-      conditions.push(`c.name = $${values.length}`);
+      conditions.push(`(c.name = $${values.length} OR c2.name = $${values.length})`);
     }
     if (packageTier) {
       values.push(packageTier);
@@ -62,17 +62,20 @@ router.get('/directory', async (req, res, next) => {
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
+       LEFT JOIN categories c2 ON c2.id = p.secondary_category_id
        WHERE ${conditions.join(' AND ')}`,
       values
     );
 
     const result = await pool.query(
-      `SELECT p.id, p.slug, p.display_name, p.package_tier, p.bio, c.name AS category
+      `SELECT p.id, p.slug, p.display_name, p.package_tier, p.bio, c.name AS category, c2.name AS secondary_category
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
-WHERE ${conditions.join(' AND ')}
+       LEFT JOIN categories c2 ON c2.id = p.secondary_category_id
+       WHERE ${conditions.join(' AND ')}
        ORDER BY CASE p.package_tier WHEN 'premium' THEN 0 WHEN 'pro' THEN 1 ELSE 2 END, p.display_name ASC
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+      values.concat([limit, offset])
     );
     res.json({
       profiles: result.rows,
