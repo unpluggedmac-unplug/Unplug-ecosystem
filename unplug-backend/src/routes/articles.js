@@ -96,16 +96,28 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'title and body are required.' });
     }
 
+    const profileResult = await pool.query(
+      'SELECT id, free_article_credits FROM profiles WHERE user_id = $1',
+      [req.user.id]
+    );
+    const hasCredit = profileResult.rows.length > 0 && profileResult.rows[0].free_article_credits > 0;
+
     const result = await pool.query(
       `INSERT INTO articles (author_user_id, category_id, title, body, kicker_supplied_by, status)
-       VALUES ($1, $2, $3, $4, $5, 'awaiting_payment')
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [req.user.id, categoryId || null, title, body, kickerSuppliedBy || null]
+      [req.user.id, categoryId || null, title, body, kickerSuppliedBy || null, hasCredit ? 'pending' : 'awaiting_payment']
     );
+
+    if (hasCredit) {
+      await pool.query('UPDATE profiles SET free_article_credits = free_article_credits - 1 WHERE id = $1', [profileResult.rows[0].id]);
+    }
 
     res.status(201).json({
       article: result.rows[0],
-      message: 'Article created — call POST /payments/initiate with linkedType "article_publish" and this article\'s id (R95.00) to submit it for approval.',
+      message: hasCredit
+        ? 'Article created using your free Article credit — submitted for approval, no payment needed.'
+        : 'Article created — call POST /payments/initiate with linkedType "article_publish" and this article\'s id (R95.00) to submit it for approval.',
     });
   } catch (err) {
     next(err);
