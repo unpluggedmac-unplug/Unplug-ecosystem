@@ -530,6 +530,7 @@ async function loadProfile() {
   try {
     const data = await api('/profiles/me');
     const p = data.profile;
+    MY_PROFILE_ID = p.id;
     const higherTiers = TIER_ORDER.slice(TIER_ORDER.indexOf(p.package_tier) + 1);
 
     content.innerHTML = `
