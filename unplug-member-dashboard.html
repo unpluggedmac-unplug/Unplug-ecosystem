@@ -725,7 +725,10 @@ async function createSubmission(type) {
       }))
       .filter((img) => img.imageUrl);
     if (images.length === 0) throw new Error('At least one image URL is required.');
-    const data = await api('/gallery', { method: 'POST', body: JSON.stringify({ images }) });
+    const data = await api('/gallery', {
+      method: 'POST',
+      body: JSON.stringify({ images, ownerType: MY_PROFILE_ID ? 'profile' : undefined, ownerId: MY_PROFILE_ID || undefined }),
+    });
     return { linkedType: 'gallery_bundle', linkedId: data.bundle.id, label: 'Gallery Bundle' };
   }
 
