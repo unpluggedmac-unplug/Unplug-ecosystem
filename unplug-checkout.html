@@ -233,6 +233,7 @@ document.querySelectorAll('#tierOptions .tier-option').forEach((el) => {
     document.querySelectorAll('#tierOptions .tier-option').forEach((o) => o.classList.remove('selected'));
     el.classList.add('selected');
     SELECTED_TIER = el.dataset.tier;
+    updateSecondCategoryVisibility();
   });
 });
 
