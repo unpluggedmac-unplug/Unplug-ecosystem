@@ -675,6 +675,12 @@ async function loadEntries() {
 // Submit & Pay — one form covering Article, Event, Gallery, Top 10, Marketplace
 // ---------------------------------------------------------------------------
 const SUBMIT_FIELD_IDS = ['article', 'event', 'gallery', 'top10', 'marketplace'];
+  document.getElementById('art-body').addEventListener('input', () => {
+  const words = document.getElementById('art-body').value.trim().split(/\s+/).filter(Boolean).length;
+  const minutes = Math.max(1, Math.round(words / 200));
+  document.getElementById('art-readtime-hint').textContent =
+    `Aim for a 3-6 minute read (roughly 600-1200 words). Current: ${words} words, ~${minutes} min.`;
+});
 
 document.getElementById('submitType').addEventListener('change', (e) => {
   SUBMIT_FIELD_IDS.forEach((type) => {
