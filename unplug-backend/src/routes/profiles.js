@@ -194,10 +194,10 @@ router.post('/profiles', requireAuth, async (req, res, next) => {
 
     const result = await pool.query(
       `INSERT INTO profiles
-        (user_id, type, category_id, package_tier, slug, display_name, bio, achievements, career, quote, contact_email, contact_phone, contact_website, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'awaiting_payment')
+        (user_id, type, category_id, secondary_category_id, package_tier, slug, display_name, bio, achievements, career, quote, contact_email, contact_phone, contact_website, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'awaiting_payment')
        RETURNING *`,
-      [req.user.id, type || 'individual', categoryId || null, packageTier, slug, displayName.trim(), bio || null, achievements || null, career || null, quote || null, contactEmail || null, contactPhone || null, contactWebsite || null]
+      [req.user.id, type || 'individual', categoryId || null, allowSecondCategory ? (secondaryCategoryId || null) : null, packageTier, slug, displayName.trim(), bio || null, achievements || null, career || null, quote || null, contactEmail || null, contactPhone || null, contactWebsite || null]
     );
 
     res.status(201).json({
