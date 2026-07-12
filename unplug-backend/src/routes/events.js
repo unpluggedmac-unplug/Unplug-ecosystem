@@ -39,16 +39,28 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'name and eventDate are required.' });
     }
 
+    const profileResult = await pool.query(
+      'SELECT id, free_event_credits FROM profiles WHERE user_id = $1',
+      [req.user.id]
+    );
+    const hasCredit = profileResult.rows.length > 0 && profileResult.rows[0].free_event_credits > 0;
+
     const result = await pool.query(
       `INSERT INTO events (organizer_user_id, name, event_date, venue, description, display_start_date, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'awaiting_payment')
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [req.user.id, name, eventDate, venue || null, description || null, displayStartDate || null]
+      [req.user.id, name, eventDate, venue || null, description || null, displayStartDate || null, hasCredit ? 'pending' : 'awaiting_payment']
     );
+
+    if (hasCredit) {
+      await pool.query('UPDATE profiles SET free_event_credits = free_event_credits - 1 WHERE id = $1', [profileResult.rows[0].id]);
+    }
 
     res.status(201).json({
       event: result.rows[0],
-      message: 'Event created — call POST /payments/initiate with linkedType "event_listing" and this event\'s id (R300.00) to submit it for approval.',
+      message: hasCredit
+        ? 'Event created using your free Event credit — submitted for approval, no payment needed.'
+        : 'Event created — call POST /payments/initiate with linkedType "event_listing" and this event\'s id (R300.00) to submit it for approval.',
     });
   } catch (err) {
     next(err);
