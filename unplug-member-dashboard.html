@@ -523,6 +523,7 @@ function enterMemberDashboard(user){
 // ---------------------------------------------------------------------------
 const TIER_ORDER = ['basic', 'pro', 'premium'];
 const TIER_PRICES = { basic: 150, pro: 280, premium: 400 };
+  let MY_PROFILE_ID = null;
 
 async function loadProfile() {
   const content = document.getElementById('profileContent');
