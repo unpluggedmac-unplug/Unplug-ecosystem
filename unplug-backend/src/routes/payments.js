@@ -328,7 +328,7 @@ const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok
 
 router.post('/initiate', requireAuth, async (req, res, next) => {
   try {
-    const { linkedType, linkedId, method, referralSource, salesConsultantId } = req.body;
+    const { linkedType, linkedId, method, referralSource, salesConsultantId, voucherCode } = req.body;
     if (!['payfast', 'ozow', 'eft'].includes(method)) {
       return res.status(400).json({ error: 'method must be one of: payfast, ozow, eft' });
     }
@@ -346,15 +346,28 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     }
 
     const amount = await resolveAmount(linkedType, linkedId);
+
+    let finalAmount = amount;
+    let appliedVoucher = null;
+    if (voucherCode) {
+      const voucherResult = await applyVoucher(voucherCode, req.user.id, linkedType, amount);
+      finalAmount = voucherResult.finalAmount;
+      appliedVoucher = voucherResult.voucher;
+    }
+
     const reference = generateReference();
 
     const result = await pool.query(
       `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, referral_source, sales_consultant_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [req.user.id, amount, method, reference, linkedType, linkedId, referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null]
+      [req.user.id, finalAmount, method, reference, linkedType, linkedId, referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null]
     );
     const payment = result.rows[0];
+
+    if (appliedVoucher) {
+      await recordVoucherRedemption(appliedVoucher.id, req.user.id, linkedType, linkedId, amount - finalAmount);
+    }
 
     if (method === 'eft') {
       return res.status(201).json({
