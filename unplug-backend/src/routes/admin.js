@@ -8,13 +8,13 @@ const router = express.Router();
 // Tier + type → free credits granted on approval, per the locked Master Plan.
 function creditsForTier(type, tier) {
   if (type === 'individual') {
-    if (tier === 'pro') return { article: 1, event: 0, arena: 0 };
-    if (tier === 'premium') return { article: 1, event: 1, arena: 1 };
+    if (tier === 'pro') return { article: 1, event: 0, arena: 0, gallery: 1 };
+    if (tier === 'premium') return { article: 1, event: 1, arena: 1, gallery: 2 };
   } else if (type === 'business') {
-    if (tier === 'pro') return { article: 1, event: 0, arena: 0 };
-    if (tier === 'premium') return { article: 1, event: 1, arena: 0 };
+    if (tier === 'pro') return { article: 1, event: 0, arena: 0, gallery: 0 };
+    if (tier === 'premium') return { article: 1, event: 1, arena: 0, gallery: 0 };
   }
-  return { article: 0, event: 0, arena: 0 };
+  return { article: 0, event: 0, arena: 0, gallery: 0 };
 }
 
 // GET /admin/users
