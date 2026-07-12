@@ -63,9 +63,10 @@ router.patch('/profiles/:id/approve', requireRole('admin'), async (req, res, nex
     const profile = result.rows[0];
     const credits = creditsForTier(profile.type, profile.package_tier);
     const credited = await pool.query(
-      `UPDATE profiles SET free_article_credits = $1, free_event_credits = $2, free_arena_credits = $3, credits_renewed_at = now()
-       WHERE id = $4 RETURNING *`,
-      [credits.article, credits.event, credits.arena, profile.id]
+      `UPDATE profiles SET free_article_credits = $1, free_event_credits = $2, free_arena_credits = $3,
+              free_gallery_credits = $4, credits_renewed_at = now(), renews_at = now() + interval '1 year'
+       WHERE id = $5 RETURNING *`,
+      [credits.article, credits.event, credits.arena, credits.gallery, profile.id]
     );
     await logActivity(req.user.id, 'profile_approved', `Profile #${req.params.id} — ${profile.display_name}`);
     res.json({ profile: credited.rows[0] });
