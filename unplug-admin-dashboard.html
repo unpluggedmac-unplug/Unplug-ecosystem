@@ -1111,6 +1111,84 @@ async function loadActivityLog() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Vouchers
+// ---------------------------------------------------------------------------
+async function loadVouchers() {
+  const body = document.getElementById('vouchersBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/vouchers');
+    if (!data.vouchers || data.vouchers.length === 0) {
+      body.innerHTML = '<div class="empty-state">No vouchers created yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Code</th><th>Discount</th><th>Service</th><th>Expires</th><th>Redeemed</th><th>Status</th><th></th></tr>';
+    data.vouchers.forEach((v) => {
+      const tr = document.createElement('tr');
+      const discountText = v.discount_type === 'percent' ? `${v.discount_value}%` : `R${v.discount_value}`;
+      const expired = new Date(v.expires_at) < new Date();
+      const statusText = !v.active ? 'Deactivated' : (expired ? 'Expired' : 'Active');
+      tr.innerHTML = `<td>${v.code}</td><td>${discountText}</td><td>${v.service_restriction || 'Any'}</td><td>${new Date(v.expires_at).toLocaleDateString()}</td><td>${v.times_redeemed}</td><td>${statusText}</td><td></td>`;
+      if (v.active) {
+        const td = tr.querySelector('td:last-child');
+        const btn = document.createElement('button');
+        btn.className = 'reject';
+        btn.textContent = 'Deactivate';
+        btn.addEventListener('click', () => deactivateVoucher(v.id));
+        td.appendChild(btn);
+      }
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+async function deactivateVoucher(id) {
+  try {
+    await api(`/admin/vouchers/${id}/deactivate`, { method: 'PATCH' });
+    showToast('Voucher deactivated.');
+    loadVouchers();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+document.getElementById('createVoucherBtn').addEventListener('click', async () => {
+  const errorEl = document.getElementById('voucherFormError');
+  errorEl.style.display = 'none';
+  const code = document.getElementById('voucherCodeInput').value.trim();
+  const discountType = document.getElementById('voucherDiscountType').value;
+  const discountValue = document.getElementById('voucherDiscountValue').value;
+  const serviceRestriction = document.getElementById('voucherServiceRestriction').value;
+  const expiresAt = document.getElementById('voucherExpiresAt').value;
+
+  if (!code || !discountValue || !expiresAt) {
+    errorEl.textContent = 'Code, discount value, and expiry date are all required.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    await api('/admin/vouchers', {
+      method: 'POST',
+      body: JSON.stringify({ code, discountType, discountValue, serviceRestriction: serviceRestriction || null, expiresAt }),
+    });
+    showToast('Voucher created.');
+    document.getElementById('voucherCodeInput').value = '';
+    document.getElementById('voucherDiscountValue').value = '';
+    document.getElementById('voucherExpiresAt').value = '';
+    loadVouchers();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+  }
+});
+
 </script>
 </body>
 </html>
