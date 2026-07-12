@@ -63,20 +63,46 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
     const finalOwnerType = ['profile', 'investor', 'general'].includes(ownerType) ? ownerType : 'general';
 
+    // Tier-based free photo allowance — only applies when this bundle is
+    // attached to the member's own Directory profile.
+    let skipPayment = false;
+    if (finalOwnerType === 'profile' && ownerId) {
+      const profileResult = await pool.query(
+        'SELECT id, type, package_tier, free_gallery_credits FROM profiles WHERE id = $1 AND user_id = $2',
+        [ownerId, req.user.id]
+      );
+      if (profileResult.rows.length > 0) {
+        const profile = profileResult.rows[0];
+        if (profile.type === 'business') {
+          const PHOTO_LIMITS = { basic: 1, pro: 3, premium: 5 };
+          const limit = PHOTO_LIMITS[profile.package_tier] || 1;
+          const existingCount = await pool.query(
+            `SELECT COUNT(*) FROM gallery_images WHERE owner_type = 'profile' AND owner_id = $1 AND status != 'rejected'`,
+            [ownerId]
+          );
+          const current = parseInt(existingCount.rows[0].count, 10);
+          if (current + images.length > limit) {
+            return res.status(400).json({ error: `Your ${profile.package_tier} Business package allows ${limit} listing photo(s) total — you already have ${current}.` });
+          }
+          skipPayment = true; // included free, within the tier's photo allowance
+        } else if (profile.free_gallery_credits > 0) {
+          skipPayment = true;
+          await pool.query('UPDATE profiles SET free_gallery_credits = free_gallery_credits - 1 WHERE id = $1', [profile.id]);
+        }
+      }
+    }
+
     const bundleResult = await pool.query(
-      `INSERT INTO gallery_bundles (user_id, image_count) VALUES ($1, $2) RETURNING *`,
-      [req.user.id, images.length]
+      `INSERT INTO gallery_bundles (user_id, image_count, status) VALUES ($1, $2, $3) RETURNING *`,
+      [req.user.id, images.length, skipPayment ? 'pending' : 'awaiting_payment']
     );
     const bundle = bundleResult.rows[0];
 
-    // Single batch insert rather than one query per image — images.length
-    // is capped at 3 above, but there's no reason to make N round-trips
-    // when one parameterized multi-row INSERT does the same job.
     const values = [];
     const valuePlaceholders = images.map((img, i) => {
       const base = i * 5;
       values.push(finalOwnerType, ownerId || null, img.imageUrl, img.caption || null, req.user.email);
-      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, ${bundle.id}, 'awaiting_payment')`;
+      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, ${bundle.id}, '${skipPayment ? 'pending' : 'awaiting_payment'}')`;
     });
     const insertResult = await pool.query(
       `INSERT INTO gallery_images (owner_type, owner_id, image_url, caption, supplied_by, bundle_id, status)
@@ -89,7 +115,9 @@ router.post('/', requireAuth, async (req, res, next) => {
     res.status(201).json({
       bundle,
       images: insertedImages,
-      message: `Bundle created — call POST /payments/initiate with linkedType "gallery_bundle" and this bundle's id (R${Number(bundle.price).toFixed(2)}) to submit for approval.`,
+      message: skipPayment
+        ? 'Bundle created using your package\'s included photo allowance — submitted for approval, no payment needed.'
+        : `Bundle created — call POST /payments/initiate with linkedType "gallery_bundle" and this bundle's id (R${Number(bundle.price).toFixed(2)}) to submit for approval.`,
     });
   } catch (err) {
     next(err);
