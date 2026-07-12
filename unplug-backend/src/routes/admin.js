@@ -32,6 +32,67 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// GET /admin/vouchers — admin-only. Lists every voucher ever created.
+router.get('/vouchers', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT v.*, u.email AS created_by_email,
+              (SELECT COUNT(*) FROM voucher_redemptions r WHERE r.voucher_id = v.id) AS times_redeemed
+       FROM vouchers v
+       LEFT JOIN users u ON u.id = v.created_by
+       ORDER BY v.created_at DESC`
+    );
+    res.json({ vouchers: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/vouchers — admin-only. Creates a new voucher code.
+// discount_type: 'percent' or 'fixed'. expires_at is mandatory.
+// service_restriction is optional — omit or leave blank for "any service".
+router.post('/vouchers', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { code, discountType, discountValue, serviceRestriction, expiresAt } = req.body;
+    if (!code || !discountType || !discountValue || !expiresAt) {
+      return res.status(400).json({ error: 'code, discountType, discountValue, and expiresAt are all required.' });
+    }
+    if (!['percent', 'fixed'].includes(discountType)) {
+      return res.status(400).json({ error: 'discountType must be "percent" or "fixed".' });
+    }
+    const result = await pool.query(
+      `INSERT INTO vouchers (code, discount_type, discount_value, service_restriction, expires_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [code.toUpperCase().trim(), discountType, discountValue, serviceRestriction || null, expiresAt, req.user.id]
+    );
+    await logActivity(req.user.id, 'voucher_created', `Voucher ${result.rows[0].code} — ${discountType} ${discountValue}`);
+    res.status(201).json({ voucher: result.rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'That voucher code already exists.' });
+    }
+    next(err);
+  }
+});
+
+// PATCH /admin/vouchers/:id/deactivate — admin-only. Turns a voucher off
+// without deleting its redemption history.
+router.patch('/vouchers/:id/deactivate', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE vouchers SET active = false WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Voucher not found.' });
+    }
+    await logActivity(req.user.id, 'voucher_deactivated', `Voucher ${result.rows[0].code}`);
+    res.json({ voucher: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /admin/profiles/pending
 // Admin-only — the Directory tab of the Approval Queue.
 router.get('/profiles/pending', requireRole('admin'), async (req, res, next) => {
