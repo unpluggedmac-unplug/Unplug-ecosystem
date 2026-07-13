@@ -1221,7 +1221,17 @@ router.get('/live-visitors', async (req, res, next) => {
 </main>
 
 <!-- ============ DIRECTORY PROFILE (EXAMPLE — PREMIUM PACKAGE) ============ -->
-<main class="page" id="page-directoryprofile">
+<!-- ============ ARTICLE DETAIL ============ -->
+<main class="page" id="page-articledetail">
+  <div class="wrap" style="padding-top:56px; max-width:70ch;">
+    <button class="btn btn-line" data-page="news" style="margin-bottom:24px;">← Back to Latest News</button>
+    <div id="articleDetailContent">
+      <div class="dir-empty-state">Loading story…</div>
+    </div>
+  </div>
+</main>
+  
+  <main class="page" id="page-directoryprofile">
   <div class="wrap" style="padding-top:56px;">
     <button class="btn btn-line" data-page="directory" style="margin-bottom:24px;">← Back to Directory</button>
     <div id="profileDetailContent">
