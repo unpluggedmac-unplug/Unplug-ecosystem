@@ -3039,13 +3039,8 @@ async function loadLiveVisitors() {
 
 async function loadTopArticleWeek() {
   try {
-    const data = await api('/articles?limit=1');
-    const el = document.getElementById('topArticleWeek');
-    if (data.articles && data.articles.length > 0) {
-      el.textContent = data.articles[0].title;
-    } else {
-      el.textContent = 'No stories yet this week.';
-    }
+    const data = await api('/analytics/top-article-week');
+    document.getElementById('topArticleWeek').textContent = data.title || 'No stories yet this week.';
   } catch (err) {
     document.getElementById('topArticleWeek').textContent = '—';
   }
