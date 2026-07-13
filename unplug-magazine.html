@@ -2347,13 +2347,18 @@ async function loadGallery(reset) {
     const startIndex = reset ? 0 : grid.querySelectorAll('.gallery-item').length;
     if (reset) grid.innerHTML = '';
     if (galleryPage === 1 && data.images.length === 0) {
-      grid.innerHTML = '<div class="dir-empty-state">No photos yet — check back soon, or be the first to submit one.</div>';
-    } else {
-      grid.insertAdjacentHTML('beforeend', data.images.map((img, i) => galleryItemHtml(img, startIndex + i)).join(''));
+      el.innerHTML = `
+      ${a.banner_image_url ? `<div style="position:relative; margin-bottom:24px;"><img src="${escapeHtml(a.banner_image_url)}" alt="${escapeHtml(a.title)}" style="width:100%; max-height:420px; object-fit:cover; display:block;"><div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>` : ''}
+      <span class="eyebrow">${escapeHtml(a.category || '')}</span>
+      <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 8px;">${escapeHtml(a.title)}</h1>
+      ${a.kicker_supplied_by ? `<p style="color:var(--slate); font-size:13px; margin-bottom:6px;">Supplied by ${escapeHtml(a.kicker_supplied_by)}</p>` : ''}
+      <p style="color:var(--slate); font-size:13px; margin-bottom:24px;">${readMinutes(a.body)} min read</p>
+      <div style="white-space:pre-wrap; line-height:1.7; font-size:16px;">${escapeHtml(a.body)}</div>
+    `;
+    if (a.banner_image_url) {
+      const badge = el.querySelector('.print-mark');
+      if (badge) badge.innerHTML = svgMarkup;
     }
-    loadMoreBtn.style.display = data.pagination.page < data.pagination.totalPages ? 'inline-flex' : 'none';
-  } catch (err) {
-    grid.innerHTML = '<div class="dir-empty-state">Couldn\'t load the gallery right now. Please try again shortly.</div>';
     showToast(err.message, true);
   } finally {
     galleryLoading = false;
