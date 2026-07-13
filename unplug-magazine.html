@@ -2171,6 +2171,11 @@ function profileDetailHtml(profile, socials, gallery) {
             ${gallery.map((g) => `<div class="profile-gallery-item" style="background-image:url('${escapeHtml(g.image_url)}'); background-size:cover; background-position:center;"></div>`).join('')}
           </div>`;
   }
+  if (profile.type === 'individual' && tier === 'premium' && profile.demo_reel_url) {
+    html += `
+          <h3 class="profile-section-title" style="margin-top:28px;">Demo Reel / Music</h3>
+          <p><a class="btn btn-line" href="${escapeHtml(profile.demo_reel_url)}" target="_blank" rel="noopener">▶ Watch / Listen</a></p>`;
+  }
 
   html += `
         </div>
