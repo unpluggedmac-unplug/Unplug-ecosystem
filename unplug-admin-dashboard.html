@@ -568,6 +568,16 @@ const QUEUE_TABS = {
       { header: 'Renews', render: (r) => r.renews_at ? new Date(r.renews_at).toLocaleDateString() : '—' },
     ],
   },
+  renewalsDue: {
+    label: 'Renewals Due', listPath: '/admin/profiles/renewals-due', resource: 'profiles', actions: ['renew'],
+    columns: [
+      { header: 'Name', render: (r) => r.display_name },
+      { header: 'Type', render: (r) => r.type },
+      { header: 'Package', render: (r) => r.package_tier },
+      { header: 'Contact Email', render: (r) => r.contact_email },
+      { header: 'Renews On', render: (r) => new Date(r.renews_at).toLocaleDateString() },
+    ],
+  },
   gallery: {
     label: 'Gallery', listPath: '/admin/gallery/pending', resource: 'gallery',
     columns: [
