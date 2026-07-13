@@ -2224,8 +2224,35 @@ function newsCardHtml(article) {
   const excerpt = escapeHtml((article.body || '').slice(0, 140)) + (article.body && article.body.length > 140 ? '…' : '');
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `Supplied by ${escapeHtml(article.kicker_supplied_by)}` : '';
-  return `<article class="story-card"><div class="story-thumb"></div><span class="story-tag">${category}</span>${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></article>`;
+  return `<a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb"></div><span class="story-tag">${category}</span>${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>`;
 }
+
+async function loadArticleDetail(id) {
+  const el = document.getElementById('articleDetailContent');
+  el.innerHTML = '<div class="dir-empty-state">Loading story…</div>';
+  trackPageView('article-' + id);
+  try {
+    const data = await api('/articles/' + id);
+    const a = data.article;
+    el.innerHTML = `
+      <span class="eyebrow">${escapeHtml(a.category || '')}</span>
+      <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 8px;">${escapeHtml(a.title)}</h1>
+      ${a.kicker_supplied_by ? `<p style="color:var(--slate); font-size:13px; margin-bottom:6px;">Supplied by ${escapeHtml(a.kicker_supplied_by)}</p>` : ''}
+      <p style="color:var(--slate); font-size:13px; margin-bottom:24px;">${readMinutes(a.body)} min read</p>
+      <div style="white-space:pre-wrap; line-height:1.7; font-size:16px;">${escapeHtml(a.body)}</div>
+    `;
+  } catch (err) {
+    el.innerHTML = '<div class="dir-empty-state">Couldn\'t load this story right now.</div>';
+  }
+}
+
+document.getElementById('newsGrid').addEventListener('click', (e) => {
+  const card = e.target.closest('.story-card[data-id]');
+  if (!card) return;
+  e.preventDefault();
+  goToPage('articledetail');
+  loadArticleDetail(card.dataset.id);
+});
 
 async function loadNews(reset) {
   if (newsLoading) return;
