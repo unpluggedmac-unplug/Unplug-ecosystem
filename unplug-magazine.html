@@ -2979,6 +2979,12 @@ function filterInvestors(btn, industry){
 
 // inject fingerprint svg into every .print-mark
 const svgMarkup = document.getElementById('print-svg').innerHTML;
+  const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 160" style="background:#f1f0ef;">${svgMarkup.replace(/currentColor/g, '#272626')}</svg>`;
+const faviconLink = document.createElement('link');
+faviconLink.rel = 'icon';
+faviconLink.type = 'image/svg+xml';
+faviconLink.href = 'data:image/svg+xml,' + encodeURIComponent(faviconSvg);
+document.head.appendChild(faviconLink);
 document.querySelectorAll('.print-mark').forEach((el, i) => {
   const uid = 'fp' + i;
   el.innerHTML = svgMarkup
