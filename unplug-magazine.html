@@ -2986,6 +2986,21 @@ function goToPage(pageId){
   document.getElementById('mainNav').classList.remove('open');
   window.scrollTo({top:0, behavior:'auto'});
   trackPageView(pageId);
+  const PAGE_TITLES = {
+    home: 'Unplug Magazine — Real People. Real Impact.',
+    news: 'Latest News — Unplug Magazine',
+    directory: 'Directory — Unplug Magazine',
+    gallery: 'Community Gallery — Unplug Magazine',
+    editions: 'Editions — Unplug Magazine',
+    top10: 'Top 10 — Unplug Magazine',
+    competitions: 'Competitions — Unplug Magazine',
+    investors: 'Investor Relations — Unplug Magazine',
+    brandplacement: 'Marketplace — Unplug Magazine',
+    about: 'About Us — Unplug Magazine',
+    contact: 'Contact Us — Unplug Magazine',
+  };
+  document.title = PAGE_TITLES[pageId] || 'Unplug Magazine';
+</parameter>
 
   if (pageId === 'directory' && !directoryLoadedOnce) {
     directoryLoadedOnce = true;
