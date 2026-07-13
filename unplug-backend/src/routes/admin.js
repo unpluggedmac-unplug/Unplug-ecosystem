@@ -111,6 +111,23 @@ router.get('/profiles/pending', requireRole('admin'), async (req, res, next) => 
   }
 });
 
+// GET /admin/profiles/renewals-due — admin-only. Lists approved profiles
+// whose renews_at falls within the next 30 days, or has already passed.
+router.get('/profiles/renewals-due', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.display_name, p.type, p.package_tier, p.renews_at, u.email AS contact_email
+       FROM profiles p
+       JOIN users u ON u.id = p.user_id
+       WHERE p.status = 'approved' AND p.renews_at IS NOT NULL AND p.renews_at <= now() + interval '30 days'
+       ORDER BY p.renews_at ASC`
+    );
+    res.json({ profiles: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /admin/profiles/approved
 // Admin-only — lists all approved Directory profiles, with verification
 // and credit-renewal status, so there's somewhere to use the Verify and
