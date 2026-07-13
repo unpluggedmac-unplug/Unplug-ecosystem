@@ -166,6 +166,8 @@ async function loadCategories() {
 function updateSecondCategoryVisibility() {
   const show = SELECTED_TYPE === 'business' && SELECTED_TIER === 'premium';
   document.getElementById('secondCategoryField').classList.toggle('section-hidden', !show);
+  const showReel = SELECTED_TYPE === 'individual' && SELECTED_TIER === 'premium';
+  document.getElementById('demoReelField').classList.toggle('section-hidden', !showReel);
 }
 
 document.getElementById('profileTypeOptions').addEventListener('click', (e) => {
