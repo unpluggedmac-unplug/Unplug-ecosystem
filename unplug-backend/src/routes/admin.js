@@ -218,15 +218,6 @@ router.patch('/profiles/:id/renew', requireRole('admin'), async (req, res, next)
     next(err);
   }
 });
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Profile not found.' });
-    }
-    await logActivity(req.user.id, 'profile_approved', `Profile #${req.params.id} — ${result.rows[0].display_name}`);
-    res.json({ profile: result.rows[0] });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // PATCH /admin/profiles/:id/reject
 router.patch('/profiles/:id/reject', requireRole('admin'), async (req, res, next) => {
