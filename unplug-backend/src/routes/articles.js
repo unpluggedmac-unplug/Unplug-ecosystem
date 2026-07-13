@@ -91,7 +91,7 @@ router.get('/:id', async (req, res, next) => {
 // earlier for the Latest News page.
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { title, body, categoryId, kickerSuppliedBy } = req.body;
+    const { title, body, categoryId, kickerSuppliedBy, bannerImageUrl } = req.body;
     if (!title || !body) {
       return res.status(400).json({ error: 'title and body are required.' });
     }
@@ -103,10 +103,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     const hasCredit = profileResult.rows.length > 0 && profileResult.rows[0].free_article_credits > 0;
 
     const result = await pool.query(
-      `INSERT INTO articles (author_user_id, category_id, title, body, kicker_supplied_by, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO articles (author_user_id, category_id, title, body, kicker_supplied_by, banner_image_url, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [req.user.id, categoryId || null, title, body, kickerSuppliedBy || null, hasCredit ? 'pending' : 'awaiting_payment']
+      [req.user.id, categoryId || null, title, body, kickerSuppliedBy || null, bannerImageUrl || null, hasCredit ? 'pending' : 'awaiting_payment']
     );
 
     if (hasCredit) {
