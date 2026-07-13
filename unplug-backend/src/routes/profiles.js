@@ -171,8 +171,9 @@ router.get('/profiles/:slug', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 router.post('/profiles', requireAuth, async (req, res, next) => {
   try {
-    const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, achievements, career, quote, contactEmail, contactPhone, contactWebsite } = req.body;
+const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, achievements, career, quote, contactEmail, contactPhone, contactWebsite, demoReelUrl } = req.body;
     const allowSecondCategory = type === 'business' && packageTier === 'premium';
+    const allowDemoReel = type === 'individual' && packageTier === 'premium';
     if (!TIERS.includes(packageTier)) {
       return res.status(400).json({ error: `packageTier must be one of: ${TIERS.join(', ')}` });
     }
@@ -194,10 +195,10 @@ router.post('/profiles', requireAuth, async (req, res, next) => {
 
     const result = await pool.query(
       `INSERT INTO profiles
-        (user_id, type, category_id, secondary_category_id, package_tier, slug, display_name, bio, achievements, career, quote, contact_email, contact_phone, contact_website, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'awaiting_payment')
+        (user_id, type, category_id, secondary_category_id, package_tier, slug, display_name, bio, achievements, career, quote, contact_email, contact_phone, contact_website, demo_reel_url, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'awaiting_payment')
        RETURNING *`,
-      [req.user.id, type || 'individual', categoryId || null, allowSecondCategory ? (secondaryCategoryId || null) : null, packageTier, slug, displayName.trim(), bio || null, achievements || null, career || null, quote || null, contactEmail || null, contactPhone || null, contactWebsite || null]
+      [req.user.id, type || 'individual', categoryId || null, allowSecondCategory ? (secondaryCategoryId || null) : null, packageTier, slug, displayName.trim(), bio || null, achievements || null, career || null, quote || null, contactEmail || null, contactPhone || null, contactWebsite || null, allowDemoReel ? (demoReelUrl || null) : null]
     );
 
     res.status(201).json({
