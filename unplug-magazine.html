@@ -2050,7 +2050,7 @@ document.getElementById('pkgTypeToggle')?.addEventListener('click', (e) => {
   });
 });
 
-document.getElementById('dirTypeTabs').addEventListener('click', (e) => {
+document.getElementById('dirTypeTabs')?.addEventListener('click', (e) => {
   const el = e.target.closest('.tier-option[data-type]');
   if (!el) return;
   document.querySelectorAll('#dirTypeTabs .tier-option').forEach((o) => o.classList.remove('selected'));
