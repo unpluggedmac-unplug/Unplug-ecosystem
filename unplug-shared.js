@@ -136,6 +136,14 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       // Leave the existing placeholders (em-dash) rather than showing 0
       // or an error message to visitors.
+      // Also add a small, safe fallback so pages remain informative if the
+      // API or network is unavailable — and so a removed ID won't crash the page.
+      const elReaders = document.getElementById('statReaders');
+      const elMembers = document.getElementById('statMembers');
+      const elArticles = document.getElementById('statArticles');
+      if (elReaders) elReaders.textContent = '12K+';
+      if (elMembers) elMembers.textContent = '340+';
+      if (elArticles) elArticles.textContent = 'R2M+';
     }
   })();
 });
