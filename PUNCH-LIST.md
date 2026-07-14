@@ -21,6 +21,22 @@
 - **Database unchanged: Supabase** (project jaywxegcxjgyqhcwzbte). The
   OTHER empty Supabase project (fkuzbwysvyskhsskjmmi) should be deleted.
 
+## ✅ COMPLETED 2026-07-15 ~1am (do NOT redo these)
+
+- **File guard installed** — `.github/workflows/file-guard.yml` auto-reverts
+  any push to main that truncates a protected file or contains AI-truncation
+  placeholders ("content omitted", "omitted for brevity", etc.). Detection
+  logic verified. If a commit vanishes a minute after pushing, this is why —
+  check the Actions tab.
+- **P1 — Latest News category dropdown** — done, live, tested.
+- **P2 part 1 — Directory clickable contacts** — done (mailto:/tel:/https
+  links, tel strips spaces, bare www gets https:// prefixed), live, tested.
+- **P2 part 3 — Directory category dropdown** — done, live, tested.
+- **H4 — Investor Spotlight live stats** — done earlier (2026-07-14 eve):
+  GET /analytics/public-stats + centralized loader in unplug-shared.js.
+  On API failure it keeps em-dash placeholders — NEVER re-add hardcoded
+  fake-number fallbacks.
+
 ## 🚨 INCIDENT LOG — 2026-07-14/15 night (for future sessions)
 
 1. A chat-tool edit replaced the entire 3,136-line unplug-magazine.html
