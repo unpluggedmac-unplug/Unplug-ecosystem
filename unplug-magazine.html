@@ -2039,7 +2039,7 @@ const DIRECTORY_PRICES = {
   business: { basic: 500, pro: 700, premium: 1000 },
 };
 
-document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
+document.getElementById('pkgTypeToggle')?.addEventListener('click', (e) => {
   const el = e.target.closest('.tier-option[data-type]');
   if (!el) return;
   document.querySelectorAll('#pkgTypeToggle .tier-option').forEach((o) => o.classList.remove('selected'));
