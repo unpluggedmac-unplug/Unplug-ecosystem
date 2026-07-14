@@ -1,11 +1,48 @@
 # Unplug Magazine — Punch List
-*Last updated: 2026-07-08 (deployment session)*
+*Last updated: 2026-07-14*
 
 This is the working status doc for the Unplug Ecosystem build (backend + public
 site). Read this first before picking work back up — it replaces having to
 re-derive context from scratch.
 
 ---
+
+## ⚠️ 2026-07-14 incident + fix — READ THIS IF ANYTHING LOOKS BROKEN AGAIN
+
+**What happened:** Pierre built real, solid new features himself (verification
+badges, per-tier free credits, a voucher system, second Directory category for
+Business Premium, article banners, demo reel URLs, activity log, inquiries/
+contact form, site analytics) across migrations 018–024. But two things went
+wrong in parallel:
+
+1. **Railway's `DATABASE_URL` got pointed at a second, different Supabase
+   project** (`fkuzbwysvyskhsskjmmi`, not our real one `jaywxegcxjgyqhcwzbte`)
+   — two very similar-looking connection strings, easy mix-up. The live site
+   was silently running against an empty database with an out-of-date schema.
+   **Confirmed zero real data was lost** — the wrong database had 0 users, 0
+   of everything.
+2. **The repo was made public** (probably to enable GitHub Pages as a free
+   host) and several commits pointed canonical/OG/sitemap URLs at the GitHub
+   Pages URL instead of Netlify. Public repo = your pricing, schema, and
+   business logic all publicly readable.
+
+**Fixed:** ran migrations 018–024 against the correct database, pointed
+Railway's `DATABASE_URL` back at the real Supabase project (verified with an
+actual write-then-read round trip, not just a health check), made the repo
+private again, and fixed the SEO/sitemap URLs to point at Netlify.
+
+**⚠️ IMPORTANT — GitHub Pages will not work while this repo stays private,
+and it should stay private.** Netlify is the one true frontend host. If you
+ever see a GitHub Pages URL (`*.github.io`) mentioned anywhere, that's a dead
+end — the real site is always the Netlify URL below.
+
+**The actual lesson for Pierre, worth repeating:** every time you add a new
+migration file, you must run `npm run migrate` — but ALSO double-check which
+database you're running it against (`unplug-backend/.env`'s `DATABASE_URL`)
+matches what's in Railway's Variables tab. Two databases existing at all was
+the root confusion. Consider deleting the second, empty Supabase project
+entirely to remove the trap (Supabase → that project → Settings → General →
+Delete project) — nothing of value is in it.
 
 ## 🚀 DEPLOYMENT STATUS (as of 2026-07-08, ~1am)
 
