@@ -3076,7 +3076,7 @@ async function loadLiveVisitors() {
     const data = await api('/analytics/live-visitors');
     if (document.getElementById('liveVisitorCount')) document.getElementById('liveVisitorCount').textContent = data.liveVisitors;
   } catch (err) {
-    document.getElementById('liveVisitorCount').textContent = '—';
+    if (document.getElementById('liveVisitorCount')) document.getElementById('liveVisitorCount').textContent = '—';
   }
 }
 
