@@ -149,6 +149,24 @@ let CURRENT_PAYMENT_LINKED_TYPE = 'profile_package';
 const CHECKOUT_PARAMS = new URLSearchParams(window.location.search);
 const EDITION_MODE = CHECKOUT_PARAMS.get('type') === 'edition_download' && CHECKOUT_PARAMS.get('id');
 
+// Package preselection from the public site's Directory page,
+// e.g. unplug-checkout.html?ptype=business&tier=pro
+(function preselectFromParams() {
+  const ptype = CHECKOUT_PARAMS.get('ptype');
+  const tier = CHECKOUT_PARAMS.get('tier');
+  if (ptype && ['individual', 'business'].includes(ptype)) {
+    SELECTED_TYPE = ptype;
+    document.querySelectorAll('#profileTypeOptions .tier-option').forEach((o) =>
+      o.classList.toggle('selected', o.dataset.type === ptype));
+  }
+  if (tier && ['basic', 'pro', 'premium'].includes(tier)) {
+    SELECTED_TIER = tier;
+    document.querySelectorAll('#tierOptions .tier-option').forEach((o) =>
+      o.classList.toggle('selected', o.dataset.tier === tier));
+  }
+  if (ptype || tier) updateSecondCategoryVisibility();
+})();
+
 const TIER_PRICES = {
   individual: { basic: 150, pro: 280, premium: 400 },
   business: { basic: 500, pro: 700, premium: 1000 },

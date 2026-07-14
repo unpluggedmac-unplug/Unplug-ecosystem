@@ -257,6 +257,14 @@ section.home-section:last-of-type{ margin-bottom:0; }
 /* ---- directory (empty/loading states) ---- */
 .dir-empty-state{ grid-column:1/-1; text-align:center; padding:48px 20px; color:var(--slate); font-size:14px; }
 
+/* ---- package type toggle (Individual / Business) ---- */
+.pkg-type-toggle{ display:inline-flex; border:1px solid var(--ink); }
+.pkg-type-toggle button{
+  font-family:'Inter',sans-serif; font-size:12px; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.05em; padding:10px 18px; background:none; border:none; cursor:pointer; color:var(--slate);
+}
+.pkg-type-toggle button.active{ background:var(--ink); color:var(--cream); }
+
 /* ---- category dropdown filter (News + Directory) ---- */
 .cat-filter-row{ display:flex; align-items:center; gap:12px; margin-bottom:32px; }
 .cat-filter-label{ font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--slate); }
@@ -1110,28 +1118,32 @@ router.get('/live-visitors', async (req, res, next) => {
   <section class="wrap" style="padding-top:24px; padding-bottom:0;">
     <div class="section-head">
       <div><span class="eyebrow">Once-off pricing</span><h2>Directory Packages</h2></div>
+      <div class="pkg-type-toggle" id="pkgTypeToggle">
+        <button class="active" data-ptype="individual">Individual</button>
+        <button data-ptype="business">Business</button>
+      </div>
     </div>
     <div class="tier-grid">
       <div class="tier-card">
         <div class="tier-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="36" height="36"><path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z"/><circle cx="12" cy="12" r="2" fill="var(--red)" stroke="none"/></svg></div>
         <h4>Basic</h4>
-        <div class="tier-price">R150 <span>once-off</span></div>
-        <p>Entry-level listing — name, category, short bio, and one contact method.</p>
-        <button class="btn btn-line tier-btn" onclick="goToMemberDashboard()">Choose Basic</button>
+        <div class="tier-price"><span class="pkg-price" data-tier="basic">R150</span> <span>once-off</span></div>
+        <p class="pkg-desc" data-tier="basic">Entry-level listing — name, category, short bio, and one contact method.</p>
+        <button class="btn btn-line tier-btn" onclick="choosePackage('basic')">Choose Basic</button>
       </div>
       <div class="tier-card tier-featured">
         <div class="tier-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="36" height="36"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
         <h4>Pro</h4>
-        <div class="tier-price">R280 <span>once-off</span></div>
-        <p>Full biography, achievements, career highlights, quote, and social handles.</p>
-        <button class="btn btn-solid tier-btn" onclick="goToMemberDashboard()">Choose Pro</button>
+        <div class="tier-price"><span class="pkg-price" data-tier="pro">R280</span> <span>once-off</span></div>
+        <p class="pkg-desc" data-tier="pro">Full biography, achievements, career highlights, quote, and social handles.</p>
+        <button class="btn btn-solid tier-btn" onclick="choosePackage('pro')">Choose Pro</button>
       </div>
       <div class="tier-card">
         <div class="tier-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="36" height="36"><path d="M2 20h20M4 20V8l5 5 3-6 3 6 5-5v12"/><circle cx="12" cy="4" r="2" fill="var(--red)" stroke="none"/></svg></div>
         <h4>Premium</h4>
-        <div class="tier-price">R400 <span>once-off</span></div>
-        <p>Everything in Pro, plus a full project gallery and linked videos.</p>
-        <button class="btn btn-line tier-btn" onclick="goToMemberDashboard()">Choose Premium</button>
+        <div class="tier-price"><span class="pkg-price" data-tier="premium">R400</span> <span>once-off</span></div>
+        <p class="pkg-desc" data-tier="premium">Everything in Pro, plus a full project gallery and linked videos.</p>
+        <button class="btn btn-line tier-btn" onclick="choosePackage('premium')">Choose Premium</button>
       </div>
     </div>
     <p style="font-size:12.5px; color:var(--slate); margin-top:14px; max-width:70ch;">Want to move up a tier later? Upgrades are a flat <strong>R250 admin fee</strong> — no need to pay the price difference. Downgrading to a lower package isn't available once you're listed.</p>
@@ -2040,6 +2052,43 @@ const api = UnplugAPI.api;
 // login — per Darius's decision 2026-07-07. Same-folder relative link,
 // matching how the four Unplug frontends already sit side by side.
 const MEMBER_DASHBOARD_URL = 'unplug-member-dashboard.html';
+// Directory package selection — prices mirror the checkout page's
+// TIER_PRICES map (display only; the backend resolves the real charge).
+const PKG_PRICES = {
+  individual: { basic: 150, pro: 280, premium: 400 },
+  business:   { basic: 500, pro: 700, premium: 1000 },
+};
+const PKG_DESCS = {
+  individual: {
+    basic: 'Entry-level listing — name, category, short bio, and one contact method.',
+    pro: 'Full biography, achievements, career highlights, quote, and social handles.',
+    premium: 'Everything in Pro, plus a full project gallery and linked videos.',
+  },
+  business: {
+    basic: 'Business listing — name, category, short description, and one contact method.',
+    pro: 'Full business profile with services, contact details, and social channels.',
+    premium: 'Everything in Pro, plus a project gallery, videos, and a second category listing.',
+  },
+};
+let PKG_TYPE = 'individual';
+
+document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-ptype]');
+  if (!btn) return;
+  PKG_TYPE = btn.dataset.ptype;
+  document.querySelectorAll('#pkgTypeToggle button').forEach((b) => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.pkg-price').forEach((el) => {
+    el.textContent = 'R' + PKG_PRICES[PKG_TYPE][el.dataset.tier];
+  });
+  document.querySelectorAll('.pkg-desc').forEach((el) => {
+    el.textContent = PKG_DESCS[PKG_TYPE][el.dataset.tier];
+  });
+});
+
+function choosePackage(tier) {
+  window.location.href = 'unplug-checkout.html?ptype=' + PKG_TYPE + '&tier=' + tier;
+}
+
 function goToMemberDashboard() {
   window.location.href = MEMBER_DASHBOARD_URL;
 }

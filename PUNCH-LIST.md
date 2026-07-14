@@ -37,6 +37,12 @@
   row in DB with server-resolved R50). Download buttons link to
   `unplug-checkout.html?type=edition_download&id=N`; checkout has an
   edition mode that skips the package step.
+- **P2 part 2 — Business packages on the Directory page** — done, tested.
+  Individual/Business toggle swaps prices (R150/280/400 vs R500/700/1000)
+  and descriptions; "Choose X" goes to
+  `unplug-checkout.html?ptype=business&tier=pro` and checkout preselects
+  both. Backend already charges type-aware prices server-side
+  (PACKAGE_PRICES[type][tier] in payments.js) — verified.
 - **TWO PRODUCTION PAYMENT BUGS FIXED (2026-07-15 ~1:30am):**
   (1) `CURRENT_PAYMENT_LINKED_TYPE` was referenced at Pay Now time but
   defined nowhere — EVERY checkout payment threw a ReferenceError. Money
