@@ -101,3 +101,41 @@ function showToast(message, isError = false) {
     // actual page for a visitor, even if the backend is briefly down.
   });
 })();
+
+
+// ---------------------------------------------------------------------------
+// Platform stats: populate the investor spotlight numbers on any page that
+// includes the stat elements with IDs statReaders / statMembers / statArticles.
+// This central implementation lives in unplug-shared.js so the same behaviour
+// works across pages without duplicating code in each HTML file.
+// ---------------------------------------------------------------------------
+
+document.addEventListener('DOMContentLoaded', () => {
+  (async function loadPlatformStatsShared() {
+    try {
+      const elReaders = document.getElementById('statReaders');
+      const elMembers = document.getElementById('statMembers');
+      const elArticles = document.getElementById('statArticles');
+      // If none of the elements exist on this page, nothing to do.
+      if (!elReaders && !elMembers && !elArticles) return;
+
+      // Use the shared API helper so it respects localStorage overrides
+      // (for local development) and any auth token if present.
+      const data = await UnplugAPI.api('/analytics/public-stats');
+
+      const fmt = (n) => {
+        if (n == null) return '—';
+        if (n >= 1000000) return Math.floor(n / 1000000) + 'M+';
+        if (n >= 1000) return Math.floor(n / 1000) + 'K+';
+        return String(n);
+      };
+
+      if (elReaders) elReaders.textContent = fmt(data.monthlyReaders);
+      if (elMembers) elMembers.textContent = fmt(data.registeredMembers);
+      if (elArticles) elArticles.textContent = fmt(data.articlesPublished);
+    } catch (err) {
+      // Leave the existing placeholders (em-dash) rather than showing 0
+      // or an error message to visitors.
+    }
+  })();
+});
