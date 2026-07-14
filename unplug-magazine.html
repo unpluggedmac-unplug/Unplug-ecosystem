@@ -3074,7 +3074,7 @@ document.getElementById('submitCta').addEventListener('click', (e) => {
 async function loadLiveVisitors() {
   try {
     const data = await api('/analytics/live-visitors');
-    document.getElementById('liveVisitorCount').textContent = data.liveVisitors;
+    if (document.getElementById('liveVisitorCount')) document.getElementById('liveVisitorCount').textContent = data.liveVisitors;
   } catch (err) {
     document.getElementById('liveVisitorCount').textContent = '—';
   }
