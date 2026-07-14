@@ -140,43 +140,5 @@ img{max-width:100%; display:block;}
 <script>
 // Page-specific JS (unchanged)
 </script>
-
-<!-- Corrected backend URL script + safety null-checks for stat elements -->
-<script>
-// Ensure this points at the production Railway backend
-const BACKEND_URL = 'https://unplug-ecosystem-production.up.railway.app';
-
-document.addEventListener('DOMContentLoaded', async () => {
-  const elReaders = document.getElementById('statReaders');
-  const elMembers = document.getElementById('statMembers');
-  const elArticles = document.getElementById('statArticles');
-
-  // If none of the stat elements exist on this page, do nothing and fail quietly.
-  if (!elReaders && !elMembers && !elArticles) return;
-
-  const fmt = (n) => {
-    if (n == null) return '—';
-    if (n >= 1000000) return Math.floor(n / 1000000) + 'M+';
-    if (n >= 1000) return Math.floor(n / 1000) + 'K+';
-    return String(n);
-  };
-
-  try {
-    const res = await fetch(BACKEND_URL + '/analytics/public-stats');
-    if (!res.ok) throw new Error('Failed to fetch public stats');
-    const data = await res.json();
-
-    if (elReaders) elReaders.textContent = fmt(data.monthlyReaders);
-    if (elMembers) elMembers.textContent = fmt(data.registeredMembers);
-    if (elArticles) elArticles.textContent = fmt(data.articlesPublished);
-  } catch (err) {
-    // Fallback hardcoded values so the page remains informative if the API
-    // or network is unavailable — and so a removed ID won't crash the page.
-    if (elReaders) elReaders.textContent = '12K+';
-    if (elMembers) elMembers.textContent = '340+';
-    if (elArticles) elArticles.textContent = 'R2M+';
-  }
-});
-</script>
 </body>
 </html>
