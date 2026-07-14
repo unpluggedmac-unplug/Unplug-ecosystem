@@ -5,7 +5,7 @@
   "main": "src/app.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/app.js",
+    "start": "npm run migrate && node src/app.js",
     "dev": "nodemon src/app.js",
     "migrate": "node db/migrate.js"
   },
