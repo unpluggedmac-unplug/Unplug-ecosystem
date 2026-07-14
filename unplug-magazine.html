@@ -3083,7 +3083,7 @@ async function loadLiveVisitors() {
 async function loadTopArticleWeek() {
   try {
     const data = await api('/analytics/top-article-week');
-    document.getElementById('topArticleWeek').textContent = data.title || 'No stories yet this week.';
+    if (document.getElementById('topArticleWeek')) document.getElementById('topArticleWeek').textContent = data.title || 'No stories yet this week.';
   } catch (err) {
     document.getElementById('topArticleWeek').textContent = '—';
   }
