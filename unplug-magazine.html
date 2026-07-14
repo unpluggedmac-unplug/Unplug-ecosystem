@@ -257,6 +257,20 @@ section.home-section:last-of-type{ margin-bottom:0; }
 /* ---- directory (empty/loading states) ---- */
 .dir-empty-state{ grid-column:1/-1; text-align:center; padding:48px 20px; color:var(--slate); font-size:14px; }
 
+/* ---- category dropdown filter (News + Directory) ---- */
+.cat-filter-row{ display:flex; align-items:center; gap:12px; margin-bottom:32px; }
+.cat-filter-label{ font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--slate); }
+.cat-select{
+  font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600; color:var(--ink);
+  padding:10px 38px 10px 14px; border:1px solid var(--ink); background:var(--cream);
+  cursor:pointer; appearance:none; -webkit-appearance:none; max-width:100%;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%23272626' stroke-width='2' fill='none'/></svg>");
+  background-repeat:no-repeat; background-position:right 14px center;
+}
+.cat-select:focus{ outline:2px solid var(--red); outline-offset:1px; }
+.contact-link{ color:var(--red); text-decoration:underline; text-underline-offset:3px; }
+.contact-link:hover{ color:var(--maroon); }
+
 /* ---- directory ---- */
 .dir-filters{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:32px; }
 .dir-filters button{
@@ -995,29 +1009,32 @@ router.get('/live-visitors', async (req, res, next) => {
   </section>
 
   <section class="wrap" style="padding-top:0;">
-    <div class="dir-filters" id="newsFilters">
-      <button class="active" data-category="">All</button>
-      <button data-category="Entrepreneurship &amp; Business">Entrepreneurship &amp; Business</button>
-      <button data-category="Career Success">Career Success</button>
-      <button data-category="Personal Growth">Personal Growth</button>
-      <button data-category="Leadership">Leadership</button>
-      <button data-category="Innovation &amp; Technology">Innovation &amp; Technology</button>
-      <button data-category="Lifestyle &amp; Luxury">Lifestyle &amp; Luxury</button>
-      <button data-category="Health &amp; Wellness">Health &amp; Wellness</button>
-      <button data-category="Fashion &amp; Style">Fashion &amp; Style</button>
-      <button data-category="Travel &amp; Experiences">Travel &amp; Experiences</button>
-      <button data-category="Finance &amp; Wealth">Finance &amp; Wealth</button>
-      <button data-category="Community Impact">Community Impact</button>
-      <button data-category="Arts &amp; Creativity">Arts &amp; Creativity</button>
-      <button data-category="Food &amp; Hospitality">Food &amp; Hospitality</button>
-      <button data-category="Relationships &amp; Family">Relationships &amp; Family</button>
-      <button data-category="Property &amp; Real Estate">Property &amp; Real Estate</button>
-      <button data-category="Motoring">Motoring</button>
-      <button data-category="Entertainment &amp; Culture">Entertainment &amp; Culture</button>
-      <button data-category="Events &amp; Awards">Events &amp; Awards</button>
-      <button data-category="Education &amp; Skills">Education &amp; Skills</button>
-      <button data-category="Faith &amp; Inspiration">Faith &amp; Inspiration</button>
-      <button data-category="Other">Other</button>
+    <div class="cat-filter-row">
+      <label class="cat-filter-label" for="newsCategorySelect">Category</label>
+      <select class="cat-select" id="newsCategorySelect">
+        <option value="">All categories</option>
+        <option value="Entrepreneurship &amp; Business">Entrepreneurship &amp; Business</option>
+        <option value="Career Success">Career Success</option>
+        <option value="Personal Growth">Personal Growth</option>
+        <option value="Leadership">Leadership</option>
+        <option value="Innovation &amp; Technology">Innovation &amp; Technology</option>
+        <option value="Lifestyle &amp; Luxury">Lifestyle &amp; Luxury</option>
+        <option value="Health &amp; Wellness">Health &amp; Wellness</option>
+        <option value="Fashion &amp; Style">Fashion &amp; Style</option>
+        <option value="Travel &amp; Experiences">Travel &amp; Experiences</option>
+        <option value="Finance &amp; Wealth">Finance &amp; Wealth</option>
+        <option value="Community Impact">Community Impact</option>
+        <option value="Arts &amp; Creativity">Arts &amp; Creativity</option>
+        <option value="Food &amp; Hospitality">Food &amp; Hospitality</option>
+        <option value="Relationships &amp; Family">Relationships &amp; Family</option>
+        <option value="Property &amp; Real Estate">Property &amp; Real Estate</option>
+        <option value="Motoring">Motoring</option>
+        <option value="Entertainment &amp; Culture">Entertainment &amp; Culture</option>
+        <option value="Events &amp; Awards">Events &amp; Awards</option>
+        <option value="Education &amp; Skills">Education &amp; Skills</option>
+        <option value="Faith &amp; Inspiration">Faith &amp; Inspiration</option>
+        <option value="Other">Other</option>
+      </select>
     </div>
     <div class="grid-3" id="newsGrid">
       <div class="dir-empty-state">Loading stories…</div>
@@ -1135,35 +1152,38 @@ router.get('/live-visitors', async (req, res, next) => {
 
   <section class="wrap">
     
-    <div class="dir-filters" id="dirFilters">
-      <button class="active" data-category="">All</button>
-      <button data-category="Activists">Activists</button>
-      <button data-category="Actors">Actors</button>
-      <button data-category="Athletes">Athletes</button>
-      <button data-category="Authors">Authors</button>
-      <button data-category="Bakers">Bakers</button>
-      <button data-category="Bloggers">Bloggers</button>
-      <button data-category="Chefs">Chefs</button>
-      <button data-category="Coaches">Coaches</button>
-      <button data-category="Comedians">Comedians</button>
-      <button data-category="Crafters">Crafters</button>
-      <button data-category="Creations">Creations</button>
-      <button data-category="Dancers">Dancers</button>
-      <button data-category="Designers">Designers</button>
-      <button data-category="Entrepreneurs">Entrepreneurs</button>
-      <button data-category="Explorers">Explorers</button>
-      <button data-category="Fitness">Fitness</button>
-      <button data-category="Founders">Founders</button>
-      <button data-category="Hairstylists">Hairstylists</button>
-      <button data-category="Influencers">Influencers</button>
-      <button data-category="Instructors">Instructors</button>
-      <button data-category="Makeup Artists">Makeup Artists</button>
-      <button data-category="Models">Models</button>
-      <button data-category="Motivational Speakers">Motivational Speakers</button>
-      <button data-category="Musicians">Musicians</button>
-      <button data-category="Performers">Performers</button>
-      <button data-category="Photographers">Photographers</button>
-      <button data-category="TikTokkers">TikTokkers</button>
+    <div class="cat-filter-row">
+      <label class="cat-filter-label" for="dirCategorySelect">Category</label>
+      <select class="cat-select" id="dirCategorySelect">
+        <option value="">All categories</option>
+        <option value="Activists">Activists</option>
+        <option value="Actors">Actors</option>
+        <option value="Athletes">Athletes</option>
+        <option value="Authors">Authors</option>
+        <option value="Bakers">Bakers</option>
+        <option value="Bloggers">Bloggers</option>
+        <option value="Chefs">Chefs</option>
+        <option value="Coaches">Coaches</option>
+        <option value="Comedians">Comedians</option>
+        <option value="Crafters">Crafters</option>
+        <option value="Creations">Creations</option>
+        <option value="Dancers">Dancers</option>
+        <option value="Designers">Designers</option>
+        <option value="Entrepreneurs">Entrepreneurs</option>
+        <option value="Explorers">Explorers</option>
+        <option value="Fitness">Fitness</option>
+        <option value="Founders">Founders</option>
+        <option value="Hairstylists">Hairstylists</option>
+        <option value="Influencers">Influencers</option>
+        <option value="Instructors">Instructors</option>
+        <option value="Makeup Artists">Makeup Artists</option>
+        <option value="Models">Models</option>
+        <option value="Motivational Speakers">Motivational Speakers</option>
+        <option value="Musicians">Musicians</option>
+        <option value="Performers">Performers</option>
+        <option value="Photographers">Photographers</option>
+        <option value="TikTokkers">TikTokkers</option>
+      </select>
     </div>
     <div class="dir-grid" id="dirGrid">
       <div class="dir-empty-state">Loading profiles…</div>
@@ -2103,11 +2123,8 @@ async function loadDirectory(reset) {
   }
 }
 
-document.getElementById('dirFilters').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-category]');
-  if (!btn) return;
-  document.querySelectorAll('#dirFilters button').forEach((b) => b.classList.toggle('active', b === btn));
-  dirCategory = btn.dataset.category;
+document.getElementById('dirCategorySelect').addEventListener('change', (e) => {
+  dirCategory = e.target.value;
   loadDirectory(true);
 });
 
@@ -2185,9 +2202,9 @@ function profileDetailHtml(profile, socials, gallery) {
     html += `
           <div class="profile-side-card">
             <h4>Contact</h4>
-            ${profile.contact_email ? `<p>${escapeHtml(profile.contact_email)}</p>` : ''}
-            ${profile.contact_phone ? `<p>${escapeHtml(profile.contact_phone)}</p>` : ''}
-            ${profile.contact_website ? `<p>${escapeHtml(profile.contact_website)}</p>` : ''}
+            ${profile.contact_email ? `<p><a class="contact-link" href="mailto:${escapeHtml(profile.contact_email)}">${escapeHtml(profile.contact_email)}</a></p>` : ''}
+            ${profile.contact_phone ? `<p><a class="contact-link" href="tel:${escapeHtml(profile.contact_phone.replace(/\s+/g, ''))}">${escapeHtml(profile.contact_phone)}</a></p>` : ''}
+            ${profile.contact_website ? `<p><a class="contact-link" href="${escapeHtml(profile.contact_website.match(/^https?:\/\//) ? profile.contact_website : 'https://' + profile.contact_website)}" target="_blank" rel="noopener">${escapeHtml(profile.contact_website.replace(/^https?:\/\//, ''))} ↗</a></p>` : ''}
           </div>`;
   }
   if (showExtras && socials.length > 0) {
@@ -2305,11 +2322,8 @@ async function loadNews(reset) {
   }
 }
 
-document.getElementById('newsFilters').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-category]');
-  if (!btn) return;
-  document.querySelectorAll('#newsFilters button').forEach((b) => b.classList.toggle('active', b === btn));
-  newsCategory = btn.dataset.category;
+document.getElementById('newsCategorySelect').addEventListener('change', (e) => {
+  newsCategory = e.target.value;
   loadNews(true);
 });
 
