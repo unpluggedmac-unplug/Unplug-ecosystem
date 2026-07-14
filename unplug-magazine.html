@@ -873,10 +873,10 @@ router.get('/live-visitors', async (req, res, next) => {
         <div class="inv-label">Investor Spotlight</div>
         <h2>Backing the stories that matter</h2>
         <p>Unplug Magazine is powered by people who believe good news is a foundation, not a footnote. Meet the investors who are building this platform alongside us.</p>
-        <div class="inv-stats">
-          <div><span class="inv-stat-num">12K+</span><span class="inv-stat-label">Monthly Readers</span></div>
-          <div><span class="inv-stat-num">340+</span><span class="inv-stat-label">Verified Changemakers</span></div>
-          <div><span class="inv-stat-num">R2M+</span><span class="inv-stat-label">Community Value Tracked</span></div>
+        <div class="inv-stats" id="platformStatsGrid">
+          <div><span class="inv-stat-num" id="statReaders">—</span><span class="inv-stat-label">Monthly Readers</span></div>
+          <div><span class="inv-stat-num" id="statMembers">—</span><span class="inv-stat-label">Registered Members</span></div>
+          <div><span class="inv-stat-num" id="statArticles">—</span><span class="inv-stat-label">Articles Published</span></div>
         </div>
       </div>
       <div class="inv-card">
@@ -2689,10 +2689,23 @@ async function loadHighlightedProfiles() {
   }
 }
 
+async function loadPlatformStats() {
+  try {
+    const data = await api('/analytics/public-stats');
+    const fmt = (n) => n >= 1000 ? Math.floor(n / 1000) + 'K+' : String(n);
+    document.getElementById('statReaders').textContent = fmt(data.monthlyReaders);
+    document.getElementById('statMembers').textContent = fmt(data.registeredMembers);
+    document.getElementById('statArticles').textContent = fmt(data.articlesPublished);
+  } catch (err) {
+    // Leave the em-dash placeholders rather than showing 0/error to visitors.
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadHighlightedArticles();
   loadNewStories();
   loadHighlightedProfiles();
+  loadPlatformStats();
 });
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,26 @@ const { requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
+// GET /analytics/public-stats — public, no auth. Real platform totals for
+// the homepage Investor Spotlight (replaces the old hardcoded fake numbers
+// "12K+ readers / 340+ changemakers / R2M+ tracked").
+router.get('/public-stats', async (req, res, next) => {
+  try {
+    const [views, members, articlesPublished] = await Promise.all([
+      pool.query(`SELECT COUNT(DISTINCT session_id) AS c FROM page_views`),
+      pool.query(`SELECT COUNT(*) AS c FROM users`),
+      pool.query(`SELECT COUNT(*) AS c FROM articles WHERE status = 'approved'`),
+    ]);
+    res.json({
+      monthlyReaders: Number(views.rows[0].c),
+      registeredMembers: Number(members.rows[0].c),
+      articlesPublished: Number(articlesPublished.rows[0].c),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /analytics/track — public, called once per page view by a small
 // snippet on the public site. No login required, no personal data stored
 // — session_id is just a random ID the visitor's own browser generates
