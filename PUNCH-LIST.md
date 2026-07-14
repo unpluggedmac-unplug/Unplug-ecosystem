@@ -1,5 +1,40 @@
 # Unplug Magazine — Punch List
-*Last updated: 2026-07-14*
+*Last updated: 2026-07-15 (post-hosting-migration)*
+
+## 🚨 CURRENT HOSTING — READ FIRST (changed 2026-07-15, ~midnight)
+
+- **Frontend: Cloudflare Pages** → https://unplug-magazine.pages.dev
+  (Pierre's Cloudflare account, Unpluggedmac@gmail.com. Project
+  `unplug-magazine`, connected to the GitHub repo, auto-deploys on every
+  push to main. Framework preset None, no build command, output dir `/`.
+  Note: Cloudflare serves "pretty URLs" — /unplug-magazine.html redirects
+  to /unplug-magazine. Both work.)
+- **Netlify is GONE** — the relaxed-cupcake site was deleted after the
+  account's credits ran out. Do not reference any netlify.app URL.
+- **GitHub Pages is DEAD and must stay dead** — the repo is PRIVATE again
+  (correct). Any github.io URL 404s by design. Never make the repo public
+  to revive Pages.
+- **Backend unchanged: Railway** → https://unplug-ecosystem-production.up.railway.app
+  `CORS_ORIGINS` deliberately deleted (allow-all) until launch; re-add
+  with the final domain(s) later. ⚠️ Railway trial: ~$4.89/24 days left
+  as of 2026-07-14 — needs the paid Hobby plan before it lapses.
+- **Database unchanged: Supabase** (project jaywxegcxjgyqhcwzbte). The
+  OTHER empty Supabase project (fkuzbwysvyskhsskjmmi) should be deleted.
+
+## 🚨 INCIDENT LOG — 2026-07-14/15 night (for future sessions)
+
+1. A chat-tool edit replaced the entire 3,136-line unplug-magazine.html
+   with a 144-line "content omitted for brevity" excerpt (commit 5a7459d),
+   deleting the whole public site. RESTORED from commit a499db1 in commit
+   b48ade3, preserving Pierre's stats wiring + centralized loader.
+   **RULE: never commit a whole-file rewrite containing "omitted"/"rest
+   unchanged" placeholder comments.**
+2. Netlify site deleted (credits exhausted) → migrated frontend to
+   Cloudflare Pages (free, no credit system, private-repo OK).
+3. Stats fallback: on API failure the site now keeps honest em-dash
+   placeholders — it must NOT fall back to the old invented numbers
+   (12K+/340+/R2M+).
+
 
 This is the working status doc for the Unplug Ecosystem build (backend + public
 site). Read this first before picking work back up — it replaces having to
