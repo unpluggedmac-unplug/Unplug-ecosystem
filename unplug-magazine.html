@@ -3085,7 +3085,7 @@ async function loadTopArticleWeek() {
     const data = await api('/analytics/top-article-week');
     if (document.getElementById('topArticleWeek')) document.getElementById('topArticleWeek').textContent = data.title || 'No stories yet this week.';
   } catch (err) {
-    document.getElementById('topArticleWeek').textContent = '—';
+    if (document.getElementById('topArticleWeek')) document.getElementById('topArticleWeek').textContent = '—';
   }
 }
 
