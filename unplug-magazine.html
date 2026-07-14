@@ -2843,7 +2843,7 @@ function editionFeatureHtml(edition) {
       <h3>${escapeHtml(edition.title)}</h3>
       <div class="btn-row">
         <button class="btn btn-line" onclick="viewEditionOnline(${edition.id}, '${escapeHtml(edition.pdf_url || '')}')">View Online</button>
-        <button class="btn btn-solid" onclick="downloadEdition()">Download — R${Number(edition.download_price).toFixed(0)}</button>
+        <button class="btn btn-solid" onclick="downloadEdition(${edition.id})">Download — R${Number(edition.download_price).toFixed(0)}</button>
       </div>
     </div>`;
 }
@@ -2857,7 +2857,7 @@ function editionCardHtml(edition) {
     <h4>${escapeHtml(edition.title)}</h4>
     <div class="edition-card-actions">
       <button class="btn-mini btn-mini-line" onclick="viewEditionOnline(${edition.id}, '${escapeHtml(edition.pdf_url || '')}')">View Online</button>
-      <button class="btn-mini btn-mini-solid" onclick="downloadEdition()">R${Number(edition.download_price).toFixed(0)}</button>
+      <button class="btn-mini btn-mini-solid" onclick="downloadEdition(${edition.id})">R${Number(edition.download_price).toFixed(0)}</button>
     </div>
   </div>`;
 }
@@ -2870,9 +2870,10 @@ function viewEditionOnline(id, pdfUrl) {
   }
 }
 
-function downloadEdition() {
-  showToast('Log in via the Member Dashboard to purchase and download editions.', true);
-  setTimeout(goToMemberDashboard, 1200);
+function downloadEdition(editionId) {
+  // Real purchase flow: the checkout page handles login + payment, and the
+  // backend gates the actual download behind a confirmed purchase.
+  window.location.href = 'unplug-checkout.html?type=edition_download&id=' + editionId;
 }
 
 async function loadEditions(reset) {

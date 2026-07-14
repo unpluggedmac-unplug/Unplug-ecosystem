@@ -32,6 +32,19 @@
 - **P2 part 1 — Directory clickable contacts** — done (mailto:/tel:/https
   links, tel strips spaces, bare www gets https:// prefixed), live, tested.
 - **P2 part 3 — Directory category dropdown** — done, live, tested.
+- **P3 — Editions View Online + Download R50** — done, tested end-to-end
+  with a real purchase (browser → checkout → /payments/initiate → payment
+  row in DB with server-resolved R50). Download buttons link to
+  `unplug-checkout.html?type=edition_download&id=N`; checkout has an
+  edition mode that skips the package step.
+- **TWO PRODUCTION PAYMENT BUGS FIXED (2026-07-15 ~1:30am):**
+  (1) `CURRENT_PAYMENT_LINKED_TYPE` was referenced at Pay Now time but
+  defined nowhere — EVERY checkout payment threw a ReferenceError. Money
+  path was fully broken until tonight. (2) The visible "API Base URL"
+  field on checkout + both dashboards defaulted to `http://localhost:4000`
+  — any real visitor signing in was pointed at their own machine. Now all
+  default to the live Railway URL; the field is hidden on the public
+  checkout page.
 - **H4 — Investor Spotlight live stats** — done earlier (2026-07-14 eve):
   GET /analytics/public-stats + centralized loader in unplug-shared.js.
   On API failure it keeps em-dash placeholders — NEVER re-add hardcoded

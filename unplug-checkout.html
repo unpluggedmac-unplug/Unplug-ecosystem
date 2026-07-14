@@ -46,7 +46,7 @@ body{ min-height:100vh; }
     <h2>Sign In</h2>
     <p class="sub">Sign in with your Unplug account to continue to checkout.</p>
     <div class="error-banner" id="loginError"></div>
-    <div class="field"><label>API Base URL</label><input id="apiBaseInput" value="http://localhost:4000"></div>
+    <div class="field" style="display:none;"><label>API Base URL</label><input id="apiBaseInput" value="https://unplug-ecosystem-production.up.railway.app"></div>
     <div class="field-row">
       <div class="field"><label>Email</label><input id="loginEmail" type="email"></div>
       <div class="field"><label>Password</label><input id="loginPassword" type="password"></div>
@@ -138,6 +138,16 @@ body{ min-height:100vh; }
 let SELECTED_TIER = null;
 let SELECTED_TYPE = 'individual';
 let CURRENT_PROFILE_ID = null;
+// What /payments/initiate is paying for. Defaults to the profile-package
+// flow; switched by special checkout modes (e.g. edition downloads) below.
+// NOTE: this definition also fixes a bug where the variable was referenced
+// at payment time but never defined, breaking Pay Now with a ReferenceError.
+let CURRENT_PAYMENT_LINKED_TYPE = 'profile_package';
+
+// Special checkout modes arrive via URL params from the public site,
+// e.g. unplug-checkout.html?type=edition_download&id=3
+const CHECKOUT_PARAMS = new URLSearchParams(window.location.search);
+const EDITION_MODE = CHECKOUT_PARAMS.get('type') === 'edition_download' && CHECKOUT_PARAMS.get('id');
 
 const TIER_PRICES = {
   individual: { basic: 150, pro: 280, premium: 400 },
@@ -221,7 +231,27 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 function enterCheckout(user){
   document.getElementById('statusLine').textContent = `Signed in as ${user.email}`;
   document.getElementById('loginCard').classList.add('section-hidden');
+  if (EDITION_MODE) { enterEditionCheckout(); return; }
   document.getElementById('packageCard').classList.remove('section-hidden');
+}
+
+// Edition-download checkout: no package/profile step — fetch the edition
+// (title + price shown are the SERVER's values; the charged amount is also
+// resolved server-side in /payments/initiate, so nothing here is trusted
+// for money), then go straight to the payment step.
+async function enterEditionCheckout(){
+  try {
+    const data = await api('/editions/' + encodeURIComponent(CHECKOUT_PARAMS.get('id')));
+    CURRENT_PAYMENT_LINKED_TYPE = 'edition_download';
+    CURRENT_PROFILE_ID = data.edition.id;
+    document.getElementById('paymentSummary').textContent =
+      `Edition download — Issue No. ${data.edition.issue_number}: ${data.edition.title}, R${Number(data.edition.download_price).toFixed(0)}`;
+    document.getElementById('paymentCard').classList.remove('section-hidden');
+    loadConsultants();
+  } catch (err) {
+    document.getElementById('paymentCard').classList.remove('section-hidden');
+    showError('paymentError', 'Could not load that edition — ' + err.message);
+  }
 }
 
 // On page load, restore a saved session rather than forcing a fresh
