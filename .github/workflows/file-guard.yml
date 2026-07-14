@@ -1,0 +1,55 @@
+# Guard against destructive commits — born from the 2026-07-15 incident
+# where an AI chat edit replaced the whole 3,136-line unplug-magazine.html
+# with a 144-line "content omitted for brevity" excerpt, deleting the live
+# site. This workflow checks every push to main; if a protected file looks
+# truncated (or contains placeholder phrases like "omitted for brevity"),
+# it automatically reverts the offending commit. Cloudflare Pages then
+# redeploys the restored version — total exposure window ~1-2 minutes.
+name: File guard
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Check protected files
+        run: |
+          fail=0
+          check_min_lines() {
+            f="$1"; min="$2"
+            if [ ! -f "$f" ]; then echo "::error::$f is MISSING"; fail=1; return; fi
+            lines=$(wc -l < "$f")
+            if [ "$lines" -lt "$min" ]; then
+              echo "::error::$f has only $lines lines (minimum $min) — looks truncated/destroyed"
+              fail=1
+            fi
+          }
+          # Floors are ~60% of current size — files only ever grow; a drop
+          # below these means the file was gutted, not edited.
+          check_min_lines unplug-magazine.html 2000
+          check_min_lines unplug-admin-dashboard.html 300
+          check_min_lines unplug-member-dashboard.html 200
+          check_min_lines unplug-checkout.html 120
+          check_min_lines unplug-shared.js 60
+          grep -q "</html>" unplug-magazine.html || { echo "::error::unplug-magazine.html has no closing </html> tag"; fail=1; }
+          if grep -rilE "omitted for brevity|content omitted|rest of the (file|code|css|html) (is |remains )?unchanged|remaining code unchanged" \
+               --include="*.html" --include="*.js" . | grep -v node_modules; then
+            echo "::error::AI-truncation placeholder phrases found in the files above — this commit would destroy content"
+            fail=1
+          fi
+          exit $fail
+      - name: Auto-revert the destructive commit
+        if: failure()
+        run: |
+          git config user.name "file-guard"
+          git config user.email "file-guard@users.noreply.github.com"
+          git revert --no-edit ${{ github.sha }}
+          git push origin main
+          echo "::warning::Commit ${{ github.sha }} was automatically reverted by the file guard."
