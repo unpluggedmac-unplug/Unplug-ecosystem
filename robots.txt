@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://unpluggedmac-unplug.github.io/Unplug-ecosystem/sitemap.xml
+Sitemap: https://relaxed-cupcake-2e5b2e.netlify.app/sitemap.xml
