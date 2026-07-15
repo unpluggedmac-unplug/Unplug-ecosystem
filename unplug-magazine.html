@@ -759,7 +759,7 @@ router.get('/live-visitors', async (req, res, next) => {
   </section>
 
   <section class="wrap home-section">
-    <div class="birthday-feature">
+    <div class="birthday-feature" id="birthdayFeature">
       <span class="print-mark bday-print"></span>
       <div class="birthday-copy">
         <span class="eyebrow" style="color:var(--cream);">Celebrating today</span>
@@ -2088,6 +2088,63 @@ document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
 function choosePackage(tier) {
   window.location.href = 'unplug-checkout.html?ptype=' + PKG_TYPE + '&tier=' + tier;
 }
+
+// ---------------------------------------------------------------------------
+// Birthday surprise — when the Birthdays section scrolls into view, balloons/
+// streamer confetti drifts across the screen ONCE per visit. Deliberately
+// gentle (soft velocity, no flashing) and fully skipped for visitors with
+// reduced-motion enabled. The confetti library only loads at the moment the
+// section is first seen, so it costs nothing on page load.
+// ---------------------------------------------------------------------------
+(function () {
+  const section = document.getElementById('birthdayFeature');
+  if (!section || !('IntersectionObserver' in window)) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  let fired = false;
+  function celebrate() {
+    if (fired) return;
+    fired = true;
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js';
+    s.onload = () => {
+      const colors = ['#d20709', '#721415', '#f7f3ea', '#e8b84b'];
+      // two soft side-bursts + a gentle drift from the top, ~2s total
+      confetti({ particleCount: 60, angle: 60, spread: 60, origin: { x: 0, y: 0.7 }, colors, startVelocity: 35, gravity: 0.9, ticks: 220, disableForReducedMotion: true });
+      confetti({ particleCount: 60, angle: 120, spread: 60, origin: { x: 1, y: 0.7 }, colors, startVelocity: 35, gravity: 0.9, ticks: 220, disableForReducedMotion: true });
+      setTimeout(() => {
+        confetti({ particleCount: 50, spread: 100, origin: { x: 0.5, y: 0 }, colors, startVelocity: 20, gravity: 0.8, ticks: 240, scalar: 1.1, disableForReducedMotion: true });
+      }, 400);
+    };
+    document.body.appendChild(s);
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        celebrate();
+        observer.disconnect();
+      }
+    });
+  }, { threshold: 0.4 });
+  observer.observe(section);
+
+  // Fallback trigger: some embedded/automation browsers support the
+  // IntersectionObserver API but never deliver its callbacks. A passive
+  // scroll check guarantees the surprise still fires; celebrate() is
+  // one-shot so double-triggering is harmless.
+  function checkVisible() {
+    if (fired) { window.removeEventListener('scroll', checkVisible); return; }
+    const r = section.getBoundingClientRect();
+    const visible = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+    if (visible > r.height * 0.4) {
+      window.removeEventListener('scroll', checkVisible);
+      celebrate();
+    }
+  }
+  window.addEventListener('scroll', checkVisible, { passive: true });
+  checkVisible();
+})();
 
 function goToMemberDashboard() {
   window.location.href = MEMBER_DASHBOARD_URL;

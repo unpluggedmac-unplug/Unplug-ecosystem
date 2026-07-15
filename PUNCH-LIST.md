@@ -43,6 +43,13 @@
   `unplug-checkout.html?ptype=business&tier=pro` and checkout preselects
   both. Backend already charges type-aware prices server-side
   (PACKAGE_PRICES[type][tier] in payments.js) — verified.
+- **H2 — Birthday confetti surprise** — done (2026-07-15 morning). When
+  the Birthdays section scrolls into view: gentle two-side confetti burst +
+  soft top drift, ONCE per visit. Library (canvas-confetti) lazy-loads from
+  CDN only at that moment; fully skipped for prefers-reduced-motion users.
+  Dual trigger (IntersectionObserver + scroll fallback) for odd browsers.
+  NOTE: untestable in automation browsers (zero-height/no-scroll viewports)
+  — verify by scrolling to the Birthdays section on a real phone/browser.
 - **TWO PRODUCTION PAYMENT BUGS FIXED (2026-07-15 ~1:30am):**
   (1) `CURRENT_PAYMENT_LINKED_TYPE` was referenced at Pay Now time but
   defined nowhere — EVERY checkout payment threw a ReferenceError. Money
