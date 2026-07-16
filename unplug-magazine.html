@@ -186,6 +186,30 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .bday-cause{ font-size:12px; color:#a39d92; text-transform:uppercase; letter-spacing:0.03em; }
 @media(max-width:800px){ .birthday-feature{ grid-template-columns:1fr; } .birthday-list{ border-left:none; padding-left:0; border-top:1px solid rgba(247,243,234,0.15); padding-top:20px; } }
 
+/* ---- birthday balloons (float up across the page, once per visit,
+   alongside the confetti burst) ---- */
+.balloon-layer{ position:fixed; inset:0; pointer-events:none; z-index:998; overflow:hidden; }
+.balloon{
+  position:absolute; bottom:-140px; width:44px; height:56px; border-radius:50% 50% 48% 48%;
+  opacity:0.9; will-change:transform;
+  animation:balloonRise var(--rise,6s) ease-in forwards;
+}
+/* the little knot + string under each balloon */
+.balloon::after{
+  content:""; position:absolute; top:100%; left:50%; width:1px; height:60px;
+  background:rgba(0,0,0,0.18); transform:translateX(-50%);
+}
+.balloon::before{
+  content:""; position:absolute; top:96%; left:50%; width:7px; height:7px;
+  background:inherit; transform:translateX(-50%) rotate(45deg);
+}
+@keyframes balloonRise{
+  0%{ transform:translateY(0) translateX(0) rotate(0deg); opacity:0; }
+  12%{ opacity:0.92; }
+  100%{ transform:translateY(-118vh) translateX(var(--sway,20px)) rotate(4deg); opacity:0.92; }
+}
+@media (prefers-reduced-motion: reduce){ .balloon-layer{ display:none; } }
+
 .print-mark.tiny svg{ width:16px; height:17px; }
 .dir-photo{ display:flex; align-items:center; justify-content:center; }
 .dir-photo .print-mark{ color:rgba(15,14,14,0.25); }
@@ -407,6 +431,35 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 .shoutout-social{ display:flex; gap:10px; margin-top:18px; }
 .shoutout-social a{ width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; color:#fff; transition:background .2s; border:1px solid rgba(255,255,255,0.3); }
 .shoutout-social a:hover{ background:rgba(255,255,255,0.35); }
+/* The shout-out recipient's name — made to stand out from the sentence. */
+.shoutout-name{
+  font-style:normal; font-weight:900; color:#fff; white-space:nowrap;
+  background:rgba(0,0,0,0.16); padding:0 10px; border-radius:6px;
+  box-shadow: inset 0 -0.5em 0 rgba(255,255,255,0.14);
+}
+.shoutout-nominate-btn{
+  align-self:flex-start; margin-top:20px; background:#fff; color:var(--red);
+  border-color:#fff; font-size:12px;
+}
+.shoutout-nominate-btn:hover{ background:rgba(255,255,255,0.85); color:var(--maroon); }
+/* Nomination modal */
+.shoutout-modal-overlay{
+  position:fixed; inset:0; background:rgba(15,14,14,0.6); z-index:1000;
+  display:none; align-items:center; justify-content:center; padding:20px;
+}
+.shoutout-modal-overlay.open{ display:flex; }
+.shoutout-modal{
+  background:var(--cream); max-width:440px; width:100%; padding:32px 30px;
+  position:relative; max-height:90vh; overflow-y:auto;
+}
+.shoutout-modal-close{
+  position:absolute; top:12px; right:16px; background:none; border:none;
+  font-size:28px; line-height:1; cursor:pointer; color:var(--slate);
+}
+.shoutout-form-msg{ font-size:13px; padding:10px 12px; margin-bottom:14px; display:none; }
+.shoutout-form-msg.show{ display:block; }
+.shoutout-form-msg.error{ background:rgba(210,7,9,0.08); border:1px solid var(--red); color:var(--maroon); }
+.shoutout-form-msg.success{ background:rgba(46,125,50,0.08); border:1px solid var(--green); color:var(--green); }
 .shoutout-mascot{
   position:relative; display:flex; align-items:flex-end; justify-content:center;
   overflow:hidden; grid-column:1; padding-top:16px;
@@ -712,9 +765,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <span class="eyebrow">The Guy Says</span>
           <h2 style="font-weight:900; letter-spacing:-0.01em;">
             <span style="display:block; font-size:0.62em; font-weight:700; text-transform:uppercase; letter-spacing:0.14em; color:#ffccc5; margin-bottom:6px;">POWER ON!</span>
-            High-voltage shout-out to <em style="font-style:italic; color:#ffccc5; white-space:nowrap;">Pierre Swanepoel</em>, keep your purpose switched on and let your light spark others.
+            High-voltage shout-out to <em id="shoutoutName" class="shoutout-name">Pierre Swanepoel</em>, keep your purpose switched on and let your light spark others.
           </h2>
           <p style="font-size:14.5px; font-weight:500; margin-top:8px; color:rgba(255,255,255,0.88);">From the team at Unplug Magazine — Real People. Real Impact.</p>
+          <p style="font-size:12.5px; font-weight:500; margin-top:4px; color:rgba(255,255,255,0.7);">A new shout-out every day — come back tomorrow to see who's next.</p>
           <div class="shoutout-social">
             <a href="https://www.instagram.com/" target="_blank" title="Share on Instagram" aria-label="Instagram">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="0.4" fill="currentColor" stroke="none"/></svg>
@@ -735,10 +789,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2.4h3.2l-7.02 8.02L23.5 21.6h-6.62l-5.18-6.78-5.93 6.78H2.56l7.5-8.58L1.7 2.4h6.79l4.68 6.2L18.9 2.4zM17.72 19.6h1.78L7.4 4.32H5.5L17.72 19.6z"/></svg>
             </a>
           </div>
+          <button class="btn shoutout-nominate-btn" id="shoutoutNominateBtn">Nominate the next shout-out →</button>
         </div>
       </div>
     </div>
   </section>
+
+  <!-- SHOUTOUT NOMINATION MODAL -->
+  <div class="shoutout-modal-overlay" id="shoutoutModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true" aria-labelledby="shoutoutModalTitle">
+      <button class="shoutout-modal-close" id="shoutoutModalClose" aria-label="Close">&times;</button>
+      <span class="eyebrow" style="color:var(--red);">The Guy Says</span>
+      <h3 id="shoutoutModalTitle" style="font-family:'Playfair Display',serif; font-size:24px; margin:8px 0 4px;">Nominate the next shout-out</h3>
+      <p style="font-size:13.5px; color:var(--slate); margin-bottom:18px;">Know someone who deserves to be seen? Submit their name and we'll consider them for an upcoming daily shout-out.</p>
+      <div class="shoutout-form-msg" id="shoutoutFormMsg"></div>
+      <div class="field"><label>Name &amp; surname *</label><input id="shoutoutNomName" type="text" placeholder="e.g. Naledi Mokoena" maxlength="200"></div>
+      <div class="field"><label>Why them? (optional)</label><textarea id="shoutoutNomMessage" rows="3" placeholder="A sentence on the impact they're making."></textarea></div>
+      <div class="field"><label>Your email (optional)</label><input id="shoutoutNomEmail" type="email" placeholder="So we can let you know if they're featured."></div>
+      <button class="btn btn-solid" id="shoutoutNomSubmit" style="width:100%;">Submit Nomination</button>
+    </div>
+  </div>
 
   <section class="wrap home-section">
     <div class="birthday-feature" id="birthdayFeature">
@@ -2083,10 +2153,39 @@ function choosePackage(tier) {
   if (!section || !('IntersectionObserver' in window)) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
+  // Balloons floating up across the page — pure CSS/DOM, so they run even if
+  // the confetti CDN is blocked. Each removes itself once it drifts off-screen.
+  function launchBalloons() {
+    const colors = ['#d20709', '#721415', '#e8b84b', '#f7f3ea', '#2e7d32', '#1f6feb'];
+    const layer = document.createElement('div');
+    layer.className = 'balloon-layer';
+    document.body.appendChild(layer);
+
+    const count = 14;
+    for (let i = 0; i < count; i++) {
+      const b = document.createElement('div');
+      b.className = 'balloon';
+      const size = 34 + Math.random() * 26;              // 34–60px wide
+      const rise = 5.5 + Math.random() * 3.5;             // 5.5–9s
+      const sway = (Math.random() * 60 - 30).toFixed(0);  // -30..+30px drift
+      b.style.left = (Math.random() * 96) + 'vw';
+      b.style.width = size + 'px';
+      b.style.height = (size * 1.25) + 'px';
+      b.style.background = colors[i % colors.length];
+      b.style.setProperty('--rise', rise + 's');
+      b.style.setProperty('--sway', sway + 'px');
+      b.style.animationDelay = (Math.random() * 1.2).toFixed(2) + 's';
+      layer.appendChild(b);
+    }
+    // Clean up the whole layer after the slowest balloon has finished.
+    setTimeout(() => layer.remove(), 11000);
+  }
+
   let fired = false;
   function celebrate() {
     if (fired) return;
     fired = true;
+    launchBalloons();
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js';
     s.onload = () => {
@@ -3198,7 +3297,84 @@ async function loadTopArticleWeek() {
 trackPageView('home');
 loadLiveVisitors();
 loadTopArticleWeek();
+loadShoutout();
 setInterval(loadLiveVisitors, 30000);
+
+// ---------------------------------------------------------------------------
+// Daily shout-out ("The Guy Says"). The name shown rotates once per day from
+// GET /shoutouts/today (approved public nominations first, then a seeded SA
+// fallback). If the API is unreachable, the hardcoded name already in the
+// markup stays as-is. The nominate button opens a modal that POSTs to
+// /shoutouts/nominate.
+// ---------------------------------------------------------------------------
+async function loadShoutout() {
+  const nameEl = document.getElementById('shoutoutName');
+  if (!nameEl) return;
+  try {
+    const data = await api('/shoutouts/today');
+    if (data && data.shoutout && data.shoutout.name) {
+      nameEl.textContent = data.shoutout.name;
+      // Keep the WhatsApp/X share links in sync with the current name.
+      const enc = encodeURIComponent(data.shoutout.name);
+      const wa = document.querySelector('.shoutout-social a[aria-label="WhatsApp"]');
+      const tw = document.querySelector('.shoutout-social a[aria-label="Twitter/X"]');
+      if (wa) wa.href = `https://wa.me/?text=Shoutout+to+${enc}+from+Unplug+Magazine!+https://www.unplugnews.com`;
+      if (tw) tw.href = `https://twitter.com/intent/tweet?text=Shoutout+to+${enc}!+%40UnplugMag+https://www.unplugnews.com`;
+    }
+  } catch (err) {
+    /* leave the existing markup name in place on failure */
+  }
+}
+
+(function setupShoutoutNominate() {
+  const modal = document.getElementById('shoutoutModal');
+  const openBtn = document.getElementById('shoutoutNominateBtn');
+  const closeBtn = document.getElementById('shoutoutModalClose');
+  const submitBtn = document.getElementById('shoutoutNomSubmit');
+  const msg = document.getElementById('shoutoutFormMsg');
+  if (!modal || !openBtn) return;
+
+  function showMsg(text, isError) {
+    msg.textContent = text;
+    msg.className = 'shoutout-form-msg show ' + (isError ? 'error' : 'success');
+  }
+  function openModal() {
+    msg.className = 'shoutout-form-msg';
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+  function closeModal() {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  openBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+  submitBtn.addEventListener('click', async () => {
+    const nomineeName = document.getElementById('shoutoutNomName').value.trim();
+    const message = document.getElementById('shoutoutNomMessage').value.trim();
+    const email = document.getElementById('shoutoutNomEmail').value.trim();
+    if (!nomineeName) { showMsg('Please enter a name and surname.', true); return; }
+
+    submitBtn.disabled = true; submitBtn.textContent = 'Submitting...';
+    try {
+      const data = await api('/shoutouts/nominate', {
+        method: 'POST',
+        body: JSON.stringify({ nomineeName, message, email }),
+      });
+      showMsg(data.message || 'Thanks — submitted for review!', false);
+      document.getElementById('shoutoutNomName').value = '';
+      document.getElementById('shoutoutNomMessage').value = '';
+      document.getElementById('shoutoutNomEmail').value = '';
+    } catch (err) {
+      showMsg(err.message || 'Something went wrong. Please try again.', true);
+    } finally {
+      submitBtn.disabled = false; submitBtn.textContent = 'Submit Nomination';
+    }
+  });
+})();
 
 // poster advertising slideshow (supports multiple instances across pages)
 document.querySelectorAll('.poster-slideshow').forEach((widget) => {

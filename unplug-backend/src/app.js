@@ -24,6 +24,7 @@ const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
 const analyticsRoutes = require('./routes/analytics');
 const inquiryRoutes = require('./routes/inquiries');
+const shoutoutRoutes = require('./routes/shoutouts');
 const { router: activityLogRoutes } = require('./routes/activityLog');
 
 const app = express();
@@ -63,6 +64,7 @@ app.use('/admin/bulk-email', bulkEmailRoutes);
 app.use('/editions', editionRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/inquiries', inquiryRoutes);
+app.use('/shoutouts', shoutoutRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 
 // Catches any request that didn't match a route above, so the API always

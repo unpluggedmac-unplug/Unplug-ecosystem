@@ -790,4 +790,52 @@ router.patch('/top10-entries/:id/reject', requireRole('admin'), async (req, res,
   }
 });
 
+// GET /admin/shoutouts/pending — public shoutout nominations awaiting review.
+// Approving one adds it to the daily rotation on the homepage.
+router.get('/shoutouts/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, nominee_name, message, submitted_by_email, created_at
+       FROM shoutout_nominations
+       WHERE status = 'pending'
+       ORDER BY created_at ASC`
+    );
+    res.json({ nominations: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/shoutouts/:id/approve — enters the nomination into rotation.
+router.patch('/shoutouts/:id/approve', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE shoutout_nominations SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Nomination not found.' });
+    }
+    res.json({ nomination: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/shoutouts/:id/reject
+router.patch('/shoutouts/:id/reject', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE shoutout_nominations SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Nomination not found.' });
+    }
+    res.json({ nomination: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
