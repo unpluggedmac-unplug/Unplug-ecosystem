@@ -373,12 +373,13 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       return res.status(201).json({
         payment,
         instructions: {
-          bank: 'Standard Bank',
-          accountName: 'Unplug Magazine (Pty) Ltd',
-          accountNumber: '000000000',
-          branchCode: '051001',
+          bank: 'FNB / RMB',
+          accountName: 'Unplug',
+          accountType: 'First Business Zero Account',
+          accountNumber: '63092416833',
+          branchCode: '250655',
           reference,
-          note: 'Use this exact reference in your EFT so we can match your payment. It will be confirmed manually by an admin once received.',
+          note: 'Make a standard bank EFT to the account above and use this exact reference so we can match your payment. Branch code 250655 is FNB’s universal code, so it works for EFTs from any bank. Your payment is confirmed manually by an admin once it reflects.',
         },
       });
     }

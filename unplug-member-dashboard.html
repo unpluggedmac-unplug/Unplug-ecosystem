@@ -791,6 +791,7 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
       const i = payment.instructions;
       resultBox.innerHTML = `<strong>${label} created.</strong> Pay via EFT using the details below.<br><br>
         <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
+        ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
         <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br>
         <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>${i.note}`;
     } else {
