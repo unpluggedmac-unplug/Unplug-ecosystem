@@ -29,6 +29,58 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// GET /editions/calendar — public. The upcoming "Save the Date" days shown
+// on the Editions page calendar. Only today-and-future entries (past ones
+// drop off automatically). Registered BEFORE /:id so "calendar" isn't
+// mistaken for an edition id.
+router.get('/calendar', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, event_date, title, description
+       FROM edition_calendar
+       WHERE event_date >= CURRENT_DATE
+       ORDER BY event_date ASC`
+    );
+    res.json({ dates: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /editions/calendar — admin marks a day as a "Save the Date".
+router.post('/calendar', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { eventDate, title, description } = req.body;
+    if (!eventDate || !title) {
+      return res.status(400).json({ error: 'eventDate and title are required.' });
+    }
+    const result = await pool.query(
+      `INSERT INTO edition_calendar (event_date, title, description)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [eventDate, title, description || null]
+    );
+    res.status(201).json({ date: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /editions/calendar/:id — admin removes a marked day.
+router.delete('/calendar/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM edition_calendar WHERE id = $1 RETURNING id',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Marked date not found.' });
+    }
+    res.json({ message: 'Removed.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /editions/:id — single edition detail, same free-viewing info.
 router.get('/:id', async (req, res, next) => {
   try {

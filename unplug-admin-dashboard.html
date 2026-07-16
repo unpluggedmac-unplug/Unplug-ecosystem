@@ -151,6 +151,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   <div class="sidebar">
     <div class="brand">Unplug Admin</div>
     <a class="active" data-section="queue">Approval Queue</a>
+    <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="edcal">Editions Calendar</a>
     <a data-section="birthdays">Birthdays</a>
     <a data-section="payments">Payments (EFT)</a>
     <a data-section="users">Users</a>
@@ -194,6 +196,35 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel">
         <div class="panel-head"><h3>This Month</h3></div>
         <div class="panel-body" id="birthdaysBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- SHOUTOUTS -->
+    <div class="admin-section" id="section-shoutouts">
+      <div class="main-head"><div><h1>Shoutout Nominations</h1><p>Public nominations for "The Guy Says". Approve one to add it to the homepage's daily rotation; each approved name is shown once, oldest first. With none approved, a seeded South African name is shown as the daily fallback.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Pending Nominations</h3></div>
+        <div class="panel-body" id="shoutoutsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- EDITIONS CALENDAR -->
+    <div class="admin-section" id="section-edcal">
+      <div class="main-head"><div><h1>Editions Calendar</h1><p>Mark upcoming days on the public Editions page. Marked days show red with a "Save the Date" label; clicking one reveals the description. Past dates drop off automatically.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Mark a Date</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Date</label><input id="edcalDate" type="date"></div>
+            <div><label>Title</label><input id="edcalTitle" placeholder="e.g. Issue #12 submissions close"></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>Description (shown when a visitor clicks the day)</label><textarea id="edcalDesc" rows="3" placeholder="Full details of what's happening on this day."></textarea></div>
+          <button class="btn btn-solid" style="width:auto;" id="addEdcalBtn">Save the Date</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Upcoming Marked Dates</h3></div>
+        <div class="panel-body" id="edcalBody" style="padding:0;"></div>
       </div>
     </div>
 
@@ -522,6 +553,8 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     document.querySelectorAll('.admin-section').forEach((s) => s.classList.remove('active'));
     const section = link.dataset.section;
     document.getElementById('section-' + section).classList.add('active');
+    if (section === 'shoutouts') loadShoutoutNominations();
+    if (section === 'edcal') loadEdcalDates();
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payments') loadPendingEft();
     if (section === 'users') loadUsers();
@@ -767,6 +800,108 @@ async function loadBirthdays() {
         } catch (err) {
           showToast(err.message, true);
         }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shoutout nominations — approve/reject public suggestions for "The Guy Says"
+// ---------------------------------------------------------------------------
+// Escapes untrusted text before it goes into innerHTML. Important here
+// because shoutout nominations are submitted by the public.
+function escapeHtmlAdmin(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+async function loadShoutoutNominations() {
+  const body = document.getElementById('shoutoutsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/shoutouts/pending');
+    const noms = data.nominations || [];
+    const badge = document.getElementById('shoutoutBadge');
+    if (badge) { badge.textContent = noms.length; badge.style.display = noms.length ? 'inline-block' : 'none'; }
+    if (noms.length === 0) {
+      body.innerHTML = '<div class="empty-state">No pending nominations.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Name</th><th>Why / note</th><th>Submitted by</th><th></th></tr>';
+    noms.forEach((n) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtmlAdmin(n.nominee_name)}</td>`
+        + `<td>${escapeHtmlAdmin(n.message || '—')}</td>`
+        + `<td>${escapeHtmlAdmin(n.submitted_by_email || '—')}</td>`
+        + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        try { await api(`/admin/shoutouts/${n.id}/approve`, { method: 'PATCH' }); showToast('Approved — added to rotation.'); loadShoutoutNominations(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try { await api(`/admin/shoutouts/${n.id}/reject`, { method: 'PATCH' }); showToast('Rejected.'); loadShoutoutNominations(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Editions calendar — admin marks upcoming "Save the Date" days
+// ---------------------------------------------------------------------------
+document.getElementById('addEdcalBtn').addEventListener('click', async () => {
+  const eventDate = document.getElementById('edcalDate').value;
+  const title = document.getElementById('edcalTitle').value.trim();
+  const description = document.getElementById('edcalDesc').value.trim();
+  if (!eventDate || !title) { showToast('Date and title are required.', true); return; }
+  try {
+    await api('/editions/calendar', {
+      method: 'POST',
+      body: JSON.stringify({ eventDate, title, description: description || undefined }),
+    });
+    showToast('Date marked.');
+    document.getElementById('edcalDate').value = '';
+    document.getElementById('edcalTitle').value = '';
+    document.getElementById('edcalDesc').value = '';
+    loadEdcalDates();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+async function loadEdcalDates() {
+  const body = document.getElementById('edcalBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/editions/calendar');
+    const dates = data.dates || [];
+    if (dates.length === 0) {
+      body.innerHTML = '<div class="empty-state">No upcoming dates marked.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Date</th><th>Title</th><th>Description</th><th></th></tr>';
+    dates.forEach((d) => {
+      const dateStr = new Date(String(d.event_date).slice(0, 10) + 'T00:00:00')
+        .toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${dateStr}</td><td>${escapeHtmlAdmin(d.title)}</td><td>${escapeHtmlAdmin(d.description || '—')}</td>`
+        + `<td><div class="row-actions"><button class="reject">Remove</button></div></td>`;
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try { await api(`/editions/calendar/${d.id}`, { method: 'DELETE' }); showToast('Removed.'); loadEdcalDates(); }
+        catch (err) { showToast(err.message, true); }
       });
       table.appendChild(tr);
     });

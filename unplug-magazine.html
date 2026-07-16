@@ -336,6 +336,29 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .editions-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:24px; }
 @media(max-width:1100px){ .editions-grid{ grid-template-columns:repeat(3,1fr);} }
 @media(max-width:760px){ .editions-grid{ grid-template-columns:repeat(2,1fr);} }
+
+/* ---- editions "Save the Date" calendar ---- */
+.edcal-nav{ display:flex; align-items:center; gap:14px; }
+.edcal-nav button{ background:none; border:1px solid var(--paper-line); width:34px; height:34px; font-size:20px; line-height:1; cursor:pointer; color:var(--ink); }
+.edcal-nav button:hover{ border-color:var(--red); color:var(--red); }
+.edcal-nav #edcalMonthLabel{ font-weight:700; font-size:15px; min-width:150px; text-align:center; }
+.edcal{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+.edcal-dow{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); text-align:center; padding:6px 0; }
+.edcal-cell{ min-height:88px; border:1px solid var(--paper-line); padding:8px; display:flex; flex-direction:column; gap:4px; background:#fff; }
+.edcal-cell.empty{ background:transparent; border:none; }
+.edcal-cell.past{ opacity:0.45; }
+.edcal-daynum{ font-size:13px; font-weight:700; color:var(--ink); }
+.edcal-cell.today .edcal-daynum{ color:var(--red); }
+.edcal-cell.marked{ background:rgba(210,7,9,0.06); border-color:var(--red); cursor:pointer; }
+.edcal-cell.marked:hover{ background:rgba(210,7,9,0.12); }
+.edcal-cell.marked .edcal-daynum{ color:var(--red); }
+.edcal-std{ font-size:8.5px; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:#fff; background:var(--red); padding:2px 4px; align-self:flex-start; border-radius:3px; }
+.edcal-title{ font-size:11px; font-weight:600; color:var(--maroon); line-height:1.25; }
+@media(max-width:700px){
+  .edcal-cell{ min-height:64px; padding:5px; }
+  .edcal-title{ display:none; }
+  .edcal-std{ font-size:7.5px; }
+}
 .edition-card{ display:block; }
 .edition-card-actions{ display:flex; gap:6px; margin-top:8px; }
 .btn-mini{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:6px 10px; border:1px solid var(--ink); background:none; color:var(--ink); cursor:pointer; }
@@ -1460,6 +1483,30 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="dir-empty-state">Loading...</div>
     </div>
   </section>
+
+  <section class="wrap" style="padding-top:8px;">
+    <div class="section-head">
+      <div><span class="eyebrow">Save the date</span><h2>Editions Calendar</h2></div>
+      <div class="edcal-nav">
+        <button id="edcalPrev" aria-label="Previous month">&lsaquo;</button>
+        <span id="edcalMonthLabel"></span>
+        <button id="edcalNext" aria-label="Next month">&rsaquo;</button>
+      </div>
+    </div>
+    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:18px;">Key dates for upcoming editions — submission deadlines and release days. Days marked <span style="color:var(--red); font-weight:700;">in red</span> are a Save the Date; tap one to see what's happening.</p>
+    <div class="edcal" id="editionCalendar"></div>
+  </section>
+
+  <!-- EDITION CALENDAR DAY MODAL -->
+  <div class="shoutout-modal-overlay" id="edcalModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true" aria-labelledby="edcalModalTitle">
+      <button class="shoutout-modal-close" id="edcalModalClose" aria-label="Close">&times;</button>
+      <span class="eyebrow" style="color:var(--red);">Save the Date</span>
+      <div id="edcalModalDate" style="font-size:13px; color:var(--slate); margin-top:8px;"></div>
+      <h3 id="edcalModalTitle" style="font-family:'Playfair Display',serif; font-size:24px; margin:4px 0 10px;"></h3>
+      <p id="edcalModalDesc" style="font-size:14px; color:var(--ink); line-height:1.6;"></p>
+    </div>
+  </div>
 
   <section class="on-paper">
     <div class="wrap">
@@ -3121,6 +3168,106 @@ document.getElementById('editionsLoadMoreBtn').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Editions "Save the Date" calendar. Renders a full month grid; days that
+// admins have marked (GET /editions/calendar) show red with a SAVE THE DATE
+// label + title, and clicking one opens a modal with the full description.
+// Only future dates are ever marked (the API filters to today-onward).
+// ---------------------------------------------------------------------------
+let edcalMarks = {};          // 'YYYY-MM-DD' -> { title, description }
+let edcalViewYear, edcalViewMonth;   // month currently displayed
+let edcalInited = false;
+
+async function initEditionCalendar() {
+  if (edcalInited) return;
+  edcalInited = true;
+  const now = new Date();
+  edcalViewYear = now.getFullYear();
+  edcalViewMonth = now.getMonth();
+
+  document.getElementById('edcalPrev').addEventListener('click', () => shiftEdcalMonth(-1));
+  document.getElementById('edcalNext').addEventListener('click', () => shiftEdcalMonth(1));
+
+  const closeBtn = document.getElementById('edcalModalClose');
+  const modal = document.getElementById('edcalModal');
+  closeBtn.addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+
+  try {
+    const data = await api('/editions/calendar');
+    edcalMarks = {};
+    (data.dates || []).forEach((d) => {
+      // event_date comes back as an ISO timestamp/date — normalize to YYYY-MM-DD.
+      const key = String(d.event_date).slice(0, 10);
+      edcalMarks[key] = { title: d.title, description: d.description || '' };
+    });
+  } catch (err) {
+    edcalMarks = {};
+  }
+  renderEdcal();
+}
+
+function shiftEdcalMonth(delta) {
+  edcalViewMonth += delta;
+  if (edcalViewMonth < 0) { edcalViewMonth = 11; edcalViewYear -= 1; }
+  if (edcalViewMonth > 11) { edcalViewMonth = 0; edcalViewYear += 1; }
+  renderEdcal();
+}
+
+function renderEdcal() {
+  const grid = document.getElementById('editionCalendar');
+  const label = document.getElementById('edcalMonthLabel');
+  if (!grid) return;
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  label.textContent = `${monthNames[edcalViewMonth]} ${edcalViewYear}`;
+
+  const firstDay = new Date(edcalViewYear, edcalViewMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(edcalViewYear, edcalViewMonth + 1, 0).getDate();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d) => `<div class="edcal-dow">${d}</div>`).join('');
+
+  for (let i = 0; i < firstDay; i++) html += '<div class="edcal-cell empty"></div>';
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const mm = String(edcalViewMonth + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    const key = `${edcalViewYear}-${mm}-${dd}`;
+    const cellDate = new Date(edcalViewYear, edcalViewMonth, day);
+    const isPast = cellDate < today;
+    const isToday = cellDate.getTime() === today.getTime();
+    const mark = edcalMarks[key];
+
+    let cls = 'edcal-cell';
+    if (isPast) cls += ' past';
+    if (isToday) cls += ' today';
+    if (mark) cls += ' marked';
+
+    html += `<div class="${cls}"${mark ? ` data-date="${key}"` : ''}>` +
+      `<span class="edcal-daynum">${day}</span>` +
+      (mark ? `<span class="edcal-std">Save the Date</span><span class="edcal-title">${escapeHtml(mark.title)}</span>` : '') +
+      `</div>`;
+  }
+
+  grid.innerHTML = html;
+
+  grid.querySelectorAll('.edcal-cell.marked').forEach((cell) => {
+    cell.addEventListener('click', () => openEdcalModal(cell.dataset.date));
+  });
+}
+
+function openEdcalModal(key) {
+  const mark = edcalMarks[key];
+  if (!mark) return;
+  const d = new Date(key + 'T00:00:00');
+  document.getElementById('edcalModalDate').textContent =
+    d.toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  document.getElementById('edcalModalTitle').textContent = mark.title;
+  document.getElementById('edcalModalDesc').textContent = mark.description || 'More details coming soon.';
+  document.getElementById('edcalModal').classList.add('open');
+}
+
+// ---------------------------------------------------------------------------
 // Homepage "This Month's Top 10" mini-list — top 3 from the same real
 // top-10 competition the full Top 10 page uses.
 // ---------------------------------------------------------------------------
@@ -3273,6 +3420,7 @@ function goToPage(pageId){
   if (pageId === 'editions' && !editionsLoaded) {
     editionsLoaded = true;
     loadEditions(true);
+    initEditionCalendar();
   }
   if (pageId === 'competitions' && !arenaLoaded) {
     arenaLoaded = true;
