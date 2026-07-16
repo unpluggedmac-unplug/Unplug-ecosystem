@@ -153,6 +153,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a class="active" data-section="queue">Approval Queue</a>
     <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="edcal">Editions Calendar</a>
+    <a data-section="deafjobs">Deaf Jobs <span id="deafJobsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="deafpassports">Deaf Passports <span id="deafPassportsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="birthdays">Birthdays</a>
     <a data-section="payments">Payments (EFT)</a>
     <a data-section="users">Users</a>
@@ -226,6 +228,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Upcoming Marked Dates</h3></div>
         <div class="panel-body" id="edcalBody" style="padding:0;"></div>
       </div>
+    </div>
+
+    <!-- DEAF JOBS -->
+    <div class="admin-section" id="section-deafjobs">
+      <div class="main-head"><div><h1>Deaf Jobs</h1><p>Vacancies posted to the Deaf Community jobs board. Approving one makes it live for 14 days from approval.</p></div></div>
+      <div class="panel"><div class="panel-head"><h3>Pending Vacancies</h3></div><div class="panel-body" id="deafJobsBody" style="padding:0;"></div></div>
+    </div>
+
+    <!-- DEAF PASSPORTS -->
+    <div class="admin-section" id="section-deafpassports">
+      <div class="main-head"><div><h1>Deaf Passports</h1><p>Opportunity Passports awaiting verification. Approving one publishes it for 14 days (no contact details are ever shown publicly).</p></div></div>
+      <div class="panel"><div class="panel-head"><h3>Pending Passports</h3></div><div class="panel-body" id="deafPassportsBody" style="padding:0;"></div></div>
     </div>
 
     <!-- PAYMENTS (EFT) -->
@@ -555,6 +569,8 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     document.getElementById('section-' + section).classList.add('active');
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'edcal') loadEdcalDates();
+    if (section === 'deafjobs') loadDeafJobs();
+    if (section === 'deafpassports') loadDeafPassports();
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payments') loadPendingEft();
     if (section === 'users') loadUsers();
@@ -908,6 +924,73 @@ async function loadEdcalDates() {
     });
     body.innerHTML = '';
     body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deaf Community — jobs + passports moderation
+// ---------------------------------------------------------------------------
+async function loadDeafJobs() {
+  const body = document.getElementById('deafJobsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/deaf-community/admin/jobs/pending');
+    const jobs = data.jobs || [];
+    const badge = document.getElementById('deafJobsBadge');
+    if (badge) { badge.textContent = jobs.length; badge.style.display = jobs.length ? 'inline-block' : 'none'; }
+    if (jobs.length === 0) { body.innerHTML = '<div class="empty-state">No pending vacancies.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Business</th><th>Title</th><th>Province</th><th>Apply Email</th><th></th></tr>';
+    jobs.forEach((j) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtmlAdmin(j.business_name)}</td><td>${escapeHtmlAdmin(j.title)}</td>`
+        + `<td>${escapeHtmlAdmin(j.province || '—')}</td><td>${escapeHtmlAdmin(j.apply_email)}</td>`
+        + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        try { await api(`/deaf-community/admin/jobs/${j.id}/approve`, { method: 'PATCH' }); showToast('Vacancy approved (live 14 days).'); loadDeafJobs(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try { await api(`/deaf-community/admin/jobs/${j.id}/reject`, { method: 'PATCH' }); showToast('Rejected.'); loadDeafJobs(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = ''; body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+async function loadDeafPassports() {
+  const body = document.getElementById('deafPassportsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/deaf-community/admin/passports/pending');
+    const passports = data.passports || [];
+    const badge = document.getElementById('deafPassportsBadge');
+    if (badge) { badge.textContent = passports.length; badge.style.display = passports.length ? 'inline-block' : 'none'; }
+    if (passports.length === 0) { body.innerHTML = '<div class="empty-state">No pending passports.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Name</th><th>Email (verify)</th><th>Skills</th><th>Availability</th><th></th></tr>';
+    passports.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtmlAdmin(p.name)}</td><td>${escapeHtmlAdmin(p.email)}</td>`
+        + `<td>${escapeHtmlAdmin((p.skills || '—').slice(0, 40))}</td><td>${escapeHtmlAdmin(p.availability || '—')}</td>`
+        + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        try { await api(`/deaf-community/admin/passports/${p.id}/approve`, { method: 'PATCH' }); showToast('Passport approved (live 14 days).'); loadDeafPassports(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try { await api(`/deaf-community/admin/passports/${p.id}/reject`, { method: 'PATCH' }); showToast('Rejected.'); loadDeafPassports(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = ''; body.appendChild(table);
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }

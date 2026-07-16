@@ -190,6 +190,62 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .emotion-breaking{ background:rgba(114,20,21,0.12); color:var(--maroon); border-color:var(--maroon); }
 .emotion-celebration{ background:rgba(46,125,50,0.12); color:var(--green); border-color:rgba(46,125,50,0.5); }
 
+/* ---- Deaf Community page ---- */
+.dc-tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-top:22px; border-bottom:1px solid var(--paper-line); }
+.dc-tab{ background:none; border:none; border-bottom:3px solid transparent; padding:12px 16px; font-size:14px; font-weight:700; cursor:pointer; color:var(--slate); font-family:'Inter',sans-serif; }
+.dc-tab.active{ color:var(--red); border-bottom-color:var(--red); }
+.dc-panel{ padding-top:28px; }
+.dc-empty{ color:var(--slate); font-size:14px; padding:20px 0; }
+/* Learning hub */
+.dc-lessons{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+@media(max-width:900px){ .dc-lessons{ grid-template-columns:repeat(2,1fr); } }
+@media(max-width:520px){ .dc-lessons{ grid-template-columns:1fr; } }
+.dc-lesson{ border:1px solid var(--paper-line); padding:20px; text-decoration:none; color:var(--ink); display:flex; flex-direction:column; gap:6px; transition:border-color .2s; }
+.dc-lesson:hover{ border-color:var(--red); }
+.dc-lesson .dc-emoji{ font-size:30px; }
+.dc-lesson h4{ font-size:16px; font-weight:700; }
+.dc-lesson p{ font-size:12.5px; color:var(--slate); flex:1; }
+.dc-lesson .dc-watch{ font-size:11.5px; font-weight:700; color:var(--red); text-transform:uppercase; letter-spacing:0.03em; }
+.dc-lesson .dc-soon{ font-size:10px; color:var(--slate); text-transform:uppercase; letter-spacing:0.05em; }
+/* Jobs */
+.dc-filter-bar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.dc-filter-chip{ border:1px solid var(--paper-line); background:#fff; color:var(--ink); border-radius:20px; padding:6px 13px; font-size:12px; font-weight:600; cursor:pointer; }
+.dc-filter-chip.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.dc-jobs-list{ display:grid; grid-template-columns:repeat(2,1fr); gap:18px; }
+@media(max-width:760px){ .dc-jobs-list{ grid-template-columns:1fr; } }
+.dc-job{ border:1px solid var(--paper-line); padding:22px; display:flex; flex-direction:column; gap:8px; }
+.dc-job h4{ font-size:18px; font-weight:700; }
+.dc-job .dc-biz{ font-size:12.5px; color:var(--red); font-weight:700; text-transform:uppercase; letter-spacing:0.03em; }
+.dc-job .dc-friendly{ font-size:12.5px; background:rgba(31,111,235,0.08); border:1px solid rgba(31,111,235,0.4); color:#1f6feb; padding:6px 10px; }
+.dc-job p.dc-desc{ font-size:13.5px; color:var(--slate); line-height:1.55; }
+.dc-job .dc-meta{ font-size:12px; color:var(--slate); }
+.dc-tags{ display:flex; flex-wrap:wrap; gap:5px; }
+.dc-tag{ font-size:10.5px; font-weight:700; background:var(--paper); border:1px solid var(--paper-line); padding:3px 8px; border-radius:12px; }
+.dc-job .dc-expiry{ font-size:11px; color:var(--slate); }
+/* Passports */
+.dc-passport-list{ display:grid; grid-template-columns:repeat(2,1fr); gap:18px; }
+@media(max-width:760px){ .dc-passport-list{ grid-template-columns:1fr; } }
+.dc-pass{ border:1px solid var(--paper-line); padding:22px; }
+.dc-pass-head{ display:flex; gap:14px; align-items:center; margin-bottom:12px; }
+.dc-pass-img{ width:64px; height:64px; border-radius:50%; object-fit:cover; background:var(--paper); flex-shrink:0; }
+.dc-pass-head h4{ font-size:18px; font-weight:700; }
+.dc-pass-head .dc-avail{ font-size:12px; color:var(--green); font-weight:700; }
+.dc-pass dl{ font-size:13px; margin:0; }
+.dc-pass dt{ font-weight:700; text-transform:uppercase; font-size:10.5px; letter-spacing:0.04em; color:var(--slate); margin-top:8px; }
+.dc-pass dd{ margin:0; color:var(--ink); line-height:1.5; }
+.dc-comments{ margin-top:14px; border-top:1px solid var(--paper-line); padding-top:12px; }
+.dc-comment{ font-size:12.5px; margin-bottom:8px; }
+.dc-comment b{ color:var(--ink); }
+.dc-comment span{ color:var(--slate); }
+.dc-comment-form{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+.dc-comment-form input{ flex:1; min-width:120px; border:1px solid var(--paper-line); padding:8px 10px; font-size:12.5px; font-family:'Inter',sans-serif; }
+.dc-comment-form button{ font-size:11px; padding:8px 12px; }
+.dc-agree{ display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:var(--slate); margin:6px 0 12px; line-height:1.4; }
+.dc-agree input{ margin-top:2px; }
+.dc-filter-checks{ display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; }
+.dc-filter-checks label{ display:flex; gap:6px; align-items:center; font-size:12.5px; text-transform:none; letter-spacing:0; color:var(--ink); }
+.dc-filter-checks label input{ width:auto; }
+
 /* ---- birthday feature ---- */
 .birthday-feature{
   background:var(--black); color:var(--cream);
@@ -822,6 +878,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button data-page="competitions">Competitions</button>
       <button data-page="investors">Investors</button>
       <button data-page="brandplacement">Marketplace</button>
+      <button data-page="deafcommunity">Deaf Community</button>
       <button data-page="about">About</button>
       <button data-page="contact">Contact</button>
     </nav>
@@ -2204,6 +2261,91 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
 </main>
 
+<!-- ============ DEAF COMMUNITY ============ -->
+<main class="page" id="page-deafcommunity">
+  <div class="wrap" style="padding-top:56px;">
+    <span class="eyebrow">Built for our community</span>
+    <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Deaf Community</h1>
+    <p class="lede">A home for the Deaf community and Deaf-supported businesses — learn Basic South African Sign Language, find deaf-friendly work, and build your Opportunity Passport.</p>
+    <div class="dc-tabs">
+      <button class="dc-tab active" data-dc="learn">👋 Learn SASL</button>
+      <button class="dc-tab" data-dc="jobs">💼 Jobs</button>
+      <button class="dc-tab" data-dc="passport">🪪 Opportunity Passport</button>
+    </div>
+  </div>
+
+  <!-- (a) LEARNING HUB -->
+  <section class="wrap dc-panel" id="dc-learn">
+    <div class="section-head"><div><span class="eyebrow">Free learning hub</span><h2>Learn Basic SASL</h2></div></div>
+    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:8px;">Short, 30-second lessons in South African Sign Language. Video lessons are on the way — for now, tap a card to watch the sign on YouTube.</p>
+    <div class="dc-lessons" id="dcLessons"></div>
+  </section>
+
+  <!-- (b) JOBS -->
+  <section class="wrap dc-panel section-hidden" id="dc-jobs">
+    <div class="section-head">
+      <div><span class="eyebrow">Deaf-friendly work</span><h2>Jobs Board</h2></div>
+      <button class="btn btn-solid" id="dcPostJobBtn" style="font-size:12px;">Post a vacancy →</button>
+    </div>
+    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:16px;">Vacancies from deaf-friendly employers. Every listing is live for 14 days. Apply straight to the business by email.</p>
+
+    <div class="dc-filter-bar" id="dcJobFilters"></div>
+    <div class="dc-jobs-list" id="dcJobsList"><p class="dc-empty">Loading vacancies…</p></div>
+  </section>
+
+  <!-- (c) OPPORTUNITY PASSPORT -->
+  <section class="wrap dc-panel section-hidden" id="dc-passport">
+    <div class="section-head">
+      <div><span class="eyebrow">Instead of a CV</span><h2>Opportunity Passports</h2></div>
+      <button class="btn btn-solid" id="dcCreatePassportBtn" style="font-size:12px;">Create your passport →</button>
+    </div>
+    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:16px;">A living digital card of your skills, certifications, communication preferences and availability. No contact details are ever shared here — interested employers reach out through Unplug. Each passport shows for 14 days. Visitors can leave a comment of support.</p>
+    <div class="dc-passport-list" id="dcPassportList"><p class="dc-empty">Loading passports…</p></div>
+  </section>
+</main>
+
+<!-- POST A VACANCY MODAL -->
+<div class="shoutout-modal-overlay" id="dcJobModal" aria-hidden="true">
+  <div class="shoutout-modal" role="dialog" aria-modal="true" style="max-width:520px;">
+    <button class="shoutout-modal-close" id="dcJobModalClose" aria-label="Close">&times;</button>
+    <span class="eyebrow" style="color:var(--red);">Deaf Community</span>
+    <h3 style="font-family:'Playfair Display',serif; font-size:23px; margin:8px 0 12px;">Post a vacancy</h3>
+    <div class="shoutout-form-msg" id="dcJobMsg"></div>
+    <div class="field-row"><div class="field"><label>Business name *</label><input id="dcJobBusiness" maxlength="200"></div>
+      <div class="field"><label>Job title *</label><input id="dcJobTitle" maxlength="200"></div></div>
+    <div class="field"><label>Description * (max 100 words)</label><textarea id="dcJobDesc" rows="4"></textarea>
+      <p id="dcJobWords" style="font-size:12px; color:var(--slate); margin-top:2px;">0 / 100 words</p></div>
+    <div class="field-row"><div class="field"><label>Apply-to email *</label><input id="dcJobEmail" type="email"></div>
+      <div class="field"><label>Province</label>
+        <select id="dcJobProvince"><option value="">— select —</option>
+          <option>Eastern Cape</option><option>Free State</option><option>Gauteng</option><option>KwaZulu-Natal</option>
+          <option>Limpopo</option><option>Mpumalanga</option><option>North West</option><option>Northern Cape</option><option>Western Cape</option>
+        </select></div></div>
+    <div class="field"><label>Salary range</label><input id="dcJobSalary" placeholder="e.g. R8 000 – R12 000 / month"></div>
+    <div class="field"><label>Tags (tick all that apply)</label><div class="dc-filter-checks" id="dcJobTags"></div></div>
+    <label class="dc-agree"><input type="checkbox" id="dcJobAgree"> <span>I confirm this business is a <strong>deaf-friendly employer</strong>. (This is shown in bold on the post.)</span></label>
+    <button class="btn btn-solid" id="dcJobSubmit" style="width:100%; margin-top:6px;">Submit vacancy</button>
+  </div>
+</div>
+
+<!-- CREATE PASSPORT MODAL -->
+<div class="shoutout-modal-overlay" id="dcPassportModal" aria-hidden="true">
+  <div class="shoutout-modal" role="dialog" aria-modal="true" style="max-width:520px;">
+    <button class="shoutout-modal-close" id="dcPassportModalClose" aria-label="Close">&times;</button>
+    <span class="eyebrow" style="color:var(--red);">Deaf Community</span>
+    <h3 style="font-family:'Playfair Display',serif; font-size:23px; margin:8px 0 12px;">Create your Opportunity Passport</h3>
+    <div class="shoutout-form-msg" id="dcPassportMsg"></div>
+    <div class="field"><label>Name &amp; surname *</label><input id="dcPassName" maxlength="200"></div>
+    <div class="field"><label>Email * (for verification only — never shown)</label><input id="dcPassEmail" type="email"></div>
+    <div class="field"><label>Profile image URL</label><input id="dcPassImage" placeholder="https://..."></div>
+    <div class="field"><label>Skills</label><textarea id="dcPassSkills" rows="2" placeholder="e.g. Graphic design, baking, customer service"></textarea></div>
+    <div class="field"><label>Certifications</label><textarea id="dcPassCerts" rows="2"></textarea></div>
+    <div class="field"><label>Communication preferences</label><input id="dcPassComm" placeholder="e.g. SASL, WhatsApp text, email"></div>
+    <div class="field"><label>Availability</label><input id="dcPassAvail" placeholder="e.g. Full-time, immediately"></div>
+    <button class="btn btn-solid" id="dcPassSubmit" style="width:100%; margin-top:6px;">Submit passport</button>
+  </div>
+</div>
+
 <section class="newsletter">
   <div class="wrap newsletter-inner">
     <h3>Get uplifting news in your inbox, every Friday.</h3>
@@ -3535,6 +3677,10 @@ function goToPage(pageId){
     arenaLoaded = true;
     loadArena();
   }
+  if (pageId === 'deafcommunity' && !deafCommunityLoaded) {
+    deafCommunityLoaded = true;
+    initDeafCommunity();
+  }
 }
 document.querySelectorAll('[data-page]').forEach(el => {
   el.addEventListener('click', (e) => {
@@ -3549,6 +3695,272 @@ document.getElementById('submitCta').addEventListener('click', (e) => {
   e.preventDefault();
   goToMemberDashboard();
 });
+
+// ---------------------------------------------------------------------------
+// Deaf Community page — learning hub, jobs board, Opportunity Passports.
+// ---------------------------------------------------------------------------
+let deafCommunityLoaded = false;
+
+const SASL_LESSONS = [
+  { emoji: '👋', title: 'Greetings', desc: 'Hello, good morning, how are you?', q: 'greetings' },
+  { emoji: '🙏', title: 'Thank You', desc: 'Say thank you and you\'re welcome.', q: 'thank you' },
+  { emoji: '🤝', title: 'Welcome', desc: 'Welcome someone warmly.', q: 'welcome' },
+  { emoji: '🆘', title: 'Help', desc: 'Ask for or offer help.', q: 'help' },
+  { emoji: '🔢', title: 'Numbers', desc: 'Count and sign numbers 1–10.', q: 'numbers' },
+  { emoji: '🚨', title: 'Emergency Phrases', desc: 'Key phrases for an emergency.', q: 'emergency phrases' },
+  { emoji: '🍽️', title: 'Restaurant Phrases', desc: 'Order and ask at a restaurant.', q: 'restaurant phrases' },
+];
+
+const DC_JOB_FILTER_LABELS = {
+  deaf_friendly_employer: '🤟 Deaf-Friendly Employer',
+  sasl_interpreter_available: '🤟 SASL Interpreter Available',
+  whatsapp_applications: '💬 WhatsApp Applications',
+  email_applications: '✉️ Email Applications',
+  remote_work: '🏠 Remote Work',
+  no_experience_required: '🎓 No Experience Required',
+  graduate_opportunities: '🎓 Graduate Opportunities',
+  full_time: '💼 Full-Time',
+  part_time: '⏰ Part-Time',
+};
+
+let dcJobFilter = '';
+
+function initDeafCommunity() {
+  // Sub-tab switching
+  document.querySelectorAll('.dc-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.dc-tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      ['learn', 'jobs', 'passport'].forEach((p) => {
+        document.getElementById('dc-' + p).classList.toggle('section-hidden', p !== tab.dataset.dc);
+      });
+    });
+  });
+
+  renderSaslLessons();
+  renderJobFilterBar();
+  renderJobTagChecks();
+  loadDeafJobs();
+  loadDeafPassports();
+
+  setupDcJobModal();
+  setupDcPassportModal();
+}
+
+function renderSaslLessons() {
+  const wrap = document.getElementById('dcLessons');
+  wrap.innerHTML = SASL_LESSONS.map((l) =>
+    `<a class="dc-lesson" href="https://www.youtube.com/results?search_query=${encodeURIComponent('South African Sign Language ' + l.q)}" target="_blank" rel="noopener">
+      <span class="dc-emoji">${l.emoji}</span>
+      <h4>${l.title}</h4>
+      <p>${l.desc}</p>
+      <span class="dc-watch">Watch the sign ↗</span>
+      <span class="dc-soon">30-sec video lesson coming soon</span>
+    </a>`).join('');
+}
+
+function renderJobFilterBar() {
+  const bar = document.getElementById('dcJobFilters');
+  const chips = ['<button class="dc-filter-chip active" data-filter="">All</button>']
+    .concat(Object.keys(DC_JOB_FILTER_LABELS).map((k) =>
+      `<button class="dc-filter-chip" data-filter="${k}">${DC_JOB_FILTER_LABELS[k]}</button>`));
+  bar.innerHTML = chips.join('');
+  bar.querySelectorAll('.dc-filter-chip').forEach((c) => {
+    c.addEventListener('click', () => {
+      bar.querySelectorAll('.dc-filter-chip').forEach((x) => x.classList.remove('active'));
+      c.classList.add('active');
+      dcJobFilter = c.dataset.filter;
+      loadDeafJobs();
+    });
+  });
+}
+
+function renderJobTagChecks() {
+  const wrap = document.getElementById('dcJobTags');
+  wrap.innerHTML = Object.keys(DC_JOB_FILTER_LABELS).map((k) =>
+    `<label><input type="checkbox" value="${k}"> ${DC_JOB_FILTER_LABELS[k]}</label>`).join('');
+}
+
+async function loadDeafJobs() {
+  const list = document.getElementById('dcJobsList');
+  list.innerHTML = '<p class="dc-empty">Loading vacancies…</p>';
+  try {
+    const params = dcJobFilter ? ('?filter=' + encodeURIComponent(dcJobFilter)) : '';
+    const data = await api('/deaf-community/jobs' + params);
+    if (!data.jobs.length) { list.innerHTML = '<p class="dc-empty">No live vacancies right now — check back soon.</p>'; return; }
+    list.innerHTML = data.jobs.map(dcJobHtml).join('');
+  } catch (err) {
+    list.innerHTML = '<p class="dc-empty">Couldn\'t load vacancies right now.</p>';
+  }
+}
+
+function dcJobHtml(j) {
+  const tags = (j.filters || []).map((f) => `<span class="dc-tag">${DC_JOB_FILTER_LABELS[f] || f}</span>`).join('');
+  const days = Math.max(0, Math.ceil((new Date(j.expires_at) - Date.now()) / 86400000));
+  const mailto = `mailto:${escapeHtml(j.apply_email)}?subject=${encodeURIComponent('Application: ' + j.title)}`;
+  return `<div class="dc-job">
+    <span class="dc-biz">${escapeHtml(j.business_name)}</span>
+    <h4>${escapeHtml(j.title)}</h4>
+    <div class="dc-friendly">This employer confirms they are a <strong>deaf-friendly employer</strong>.</div>
+    <p class="dc-desc">${escapeHtml(j.description)}</p>
+    <div class="dc-meta">${j.province ? '📍 ' + escapeHtml(j.province) : ''}${j.province && j.salary_range ? ' · ' : ''}${j.salary_range ? '💰 ' + escapeHtml(j.salary_range) : ''}</div>
+    ${tags ? `<div class="dc-tags">${tags}</div>` : ''}
+    <a class="btn btn-solid" href="${mailto}" style="align-self:flex-start; font-size:12px;">Apply by email →</a>
+    <span class="dc-expiry">Live for ${days} more day${days === 1 ? '' : 's'}</span>
+  </div>`;
+}
+
+async function loadDeafPassports() {
+  const list = document.getElementById('dcPassportList');
+  list.innerHTML = '<p class="dc-empty">Loading passports…</p>';
+  try {
+    const data = await api('/deaf-community/passports');
+    if (!data.passports.length) { list.innerHTML = '<p class="dc-empty">No passports published yet — be the first to create one.</p>'; return; }
+    list.innerHTML = data.passports.map(dcPassportHtml).join('');
+    data.passports.forEach((p) => loadPassportComments(p.id));
+    list.querySelectorAll('.dc-comment-form').forEach((form) => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = form.dataset.id;
+        const nameEl = form.querySelector('.dc-c-name');
+        const textEl = form.querySelector('.dc-c-text');
+        if (!textEl.value.trim()) return;
+        try {
+          await api(`/deaf-community/passports/${id}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({ commenterName: nameEl.value.trim() || undefined, comment: textEl.value.trim() }),
+          });
+          textEl.value = '';
+          loadPassportComments(id);
+        } catch (err) { showToast(err.message, true); }
+      });
+    });
+  } catch (err) {
+    list.innerHTML = '<p class="dc-empty">Couldn\'t load passports right now.</p>';
+  }
+}
+
+function dcPassportHtml(p) {
+  const img = p.profile_image_url
+    ? `<img class="dc-pass-img" src="${escapeHtml(p.profile_image_url)}" alt="${escapeHtml(p.name)}">`
+    : `<div class="dc-pass-img"></div>`;
+  const row = (label, val) => val ? `<dt>${label}</dt><dd>${escapeHtml(val)}</dd>` : '';
+  return `<div class="dc-pass">
+    <div class="dc-pass-head">${img}<div><h4>${escapeHtml(p.name)}</h4>${p.availability ? `<div class="dc-avail">${escapeHtml(p.availability)}</div>` : ''}</div></div>
+    <dl>
+      ${row('Skills', p.skills)}
+      ${row('Certifications', p.certifications)}
+      ${row('Communication', p.communication_preferences)}
+    </dl>
+    <div class="dc-comments" data-id="${p.id}">
+      <div class="dc-comment-thread" id="dc-comments-${p.id}"></div>
+      <form class="dc-comment-form" data-id="${p.id}">
+        <input class="dc-c-name" placeholder="Your name (optional)" maxlength="120">
+        <input class="dc-c-text" placeholder="Leave a comment of support…" maxlength="500" required>
+        <button class="btn btn-line" type="submit">Post</button>
+      </form>
+    </div>
+  </div>`;
+}
+
+async function loadPassportComments(id) {
+  const thread = document.getElementById('dc-comments-' + id);
+  if (!thread) return;
+  try {
+    const data = await api(`/deaf-community/passports/${id}/comments`);
+    if (!data.comments.length) { thread.innerHTML = '<p class="dc-comment" style="color:var(--slate);">No comments yet.</p>'; return; }
+    thread.innerHTML = data.comments.map((c) =>
+      `<div class="dc-comment"><b>${escapeHtml(c.commenter_name || 'Anonymous')}</b> <span>${escapeHtml(c.comment)}</span></div>`).join('');
+  } catch (err) { /* leave silent */ }
+}
+
+// --- job post modal ---
+function setupDcJobModal() {
+  const modal = document.getElementById('dcJobModal');
+  const openBtn = document.getElementById('dcPostJobBtn');
+  const msg = document.getElementById('dcJobMsg');
+  const descEl = document.getElementById('dcJobDesc');
+  const wordsEl = document.getElementById('dcJobWords');
+  document.getElementById('dcJobModalClose').addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+  openBtn.addEventListener('click', () => { msg.className = 'shoutout-form-msg'; modal.classList.add('open'); });
+
+  descEl.addEventListener('input', () => {
+    const n = descEl.value.trim().split(/\s+/).filter(Boolean).length;
+    wordsEl.textContent = n + ' / 100 words';
+    wordsEl.style.color = n > 100 ? 'var(--red)' : 'var(--slate)';
+  });
+
+  document.getElementById('dcJobSubmit').addEventListener('click', async () => {
+    const filters = [...document.querySelectorAll('#dcJobTags input:checked')].map((c) => c.value);
+    const payload = {
+      businessName: document.getElementById('dcJobBusiness').value.trim(),
+      title: document.getElementById('dcJobTitle').value.trim(),
+      description: document.getElementById('dcJobDesc').value.trim(),
+      applyEmail: document.getElementById('dcJobEmail').value.trim(),
+      province: document.getElementById('dcJobProvince').value || undefined,
+      salaryRange: document.getElementById('dcJobSalary').value.trim() || undefined,
+      filters,
+      deafFriendlyAgreed: document.getElementById('dcJobAgree').checked,
+    };
+    if (!payload.businessName || !payload.title || !payload.description || !payload.applyEmail) {
+      msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Please fill in all required fields.'; return;
+    }
+    if (!payload.deafFriendlyAgreed) {
+      msg.className = 'shoutout-form-msg show error'; msg.textContent = 'You must confirm you are a deaf-friendly employer.'; return;
+    }
+    const btn = document.getElementById('dcJobSubmit');
+    btn.disabled = true; btn.textContent = 'Submitting...';
+    try {
+      const data = await api('/deaf-community/jobs', { method: 'POST', body: JSON.stringify(payload) });
+      msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for review.';
+      ['dcJobBusiness', 'dcJobTitle', 'dcJobDesc', 'dcJobEmail', 'dcJobSalary'].forEach((id) => document.getElementById(id).value = '');
+      document.getElementById('dcJobAgree').checked = false;
+      document.querySelectorAll('#dcJobTags input:checked').forEach((c) => c.checked = false);
+      wordsEl.textContent = '0 / 100 words';
+    } catch (err) {
+      msg.className = 'shoutout-form-msg show error'; msg.textContent = err.message;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Submit vacancy';
+    }
+  });
+}
+
+// --- passport modal ---
+function setupDcPassportModal() {
+  const modal = document.getElementById('dcPassportModal');
+  const openBtn = document.getElementById('dcCreatePassportBtn');
+  const msg = document.getElementById('dcPassportMsg');
+  document.getElementById('dcPassportModalClose').addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+  openBtn.addEventListener('click', () => { msg.className = 'shoutout-form-msg'; modal.classList.add('open'); });
+
+  document.getElementById('dcPassSubmit').addEventListener('click', async () => {
+    const payload = {
+      name: document.getElementById('dcPassName').value.trim(),
+      email: document.getElementById('dcPassEmail').value.trim(),
+      profileImageUrl: document.getElementById('dcPassImage').value.trim() || undefined,
+      skills: document.getElementById('dcPassSkills').value.trim() || undefined,
+      certifications: document.getElementById('dcPassCerts').value.trim() || undefined,
+      communicationPreferences: document.getElementById('dcPassComm').value.trim() || undefined,
+      availability: document.getElementById('dcPassAvail').value.trim() || undefined,
+    };
+    if (!payload.name || !payload.email) {
+      msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Name and email are required.'; return;
+    }
+    const btn = document.getElementById('dcPassSubmit');
+    btn.disabled = true; btn.textContent = 'Submitting...';
+    try {
+      const data = await api('/deaf-community/passports', { method: 'POST', body: JSON.stringify(payload) });
+      msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for verification.';
+      ['dcPassName', 'dcPassEmail', 'dcPassImage', 'dcPassSkills', 'dcPassCerts', 'dcPassComm', 'dcPassAvail'].forEach((id) => document.getElementById(id).value = '');
+    } catch (err) {
+      msg.className = 'shoutout-form-msg show error'; msg.textContent = err.message;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Submit passport';
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Site-wide search — overlay that queries GET /search across articles,
