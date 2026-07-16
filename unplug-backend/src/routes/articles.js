@@ -5,6 +5,8 @@ const { getPagination, paginationMeta } = require('../utils/pagination');
 
 const router = express.Router();
 
+const ALLOWED_EMOTIONS = ['inspiring', 'business', 'community', 'breaking', 'celebration'];
+
 async function getArticleOwnerId(req) {
   const result = await pool.query('SELECT author_user_id FROM articles WHERE id = $1', [req.params.id]);
   if (result.rows.length === 0) return null;
@@ -32,7 +34,7 @@ router.get('/', async (req, res, next) => {
     );
 
     const result = await pool.query(
-      `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.published_at, c.name AS category
+      `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at, c.name AS category
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
        WHERE ${conditions.join(' AND ')}
@@ -91,9 +93,12 @@ router.get('/:id', async (req, res, next) => {
 // earlier for the Latest News page.
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { title, body, categoryId, kickerSuppliedBy, bannerImageUrl } = req.body;
+    const { title, body, categoryId, kickerSuppliedBy, bannerImageUrl, emotion } = req.body;
     if (!title || !body) {
       return res.status(400).json({ error: 'title and body are required.' });
+    }
+    if (emotion && !ALLOWED_EMOTIONS.includes(emotion)) {
+      return res.status(400).json({ error: 'emotion must be one of: ' + ALLOWED_EMOTIONS.join(', ') + '.' });
     }
 
     const profileResult = await pool.query(
@@ -103,10 +108,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     const hasCredit = profileResult.rows.length > 0 && profileResult.rows[0].free_article_credits > 0;
 
     const result = await pool.query(
-      `INSERT INTO articles (author_user_id, category_id, title, body, kicker_supplied_by, banner_image_url, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO articles (author_user_id, category_id, title, body, kicker_supplied_by, banner_image_url, emotion, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [req.user.id, categoryId || null, title, body, kickerSuppliedBy || null, bannerImageUrl || null, hasCredit ? 'pending' : 'awaiting_payment']
+      [req.user.id, categoryId || null, title, body, kickerSuppliedBy || null, bannerImageUrl || null, emotion || null, hasCredit ? 'pending' : 'awaiting_payment']
     );
 
     if (hasCredit) {
@@ -127,13 +132,19 @@ router.post('/', requireAuth, async (req, res, next) => {
 // PATCH /articles/:id — owner or admin can edit before/after approval.
 router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, next) => {
   try {
-    const { title, body, kickerSuppliedBy } = req.body;
+    const { title, body, kickerSuppliedBy, emotion } = req.body;
     const setClauses = [];
     const values = [];
 
     if (title !== undefined) { values.push(title); setClauses.push(`title = $${values.length}`); }
     if (body !== undefined) { values.push(body); setClauses.push(`body = $${values.length}`); }
     if (kickerSuppliedBy !== undefined) { values.push(kickerSuppliedBy); setClauses.push(`kicker_supplied_by = $${values.length}`); }
+    if (emotion !== undefined) {
+      if (emotion && !ALLOWED_EMOTIONS.includes(emotion)) {
+        return res.status(400).json({ error: 'emotion must be one of: ' + ALLOWED_EMOTIONS.join(', ') + '.' });
+      }
+      values.push(emotion || null); setClauses.push(`emotion = $${values.length}`);
+    }
 
     if (setClauses.length === 0) {
       return res.status(400).json({ error: 'No editable fields provided.' });

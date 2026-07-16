@@ -166,6 +166,13 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .story-card h3{ font-size:22px; font-weight:600; line-height:1.25; margin-bottom:8px; }
 .story-card p{ color:var(--slate); font-size:14.5px; line-height:1.6; }
 .story-meta{ margin-top:14px; font-size:12px; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em; }
+/* Emotion Reader chip */
+.emotion-badge{ display:inline-block; font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; margin-bottom:8px; border:1px solid transparent; }
+.emotion-inspiring{ background:rgba(232,184,75,0.16); color:#8a6400; border-color:rgba(232,184,75,0.6); }
+.emotion-business{ background:rgba(31,111,235,0.12); color:#1f6feb; border-color:rgba(31,111,235,0.5); }
+.emotion-community{ background:rgba(210,7,9,0.10); color:var(--red); border-color:rgba(210,7,9,0.4); }
+.emotion-breaking{ background:rgba(114,20,21,0.12); color:var(--maroon); border-color:var(--maroon); }
+.emotion-celebration{ background:rgba(46,125,50,0.12); color:var(--green); border-color:rgba(46,125,50,0.5); }
 
 /* ---- birthday feature ---- */
 .birthday-feature{
@@ -2568,12 +2575,26 @@ function readMinutes(body) {
   return Math.max(1, Math.round(words / 200));
 }
 
+// Emotion Reader — maps an article's emotion to an emoji + label chip.
+const EMOTION_MAP = {
+  inspiring:   { emoji: '😊', label: 'Inspiring' },
+  business:    { emoji: '💼', label: 'Business' },
+  community:   { emoji: '❤️', label: 'Community' },
+  breaking:    { emoji: '🚨', label: 'Breaking News' },
+  celebration: { emoji: '🎉', label: 'Celebration' },
+};
+function emotionBadge(emotion) {
+  const e = EMOTION_MAP[emotion];
+  if (!e) return '';
+  return `<span class="emotion-badge emotion-${emotion}">${e.emoji} ${e.label}</span>`;
+}
+
 function newsCardHtml(article) {
   const title = escapeHtml(article.title);
   const excerpt = escapeHtml((article.body || '').slice(0, 140)) + (article.body && article.body.length > 140 ? '…' : '');
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `Supplied by ${escapeHtml(article.kicker_supplied_by)}` : '';
-  return `<a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb"></div><span class="story-tag">${category}</span>${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>`;
+  return `<a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb"></div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>`;
 }
 
 async function loadArticleDetail(id) {
@@ -2586,6 +2607,7 @@ async function loadArticleDetail(id) {
     el.innerHTML = `
       ${a.banner_image_url ? `<div style="position:relative; margin-bottom:24px;"><img src="${escapeHtml(a.banner_image_url)}" alt="${escapeHtml(a.title)}" style="width:100%; max-height:420px; object-fit:cover; display:block;"><div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>` : ''}
       <span class="eyebrow">${escapeHtml(a.category || '')}</span>
+      ${emotionBadge(a.emotion) ? `<div style="margin:10px 0 0;">${emotionBadge(a.emotion)}</div>` : ''}
       <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 8px;">${escapeHtml(a.title)}</h1>
       ${a.kicker_supplied_by ? `<p style="color:var(--slate); font-size:13px; margin-bottom:6px;">Supplied by ${escapeHtml(a.kicker_supplied_by)}</p>` : ''}
       <p style="color:var(--slate); font-size:13px; margin-bottom:24px;">${readMinutes(a.body)} min read</p>
