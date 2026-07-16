@@ -374,6 +374,8 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .dir-photo{ aspect-ratio:1/1; background:linear-gradient(135deg,var(--paper),#e3d8c2); margin-bottom:12px; position:relative; }
 .dir-card h4{ font-size:16px; font-weight:600; }
 .dir-card p{ font-size:12.5px; color:var(--slate); text-transform:uppercase; letter-spacing:0.03em; margin-top:2px; }
+.deaf-owned-badge{ display:inline-block; margin-top:8px; font-size:10.5px; font-weight:700; letter-spacing:0.02em;
+  background:rgba(31,111,235,0.12); color:#1f6feb; border:1px solid #1f6feb; padding:3px 8px; border-radius:20px; text-transform:none; }
 
 /* ---- gallery ---- */
 .gallery-grid{ column-count:4; column-gap:16px; }
@@ -2400,7 +2402,8 @@ function dirCardHtml(profile) {
   const category = escapeHtml(profile.category || '');
   const slug = escapeHtml(profile.slug);
   const secondCategory = escapeHtml(profile.secondary_category || '');
-  return `<a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}${secondCategory ? ' + ' + secondCategory : ''}</p></a>`;
+  const deafBadge = profile.deaf_owned_verified ? '<span class="deaf-owned-badge">🤟 Deaf-Owned Verified</span>' : '';
+  return `<a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}${secondCategory ? ' + ' + secondCategory : ''}</p>${deafBadge}</a>`;
 }
 
 async function loadDirectory(reset) {
@@ -2470,6 +2473,7 @@ function profileDetailHtml(profile, socials, gallery) {
       <div class="profile-header-copy">
         <span class="tier-pill">${escapeHtml(TIER_LABELS[tier] || tier)}</span>
         ${profile.verified ? '<span class="tier-pill" style="background:var(--red); color:#fff; margin-left:6px;">✓ Verified</span>' : ''}
+        ${profile.deaf_owned_verified ? '<span class="tier-pill deaf-owned-badge" style="margin-left:6px;">🤟 Deaf-Owned Verified</span>' : ''}
         <h1 style="font-size:clamp(28px,4vw,42px); margin:10px 0 4px;">${escapeHtml(profile.display_name)}</h1>
         <p style="color:var(--red); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; font-size:13px;">${escapeHtml(profile.category || '')}</p>
         ${showExtras && profile.quote ? `<p class="profile-quote">"${escapeHtml(profile.quote)}"</p>` : ''}

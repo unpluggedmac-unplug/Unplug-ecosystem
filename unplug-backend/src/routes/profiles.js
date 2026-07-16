@@ -68,7 +68,7 @@ router.get('/directory', async (req, res, next) => {
     );
 
     const result = await pool.query(
-      `SELECT p.id, p.slug, p.display_name, p.package_tier, p.bio, c.name AS category, c2.name AS secondary_category
+      `SELECT p.id, p.slug, p.display_name, p.package_tier, p.bio, p.type, p.deaf_owned_verified, c.name AS category, c2.name AS secondary_category
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN categories c2 ON c2.id = p.secondary_category_id

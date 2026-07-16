@@ -591,13 +591,14 @@ const QUEUE_TABS = {
     ],
   },
   approvedProfiles: {
-    label: 'Approved Profiles', listPath: '/admin/profiles/approved', resource: 'profiles', actions: ['verify', 'renew'],
+    label: 'Approved Profiles', listPath: '/admin/profiles/approved', resource: 'profiles', actions: ['verify', 'deaf-owned', 'renew'],
     columns: [
       { header: 'Name', render: (r) => r.display_name },
       { header: 'Type', render: (r) => r.type },
       { header: 'Package', render: (r) => r.package_tier },
       { header: 'Category', render: (r) => r.category || '—' },
       { header: 'Verified', render: (r) => r.verified ? 'Yes' : 'No' },
+      { header: 'Deaf-Owned', render: (r) => r.deaf_owned_verified ? '🤟 Yes' : 'No' },
       { header: 'Renews', render: (r) => r.renews_at ? new Date(r.renews_at).toLocaleDateString() : '—' },
     ],
   },

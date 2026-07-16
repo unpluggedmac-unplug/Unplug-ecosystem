@@ -135,7 +135,7 @@ router.get('/profiles/renewals-due', requireRole('admin'), async (req, res, next
 router.get('/profiles/approved', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT p.id, p.display_name, p.type, p.package_tier, p.verified, p.renews_at, c.name AS category, u.email AS submitted_by
+      `SELECT p.id, p.display_name, p.type, p.package_tier, p.verified, p.deaf_owned_verified, p.renews_at, c.name AS category, u.email AS submitted_by
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
        JOIN users u ON u.id = p.user_id
@@ -188,6 +188,27 @@ router.patch('/profiles/:id/verify', requireRole('admin'), async (req, res, next
       return res.status(404).json({ error: 'Profile not found.' });
     }
     await logActivity(req.user.id, 'profile_verified', `Profile #${req.params.id} — ${result.rows[0].display_name}`);
+    res.json({ profile: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/profiles/:id/deaf-owned — toggles the Deaf-Owned Verified
+// badge on a profile. Flipping (not just setting true) lets one button in
+// the admin queue both grant and remove the badge.
+router.patch('/profiles/:id/deaf-owned', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE profiles SET deaf_owned_verified = NOT deaf_owned_verified, updated_at = now()
+       WHERE id = $1 RETURNING id, display_name, deaf_owned_verified`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found.' });
+    }
+    await logActivity(req.user.id, 'profile_deaf_owned_toggled',
+      `Profile #${req.params.id} — ${result.rows[0].display_name} → deaf-owned ${result.rows[0].deaf_owned_verified}`);
     res.json({ profile: result.rows[0] });
   } catch (err) {
     next(err);
