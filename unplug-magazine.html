@@ -17,6 +17,40 @@
 <meta name="twitter:title" content="Unplug Magazine — Real People. Real Impact.">
 <meta name="twitter:description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.">
 <meta name="twitter:image" content="https://unplug-magazine.pages.dev/social-banner.jpg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://unplug-magazine.pages.dev/#organization",
+      "name": "Unplug Magazine",
+      "url": "https://unplug-magazine.pages.dev",
+      "logo": "https://unplug-magazine.pages.dev/social-banner.jpg",
+      "description": "A purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.",
+      "sameAs": [
+        "https://www.instagram.com/un_pluggedmacaz",
+        "https://www.facebook.com/share/1D97UaRqpk/",
+        "https://www.tiktok.com/@unplugmagazin",
+        "https://www.linkedin.com/in/unplug-magazine-8356b6309",
+        "https://youtube.com/@unpluggedmagazineza"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://unplug-magazine.pages.dev/#website",
+      "url": "https://unplug-magazine.pages.dev",
+      "name": "Unplug Magazine",
+      "publisher": { "@id": "https://unplug-magazine.pages.dev/#organization" },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://unplug-magazine.pages.dev/?p=news&q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+  ]
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,900;1,500&family=Inter:wght@400;500;600;700&family=Fraunces:ital@1&display=swap" rel="stylesheet">
 <style>
@@ -2795,6 +2829,12 @@ async function loadProfileDetail(slug) {
   try {
     const data = await api('/profiles/' + encodeURIComponent(slug));
     container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery);
+    // Deep-link this profile (shareable/indexable URL + its own title/desc).
+    const q = '?p=profile&slug=' + encodeURIComponent(slug);
+    history.replaceState({ p: 'profile', slug }, '', q);
+    seoSetUrl(q);
+    document.title = data.profile.display_name + ' — Unplug Directory';
+    seoSetDescription(data.profile.bio || (data.profile.display_name + ' on the Unplug Magazine Directory.'));
   } catch (err) {
     container.innerHTML = '<div class="dir-empty-state">This profile could not be found.</div>';
   }
@@ -2856,6 +2896,13 @@ async function loadArticleDetail(id) {
       const badge = el.querySelector('.print-mark');
       if (badge) badge.innerHTML = svgMarkup;
     }
+    // Deep-link this article: distinct, shareable, indexable URL + its own
+    // title/description (replaceState overwrites the ?p=articledetail entry).
+    const q = '?p=article&id=' + id;
+    history.replaceState({ p: 'article', id }, '', q);
+    seoSetUrl(q);
+    document.title = a.title + ' — Unplug Magazine';
+    seoSetDescription((a.body || '').replace(/<[^>]*>/g, '').trim());
   } catch (err) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load this story right now.</div>';
   }
@@ -3707,6 +3754,33 @@ document.querySelectorAll('.print-mark').forEach((el, i) => {
 });
 
 // page navigation
+// Keep the canonical + og:url in sync with the current deep-link URL.
+function seoSetUrl(query){
+  const base = 'https://unplug-magazine.pages.dev';
+  const url = base + '/' + (query || '');
+  const c = document.querySelector('link[rel="canonical"]'); if (c) c.href = url;
+  const o = document.querySelector('meta[property="og:url"]'); if (o) o.setAttribute('content', url);
+}
+function seoSetDescription(text){
+  if (!text) return;
+  const d = document.querySelector('meta[name="description"]'); if (d) d.setAttribute('content', text.slice(0, 300));
+}
+
+// On first load and on browser back/forward, route from the ?p= URL so deep
+// links (e.g. shared article/profile URLs) open the right content.
+function routeFromUrl(){
+  window.__seoSuppress = true;
+  try {
+    const params = new URLSearchParams(location.search);
+    const p = params.get('p');
+    if (p === 'article' && params.get('id')) { goToPage('articledetail'); loadArticleDetail(params.get('id')); }
+    else if (p === 'profile' && params.get('slug')) { goToPage('directoryprofile'); loadProfileDetail(params.get('slug')); }
+    else if (p && document.getElementById('page-' + p)) { goToPage(p); }
+    else { goToPage('home'); }
+  } finally { window.__seoSuppress = false; }
+}
+window.addEventListener('popstate', routeFromUrl);
+
 function goToPage(pageId){
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + pageId);
@@ -3730,6 +3804,14 @@ function goToPage(pageId){
   };
   document.title = PAGE_TITLES[pageId] || 'Unplug Magazine';
 
+  // Deep-linkable URL: reflect the current page in the address bar so pages
+  // are shareable, bookmarkable and individually indexable. Query params are
+  // used (not paths) so a refresh always serves index.html on the static host.
+  if (!window.__seoSuppress) {
+    const url = pageId === 'home' ? '/' : ('?p=' + encodeURIComponent(pageId));
+    history.pushState({ p: pageId }, '', url);
+    seoSetUrl(url === '/' ? '' : url);
+  }
 
   if (pageId === 'directory' && !directoryLoadedOnce) {
     directoryLoadedOnce = true;
@@ -4171,6 +4253,10 @@ loadShoutout();
 setupCalendarEvents();
 loadYoutubeImage();
 setInterval(loadLiveVisitors, 30000);
+
+// If the page was opened via a deep link (?p=news, ?p=article&id=5, …),
+// route to that content. A plain home load needs nothing (home is default).
+if (location.search) routeFromUrl();
 
 // If an admin has chosen a YouTube section image, show it (linking to the
 // channel) in place of the embedded playlist.
