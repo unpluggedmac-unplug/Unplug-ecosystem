@@ -605,22 +605,15 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 .inv-quote{ font-family: 'Playfair Display', serif; font-style: italic; font-size: 17px; line-height: 1.55; color: #e8e4df; border-left: 2px solid var(--red); padding-left: 16px; margin-top: 8px; }
 @media(max-width:860px){ .investor-spotlight{ grid-template-columns:1fr; padding:40px 24px; } }
 
-/* ---- feature-in-edition section (slow zoom-out background) ---- */
-.feature-edition{ position:relative; overflow:hidden; min-height:420px; display:flex; align-items:center; justify-content:center; text-align:center; }
-.feature-edition-bg{
-  position:absolute; inset:0; background-size:cover; background-position:center;
-  transform:scale(1.18); animation:featureZoomOut 24s ease-out both;
-  will-change:transform;
-}
-.feature-edition-bg::after{ content:""; position:absolute; inset:0; background:rgba(15,14,14,0.55); }
-@keyframes featureZoomOut{ from{ transform:scale(1.18); } to{ transform:scale(1); } }
-@media (prefers-reduced-motion: reduce){ .feature-edition-bg{ animation:none; transform:scale(1); } }
-.feature-edition-inner{ position:relative; z-index:2; color:#fff; max-width:620px; padding:56px 28px; }
-.feature-edition-inner .eyebrow{ justify-content:center; }
-.feature-edition-inner h2{ font-size:clamp(28px,4vw,48px); font-weight:700; color:#fff; margin:14px 0 14px; line-height:1.1; }
-.feature-edition-inner p{ font-size:16px; line-height:1.6; color:rgba(255,255,255,0.9); margin-bottom:24px; }
-.feature-edition-btn{ background:var(--red); border-color:var(--red); color:#fff; }
-.feature-edition-btn:hover{ background:#fff; color:var(--red); border-color:#fff; }
+/* ---- feature-in-edition section (readable card, same style as the
+   Ivorymuse card: label, title, image, button, stacked) ---- */
+.feature-edition-card{ display:flex; flex-direction:column; }
+.feature-edition-title{ font-size:clamp(22px,3vw,32px); font-weight:600; line-height:1.25; color:var(--ink); margin:10px 0 12px; max-width:36ch; }
+.feature-edition-card p{ color:var(--slate); font-size:15px; line-height:1.6; max-width:60ch; margin-bottom:24px; }
+.feature-edition-thumb{ overflow:hidden; margin-bottom:24px; }
+.feature-edition-thumb img{ display:block; width:100%; height:auto; }
+.feature-edition-btn{ align-self:flex-start; background:var(--red); border-color:var(--red); color:#fff; }
+.feature-edition-btn:hover{ background:var(--maroon); border-color:var(--maroon); }
 
 /* ---- youtube embed ---- */
 .youtube-section{ background: var(--paper); padding: 56px 0; }
@@ -1186,12 +1179,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </section>
 
   <!-- FEATURE IN EDITION SECTION -->
-  <section class="feature-edition home-section">
-    <div class="feature-edition-bg" style="background-image:url('feature-edition.jpeg');"></div>
-    <div class="feature-edition-inner">
-      <span class="eyebrow" style="color:#fff;">The next issue</span>
-      <h2>Let's feature you in our upcoming edition</h2>
-      <p>Your story, your milestone, your business — in print and online. Reach out and let's put you in the next Unplug edition.</p>
+  <section class="wrap home-section">
+    <div class="feature-edition-card">
+      <span class="story-tag">The next issue</span>
+      <h2 class="feature-edition-title">Let's feature you in our upcoming edition</h2>
+      <p>Your story, your milestone, your business online. Reach out and let's put you in the next Unplug edition.</p>
+      <div class="feature-edition-thumb">
+        <img src="feature-edition.jpeg" alt="Let's feature you in our upcoming edition" loading="lazy">
+      </div>
       <a href="mailto:info@unplugnews.com?subject=Feature%20me%20in%20your%20upcoming%20edition" class="btn btn-solid feature-edition-btn">Get featured →</a>
     </div>
   </section>
