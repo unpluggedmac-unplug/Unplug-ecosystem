@@ -657,7 +657,10 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 /* ---- calendar events ---- */
 .calendar-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
 @media(max-width:900px){ .calendar-grid{ grid-template-columns:1fr; } }
-.cal-card{ border:1px solid var(--paper-line); padding:24px; display:flex; flex-direction:column; gap:12px; }
+.cal-card{ border:1px solid var(--paper-line); padding:24px; display:flex; flex-direction:column; gap:12px; cursor:pointer; transition:border-color .2s; }
+.cal-card:hover{ border-color:var(--red); }
+.cal-thumb{ overflow:hidden; margin:-24px -24px 4px; }
+.cal-thumb img{ display:block; width:100%; height:170px; object-fit:cover; }
 .cal-date{ display:flex; align-items:baseline; gap:6px; }
 .cal-day{ font-family:'Playfair Display',serif; font-size:48px; font-weight:700; color:var(--red); line-height:1; }
 .cal-mon{ font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--slate); }
@@ -1057,45 +1060,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </div>
       <button class="btn btn-solid cal-submit-btn" id="submitEventBtn">Submit your event →</button>
     </div>
-    <div class="calendar-grid">
-      <div class="cal-card" data-title="Entrepreneurship Bootcamp: Start With What You Have" data-start="20260712T090000" data-end="20260712T130000" data-location="Johannesburg" data-desc="Free entry. Presented by Unplug Magazine.">
-        <div class="cal-date"><span class="cal-day">12</span><span class="cal-mon">JUL</span></div>
-        <div class="cal-info">
-          <span class="cal-tag">Workshop</span>
-          <h4>Entrepreneurship Bootcamp: Start With What You Have</h4>
-          <p>Johannesburg · 09:00–13:00 · Free entry</p>
-        </div>
-        <div class="cal-add-wrap">
-          <button class="btn btn-line cal-btn cal-add-btn">Add to Calendar</button>
-          <div class="cal-add-menu"></div>
-        </div>
-      </div>
-      <div class="cal-card" data-title="Unplug Impact Awards — Q3 Ceremony" data-start="20260718T180000" data-end="20260718T210000" data-location="Cape Town" data-desc="Invite only. Presented by Unplug Magazine.">
-        <div class="cal-date"><span class="cal-day">18</span><span class="cal-mon">JUL</span></div>
-        <div class="cal-info">
-          <span class="cal-tag">Awards</span>
-          <h4>Unplug Impact Awards — Q3 Ceremony</h4>
-          <p>Cape Town · 18:00–21:00 · Invite only</p>
-        </div>
-        <div class="cal-add-wrap">
-          <button class="btn btn-line cal-btn cal-add-btn">Add to Calendar</button>
-          <div class="cal-add-menu"></div>
-        </div>
-      </div>
-      <div class="cal-card" data-title="Township Creative Market &amp; Story Showcase" data-start="20260725T100000" data-end="20260725T160000" data-location="Durban" data-desc="Open to all. Presented by Unplug Magazine.">
-        <div class="cal-date"><span class="cal-day">25</span><span class="cal-mon">JUL</span></div>
-        <div class="cal-info">
-          <span class="cal-tag">Community</span>
-          <h4>Township Creative Market &amp; Story Showcase</h4>
-          <p>Durban · 10:00–16:00 · Open to all</p>
-        </div>
-        <div class="cal-add-wrap">
-          <button class="btn btn-line cal-btn cal-add-btn">Add to Calendar</button>
-          <div class="cal-add-menu"></div>
-        </div>
-      </div>
+    <div class="calendar-grid" id="calendarGrid">
+      <div class="dir-empty-state">Loading events…</div>
     </div>
   </section>
+
+  <!-- EVENT DETAIL MODAL -->
+  <div class="shoutout-modal-overlay" id="eventModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true" style="max-width:520px;">
+      <button class="shoutout-modal-close" id="eventModalClose" aria-label="Close">&times;</button>
+      <div id="eventModalBody"></div>
+    </div>
+  </div>
 
   <section class="wrap home-section">
     <div class="section-head">
@@ -4209,77 +4185,143 @@ async function loadYoutubeImage() {
 //    visitor's own calendar: Google Calendar (web) or a downloadable .ics
 //    file that Apple Calendar / Outlook import.
 // ---------------------------------------------------------------------------
+const CAL_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+let calEventsById = {};
+
+// Build "YYYYMMDDTHHMMSS" from a date "YYYY-MM-DD" and time "HH:MM".
+function calStamp(dateStr, timeStr) {
+  const d = String(dateStr).slice(0, 10).replace(/-/g, '');
+  const t = (timeStr || '00:00').replace(':', '') + '00';
+  return d + 'T' + t;
+}
+// Times are South African (UTC+2, no DST) — pin to +02:00 so the calendar
+// entry is correct for everyone, not the viewer's own timezone.
+function calParseStamp(s) {
+  const utcMs = Date.UTC(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8), +s.slice(9,11), +s.slice(11,13), 0);
+  return new Date(utcMs - 2 * 3600 * 1000);
+}
+function calUtcStamp(d) { return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+
+function calAddLinks(ev) {
+  const title = ev.name || 'Unplug Event';
+  const location = ev.venue || '';
+  const desc = (ev.description || '') + (ev.entrance_fee ? '\nEntrance: ' + ev.entrance_fee : '') + (ev.event_link ? '\n' + ev.event_link : '');
+  let startUtc, endUtc;
+  if (ev.start_time) {
+    startUtc = calUtcStamp(calParseStamp(calStamp(ev.event_date, ev.start_time)));
+    endUtc = calUtcStamp(calParseStamp(calStamp(ev.event_date, ev.end_time || ev.start_time)));
+  } else {
+    // all-day: use the date only (Google wants start/next-day)
+    const d = String(ev.event_date).slice(0, 10).replace(/-/g, '');
+    const next = new Date(String(ev.event_date).slice(0,10) + 'T00:00:00Z'); next.setUTCDate(next.getUTCDate()+1);
+    startUtc = d; endUtc = calUtcStamp(next).slice(0, 8);
+  }
+  const gcal = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+    + '&text=' + encodeURIComponent(title) + '&dates=' + startUtc + '/' + endUtc
+    + '&location=' + encodeURIComponent(location) + '&details=' + encodeURIComponent(desc);
+  const dt = ev.start_time ? ('DTSTART:' + startUtc + '\r\nDTEND:' + endUtc)
+    : ('DTSTART;VALUE=DATE:' + startUtc + '\r\nDTEND;VALUE=DATE:' + endUtc);
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Unplug Magazine//EN','BEGIN:VEVENT',
+    'UID:' + startUtc + '-' + ev.id + '@unplugnews.com', 'DTSTAMP:' + calUtcStamp(new Date()),
+    dt, 'SUMMARY:' + title, 'LOCATION:' + location, 'DESCRIPTION:' + (desc || '').replace(/\n/g, '\\n'),
+    'END:VEVENT','END:VCALENDAR'].join('\r\n');
+  return {
+    gcal,
+    icsHref: 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics),
+    icsFile: title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.ics',
+  };
+}
+
+function calCardHtml(ev) {
+  const dateStr = String(ev.event_date).slice(0, 10);
+  const day = dateStr.slice(8, 10);
+  const mon = CAL_MONTHS[parseInt(dateStr.slice(5, 7), 10) - 1] || '';
+  const timeTxt = ev.start_time ? (ev.start_time + (ev.end_time ? '–' + ev.end_time : '')) : '';
+  const metaBits = [ev.venue, timeTxt, ev.entrance_fee].filter(Boolean).map(escapeHtml).join(' · ');
+  const img = ev.image_url ? `<div class="cal-thumb"><img src="${escapeHtml(ev.image_url)}" alt="${escapeHtml(ev.name)}" loading="lazy"></div>` : '';
+  return `<div class="cal-card" data-id="${ev.id}">
+    ${img}
+    <div class="cal-date"><span class="cal-day">${day}</span><span class="cal-mon">${mon}</span></div>
+    <div class="cal-info">
+      <h4>${escapeHtml(ev.name)}</h4>
+      <p>${metaBits}</p>
+    </div>
+    <div class="cal-add-wrap">
+      <button class="btn btn-line cal-btn cal-add-btn">Add to Calendar</button>
+      <div class="cal-add-menu"></div>
+    </div>
+  </div>`;
+}
+
+async function loadCalendarEvents() {
+  const grid = document.getElementById('calendarGrid');
+  if (!grid) return;
+  try {
+    const data = await api('/events/upcoming?limit=6');
+    calEventsById = {};
+    (data.events || []).forEach((ev) => { calEventsById[ev.id] = ev; });
+    if (!data.events || data.events.length === 0) {
+      grid.innerHTML = '<div class="dir-empty-state">No upcoming events yet — check back soon, or submit yours.</div>';
+      return;
+    }
+    grid.innerHTML = data.events.map(calCardHtml).join('');
+
+    grid.querySelectorAll('.cal-card').forEach((card) => {
+      const ev = calEventsById[card.dataset.id];
+      const menu = card.querySelector('.cal-add-menu');
+      const wrap = card.querySelector('.cal-add-wrap');
+      const btn = card.querySelector('.cal-add-btn');
+      const links = calAddLinks(ev);
+      menu.innerHTML = `<a href="${links.gcal}" target="_blank" rel="noopener">Google Calendar</a>`
+        + `<a href="${links.icsHref}" download="${links.icsFile}">Apple / Outlook (.ics)</a>`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.cal-add-wrap.open').forEach((w) => { if (w !== wrap) w.classList.remove('open'); });
+        wrap.classList.toggle('open');
+      });
+      menu.addEventListener('click', (e) => { e.stopPropagation(); wrap.classList.remove('open'); });
+      // Clicking the card (not the add-to-cal button) opens the detail modal.
+      card.addEventListener('click', () => openEventModal(ev));
+    });
+  } catch (err) {
+    grid.innerHTML = '<div class="dir-empty-state">Couldn\'t load events right now.</div>';
+  }
+}
+
+function openEventModal(ev) {
+  const modal = document.getElementById('eventModal');
+  const body = document.getElementById('eventModalBody');
+  if (!modal || !body) return;
+  const dateStr = new Date(String(ev.event_date).slice(0,10) + 'T00:00:00')
+    .toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const timeTxt = ev.start_time ? (ev.start_time + (ev.end_time ? ' – ' + ev.end_time : '')) : '';
+  body.innerHTML =
+    (ev.image_url ? `<img src="${escapeHtml(ev.image_url)}" alt="${escapeHtml(ev.name)}" style="width:100%; max-height:220px; object-fit:cover; margin-bottom:14px;">` : '') +
+    `<span class="eyebrow" style="color:var(--red);">Event</span>
+     <h3 style="font-family:'Playfair Display',serif; font-size:24px; margin:8px 0 10px;">${escapeHtml(ev.name)}</h3>
+     <p style="font-size:13.5px; color:var(--slate); margin-bottom:10px;">📅 ${dateStr}${timeTxt ? ' · ⏰ ' + escapeHtml(timeTxt) : ''}${ev.venue ? ' · 📍 ' + escapeHtml(ev.venue) : ''}</p>
+     ${ev.entrance_fee ? `<p style="font-size:14px; margin-bottom:8px;"><strong>Entrance:</strong> ${escapeHtml(ev.entrance_fee)}</p>` : ''}
+     ${ev.description ? `<p style="font-size:14px; line-height:1.6; color:var(--ink); margin-bottom:12px;">${escapeHtml(ev.description)}</p>` : ''}
+     ${ev.contact_details ? `<p style="font-size:13.5px; color:var(--slate); margin-bottom:6px;"><strong>Contact:</strong> ${escapeHtml(ev.contact_details)}</p>` : ''}
+     ${ev.event_link ? `<a href="${escapeHtml(ev.event_link)}" target="_blank" rel="noopener" class="btn btn-solid" style="margin-top:6px;">More info / tickets →</a>` : ''}`;
+  modal.classList.add('open');
+}
+
 function setupCalendarEvents() {
   const submitBtn = document.getElementById('submitEventBtn');
   if (submitBtn) submitBtn.addEventListener('click', goToMemberDashboard);
 
-  // Turn "20260712T090000" into a Date. The wall-clock time is South African
-  // Standard Time (UTC+2, no daylight saving), so we pin it to +02:00 rather
-  // than the viewer's local zone — otherwise the event would land at the
-  // wrong absolute time for anyone outside SA.
-  function parseStamp(s) {
-    const utcMs = Date.UTC(
-      +s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8),
-      +s.slice(9, 11), +s.slice(11, 13), +s.slice(13, 15) || 0
-    );
-    return new Date(utcMs - 2 * 3600 * 1000);
+  const modal = document.getElementById('eventModal');
+  if (modal) {
+    document.getElementById('eventModalClose').addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
   }
-  // UTC stamp (YYYYMMDDTHHMMSSZ) for calendar links.
-  function toUtcStamp(d) {
-    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  }
-
-  document.querySelectorAll('.cal-card').forEach((card) => {
-    const menu = card.querySelector('.cal-add-menu');
-    const wrap = card.querySelector('.cal-add-wrap');
-    const btn = card.querySelector('.cal-add-btn');
-    if (!menu || !wrap || !btn) return;
-
-    const title = card.dataset.title || 'Unplug Event';
-    const location = card.dataset.location || '';
-    const desc = card.dataset.desc || '';
-    const start = parseStamp(card.dataset.start);
-    const end = parseStamp(card.dataset.end);
-    const startUtc = toUtcStamp(start);
-    const endUtc = toUtcStamp(end);
-
-    // Google Calendar link.
-    const gcal = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
-      + '&text=' + encodeURIComponent(title)
-      + '&dates=' + startUtc + '/' + endUtc
-      + '&location=' + encodeURIComponent(location)
-      + '&details=' + encodeURIComponent(desc);
-
-    // .ics file for Apple Calendar / Outlook.
-    const ics = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Unplug Magazine//EN',
-      'BEGIN:VEVENT',
-      'UID:' + startUtc + '-' + Math.random().toString(36).slice(2) + '@unplugnews.com',
-      'DTSTAMP:' + toUtcStamp(new Date()),
-      'DTSTART:' + startUtc, 'DTEND:' + endUtc,
-      'SUMMARY:' + title, 'LOCATION:' + location, 'DESCRIPTION:' + desc,
-      'END:VEVENT', 'END:VCALENDAR',
-    ].join('\r\n');
-    const icsHref = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
-    const icsFile = title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.ics';
-
-    menu.innerHTML =
-      `<a href="${gcal}" target="_blank" rel="noopener">Google Calendar</a>` +
-      `<a href="${icsHref}" download="${icsFile}">Apple / Outlook (.ics)</a>`;
-
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.querySelectorAll('.cal-add-wrap.open').forEach((w) => { if (w !== wrap) w.classList.remove('open'); });
-      wrap.classList.toggle('open');
-    });
-    // Close after picking an option.
-    menu.addEventListener('click', () => wrap.classList.remove('open'));
-  });
-
-  // Click anywhere else closes any open calendar menu.
+  // Click anywhere closes any open add-to-calendar menu.
   document.addEventListener('click', () => {
     document.querySelectorAll('.cal-add-wrap.open').forEach((w) => w.classList.remove('open'));
   });
+
+  loadCalendarEvents();
 }
 
 // ---------------------------------------------------------------------------

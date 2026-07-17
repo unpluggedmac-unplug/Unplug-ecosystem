@@ -207,7 +207,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field"><label>Event Name</label><input id="evt-name"></div>
           <div class="field"><label>Event Date</label><input id="evt-date" type="date"></div>
         </div>
+        <div class="field-row">
+          <div class="field"><label>Start Time</label><input id="evt-start-time" type="time"></div>
+          <div class="field"><label>End Time</label><input id="evt-end-time" type="time"></div>
+        </div>
         <div class="field"><label>Venue</label><input id="evt-venue"></div>
+        <div class="field"><label>Entrance Fee (what attendees pay, e.g. "R50" or "Free")</label><input id="evt-fee" placeholder="Free"></div>
+        <div class="field"><label>Feature Image URL</label><input id="evt-image" placeholder="https://..."></div>
+        <div class="field"><label>Contact Details (shown on the event)</label><input id="evt-contact" placeholder="e.g. 082 000 0000 / email"></div>
+        <div class="field"><label>Event Link (tickets / more info)</label><input id="evt-link" placeholder="https://..."></div>
         <div class="field"><label>Description</label><textarea id="evt-desc" rows="3"></textarea></div>
         <div class="field"><label>Calendar Promotion Start Date (optional)</label><input id="evt-display-start" type="date"></div>
       </div>
@@ -738,6 +746,12 @@ async function createSubmission(type) {
         venue: document.getElementById('evt-venue').value.trim() || undefined,
         description: document.getElementById('evt-desc').value.trim() || undefined,
         displayStartDate: document.getElementById('evt-display-start').value || undefined,
+        startTime: document.getElementById('evt-start-time').value || undefined,
+        endTime: document.getElementById('evt-end-time').value || undefined,
+        entranceFee: document.getElementById('evt-fee').value.trim() || undefined,
+        imageUrl: document.getElementById('evt-image').value.trim() || undefined,
+        contactDetails: document.getElementById('evt-contact').value.trim() || undefined,
+        eventLink: document.getElementById('evt-link').value.trim() || undefined,
       }),
     });
     return { linkedType: 'event_listing', linkedId: data.event.id, label: 'Event' };
