@@ -1,6 +1,36 @@
 # Unplug Magazine — Punch List
 *Last updated: 2026-07-15 (post-hosting-migration)*
 
+## ✅ CONTENT MIGRATION FROM unplugnews.com (2026-07-17) — done, verified live
+
+Real content pulled from the old WordPress site via a full export (WXR/XML),
+imported into the live database:
+- **29 Directory profiles** (real people — actors, musicians, entrepreneurs,
+  models, etc.), imported as Premium tier with rich formatted bios (headings,
+  tables preserved), 50 real social links, 146 real gallery images.
+  Each has a placeholder account (`legacy-<slug>@import.unplugnews.com`) the
+  real person can claim later — not a paying member yet.
+- **31 articles**, real published stories, banner images attached.
+- **289 real images** downloaded and re-hosted at `media/legacy/` in this
+  repo (served by Cloudflare Pages) — 11 Instagram/Facebook CDN embeds
+  failed to download (expiring signed URLs, expected/unavoidable).
+- **Frontend upgrade that made this possible:** profile bios and article
+  bodies now render as sanitized rich HTML (DOMPurify) instead of plain
+  escaped text — real formatting displays properly, and it's safe against
+  script injection regardless of content source.
+- **Skipped on purpose:** 2 old "Badge" program pages (superseded by the
+  new deaf-owned verification system), the old Top 20 candidate roster
+  (24 plain names, no bios — not migrated as profiles), the Gallery page's
+  handful of named photos (not re-imported as structured gallery entries).
+  None of these block anything — pick up later if wanted.
+- Migration script (re-runnable, skips already-imported items):
+  `unplug-backend/scripts/import-legacy-content.js`
+
+**Still pending — Phase 2, domain cutover:** point unplugnews.com's DNS at
+Cloudflare Pages, replacing the WordPress site. NOT done yet — needs the
+domain registrar login and a check of whether email (MX records) runs
+through this domain first. See conversation for details.
+
 ## 🚨 CURRENT HOSTING — READ FIRST (changed 2026-07-15, ~midnight)
 
 - **Frontend: Cloudflare Pages** → https://unplug-magazine.pages.dev
