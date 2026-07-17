@@ -742,10 +742,10 @@ router.get('/settings', requireRole('admin'), async (req, res, next) => {
 router.patch('/settings/:key', requireRole('admin'), async (req, res, next) => {
   try {
     const { value } = req.body;
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null) {
       return res.status(400).json({ error: 'value is required.' });
     }
-    if (req.params.key === 'bundle_vote_price' && isNaN(parseFloat(value))) {
+    if (req.params.key === 'bundle_vote_price' && (value === '' || isNaN(parseFloat(value)))) {
       return res.status(400).json({ error: 'bundle_vote_price must be a number.' });
     }
 

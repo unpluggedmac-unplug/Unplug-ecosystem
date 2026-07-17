@@ -155,6 +155,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="edcal">Editions Calendar</a>
     <a data-section="deafjobs">Deaf Jobs <span id="deafJobsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="deafpassports">Deaf Passports <span id="deafPassportsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="sitesettings">Site Settings</a>
     <a data-section="birthdays">Birthdays</a>
     <a data-section="payments">Payments (EFT)</a>
     <a data-section="users">Users</a>
@@ -231,6 +232,19 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel">
         <div class="panel-head"><h3>Upcoming Marked Dates</h3></div>
         <div class="panel-body" id="edcalBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- SITE SETTINGS -->
+    <div class="admin-section" id="section-sitesettings">
+      <div class="main-head"><div><h1>Site Settings</h1><p>Configurable bits of the public site.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>YouTube section image</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Paste an image URL to show in the homepage "Watch on YouTube" block (it links to the channel). Leave blank to keep the embedded playlist.</p>
+          <div class="field"><label>Image URL</label><input id="ytImageInput" placeholder="https://..."></div>
+          <button class="btn btn-solid" style="width:auto;" id="saveYtImageBtn">Save</button>
+        </div>
       </div>
     </div>
 
@@ -575,6 +589,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'edcal') loadEdcalDates();
     if (section === 'deafjobs') loadDeafJobs();
     if (section === 'deafpassports') loadDeafPassports();
+    if (section === 'sitesettings') loadSiteSettings();
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payments') loadPendingEft();
     if (section === 'users') loadUsers();
@@ -966,6 +981,28 @@ async function loadEdcalDates() {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Site Settings — e.g. the homepage YouTube section image
+// ---------------------------------------------------------------------------
+async function loadSiteSettings() {
+  try {
+    const data = await api('/admin/settings');
+    const yt = (data.settings || []).find((s) => s.key === 'youtube_image_url');
+    document.getElementById('ytImageInput').value = yt ? yt.value : '';
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+document.getElementById('saveYtImageBtn').addEventListener('click', async () => {
+  const value = document.getElementById('ytImageInput').value.trim();
+  try {
+    await api('/admin/settings/youtube_image_url', { method: 'PATCH', body: JSON.stringify({ value }) });
+    showToast('Saved.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Deaf Community — jobs + passports moderation

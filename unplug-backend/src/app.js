@@ -28,6 +28,7 @@ const shoutoutRoutes = require('./routes/shoutouts');
 const searchRoutes = require('./routes/search');
 const deafCommunityRoutes = require('./routes/deafCommunity');
 const newsletterRoutes = require('./routes/newsletter');
+const publicSettingsRoutes = require('./routes/publicSettings');
 const { router: activityLogRoutes } = require('./routes/activityLog');
 
 const app = express();
@@ -71,6 +72,7 @@ app.use('/shoutouts', shoutoutRoutes);
 app.use('/search', searchRoutes);
 app.use('/deaf-community', deafCommunityRoutes);
 app.use('/newsletter', newsletterRoutes);
+app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 
 // Catches any request that didn't match a route above, so the API always

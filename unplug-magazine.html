@@ -1232,7 +1232,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <p>Go deeper into the impact. Watch documentary-style mini-features, community spotlights, and behind-the-scenes moments from the people in our Directory.</p>
           <a href="https://youtube.com/@unpluggedmagazineza?si=FWWo49yKAc7zu_7I" target="_blank" rel="noopener" class="btn btn-solid">Visit Our Channel ↗</a>
         </div>
-        <div class="youtube-embed">
+        <div class="youtube-embed" id="youtubeVisual">
           <iframe
             src="https://www.youtube.com/embed/videoseries?list=PLbpi6ZahtOH6Ar_3GPy3workwDO91Sj7"
             title="Unplug Magazine on YouTube"
@@ -4112,7 +4112,24 @@ loadLiveVisitors();
 loadTopArticleWeek();
 loadShoutout();
 setupCalendarEvents();
+loadYoutubeImage();
 setInterval(loadLiveVisitors, 30000);
+
+// If an admin has chosen a YouTube section image, show it (linking to the
+// channel) in place of the embedded playlist.
+async function loadYoutubeImage() {
+  const box = document.getElementById('youtubeVisual');
+  if (!box) return;
+  try {
+    const data = await api('/public-settings');
+    const url = data.settings && data.settings.youtube_image_url;
+    if (url) {
+      box.innerHTML = `<a href="https://youtube.com/@unpluggedmagazineza?si=FWWo49yKAc7zu_7I" target="_blank" rel="noopener" style="display:block; width:100%; height:100%;"><img src="${escapeHtml(url)}" alt="Unplug on YouTube" style="width:100%; height:100%; object-fit:cover;"></a>`;
+    }
+  } catch (err) {
+    /* keep the embedded playlist on failure */
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Homepage Calendar Events:
