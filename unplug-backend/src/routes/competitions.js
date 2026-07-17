@@ -324,4 +324,50 @@ router.post('/top10/publish', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Hall of Fame — past competition winners (admin-entered). Uses a distinct
+// /hall-of-fame path so it doesn't collide with /competitions/:slug.
+// ---------------------------------------------------------------------------
+
+// GET /hall-of-fame — public, newest year first.
+router.get('/hall-of-fame', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, year, name, title, photo_url, description
+       FROM hall_of_fame ORDER BY year DESC NULLS LAST, created_at DESC`
+    );
+    res.json({ winners: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /hall-of-fame — admin adds a past winner.
+router.post('/hall-of-fame', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { year, name, title, photoUrl, description } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required.' });
+    const result = await pool.query(
+      `INSERT INTO hall_of_fame (year, name, title, photo_url, description)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [year ? parseInt(year, 10) : null, name.trim(), (title || '').trim() || null,
+       (photoUrl || '').trim() || null, (description || '').trim() || null]
+    );
+    res.status(201).json({ winner: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /hall-of-fame/:id — admin removes a winner.
+router.delete('/hall-of-fame/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query('DELETE FROM hall_of_fame WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Winner not found.' });
+    res.json({ message: 'Removed.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

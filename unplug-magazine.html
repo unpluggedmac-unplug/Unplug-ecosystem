@@ -465,6 +465,17 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .gallery-cap{ position:absolute; left:10px; bottom:10px; font-size:11px; color:#fff; background:rgba(39,38,38,0.55); padding:4px 8px; text-transform:uppercase; letter-spacing:0.03em; }
 
 /* ---- competitions ---- */
+/* Hall of Fame */
+.hof-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
+@media(max-width:900px){ .hof-grid{ grid-template-columns:repeat(2,1fr); } }
+@media(max-width:560px){ .hof-grid{ grid-template-columns:1fr; } }
+.hof-card{ border:1px solid var(--paper-line); padding:22px; display:flex; flex-direction:column; gap:8px; }
+.hof-photo{ width:72px; height:72px; border-radius:50%; object-fit:cover; background:var(--paper); }
+.hof-year{ font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--gold); }
+.hof-card h4{ font-size:19px; font-weight:700; }
+.hof-card .hof-title{ font-size:12.5px; color:var(--red); font-weight:700; text-transform:uppercase; letter-spacing:0.03em; }
+.hof-card p{ font-size:13.5px; color:var(--slate); line-height:1.55; }
+
 .comp-hero{ background:var(--ink); color:var(--cream); padding:56px 40px; position:relative; overflow:hidden; }
 .comp-hero .print-mark{ position:absolute; right:-40px; top:-30px; opacity:0.08; }
 .comp-hero .print-mark svg{ width:340px; height:340px; color:var(--cream); }
@@ -1817,6 +1828,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="dir-empty-state">Loading…</div>
     </div>
   </section>
+
+  <!-- HALL OF FAME -->
+  <section class="wrap" id="hallOfFameSection" style="display:none;">
+    <div class="section-head">
+      <div><span class="eyebrow">Past champions</span><h2>Hall of Fame</h2></div>
+    </div>
+    <div class="hof-grid" id="hofGrid"></div>
+  </section>
+
   <!-- FEATURED ADVERTISERS POSTER SLIDESHOW -->
   <section class="wrap poster-section" style="padding-top:0;">
     <div class="section-head">
@@ -3594,7 +3614,28 @@ function arenaEntryCardHtml(entry) {
   return `<article class="story-card"><div class="story-thumb"></div><span class="story-tag">${escapeHtml(entry.category || '')}</span><h3>${escapeHtml(entry.display_name)}</h3><p>${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</p></article>`;
 }
 
+async function loadHallOfFame() {
+  const section = document.getElementById('hallOfFameSection');
+  const grid = document.getElementById('hofGrid');
+  if (!section || !grid) return;
+  try {
+    const data = await api('/hall-of-fame');
+    if (!data.winners || data.winners.length === 0) { section.style.display = 'none'; return; }
+    grid.innerHTML = data.winners.map((w) => `<div class="hof-card">
+      ${w.photo_url ? `<img class="hof-photo" src="${escapeHtml(w.photo_url)}" alt="${escapeHtml(w.name)}">` : ''}
+      ${w.year ? `<span class="hof-year">${w.year}</span>` : ''}
+      <h4>${escapeHtml(w.name)}</h4>
+      ${w.title ? `<span class="hof-title">${escapeHtml(w.title)}</span>` : ''}
+      ${w.description ? `<p>${escapeHtml(w.description)}</p>` : ''}
+    </div>`).join('');
+    section.style.display = 'block';
+  } catch (err) {
+    section.style.display = 'none';
+  }
+}
+
 async function loadArena() {
+  loadHallOfFame();
   const heroEl = document.getElementById('arenaHero');
   const entriesEl = document.getElementById('arenaEntriesGrid');
   try {
