@@ -196,6 +196,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
       </div>
       <div class="panel">
+        <div class="panel-head"><h3>Pending Public Submissions <span id="bdayPendingBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></h3></div>
+        <div class="panel-body" id="bdayPendingBody" style="padding:0;"></div>
+      </div>
+      <div class="panel">
         <div class="panel-head"><h3>This Month</h3></div>
         <div class="panel-body" id="birthdaysBody" style="padding:0;"></div>
       </div>
@@ -795,7 +799,41 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
   }
 });
 
+async function loadPendingBirthdays() {
+  const body = document.getElementById('bdayPendingBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/birthdays/pending');
+    const list = data.birthdays || [];
+    const badge = document.getElementById('bdayPendingBadge');
+    if (badge) { badge.textContent = list.length; badge.style.display = list.length ? 'inline-block' : 'none'; }
+    if (list.length === 0) { body.innerHTML = '<div class="empty-state">No pending submissions.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Name</th><th>Date</th><th>Photo</th><th></th></tr>';
+    list.forEach((b) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtmlAdmin(b.name)}</td><td>${b.birth_month}/${b.birth_day}</td>`
+        + `<td>${b.photo_url ? '<a href="' + escapeHtmlAdmin(b.photo_url) + '" target="_blank">view</a>' : '—'}</td>`
+        + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        try { await api(`/birthdays/${b.id}/approve`, { method: 'PATCH' }); showToast('Approved.'); loadPendingBirthdays(); loadBirthdays(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try { await api(`/birthdays/${b.id}/reject`, { method: 'PATCH' }); showToast('Rejected.'); loadPendingBirthdays(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = ''; body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
 async function loadBirthdays() {
+  loadPendingBirthdays();
   const body = document.getElementById('birthdaysBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {

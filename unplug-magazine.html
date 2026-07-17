@@ -986,8 +986,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <h2>Birthdays we're unplugging for</h2>
         <p>Every day we celebrate the changemakers in our community marking another year — because the people doing the work deserve to be seen on their day, too.</p>
         <div class="btn-row">
-          <button class="btn btn-line" style="border-color:rgba(255,255,255,0.4); color:var(--cream);">Submit Birthday</button>
-          <button class="btn btn-solid" style="background:var(--red); border-color:var(--red);">View This Month List</button>
+          <button class="btn btn-line" id="submitBirthdayBtn" style="border-color:rgba(255,255,255,0.4); color:var(--cream);">Submit Birthday</button>
+          <button class="btn btn-solid" id="viewMonthListBtn" style="background:var(--red); border-color:var(--red);">View This Month List</button>
         </div>
       </div>
       <div class="birthday-list">
@@ -998,6 +998,31 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </div>
     </div>
   </section>
+
+  <!-- SUBMIT BIRTHDAY MODAL -->
+  <div class="shoutout-modal-overlay" id="birthdayModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true">
+      <button class="shoutout-modal-close" id="birthdayModalClose" aria-label="Close">&times;</button>
+      <span class="eyebrow" style="color:var(--red);">Celebrating together</span>
+      <h3 style="font-family:'Playfair Display',serif; font-size:23px; margin:8px 0 4px;">Submit a birthday</h3>
+      <p style="font-size:13.5px; color:var(--slate); margin-bottom:16px;">We'll feature it on the homepage on the day (once approved).</p>
+      <div class="shoutout-form-msg" id="birthdayMsg"></div>
+      <div class="field"><label>Name &amp; surname *</label><input id="bdayNameInput" maxlength="160"></div>
+      <div class="field"><label>Birthday date *</label><input id="bdayDateInput" type="date"></div>
+      <div class="field"><label>Photo URL (optional)</label><input id="bdayPhotoInput" placeholder="https://..."></div>
+      <button class="btn btn-solid" id="bdaySubmitBtn" style="width:100%;">Submit birthday</button>
+    </div>
+  </div>
+
+  <!-- VIEW MONTH LIST MODAL -->
+  <div class="shoutout-modal-overlay" id="monthListModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true">
+      <button class="shoutout-modal-close" id="monthListClose" aria-label="Close">&times;</button>
+      <span class="eyebrow" style="color:var(--red);">This month</span>
+      <h3 id="monthListTitle" style="font-family:'Playfair Display',serif; font-size:23px; margin:8px 0 12px;">Birthdays this month</h3>
+      <div id="monthListBody"><p style="color:var(--slate); font-size:14px;">Loading…</p></div>
+    </div>
+  </div>
 
   <!-- CALENDAR EVENTS -->
   <section class="wrap home-section">
@@ -4242,6 +4267,73 @@ async function loadShoutout() {
       btn.disabled = false; btn.textContent = 'Subscribe';
     }
   });
+})();
+
+// Birthday submission + "this month" list.
+(function setupBirthdays() {
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  // --- submit birthday ---
+  const modal = document.getElementById('birthdayModal');
+  const openBtn = document.getElementById('submitBirthdayBtn');
+  if (openBtn && modal) {
+    const msg = document.getElementById('birthdayMsg');
+    openBtn.addEventListener('click', () => { msg.className = 'shoutout-form-msg'; modal.classList.add('open'); });
+    document.getElementById('birthdayModalClose').addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+
+    document.getElementById('bdaySubmitBtn').addEventListener('click', async () => {
+      const name = document.getElementById('bdayNameInput').value.trim();
+      const dateVal = document.getElementById('bdayDateInput').value; // YYYY-MM-DD
+      const photoUrl = document.getElementById('bdayPhotoInput').value.trim();
+      if (!name || !dateVal) { msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Name and birthday date are required.'; return; }
+      const [, mm, dd] = dateVal.split('-');
+      const btn = document.getElementById('bdaySubmitBtn');
+      btn.disabled = true; btn.textContent = 'Submitting...';
+      try {
+        const data = await api('/birthdays/submit', {
+          method: 'POST',
+          body: JSON.stringify({ name, birthMonth: parseInt(mm, 10), birthDay: parseInt(dd, 10), photoUrl: photoUrl || undefined }),
+        });
+        msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for review!';
+        document.getElementById('bdayNameInput').value = '';
+        document.getElementById('bdayDateInput').value = '';
+        document.getElementById('bdayPhotoInput').value = '';
+      } catch (err) {
+        msg.className = 'shoutout-form-msg show error'; msg.textContent = err.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Submit birthday';
+      }
+    });
+  }
+
+  // --- view this month list ---
+  const listModal = document.getElementById('monthListModal');
+  const viewBtn = document.getElementById('viewMonthListBtn');
+  if (viewBtn && listModal) {
+    const body = document.getElementById('monthListBody');
+    document.getElementById('monthListClose').addEventListener('click', () => listModal.classList.remove('open'));
+    listModal.addEventListener('click', (e) => { if (e.target === listModal) listModal.classList.remove('open'); });
+
+    viewBtn.addEventListener('click', async () => {
+      const now = new Date();
+      document.getElementById('monthListTitle').textContent = MONTHS[now.getMonth()] + ' birthdays';
+      listModal.classList.add('open');
+      body.innerHTML = '<p style="color:var(--slate); font-size:14px;">Loading…</p>';
+      try {
+        const data = await api('/birthdays/month?month=' + (now.getMonth() + 1));
+        if (!data.birthdays.length) { body.innerHTML = '<p style="color:var(--slate); font-size:14px;">No birthdays listed this month yet.</p>'; return; }
+        body.innerHTML = '<div style="display:flex; flex-direction:column; gap:8px;">' +
+          data.birthdays.map((b) =>
+            `<div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--paper-line);">
+               <span style="font-weight:700; color:var(--red); min-width:54px; font-size:13px;">${MONTHS[b.birth_month-1].slice(0,3).toUpperCase()} ${String(b.birth_day).padStart(2,'0')}</span>
+               <span style="font-size:14.5px;">${escapeHtml(b.name)}</span>
+             </div>`).join('') + '</div>';
+      } catch (err) {
+        body.innerHTML = '<p style="color:var(--slate); font-size:14px;">Couldn\'t load birthdays right now.</p>';
+      }
+    });
+  }
 })();
 
 (function setupShoutoutNominate() {
