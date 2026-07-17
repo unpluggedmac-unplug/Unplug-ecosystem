@@ -1,6 +1,8 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { publicSubmitLimiter } = require('../middleware/rateLimit');
+const honeypot = require('../middleware/honeypot');
 
 const router = express.Router();
 
@@ -41,7 +43,7 @@ router.get('/month', async (req, res, next) => {
 
 // POST /birthdays/submit — public submission (name, date, photo). Enters
 // 'pending'; shows on the homepage once an admin approves it.
-router.post('/submit', async (req, res, next) => {
+router.post('/submit', publicSubmitLimiter, honeypot, async (req, res, next) => {
   try {
     const { name, birthMonth, birthDay, photoUrl, message } = req.body;
     const m = parseInt(birthMonth, 10);

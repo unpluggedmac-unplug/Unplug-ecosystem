@@ -29,4 +29,16 @@ const emailActionLimiter = rateLimit({
   message: { error: 'Too many requests. Please wait a few minutes before trying again.' },
 });
 
-module.exports = { loginLimiter, registerLimiter, emailActionLimiter };
+// Public, unauthenticated submissions (shout-out nominations, job/passport
+// posts, birthday submissions, passport comments, newsletter, contact form).
+// Caps how many an IP can send in a window so the moderation queues can't be
+// flooded by a bot. Generous enough for genuine repeat use.
+const publicSubmitLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'You\'re doing that too often. Please wait a few minutes and try again.' },
+});
+
+module.exports = { loginLimiter, registerLimiter, emailActionLimiter, publicSubmitLimiter };

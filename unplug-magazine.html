@@ -657,6 +657,8 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 /* ---- calendar events ---- */
 .calendar-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
 @media(max-width:900px){ .calendar-grid{ grid-template-columns:1fr; } }
+/* Honeypot spam trap — visually hidden but present in the DOM so bots fill it. */
+.hp-field{ position:absolute !important; left:-9999px !important; top:auto; width:1px; height:1px; overflow:hidden; opacity:0; }
 .cal-card{ border:1px solid var(--paper-line); padding:24px; display:flex; flex-direction:column; gap:12px; cursor:pointer; transition:border-color .2s; }
 .cal-card:hover{ border-color:var(--red); }
 .cal-thumb{ overflow:hidden; margin:-24px -24px 4px; }
@@ -1001,6 +1003,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="field"><label>Name &amp; surname *</label><input id="shoutoutNomName" type="text" placeholder="e.g. Naledi Mokoena" maxlength="200"></div>
       <div class="field"><label>Why them? (optional)</label><textarea id="shoutoutNomMessage" rows="3" placeholder="A sentence on the impact they're making."></textarea></div>
       <div class="field"><label>Your email (optional)</label><input id="shoutoutNomEmail" type="email" placeholder="So we can let you know if they're featured."></div>
+      <input type="text" name="website" id="hpShoutout" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn btn-solid" id="shoutoutNomSubmit" style="width:100%;">Submit Nomination</button>
     </div>
   </div>
@@ -1037,6 +1040,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="field"><label>Name &amp; surname *</label><input id="bdayNameInput" maxlength="160"></div>
       <div class="field"><label>Birthday date *</label><input id="bdayDateInput" type="date"></div>
       <div class="field"><label>Photo URL (optional)</label><input id="bdayPhotoInput" placeholder="https://..."></div>
+      <input type="text" name="website" id="hpBirthday" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn btn-solid" id="bdaySubmitBtn" style="width:100%;">Submit birthday</button>
     </div>
   </div>
@@ -2239,12 +2243,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <p style="font-size:14px; margin-bottom:4px;"><strong>Website:</strong> <a href="https://www.unplugnews.com" style="color:var(--red);">www.unplugnews.com</a></p>
         <p style="font-size:13px; color:var(--slate); margin-top:24px; font-style:italic;">"Where Stories Shape Legacy"</p>
       </div>
-      <form onsubmit="event.preventDefault(); alert('Thanks — we\'ll be in touch soon.');">
+      <form id="contactForm">
+        <input type="text" name="website" id="hpContact" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
         <div class="field"><label for="cname">Name</label><input id="cname" type="text" required></div>
         <div class="field"><label for="cemail">Email</label><input id="cemail" type="email" required></div>
         <div class="field"><label for="csubject">Subject</label><input id="csubject" type="text" required></div>
         <div class="field"><label for="cmsg">Message</label><textarea id="cmsg" rows="5" required></textarea></div>
-        <button class="btn btn-solid" type="submit">Send Message</button>
+        <button class="btn btn-solid" type="submit" id="contactBtn">Send Message</button>
       </form>
     </div>
   </section>
@@ -2365,6 +2370,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         </select></div></div>
     <div class="field"><label>Salary range</label><input id="dcJobSalary" placeholder="e.g. R8 000 – R12 000 / month"></div>
     <div class="field"><label>Tags (tick all that apply)</label><div class="dc-filter-checks" id="dcJobTags"></div></div>
+    <input type="text" name="website" id="hpJob" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
     <label class="dc-agree"><input type="checkbox" id="dcJobAgree"> <span>I confirm this business is a <strong>deaf-friendly employer</strong>. (This is shown in bold on the post.)</span></label>
     <button class="btn btn-solid" id="dcJobSubmit" style="width:100%; margin-top:6px;">Submit vacancy</button>
   </div>
@@ -2384,6 +2390,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="field"><label>Certifications</label><textarea id="dcPassCerts" rows="2"></textarea></div>
     <div class="field"><label>Communication preferences</label><input id="dcPassComm" placeholder="e.g. SASL, WhatsApp text, email"></div>
     <div class="field"><label>Availability</label><input id="dcPassAvail" placeholder="e.g. Full-time, immediately"></div>
+    <input type="text" name="website" id="hpPassport" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
     <button class="btn btn-solid" id="dcPassSubmit" style="width:100%; margin-top:6px;">Submit passport</button>
   </div>
 </div>
@@ -2392,6 +2399,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   <div class="wrap newsletter-inner">
     <h3>Get uplifting news in your inbox, every Friday.</h3>
     <form id="newsletterForm">
+      <input type="text" name="website" id="hpNewsletter" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <input type="email" id="newsletterEmail" placeholder="Your email address" required>
       <button type="submit" id="newsletterBtn">Subscribe</button>
     </form>
@@ -3903,11 +3911,12 @@ async function loadDeafPassports() {
         const id = form.dataset.id;
         const nameEl = form.querySelector('.dc-c-name');
         const textEl = form.querySelector('.dc-c-text');
+        const hpEl = form.querySelector('.dc-c-hp');
         if (!textEl.value.trim()) return;
         try {
           await api(`/deaf-community/passports/${id}/comments`, {
             method: 'POST',
-            body: JSON.stringify({ commenterName: nameEl.value.trim() || undefined, comment: textEl.value.trim() }),
+            body: JSON.stringify({ commenterName: nameEl.value.trim() || undefined, comment: textEl.value.trim(), website: hpEl ? hpEl.value : '' }),
           });
           textEl.value = '';
           loadPassportComments(id);
@@ -3934,6 +3943,7 @@ function dcPassportHtml(p) {
     <div class="dc-comments" data-id="${p.id}">
       <div class="dc-comment-thread" id="dc-comments-${p.id}"></div>
       <form class="dc-comment-form" data-id="${p.id}">
+        <input type="text" name="website" class="dc-c-hp hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
         <input class="dc-c-name" placeholder="Your name (optional)" maxlength="120">
         <input class="dc-c-text" placeholder="Leave a comment of support…" maxlength="500" required>
         <button class="btn btn-line" type="submit">Post</button>
@@ -3981,6 +3991,7 @@ function setupDcJobModal() {
       salaryRange: document.getElementById('dcJobSalary').value.trim() || undefined,
       filters,
       deafFriendlyAgreed: document.getElementById('dcJobAgree').checked,
+      website: document.getElementById('hpJob').value,
     };
     if (!payload.businessName || !payload.title || !payload.description || !payload.applyEmail) {
       msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Please fill in all required fields.'; return;
@@ -4023,6 +4034,7 @@ function setupDcPassportModal() {
       certifications: document.getElementById('dcPassCerts').value.trim() || undefined,
       communicationPreferences: document.getElementById('dcPassComm').value.trim() || undefined,
       availability: document.getElementById('dcPassAvail').value.trim() || undefined,
+      website: document.getElementById('hpPassport').value,
     };
     if (!payload.name || !payload.email) {
       msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Name and email are required.'; return;
@@ -4374,6 +4386,34 @@ async function loadShoutout() {
   });
 })();
 
+// Contact form — posts to /inquiries (was previously a fake alert).
+(function setupContactForm() {
+  const form = document.getElementById('contactForm');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('contactBtn');
+    const payload = {
+      name: document.getElementById('cname').value.trim(),
+      email: document.getElementById('cemail').value.trim(),
+      subject: document.getElementById('csubject').value.trim(),
+      message: document.getElementById('cmsg').value.trim(),
+      website: document.getElementById('hpContact').value,
+    };
+    if (!payload.name || !payload.email || !payload.message) return;
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      const data = await api('/inquiries', { method: 'POST', body: JSON.stringify(payload) });
+      showToast(data.message || 'Thanks — we\'ll be in touch soon.');
+      form.reset();
+    } catch (err) {
+      showToast(err.message || 'Could not send right now.', true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send Message';
+    }
+  });
+})();
+
 // Newsletter subscribe — stores the email via POST /newsletter/subscribe.
 (function setupNewsletter() {
   const form = document.getElementById('newsletterForm');
@@ -4386,7 +4426,7 @@ async function loadShoutout() {
     if (!email) return;
     btn.disabled = true; btn.textContent = '...';
     try {
-      const data = await api('/newsletter/subscribe', { method: 'POST', body: JSON.stringify({ email }) });
+      const data = await api('/newsletter/subscribe', { method: 'POST', body: JSON.stringify({ email, website: document.getElementById('hpNewsletter').value }) });
       showToast(data.message || 'Subscribed — welcome to Unplug!');
       emailEl.value = '';
     } catch (err) {
@@ -4421,7 +4461,7 @@ async function loadShoutout() {
       try {
         const data = await api('/birthdays/submit', {
           method: 'POST',
-          body: JSON.stringify({ name, birthMonth: parseInt(mm, 10), birthDay: parseInt(dd, 10), photoUrl: photoUrl || undefined }),
+          body: JSON.stringify({ name, birthMonth: parseInt(mm, 10), birthDay: parseInt(dd, 10), photoUrl: photoUrl || undefined, website: document.getElementById('hpBirthday').value }),
         });
         msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for review!';
         document.getElementById('bdayNameInput').value = '';
@@ -4500,7 +4540,7 @@ async function loadShoutout() {
     try {
       const data = await api('/shoutouts/nominate', {
         method: 'POST',
-        body: JSON.stringify({ nomineeName, message, email }),
+        body: JSON.stringify({ nomineeName, message, email, website: document.getElementById('hpShoutout').value }),
       });
       showMsg(data.message || 'Thanks — submitted for review!', false);
       document.getElementById('shoutoutNomName').value = '';
