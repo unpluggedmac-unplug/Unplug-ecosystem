@@ -1228,10 +1228,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <p>Every year, we crown a new Impact Maker, The Face Of Unplug, chosen by readers, entries, and celebrated across our platform.</p>
       <div class="btn-row">
         <button class="btn btn-solid" data-page="competitions" style="background:var(--red); border-color:var(--red); color:var(--cream);">View Competition</button>
-        <button class="btn btn-line" style="border-color:var(--cream); color:var(--cream);">Invite</button>
+        <button class="btn btn-line" id="arenaInviteBtn" style="border-color:var(--cream); color:var(--cream);">Invite</button>
       </div>
     </div>
   </section>
+
+  <!-- ARENA INVITE MODAL -->
+  <div class="shoutout-modal-overlay" id="inviteModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true">
+      <button class="shoutout-modal-close" id="inviteModalClose" aria-label="Close">&times;</button>
+      <span class="eyebrow" style="color:var(--red);">The Arena</span>
+      <h3 style="font-family:'Playfair Display',serif; font-size:23px; margin:8px 0 4px;">Invite someone to The Arena</h3>
+      <p style="font-size:13.5px; color:var(--slate); margin-bottom:16px;">Enter their WhatsApp number and we'll open WhatsApp with a ready-to-send invite.</p>
+      <div class="shoutout-form-msg" id="inviteMsg"></div>
+      <div class="field"><label>Their WhatsApp number</label><input id="inviteNumber" type="tel" placeholder="e.g. 082 123 4567"></div>
+      <button class="btn btn-solid" id="inviteSend" style="width:100%;">Open WhatsApp invite →</button>
+    </div>
+  </div>
+
   <!-- VNK DIGITAL BANNER -->
   <div class="vnk-banner">
     <div class="vnk-banner-copy">
@@ -4176,6 +4190,36 @@ async function loadShoutout() {
     /* leave the existing markup name in place on failure */
   }
 }
+
+// Arena invite — opens WhatsApp with a ready-to-send invite to the number
+// the user enters. SA numbers starting with 0 are converted to +27.
+(function setupArenaInvite() {
+  const modal = document.getElementById('inviteModal');
+  const openBtn = document.getElementById('arenaInviteBtn');
+  if (!modal || !openBtn) return;
+  const closeBtn = document.getElementById('inviteModalClose');
+  const sendBtn = document.getElementById('inviteSend');
+  const numEl = document.getElementById('inviteNumber');
+  const msg = document.getElementById('inviteMsg');
+
+  openBtn.addEventListener('click', () => { msg.className = 'shoutout-form-msg'; modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false'); });
+  closeBtn.addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+
+  sendBtn.addEventListener('click', () => {
+    let digits = (numEl.value || '').replace(/\D/g, '');
+    if (!digits) { msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Please enter a WhatsApp number.'; return; }
+    if (digits.startsWith('0')) digits = '27' + digits.slice(1);       // local SA -> intl
+    else if (digits.startsWith('27') === false && digits.length <= 9) digits = '27' + digits; // bare 9-digit
+    if (digits.length < 10) { msg.className = 'shoutout-form-msg show error'; msg.textContent = 'That number looks too short.'; return; }
+    const text = encodeURIComponent(
+      "Hi! I'd love to nominate you for Unplug Magazine's Arena — you're doing good in the world and deserve to be seen. Take a look: https://unplug-magazine.pages.dev"
+    );
+    window.open(`https://wa.me/${digits}?text=${text}`, '_blank', 'noopener');
+    modal.classList.remove('open');
+    numEl.value = '';
+  });
+})();
 
 (function setupShoutoutNominate() {
   const modal = document.getElementById('shoutoutModal');
