@@ -2357,9 +2357,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <section class="newsletter">
   <div class="wrap newsletter-inner">
     <h3>Get uplifting news in your inbox, every Friday.</h3>
-    <form onsubmit="event.preventDefault(); alert('Subscribed — welcome to Unplug.');">
-      <input type="email" placeholder="Your email address" required>
-      <button type="submit">Subscribe</button>
+    <form id="newsletterForm">
+      <input type="email" id="newsletterEmail" placeholder="Your email address" required>
+      <button type="submit" id="newsletterBtn">Subscribe</button>
     </form>
   </div>
 </section>
@@ -4218,6 +4218,29 @@ async function loadShoutout() {
     window.open(`https://wa.me/${digits}?text=${text}`, '_blank', 'noopener');
     modal.classList.remove('open');
     numEl.value = '';
+  });
+})();
+
+// Newsletter subscribe — stores the email via POST /newsletter/subscribe.
+(function setupNewsletter() {
+  const form = document.getElementById('newsletterForm');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const emailEl = document.getElementById('newsletterEmail');
+    const btn = document.getElementById('newsletterBtn');
+    const email = emailEl.value.trim();
+    if (!email) return;
+    btn.disabled = true; btn.textContent = '...';
+    try {
+      const data = await api('/newsletter/subscribe', { method: 'POST', body: JSON.stringify({ email }) });
+      showToast(data.message || 'Subscribed — welcome to Unplug!');
+      emailEl.value = '';
+    } catch (err) {
+      showToast(err.message || 'Could not subscribe right now.', true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Subscribe';
+    }
   });
 })();
 
