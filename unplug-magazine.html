@@ -355,6 +355,19 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .rank-cause{ font-size:13px; color:var(--slate); margin-top:2px; }
 .rank-badge{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--maroon); border:1px solid var(--maroon); padding:6px 12px; white-space:nowrap; }
 
+/* ---- rich bio/article content (sanitized long-form HTML) ---- */
+.rich-bio h1,.rich-bio h2,.rich-bio h3,.rich-bio h4{ font-family:'Playfair Display',serif; color:var(--ink); margin:22px 0 10px; line-height:1.3; }
+.rich-bio h1{ font-size:26px; } .rich-bio h2{ font-size:22px; } .rich-bio h3{ font-size:18px; } .rich-bio h4{ font-size:16px; }
+.rich-bio p{ margin-bottom:14px; }
+.rich-bio ul,.rich-bio ol{ margin:0 0 14px 22px; }
+.rich-bio li{ margin-bottom:6px; }
+.rich-bio a{ color:var(--red); text-decoration:underline; text-underline-offset:2px; }
+.rich-bio img{ max-width:100%; margin:14px 0; }
+.rich-bio blockquote{ border-left:3px solid var(--red); padding-left:16px; font-style:italic; color:var(--slate); margin:14px 0; }
+.rich-bio table{ width:100%; border-collapse:collapse; margin:14px 0; font-size:14px; }
+.rich-bio th,.rich-bio td{ border:1px solid var(--paper-line); padding:8px 10px; text-align:left; }
+.rich-bio th{ background:var(--paper); font-weight:700; }
+
 /* ---- toast (API feedback) ---- */
 .toast{
   position:fixed; left:50%; bottom:28px; transform:translate(-50%, 12px);
@@ -2453,9 +2466,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <div id="toast" class="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script src="unplug-shared.js"></script>
 <script>
 const api = UnplugAPI.api;
+
+// Renders admin-approved rich content (long-form profile bios, article
+// bodies) as real HTML — sanitized against script injection regardless of
+// where the content originated (migrated legacy content, future member
+// submissions, anything). escapeHtml() elsewhere is for plain-text fields
+// (names, categories, single-line values); this is only for fields meant
+// to hold formatted long-form text.
+function renderRichText(html) {
+  if (!html) return '';
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p','br','strong','b','em','i','u','h1','h2','h3','h4','ul','ol','li','a','img','table','thead','tbody','tr','th','td','blockquote','hr','span'],
+    ALLOWED_ATTR: ['href','target','rel','src','alt','title'],
+  });
+}
 
 // Every action that needs a real account (submitting a photo/article/Top 10
 // entry, choosing a Directory package, downloading a purchased edition)
@@ -2717,7 +2745,7 @@ function profileDetailHtml(profile, socials, gallery) {
       <div class="profile-grid">
         <div>
           <h3 class="profile-section-title">About</h3>
-          <p style="color:var(--slate); line-height:1.7;">${escapeHtml(profile.bio) || 'No bio provided yet.'}</p>`;
+          <div class="rich-bio" style="color:var(--slate); line-height:1.7;">${profile.bio ? renderRichText(profile.bio) : 'No bio provided yet.'}</div>`;
 
   if (showExtras && profile.achievements) {
     html += `
@@ -2838,7 +2866,7 @@ async function loadArticleDetail(id) {
       <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 8px;">${escapeHtml(a.title)}</h1>
       ${a.kicker_supplied_by ? `<p style="color:var(--slate); font-size:13px; margin-bottom:6px;">Supplied by ${escapeHtml(a.kicker_supplied_by)}</p>` : ''}
       <p style="color:var(--slate); font-size:13px; margin-bottom:24px;">${readMinutes(a.body)} min read</p>
-      <div style="white-space:pre-wrap; line-height:1.7; font-size:16px;">${escapeHtml(a.body)}</div>
+      <div class="rich-bio" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
     `;
     if (a.banner_image_url) {
       const badge = el.querySelector('.print-mark');
