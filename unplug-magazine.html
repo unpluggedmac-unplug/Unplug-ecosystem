@@ -598,6 +598,11 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 .legal-page a{ color:var(--red); }
 .consent-note{ font-size:11.5px; color:var(--slate); margin-top:10px; line-height:1.4; }
 .consent-note a{ color:var(--red); }
+/* Skip-to-content link — hidden until keyboard-focused */
+.skip-link{ position:fixed; top:-60px; left:12px; z-index:100001; background:var(--red); color:#fff; padding:10px 16px; font-weight:700; font-size:13px; border-radius:0 0 6px 6px; transition:top .15s; text-decoration:none; }
+.skip-link:focus{ top:0; outline:3px solid #fff; }
+/* Visible keyboard focus everywhere (was relying on default only) */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible{ outline:3px solid #1f6feb; outline-offset:2px; }
 
 /* ---- shoutout banner ---- */
 .shoutout-banner{
@@ -890,6 +895,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 </style>
 </head>
 <body>
+
+<a href="#" class="skip-link" id="skipLink">Skip to content</a>
 
 <!-- shared fingerprint SVG (used across pages as signature motif) -->
 <template id="print-svg">
@@ -2600,7 +2607,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
 </footer>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script src="unplug-shared.js"></script>
@@ -4377,6 +4384,64 @@ setInterval(loadLiveVisitors, 30000);
 // If the page was opened via a deep link (?p=news, ?p=article&id=5, …),
 // route to that content. A plain home load needs nothing (home is default).
 if (location.search) routeFromUrl();
+
+// ---------------------------------------------------------------------------
+// Accessibility: skip-to-content link + modal focus management. For a
+// Deaf/accessibility-first brand, keyboard + screen-reader users must be able
+// to move around cleanly.
+// ---------------------------------------------------------------------------
+(function a11yEnhancements() {
+  // Skip link jumps focus to the currently active page's content.
+  const skip = document.getElementById('skipLink');
+  if (skip) {
+    skip.addEventListener('click', (e) => {
+      e.preventDefault();
+      const active = document.querySelector('.page.active') || document.querySelector('main');
+      if (active) {
+        active.setAttribute('tabindex', '-1');
+        active.focus();
+        active.scrollIntoView();
+      }
+    });
+  }
+
+  // Modal focus trap + restore. Watches the .open class on every modal/overlay
+  // so we don't have to touch each open/close call site.
+  const overlays = document.querySelectorAll('.shoutout-modal-overlay, .site-search-overlay');
+  function focusables(container) {
+    return [...container.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )].filter((el) => el.offsetParent !== null);
+  }
+  overlays.forEach((modal) => {
+    const dialog = modal.querySelector('[role="dialog"]') || modal;
+    if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+    let lastFocused = null;
+    function onOpen() {
+      lastFocused = document.activeElement;
+      const f = focusables(modal);
+      (f[0] || dialog).focus();
+    }
+    function onClose() {
+      if (lastFocused && lastFocused.focus) lastFocused.focus();
+      lastFocused = null;
+    }
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || !modal.classList.contains('open')) return;
+      const items = focusables(modal);
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    let wasOpen = false;
+    new MutationObserver(() => {
+      const open = modal.classList.contains('open');
+      if (open && !wasOpen) { wasOpen = true; onOpen(); }
+      else if (!open && wasOpen) { wasOpen = false; onClose(); }
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+  });
+})();
 
 // If an admin has chosen a YouTube section image, show it (linking to the
 // channel) in place of the embedded playlist.
