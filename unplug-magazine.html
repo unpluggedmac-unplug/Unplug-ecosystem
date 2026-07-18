@@ -27,7 +27,19 @@
       "name": "Unplug Magazine",
       "url": "https://unplug-magazine.pages.dev",
       "logo": "https://unplug-magazine.pages.dev/social-banner.jpg",
+      "image": "https://unplug-magazine.pages.dev/social-banner.jpg",
       "description": "A purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.",
+      "email": "info@unplugnews.com",
+      "telephone": "+27645566814",
+      "areaServed": "ZA",
+      "contactPoint": [{
+        "@type": "ContactPoint",
+        "telephone": "+27645566814",
+        "email": "info@unplugnews.com",
+        "contactType": "customer service",
+        "areaServed": "ZA",
+        "availableLanguage": ["en"]
+      }],
       "sameAs": [
         "https://www.instagram.com/un_pluggedmacaz",
         "https://www.facebook.com/share/1D97UaRqpk/",
@@ -52,6 +64,7 @@
 }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,900;1,500&family=Inter:wght@400;500;600;700&family=Fraunces:ital@1&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -979,7 +992,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <span class="story-tag">Bridal And Wedding Magazine</span>
       <h2 class="ivorymuse-title">Find the inspiration. Use the tools. Create your perfect day.</h2>
       <div class="ivorymuse-thumb">
-        <img src="ivorymuse-banner.jpeg" alt="Ivorymuse — wedding inspiration and planning" loading="lazy">
+        <img src="ivorymuse-banner.jpeg" alt="Ivorymuse — wedding inspiration and planning" loading="lazy" decoding="async">
       </div>
       <a class="btn btn-solid ivorymuse-btn" href="https://www.ivorymuse.co.za" target="_blank" rel="noopener">Explore The Ivory Muse →</a>
     </div>
@@ -1254,7 +1267,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <h2 class="feature-edition-title">Let's feature you in our upcoming edition</h2>
       <p>Your story, your milestone, your business online. Reach out and let's put you in the next Unplug edition.</p>
       <div class="feature-edition-thumb">
-        <img src="feature-edition.jpeg" alt="Let's feature you in our upcoming edition" loading="lazy">
+        <img src="feature-edition.jpeg" alt="Let's feature you in our upcoming edition" loading="lazy" decoding="async">
       </div>
       <a href="mailto:info@unplugnews.com?subject=Feature%20me%20in%20your%20upcoming%20edition" class="btn btn-solid feature-edition-btn">Get featured →</a>
     </div>
@@ -4336,7 +4349,7 @@ function calCardHtml(ev) {
   const mon = CAL_MONTHS[parseInt(dateStr.slice(5, 7), 10) - 1] || '';
   const timeTxt = ev.start_time ? (ev.start_time + (ev.end_time ? '–' + ev.end_time : '')) : '';
   const metaBits = [ev.venue, timeTxt, ev.entrance_fee].filter(Boolean).map(escapeHtml).join(' · ');
-  const img = ev.image_url ? `<div class="cal-thumb"><img src="${escapeHtml(ev.image_url)}" alt="${escapeHtml(ev.name)}" loading="lazy"></div>` : '';
+  const img = ev.image_url ? `<div class="cal-thumb"><img src="${escapeHtml(ev.image_url)}" alt="${escapeHtml(ev.name)}" loading="lazy" decoding="async"></div>` : '';
   return `<div class="cal-card" data-id="${ev.id}">
     ${img}
     <div class="cal-date"><span class="cal-day">${day}</span><span class="cal-mon">${mon}</span></div>
