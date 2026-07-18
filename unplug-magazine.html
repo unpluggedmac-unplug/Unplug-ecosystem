@@ -2993,9 +2993,22 @@ function emotionBadge(emotion) {
   return `<span class="emotion-badge emotion-${emotion}">${e.emoji} ${e.label}</span>`;
 }
 
+// Turns article body HTML (which for WordPress-imported stories includes
+// <!-- wp:… --> block comments and tags) into a clean plain-text excerpt.
+function textExcerpt(html, len) {
+  const text = (html || '')
+    .replace(/<!--[\s\S]*?-->/g, ' ')  // strip HTML / WordPress block comments
+    .replace(/<[^>]*>/g, ' ')          // strip tags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return escapeHtml(text.slice(0, len)) + (text.length > len ? '…' : '');
+}
+
 function newsCardHtml(article) {
   const title = escapeHtml(article.title);
-  const excerpt = escapeHtml((article.body || '').slice(0, 140)) + (article.body && article.body.length > 140 ? '…' : '');
+  const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `Supplied by ${escapeHtml(article.kicker_supplied_by)}` : '';
   return `<a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb"></div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>`;
@@ -3378,7 +3391,7 @@ const SHARE_ROW_HTML = `<div class="share-row">
 
 function homeStoryCardHtml(article) {
   const title = escapeHtml(article.title);
-  const excerpt = escapeHtml((article.body || '').slice(0, 140)) + (article.body && article.body.length > 140 ? '…' : '');
+  const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `<span class="story-kicker">Supplied by <strong>${escapeHtml(article.kicker_supplied_by)}</strong></span>` : '';
   return `<article class="story-card">
