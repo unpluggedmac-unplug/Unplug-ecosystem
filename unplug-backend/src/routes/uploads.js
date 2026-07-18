@@ -24,7 +24,11 @@ async function uploadToSupabase(file) {
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${objectPath}`, {
     method: 'POST',
     headers: {
+      // Works with both the legacy service_role JWT and the new sb_secret_*
+      // keys. The Storage API gateway expects the key in the `apikey` header
+      // as well as the Bearer token, so we send both.
       Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      apikey: SUPABASE_SERVICE_KEY,
       'Content-Type': file.mimetype || 'application/octet-stream',
       'x-upsert': 'true',
     },
