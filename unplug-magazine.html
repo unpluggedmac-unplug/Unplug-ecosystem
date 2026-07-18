@@ -588,6 +588,16 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 .footer-grid li{ margin-bottom:10px; font-size:14px; }
 .footer-grid li a:hover{ color:var(--cream); }
 .footer-bottom{ border-top:1px solid rgba(247,243,234,0.15); padding-top:24px; font-size:12px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; color:#a39d92; }
+.footer-bottom a:hover{ color:var(--cream); }
+/* Legal pages (privacy / terms) */
+.legal-page{ max-width:800px; padding-bottom:60px; }
+.legal-page h3{ font-size:18px; font-weight:700; margin:28px 0 8px; }
+.legal-page p{ font-size:15px; line-height:1.7; color:var(--ink); margin-bottom:8px; }
+.legal-page ul{ margin:8px 0 8px 20px; }
+.legal-page li{ font-size:15px; line-height:1.7; color:var(--ink); margin-bottom:6px; }
+.legal-page a{ color:var(--red); }
+.consent-note{ font-size:11.5px; color:var(--slate); margin-top:10px; line-height:1.4; }
+.consent-note a{ color:var(--red); }
 
 /* ---- shoutout banner ---- */
 .shoutout-banner{
@@ -1052,6 +1062,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="field"><label>Your email (optional)</label><input id="shoutoutNomEmail" type="email" placeholder="So we can let you know if they're featured."></div>
       <input type="text" name="website" id="hpShoutout" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn btn-solid" id="shoutoutNomSubmit" style="width:100%;">Submit Nomination</button>
+      <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </div>
   </div>
 
@@ -1089,6 +1100,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="field"><label>Photo URL (optional)</label><input id="bdayPhotoInput" placeholder="https://..."></div>
       <input type="text" name="website" id="hpBirthday" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn btn-solid" id="bdaySubmitBtn" style="width:100%;">Submit birthday</button>
+      <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </div>
   </div>
 
@@ -2297,6 +2309,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <div class="field"><label for="csubject">Subject</label><input id="csubject" type="text" required></div>
         <div class="field"><label for="cmsg">Message</label><textarea id="cmsg" rows="5" required></textarea></div>
         <button class="btn btn-solid" type="submit" id="contactBtn">Send Message</button>
+        <p class="consent-note">By sending this, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
       </form>
     </div>
   </section>
@@ -2420,6 +2433,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <input type="text" name="website" id="hpJob" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
     <label class="dc-agree"><input type="checkbox" id="dcJobAgree"> <span>I confirm this business is a <strong>deaf-friendly employer</strong>. (This is shown in bold on the post.)</span></label>
     <button class="btn btn-solid" id="dcJobSubmit" style="width:100%; margin-top:6px;">Submit vacancy</button>
+    <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="?p=terms" target="_blank" rel="noopener">Terms of Use</a>.</p>
   </div>
 </div>
 
@@ -2439,8 +2453,99 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="field"><label>Availability</label><input id="dcPassAvail" placeholder="e.g. Full-time, immediately"></div>
     <input type="text" name="website" id="hpPassport" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
     <button class="btn btn-solid" id="dcPassSubmit" style="width:100%; margin-top:6px;">Submit passport</button>
+    <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="?p=terms" target="_blank" rel="noopener">Terms of Use</a>.</p>
   </div>
 </div>
+
+<!-- ============ PRIVACY POLICY ============ -->
+<main class="page" id="page-privacy">
+  <div class="wrap legal-page" style="padding-top:56px;">
+    <span class="eyebrow">Your data</span>
+    <h1 style="font-size:clamp(30px,4vw,46px); margin:14px 0 6px;">Privacy Policy</h1>
+    <p style="color:var(--slate); font-size:13px; margin-bottom:8px;">Last updated: 18 July 2026</p>
+    <p class="lede">This policy explains what personal information Unplug Magazine collects, why, and your rights under South Africa's Protection of Personal Information Act (POPIA).</p>
+
+    <h3>1. Who we are</h3>
+    <p>Unplug Magazine ("we", "us", "our") operates this website. For any privacy question or to exercise your rights below, contact our Information Officer at <a href="mailto:info@unplugnews.com">info@unplugnews.com</a>.</p>
+
+    <h3>2. Information we collect</h3>
+    <ul>
+      <li><strong>Account details</strong> — your email address and a password (stored encrypted) when you register.</li>
+      <li><strong>Things you submit</strong> — names, birthdays and photos, Directory profile details, job vacancies, Opportunity Passports, event details, shout-out nominations, gallery images and article content.</li>
+      <li><strong>Contact &amp; newsletter</strong> — the name, email and message you send us, or the email you use to subscribe.</li>
+      <li><strong>Payments</strong> — the amount and reference for EFT payments. We do not receive or store your card or banking login details.</li>
+      <li><strong>Automatically</strong> — anonymous usage analytics (page views, a random session ID) and your IP address, used only to keep the site secure and prevent spam.</li>
+    </ul>
+
+    <h3>3. How we use your information</h3>
+    <p>To create and manage your account; to display content you have submitted and approved for publication; to process payments; to respond to you; to send you the newsletter if you subscribed; to keep the platform safe (spam/abuse prevention); and to understand, in aggregate, how the site is used.</p>
+
+    <h3>4. Content that becomes public</h3>
+    <p>Some submissions are <strong>published publicly once approved by an admin</strong> — for example Directory profiles, approved shout-outs, job listings and Opportunity Passports. Please only submit information you are comfortable making public. Opportunity Passports never display your contact details; your email is used for verification only.</p>
+
+    <h3>5. Who we share it with</h3>
+    <p>We do <strong>not sell</strong> your personal information. We share it only with service providers that help us run the platform (our hosting, database and email providers) and where required by law. Approved public content is, by its nature, visible to anyone.</p>
+
+    <h3>6. How long we keep it</h3>
+    <p>Account and published content is kept while your account is active. Job listings and Opportunity Passports are shown for 14 days. You can ask us to delete your data at any time (see your rights below).</p>
+
+    <h3>7. Your rights under POPIA</h3>
+    <p>You have the right to access the personal information we hold about you, to ask us to correct or delete it, to object to certain processing, and to withdraw consent (for example, to unsubscribe from the newsletter). To exercise any of these, email <a href="mailto:info@unplugnews.com">info@unplugnews.com</a>. You also have the right to lodge a complaint with the Information Regulator of South Africa.</p>
+
+    <h3>8. Cookies &amp; local storage</h3>
+    <p>We use your browser's local storage to remember your accessibility preferences and to keep you signed in. We use a first-party session identifier for anonymous analytics. We do not use third-party advertising or tracking cookies.</p>
+
+    <h3>9. Children</h3>
+    <p>The site is not intended for children under 18 without the consent of a parent or guardian.</p>
+
+    <h3>10. Changes</h3>
+    <p>We may update this policy from time to time; the "last updated" date above will change accordingly.</p>
+
+    <p style="font-size:12.5px; color:var(--slate); margin-top:28px; font-style:italic;">This policy is provided as a starting point and should be reviewed by a qualified professional and completed with your registered legal entity details before you rely on it commercially.</p>
+  </div>
+</main>
+
+<!-- ============ TERMS OF USE ============ -->
+<main class="page" id="page-terms">
+  <div class="wrap legal-page" style="padding-top:56px;">
+    <span class="eyebrow">The rules</span>
+    <h1 style="font-size:clamp(30px,4vw,46px); margin:14px 0 6px;">Terms of Use</h1>
+    <p style="color:var(--slate); font-size:13px; margin-bottom:8px;">Last updated: 18 July 2026</p>
+    <p class="lede">By using this website you agree to these terms. Please read them carefully.</p>
+
+    <h3>1. Using the site</h3>
+    <p>You may browse freely. Some actions (submitting content, buying a listing) require a free account. You are responsible for keeping your account details secure and for activity under your account.</p>
+
+    <h3>2. Content you submit</h3>
+    <p>You keep ownership of what you submit, but you confirm you have the right to submit it and you grant Unplug Magazine permission to display and promote it on the platform. Don't submit anything unlawful, misleading, hateful, infringing, or that isn't yours to share.</p>
+
+    <h3>3. Moderation</h3>
+    <p>Public submissions are reviewed before they appear, and we may decline, edit for display, or remove any content at our discretion. Job listings and Opportunity Passports appear for 14 days.</p>
+
+    <h3>4. Paid services</h3>
+    <p>Directory packages, article publishing, event listings, edition downloads and competition entries are paid services, currently settled by manual EFT. Prices are shown before you pay and are confirmed on our side once payment reflects.</p>
+
+    <h3>5. Deaf Community features</h3>
+    <p>The jobs board and Opportunity Passports are a community platform — we are not an employer, recruitment agency, or party to any arrangement between users. We don't guarantee the accuracy of third-party listings and are not liable for interactions that result from them. Employers posting a vacancy confirm they are a deaf-friendly employer.</p>
+
+    <h3>6. Intellectual property</h3>
+    <p>The Unplug Magazine name, branding and site design belong to us. Content published by contributors remains theirs.</p>
+
+    <h3>7. Third-party links</h3>
+    <p>We link to partners and social platforms (for example Ivory Muse, our social channels and advertisers). We aren't responsible for the content or practices of those external sites.</p>
+
+    <h3>8. Disclaimer &amp; liability</h3>
+    <p>The site is provided "as is". To the extent permitted by law, we are not liable for any loss arising from your use of the site or reliance on user-submitted content.</p>
+
+    <h3>9. Governing law</h3>
+    <p>These terms are governed by the laws of the Republic of South Africa.</p>
+
+    <h3>10. Contact</h3>
+    <p>Questions about these terms? Email <a href="mailto:info@unplugnews.com">info@unplugnews.com</a>.</p>
+
+    <p style="font-size:12.5px; color:var(--slate); margin-top:28px; font-style:italic;">These terms are a starting template and should be reviewed by a qualified professional before you rely on them commercially.</p>
+  </div>
+</main>
 
 <section class="newsletter">
   <div class="wrap newsletter-inner">
@@ -2490,7 +2595,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
     <div class="footer-bottom">
       <span>© 2026 Unplug Magazine. All rights reserved.</span>
-      <span>Privacy Policy · Terms of Use</span>
+      <span><a href="#" data-page="privacy" style="color:inherit;">Privacy Policy</a> · <a href="#" data-page="terms" style="color:inherit;">Terms of Use</a></span>
     </div>
   </div>
 </footer>
@@ -3814,6 +3919,8 @@ function goToPage(pageId){
     brandplacement: 'Marketplace — Unplug Magazine',
     about: 'About Us — Unplug Magazine',
     contact: 'Contact Us — Unplug Magazine',
+    privacy: 'Privacy Policy — Unplug Magazine',
+    terms: 'Terms of Use — Unplug Magazine',
   };
   document.title = PAGE_TITLES[pageId] || 'Unplug Magazine';
 
