@@ -38,14 +38,26 @@ async function run() {
 
   const passwordHash = await bcrypt.hash(adminPassword, 10);
 
+  // By default we only create the admin if it doesn't exist yet, so a
+  // redeploy never clobbers a password set elsewhere. Setting
+  // ADMIN_PASSWORD_RESET=true is a deliberate one-time switch that forces the
+  // admin's password to ADMIN_PASSWORD (used to recover a forgotten password).
+  // Turn it back off (remove the var) after the reset so future deploys don't
+  // keep resetting the password.
+  const forceReset = String(process.env.ADMIN_PASSWORD_RESET || '').toLowerCase() === 'true';
+
   await pool.query(
     `INSERT INTO users (email, password_hash, role, email_verified)
      VALUES ($1, $2, 'admin', true)
-     ON CONFLICT (email) DO NOTHING`,
+     ON CONFLICT (email) DO ${forceReset ? 'UPDATE SET password_hash = EXCLUDED.password_hash, role = \'admin\', email_verified = true' : 'NOTHING'}`,
     [adminEmail, passwordHash]
   );
 
-  console.log(`Admin account ready for ${adminEmail} (password not logged).`);
+  console.log(
+    forceReset
+      ? `Admin password RESET for ${adminEmail} (ADMIN_PASSWORD_RESET was true — remember to remove that var now).`
+      : `Admin account ready for ${adminEmail} (password not logged).`
+  );
   await pool.end();
 }
 
