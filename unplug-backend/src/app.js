@@ -34,6 +34,9 @@ const savedArticleRoutes = require('./routes/savedArticles');
 const commentRoutes = require('./routes/comments');
 const pollRoutes = require('./routes/polls');
 const feedRoutes = require('./routes/feed');
+const reviewRoutes = require('./routes/reviews');
+const claimRoutes = require('./routes/claims');
+const directoryMapRoutes = require('./routes/directoryMap');
 
 const app = express();
 
@@ -82,6 +85,9 @@ app.use('/saved', savedArticleRoutes);
 app.use('/comments', commentRoutes);
 app.use('/polls', pollRoutes);
 app.use('/feed', feedRoutes);
+app.use('/reviews', reviewRoutes);
+app.use('/claims', claimRoutes);
+app.use('/directory', directoryMapRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,
