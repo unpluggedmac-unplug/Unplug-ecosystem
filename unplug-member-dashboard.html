@@ -293,7 +293,21 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 <div class="toast" id="toast"></div>
 
 <script>
-let API_BASE = localStorage.getItem('unplug_api_base') || 'http://localhost:4000';
+// API base. Defaults to the LIVE backend: an http://localhost fallback on an
+// https page is blocked by the browser as mixed content, which surfaces as a
+// bare "Failed to fetch" with no clue why. Also discard values saved before
+// the Railway -> Render move, and any localhost value when this page is not
+// actually being served locally.
+const LIVE_API_BASE = "https://unplug-ecosystem.onrender.com";
+(function migrateApiBase() {
+  const saved = localStorage.getItem("unplug_api_base");
+  if (!saved) return;
+  const servedLocally = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  if (saved.indexOf("railway.app") !== -1 || (!servedLocally && saved.indexOf("localhost") !== -1)) {
+    localStorage.removeItem("unplug_api_base");
+  }
+})();
+let API_BASE = localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
 let AUTH_TOKEN = null;
 
 async function api(path, options = {}) {
