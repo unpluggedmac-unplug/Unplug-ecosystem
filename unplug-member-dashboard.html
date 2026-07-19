@@ -134,6 +134,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="field"><label>Password</label><input id="loginPassword" type="password"></div>
     </div>
     <button class="btn btn-solid" id="loginBtn">Sign In</button>
+    <button class="btn btn-line" id="magicLinkBtn" style="margin-top:10px;">Email me a sign-in link instead</button>
+    <p class="sub" id="magicLinkNote" style="margin:10px 0 0; display:none;"></p>
     <button class="btn btn-line" id="showForgotBtn" style="margin-top:10px;">Forgot Password?</button>
     <button class="btn btn-line" id="backFromLoginBtn" style="margin-top:10px;">← Back</button>
   </div>
@@ -528,6 +530,62 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   }
 });
 
+// Passwordless sign-in: ask for a one-time link by email.
+document.getElementById('magicLinkBtn').addEventListener('click', async () => {
+  const note = document.getElementById('magicLinkNote');
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) {
+    note.style.display = 'block';
+    note.textContent = 'Enter your email address above first, then press this again.';
+    return;
+  }
+  const btn = document.getElementById('magicLinkBtn');
+  btn.disabled = true;
+  note.style.display = 'block';
+  note.textContent = 'Sending…';
+  try {
+    const data = await api('/auth/magic-link/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+    // The backend deliberately gives the same answer whether or not the
+    // account exists, so we don't leak who is registered.
+    note.textContent = data.message;
+  } catch (err) {
+    note.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// If the page was opened from a sign-in link, exchange the token for a
+// session before anything else renders, then clean the token out of the URL
+// so it isn't left in history, bookmarks or a shared screenshot.
+async function consumeMagicLinkIfPresent() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('magic');
+  if (!token) return false;
+  history.replaceState({}, '', location.pathname);
+  try {
+    const data = await api('/auth/magic-link/consume', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+    AUTH_TOKEN = data.token;
+    localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
+    enterMemberDashboard(data.user);
+    showToast('Signed in.');
+    return true;
+  } catch (err) {
+    document.getElementById('gateCard').classList.remove('section-hidden');
+    document.getElementById('loginCard').classList.remove('section-hidden');
+    const banner = document.getElementById('loginError');
+    banner.textContent = err.message;
+    banner.classList.add('show');
+    return false;
+  }
+}
+
 function enterMemberDashboard(user){
   document.getElementById('topRight').innerHTML = `Signed in as ${user.email} &nbsp;·&nbsp; <button id="logoutBtn">Log out</button>`;
   document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -548,6 +606,10 @@ function enterMemberDashboard(user){
 // On page load, restore a saved session rather than forcing a fresh
 // login after every refresh.
 (async function restoreSession(){
+  // A sign-in link takes priority: someone arriving on one is explicitly
+  // choosing which account to use, which may not be the one already saved
+  // in this browser.
+  if (await consumeMagicLinkIfPresent()) return;
   const savedToken = localStorage.getItem('unplug_auth_token');
   if (!savedToken) return;
   AUTH_TOKEN = savedToken;

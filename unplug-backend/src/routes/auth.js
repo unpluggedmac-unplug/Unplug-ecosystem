@@ -177,6 +177,97 @@ router.post('/login', loginLimiter, async (req, res, next) => {
   }
 });
 
+// Where the sign-in link should point. Follows the domain via SITE_URL so
+// this doesn't have to be edited when the site moves.
+const SITE_URL = (process.env.SITE_URL || 'https://www.unplugnews.com').replace(/\/$/, '');
+
+// POST /auth/magic-link/request — passwordless sign-in.
+//
+// Always returns the same message whether or not the account exists, so this
+// can't be used to find out who has an account. Rate limited like the other
+// email actions, and additionally capped per account below so one address
+// can't be mail-bombed by repeated requests.
+router.post('/magic-link/request', emailActionLimiter, async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'A valid email is required.' });
+    }
+    const userResult = await pool.query(
+      'SELECT id, email, email_verified FROM users WHERE email = $1',
+      [email.trim().toLowerCase()]
+    );
+    if (userResult.rows.length > 0) {
+      const user = userResult.rows[0];
+      // Don't let a sign-in link bypass email verification — that check
+      // exists precisely to prove the address belongs to them.
+      if (user.email_verified) {
+        const recent = await pool.query(
+          `SELECT COUNT(*)::int AS n FROM magic_link_tokens
+            WHERE user_id = $1 AND created_at > now() - interval '15 minutes'`,
+          [user.id]
+        );
+        if (recent.rows[0].n < 5) {
+          const token = crypto.randomBytes(32).toString('hex');
+          await pool.query(
+            `INSERT INTO magic_link_tokens (user_id, token, expires_at)
+             VALUES ($1, $2, now() + interval '15 minutes')`,
+            [user.id, token]
+          );
+          const link = `${SITE_URL}/unplug-member-dashboard.html?magic=${token}`;
+          await sendEmail({
+            to: user.email,
+            subject: 'Your Unplug sign-in link',
+            text: `Here's your sign-in link for Unplug:\n\n${link}\n\n`
+              + `It works once and expires in 15 minutes.\n\n`
+              + `If you didn't ask to sign in, you can ignore this email — nobody can access your account without this link.`,
+          });
+        }
+      }
+    }
+    res.json({ message: 'If that account exists, a sign-in link is on its way. Check your email.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /auth/magic-link/consume — exchanges the emailed token for a session.
+// Single use: the token is marked used in the same statement that claims it,
+// so two simultaneous requests can't both succeed.
+router.post('/magic-link/consume', async (req, res, next) => {
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'That sign-in link is not valid.' });
+    }
+    const claimed = await pool.query(
+      `UPDATE magic_link_tokens SET used_at = now()
+        WHERE token = $1 AND used_at IS NULL AND expires_at > now()
+        RETURNING user_id`,
+      [token]
+    );
+    if (claimed.rowCount === 0) {
+      return res.status(400).json({ error: 'That sign-in link has already been used or has expired. Please request a new one.' });
+    }
+    const userResult = await pool.query(
+      'SELECT id, email, role FROM users WHERE id = $1',
+      [claimed.rows[0].user_id]
+    );
+    if (userResult.rows.length === 0) {
+      return res.status(400).json({ error: 'That account no longer exists.' });
+    }
+    const user = userResult.rows[0];
+    const authToken = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.json({ user: { id: user.id, email: user.email, role: user.role }, token: authToken });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /auth/forgot-password
 // Public — sends a reset link/token to the account's primary email OR
 // alternative email, whichever the requester specifies via `useAltEmail`.
