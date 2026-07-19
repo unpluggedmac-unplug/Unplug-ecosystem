@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
+const { sendEmail, isConfigured, verifyConnection } = require('../utils/email');
 
 const router = express.Router();
 
@@ -854,6 +855,56 @@ router.patch('/shoutouts/:id/reject', requireRole('admin'), async (req, res, nex
       return res.status(404).json({ error: 'Nomination not found.' });
     }
     res.json({ nomination: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/email-status — is outgoing email actually configured? Signup
+// verification and password resets depend on it, and when it's missing the
+// failure is invisible: codes get written to the server log and the member
+// just never receives anything. This makes that state checkable.
+router.get('/email-status', requireRole('admin'), async (req, res) => {
+  const configured = isConfigured();
+  if (!configured) {
+    return res.json({
+      configured: false,
+      connectionOk: false,
+      message: 'SMTP is not set up. Verification codes and password resets are being written to the server log instead of sent, so new members cannot verify their accounts.',
+    });
+  }
+  try {
+    await verifyConnection();
+    res.json({ configured: true, connectionOk: true, message: 'SMTP is configured and the mail server accepted our credentials.' });
+  } catch (err) {
+    // Configured but not working is the most dangerous state — it looks fine
+    // from the outside, so report the reason rather than a bare failure.
+    res.json({
+      configured: true,
+      connectionOk: false,
+      message: 'SMTP is configured but the connection failed: ' + err.message,
+    });
+  }
+});
+
+// POST /admin/test-email — sends a real test message to the signed-in admin's
+// own address. Deliberately only to their own address: this endpoint must not
+// become a way to send mail to arbitrary people.
+router.post('/test-email', requireRole('admin'), async (req, res, next) => {
+  try {
+    if (!isConfigured()) {
+      return res.status(400).json({ error: 'SMTP is not set up yet, so there is nothing to test.' });
+    }
+    const to = req.user.email;
+    await sendEmail({
+      to,
+      subject: 'Unplug — test email',
+      text: 'This is a test from your Unplug admin dashboard.\n\n'
+        + 'If you are reading this, outgoing email is working: signup verification '
+        + 'codes and password resets will reach your members.\n\n— Unplug',
+    });
+    logActivity(req.user.id, 'test_email_sent', to);
+    res.json({ sent: true, to, message: `Test email sent to ${to}. If it doesn't arrive within a minute, check the spam folder.` });
   } catch (err) {
     next(err);
   }

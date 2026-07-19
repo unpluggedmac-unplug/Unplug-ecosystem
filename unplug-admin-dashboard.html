@@ -434,6 +434,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="main-head"><div><h1>Publish</h1><p>Put content on the site directly. Nothing here charges anyone or goes through the payment portal.</p></div></div>
 
       <div class="panel">
+        <div class="panel-head"><h3>Email status</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Signup verification codes and password resets depend on outgoing email. If this isn't working, new members can't verify their accounts.</p>
+          <div id="emailStatusBox" style="font-size:13.5px; padding:12px; border:1px solid var(--paper-line); background:var(--paper);">Checking…</div>
+          <button class="btn btn-line" style="width:auto; margin-top:12px;" id="checkEmailBtn">Re-check</button>
+          <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="testEmailBtn">Send test email to me</button>
+        </div>
+      </div>
+
+      <div class="panel">
         <div class="panel-head"><h3>Publish an article</h3></div>
         <div class="panel-body">
           <div class="form-row">
@@ -781,7 +791,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'analytics') loadAnalytics(7);
     if (section === 'comments') loadPendingComments();
     if (section === 'pagecms') loadPageCms();
-    if (section === 'publish') loadPublishSection();
+    if (section === 'publish') { loadPublishSection(); loadEmailStatus(); }
     if (section === 'polls') loadPolls();
     if (section === 'reviews') loadPendingReviews();
     if (section === 'claims') loadPendingClaims();
@@ -1122,6 +1132,40 @@ document.getElementById('cmsSaveContentBtn').addEventListener('click', async () 
     loadPageCms();
   } catch (err) {
     showToast(err.message, true);
+  }
+});
+
+// Email health. Shown in the Publish section because that's where an admin
+// is most likely to notice it before members are affected.
+async function loadEmailStatus() {
+  const box = document.getElementById('emailStatusBox');
+  if (!box) return;
+  box.textContent = 'Checking…';
+  try {
+    const s = await api('/admin/email-status');
+    const ok = s.configured && s.connectionOk;
+    box.style.borderColor = ok ? 'var(--green, #2e7d32)' : 'var(--red)';
+    box.innerHTML = `<strong style="color:${ok ? 'var(--green, #2e7d32)' : 'var(--red)'};">`
+      + (ok ? '✓ Email is working' : '✕ Email is not working')
+      + `</strong><br><span style="color:var(--slate);">${escapeHtmlAdmin(s.message)}</span>`;
+  } catch (err) {
+    box.style.borderColor = 'var(--red)';
+    box.textContent = 'Could not check email status: ' + err.message;
+  }
+}
+
+document.getElementById('checkEmailBtn').addEventListener('click', loadEmailStatus);
+
+document.getElementById('testEmailBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('testEmailBtn');
+  btn.disabled = true;
+  try {
+    const res = await api('/admin/test-email', { method: 'POST' });
+    showToast(res.message || 'Test email sent.');
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
   }
 });
 
