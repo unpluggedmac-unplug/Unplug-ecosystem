@@ -38,6 +38,7 @@ const reviewRoutes = require('./routes/reviews');
 const claimRoutes = require('./routes/claims');
 const directoryMapRoutes = require('./routes/directoryMap');
 const pageCmsRoutes = require('./routes/pageContent');
+const sitemapRoutes = require('./routes/sitemap');
 
 const app = express();
 
@@ -90,6 +91,7 @@ app.use('/reviews', reviewRoutes);
 app.use('/claims', claimRoutes);
 app.use('/directory', directoryMapRoutes);
 app.use('/page-cms', pageCmsRoutes);
+app.use('/', sitemapRoutes); // exposes /sitemap.xml and /robots.txt
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,

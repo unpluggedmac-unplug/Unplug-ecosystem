@@ -1,4 +1,18 @@
 User-agent: *
 Allow: /
 
+# Admin, member and checkout screens are private tools, not content. Keeping
+# them out of results stops sign-in pages ranking for the brand name.
+Disallow: /unplug-admin-dashboard
+Disallow: /unplug-admin-dashboard.html
+Disallow: /unplug-member-dashboard
+Disallow: /unplug-member-dashboard.html
+Disallow: /unplug-checkout
+Disallow: /unplug-checkout.html
+
+# Two sitemaps on purpose. The first is same-domain and is the one to submit
+# in Search Console. The second is generated from live content by the API, so
+# stories and listings published since the last static rebuild are still
+# discoverable (submit it under the API host to have it fully trusted).
 Sitemap: https://unplug-magazine.pages.dev/sitemap.xml
+Sitemap: https://unplug-ecosystem.onrender.com/sitemap.xml
