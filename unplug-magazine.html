@@ -822,6 +822,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .share-btn.wa{ background:#25D366; }
 .share-btn.tw{ background:#000; }
 .share-btn.cp{ background:var(--slate); border:0; cursor:pointer; }
+/* ---- POPIA consent bar ---- */
+.consent-bar[hidden]{ display:none; }
+.consent-bar{ position:fixed; left:0; right:0; bottom:0; z-index:900; background:var(--black); color:#fff;
+  padding:16px clamp(16px,4vw,32px); display:flex; align-items:center; justify-content:space-between;
+  gap:18px; flex-wrap:wrap; border-top:3px solid var(--red); }
+.consent-bar p{ font-size:13.5px; line-height:1.6; margin:0; max-width:78ch; color:rgba(255,255,255,0.88); }
+.consent-bar a{ color:#fff; text-decoration:underline; }
+.consent-actions{ display:flex; gap:10px; flex-shrink:0; }
+.consent-bar .btn-line{ color:#fff; border-color:rgba(255,255,255,0.5); }
+.consent-bar .btn-line:hover{ background:#fff; color:var(--ink); }
+@media(max-width:640px){ .consent-actions{ width:100%; } .consent-actions .btn{ flex:1; } }
 /* ---- admin-added page blocks ---- */
 .cms-blocks:empty{ display:none; }
 .cms-block{ display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:center; margin:34px 0; border:1px solid var(--paper-line); }
@@ -1035,6 +1046,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <body>
 
 <a href="#" class="skip-link" id="skipLink">Skip to content</a>
+
+<!-- POPIA consent. Hidden until the script decides it's needed, so returning
+     readers who already chose never see it flash on screen. -->
+<div class="consent-bar" id="consentBar" role="region" aria-label="Privacy choices" hidden>
+  <p>We'd like to count visits so we know which stories land. It's anonymous, and entirely your choice — the site works exactly the same either way. <a href="?p=privacy">Read our privacy policy</a>.</p>
+  <div class="consent-actions">
+    <button class="btn btn-line" type="button" id="consentDecline">No thanks</button>
+    <button class="btn btn-solid" type="button" id="consentAccept">Allow</button>
+  </div>
+</div>
 
 <!-- shared fingerprint SVG (used across pages as signature motif) -->
 <template id="print-svg">
@@ -3434,6 +3455,42 @@ function initArticleReader(a, id, shareUrl) {
 }
 
 // ---------------------------------------------------------------------------
+// POPIA consent.
+//
+// Analytics is optional processing under POPIA, so it is off until someone
+// actively accepts. "No answer yet" is treated exactly like a decline — the
+// banner never pre-consents on a reader's behalf, and dismissing it isn't
+// acceptance. The choice is remembered so we don't nag on every visit, and
+// it can be changed again from the Privacy page.
+const CONSENT_KEY = 'unplug_consent_analytics';
+
+function analyticsAllowed() {
+  try { return localStorage.getItem(CONSENT_KEY) === 'accepted'; }
+  catch (e) { return false; }
+}
+
+function setConsent(choice) {
+  try { localStorage.setItem(CONSENT_KEY, choice); } catch (e) { /* private mode */ }
+  const bar = document.getElementById('consentBar');
+  if (bar) bar.hidden = true;
+  // Accepting mid-visit should count this visit, not silently start next time.
+  if (choice === 'accepted') trackPageView('home');
+}
+
+(function setupConsentBar() {
+  let stored = null;
+  try { stored = localStorage.getItem(CONSENT_KEY); } catch (e) { /* ignore */ }
+  const bar = document.getElementById('consentBar');
+  if (!bar) return;
+  if (stored === 'accepted' || stored === 'declined') { bar.hidden = true; return; }
+  bar.hidden = false;
+  const accept = document.getElementById('consentAccept');
+  const decline = document.getElementById('consentDecline');
+  if (accept) accept.addEventListener('click', () => setConsent('accepted'));
+  if (decline) decline.addEventListener('click', () => setConsent('declined'));
+})();
+
+// ---------------------------------------------------------------------------
 // Admin-editable page content.
 //
 // Two mechanisms, both additive: an element tagged data-cms="home.hero.title"
@@ -5281,6 +5338,10 @@ function setupDcPassportModal() {
 })();
 
   function trackPageView(pageId) {
+  // POPIA: analytics is optional processing, so it only runs once someone has
+  // actively accepted. No choice yet, or a decline, means no tracking call at
+  // all — not a call with a flag on it.
+  if (!analyticsAllowed()) return;
   api('/analytics/track', {
     method: 'POST',
     body: JSON.stringify({ pagePath: pageId, sessionId: guestSessionId() }),

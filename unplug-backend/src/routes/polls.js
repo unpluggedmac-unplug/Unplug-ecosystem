@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
@@ -189,6 +190,7 @@ router.delete('/:id', requireRole('admin'), async (req, res, next) => {
       return res.status(400).json({ error: 'A valid poll id is required.' });
     }
     await pool.query('DELETE FROM polls WHERE id = $1', [pollId]);
+    logActivity(req.user.id, 'poll_deleted', `poll ${pollId}`);
     res.json({ deleted: true });
   } catch (err) {
     next(err);

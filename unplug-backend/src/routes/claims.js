@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
@@ -114,6 +115,13 @@ router.patch('/:id/status', requireRole('admin'), async (req, res, next) => {
       );
     }
     await client.query('COMMIT');
+    // Transferring a listing to a different owner is the most consequential
+    // action in the admin dashboard, so it always leaves a trail.
+    logActivity(
+      req.user.id,
+      status === 'approved' ? 'claim_approved_listing_transferred' : 'claim_rejected',
+      `claim ${claimId} · listing ${claim.rows[0].profile_id} · to user ${claim.rows[0].user_id}`
+    );
     res.json({ claim: { id: claimId, status } });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

@@ -93,6 +93,13 @@ function showToast(message, isError = false) {
 (function () {
   const API_BASE = 'https://unplug-ecosystem.onrender.com';
 
+  // POPIA: this ping only happens once a visitor has actively said yes on the
+  // consent bar. No stored choice means no tracking — and we don't even mint
+  // a session id until then, so declining leaves nothing behind at all.
+  let consent = null;
+  try { consent = localStorage.getItem('unplug_consent_analytics'); } catch (e) { /* private mode */ }
+  if (consent !== 'accepted') return;
+
   let sessionId = localStorage.getItem('unplug_analytics_session');
   if (!sessionId) {
     sessionId = 'sess-' + Math.random().toString(36).slice(2) + Date.now().toString(36);

@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
@@ -61,6 +62,7 @@ router.put('/admin/content', requireRole('admin'), async (req, res, next) => {
         'DELETE FROM page_content WHERE page_key = $1 AND content_key = $2',
         [pageKey, contentKey]
       );
+      logActivity(req.user.id, 'cms_content_reverted', `${pageKey}.${contentKey}`);
       return res.json({ reverted: true, message: 'Cleared — the page is back to its built-in wording.' });
     }
     await pool.query(
@@ -70,6 +72,7 @@ router.put('/admin/content', requireRole('admin'), async (req, res, next) => {
        DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       [pageKey, contentKey, value]
     );
+    logActivity(req.user.id, 'cms_content_changed', `${pageKey}.${contentKey}`);
     res.json({ saved: true, message: 'Saved — the change is live on the site.' });
   } catch (err) {
     next(err);
@@ -154,6 +157,7 @@ router.delete('/admin/blocks/:id', requireRole('admin'), async (req, res, next) 
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid block id is required.' });
     await pool.query('DELETE FROM page_blocks WHERE id = $1', [id]);
+    logActivity(req.user.id, 'cms_block_deleted', `block ${id}`);
     res.json({ deleted: true });
   } catch (err) {
     next(err);

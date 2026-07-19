@@ -15,24 +15,22 @@ async function logActivity(adminUserId, action, details) {
   }
 }
 
-// Simplified — no JOIN, just the log table itself, to remove any risk
-// from the users table relationship. If this still fails, the error
-// detail below will show exactly why.
 router.get('/', requireRole('admin'), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, admin_user_id, action, details, created_at
        FROM admin_activity_log
        ORDER BY created_at DESC
-       LIMIT 100`
+       LIMIT 200`
     );
     res.json({ activity: result.rows });
   } catch (err) {
+    // The raw error goes to the server log, not the response — database
+    // messages can name tables and columns, which is detail an attacker
+    // shouldn't get for free. (This previously returned err.message to the
+    // client as a temporary debugging aid.)
     console.error('[activity log] query failed:', err);
-    // TEMPORARY — includes the real error message in the response so we
-    // can see exactly what's wrong, instead of a generic failure.
-    // Remove this detail once it's confirmed working.
-    res.status(500).json({ error: 'Could not load activity log.', detail: err.message, code: err.code });
+    res.status(500).json({ error: 'Could not load activity log.' });
   }
 });
 

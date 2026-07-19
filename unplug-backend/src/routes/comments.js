@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 
@@ -162,6 +163,7 @@ router.patch('/:id/status', requireRole('admin'), async (req, res, next) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'That comment no longer exists.' });
     }
+    logActivity(req.user.id, 'comment_' + status, `comment ${commentId}`);
     res.json({ comment: result.rows[0] });
   } catch (err) {
     next(err);
