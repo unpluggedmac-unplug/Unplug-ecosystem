@@ -822,6 +822,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .share-btn.wa{ background:#25D366; }
 .share-btn.tw{ background:#000; }
 .share-btn.cp{ background:var(--slate); border:0; cursor:pointer; }
+/* ---- admin-added page blocks ---- */
+.cms-blocks:empty{ display:none; }
+.cms-block{ display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:center; margin:34px 0; border:1px solid var(--paper-line); }
+.cms-block:only-child{ margin-top:0; }
+.cms-block-img{ overflow:hidden; }
+.cms-block-img img{ display:block; width:100%; height:100%; object-fit:cover; }
+.cms-block-text{ padding:26px 28px; }
+.cms-block-text h2{ font-size:clamp(20px,2.6vw,30px); font-weight:600; line-height:1.25; margin:8px 0 10px; }
+.cms-block-text p{ color:var(--slate); font-size:14.5px; line-height:1.65; }
+.cms-block-btn{ margin-top:16px; display:inline-flex; }
+.cms-block:not(:has(.cms-block-img)){ grid-template-columns:1fr; }
+@media(max-width:760px){ .cms-block{ grid-template-columns:1fr; } }
 /* ---- directory reviews + claim ---- */
 .reviews-wrap{ margin-top:40px; padding-top:26px; border-top:1px solid var(--paper-line); }
 .rv-title{ font-size:20px; font-weight:600; margin-bottom:14px; }
@@ -1229,7 +1241,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <span class="print-mark bday-print"></span>
       <div class="birthday-copy">
         <span class="eyebrow" style="color:var(--cream);">Celebrating today</span>
-        <h2>Birthdays we're unplugging for</h2>
+        <h2 data-cms="home.birthdays.title">Birthdays we're unplugging for</h2>
         <p>Every day we celebrate the changemakers in our community marking another year — because the people doing the work deserve to be seen on their day, too.</p>
         <div class="btn-row">
           <button class="btn btn-line" id="submitBirthdayBtn" style="border-color:rgba(255,255,255,0.4); color:var(--cream);">Submit Birthday</button>
@@ -1277,7 +1289,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="section-head">
       <div>
         <span class="eyebrow">Upcoming</span>
-        <h2>Calendar Events</h2>
+        <h2 data-cms="home.calendar.title">Calendar Events</h2>
       </div>
       <button class="btn btn-solid cal-submit-btn" id="submitEventBtn">Submit your event →</button>
     </div>
@@ -1321,6 +1333,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </section>
 
+  <div class="wrap cms-blocks" data-cms-blocks="home"></div>
+
   <!-- Personalised feed. Hidden entirely for signed-out readers, who get the
        standard New Stories section below instead. -->
   <section class="wrap home-section foryou-section" id="forYouSection" hidden>
@@ -1341,7 +1355,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="section-head">
       <div>
         <span class="eyebrow">Just in</span>
-        <h2>New Stories</h2>
+        <h2 data-cms="home.newstories.title">New Stories</h2>
       </div>
       <button class="view-all" data-page="news">View all stories →</button>
     </div>
@@ -1355,7 +1369,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="section-head">
         <div>
           <span class="eyebrow">The Best Of The Best</span>
-          <h2>This Month's Top 10</h2>
+          <h2 data-cms="home.top10.title">This Month's Top 10</h2>
         </div>
         <button class="view-all" data-page="top10">See full list →</button>
       </div>
@@ -1465,7 +1479,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="youtube-inner">
         <div class="youtube-copy">
           <span class="eyebrow">Watch on YouTube</span>
-          <h2>Our stories, now on screen</h2>
+          <h2 data-cms="home.youtube.title">Our stories, now on screen</h2>
           <p>Go deeper into the impact. Watch documentary-style mini-features, community spotlights, and behind-the-scenes moments from the people in our Directory.</p>
           <a href="https://youtube.com/@unpluggedmagazineza?si=FWWo49yKAc7zu_7I" target="_blank" rel="noopener" class="btn btn-solid">Visit Our Channel ↗</a>
         </div>
@@ -1485,7 +1499,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="comp-hero">
       <span class="print-mark"></span>
       <span class="eyebrow">Open now</span>
-      <h2>The Arena</h2>
+      <h2 data-cms="home.arena.title">The Arena</h2>
       <p>Nominate someone to enter the arena, whose unplugging good into the world.</p>
       <p>Every year, we crown a new Impact Maker, The Face Of Unplug, chosen by readers, entries, and celebrated across our platform.</p>
       <div class="btn-row">
@@ -1635,7 +1649,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
   <section class="wrap" style="padding-top:24px; padding-bottom:0;">
     <div class="section-head">
-      <div><span class="eyebrow">Once-off pricing</span><h2>Directory Packages</h2></div>
+      <div><span class="eyebrow">Once-off pricing</span><h2 data-cms="directory.packages.title">Directory Packages</h2></div>
       <div class="pkg-type-toggle" id="pkgTypeToggle">
         <button class="active" data-ptype="individual">Individual</button>
         <button data-ptype="business">Business</button>
@@ -1715,6 +1729,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <option value="TikTokkers">TikTokkers</option>
       </select>
     </div>
+    <div class="cms-blocks" data-cms-blocks="directory"></div>
     <div class="dir-tools">
       <button class="btn btn-line" type="button" id="dirMapToggle" aria-pressed="false">🗺 Map view</button>
       <button class="btn btn-line" type="button" id="dirNearMeBtn">📍 Near me</button>
@@ -2068,7 +2083,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   <!-- HALL OF FAME -->
   <section class="wrap" id="hallOfFameSection" style="display:none;">
     <div class="section-head">
-      <div><span class="eyebrow">Past champions</span><h2>Hall of Fame</h2></div>
+      <div><span class="eyebrow">Past champions</span><h2 data-cms="home.halloffame.title">Hall of Fame</h2></div>
     </div>
     <div class="hof-grid" id="hofGrid"></div>
   </section>
@@ -3416,6 +3431,54 @@ function initArticleReader(a, id, shareUrl) {
   loadRelatedStories(a, id);
   loadPoll(id);
   loadComments(id);
+}
+
+// ---------------------------------------------------------------------------
+// Admin-editable page content.
+//
+// Two mechanisms, both additive: an element tagged data-cms="home.hero.title"
+// has its text replaced when an override exists, and a container tagged
+// data-cms-blocks="home" is filled with any image blocks for that page. If
+// the CMS is empty or unreachable, every page keeps its built-in wording —
+// the site never depends on the database to be readable.
+// ---------------------------------------------------------------------------
+function cmsBlockHtml(b) {
+  const img = b.image_url
+    ? `<div class="cms-block-img"><img src="${escapeHtml(b.image_url)}" alt="${escapeHtml(b.title || '')}" loading="lazy" decoding="async"></div>`
+    : '';
+  const btn = (b.button_label && b.button_url)
+    ? `<a class="btn btn-solid cms-block-btn" href="${escapeHtml(b.button_url)}">${escapeHtml(b.button_label)}</a>`
+    : '';
+  return `<section class="cms-block">
+    ${img}
+    <div class="cms-block-text">
+      ${b.subheading ? `<span class="eyebrow">${escapeHtml(b.subheading)}</span>` : ''}
+      ${b.title ? `<h2>${escapeHtml(b.title)}</h2>` : ''}
+      ${b.description ? `<p>${escapeHtml(b.description)}</p>` : ''}
+      ${btn}
+    </div>
+  </section>`;
+}
+
+async function applyPageCms() {
+  let cms;
+  try {
+    cms = await api('/page-cms');
+  } catch (err) {
+    return; // leave the built-in content in place
+  }
+  const content = cms.content || {};
+  document.querySelectorAll('[data-cms]').forEach((el) => {
+    const value = content[el.getAttribute('data-cms')];
+    // textContent, not innerHTML — page copy is text, and this keeps any
+    // stray markup in the CMS from executing.
+    if (typeof value === 'string' && value.trim()) el.textContent = value;
+  });
+  const blocks = cms.blocks || {};
+  document.querySelectorAll('[data-cms-blocks]').forEach((wrap) => {
+    const list = blocks[wrap.getAttribute('data-cms-blocks')] || [];
+    wrap.innerHTML = list.map(cmsBlockHtml).join('');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -5268,6 +5331,8 @@ UnplugAPI.restoreSession(
     }
   });
 })();
+
+applyPageCms();
 
 trackPageView('home');
 loadLiveVisitors();

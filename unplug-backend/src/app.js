@@ -37,6 +37,7 @@ const feedRoutes = require('./routes/feed');
 const reviewRoutes = require('./routes/reviews');
 const claimRoutes = require('./routes/claims');
 const directoryMapRoutes = require('./routes/directoryMap');
+const pageCmsRoutes = require('./routes/pageContent');
 
 const app = express();
 
@@ -88,6 +89,7 @@ app.use('/feed', feedRoutes);
 app.use('/reviews', reviewRoutes);
 app.use('/claims', claimRoutes);
 app.use('/directory', directoryMapRoutes);
+app.use('/page-cms', pageCmsRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,

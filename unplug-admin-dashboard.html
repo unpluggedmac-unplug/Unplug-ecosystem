@@ -164,6 +164,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="analytics">Analytics</a>
     <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="pagecms">Page Content</a>
     <a data-section="publish">Publish</a>
     <a data-section="polls">Polls</a>
     <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
@@ -359,6 +360,75 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
 
     <!-- INQUIRIES -->
+    <!-- PAGE CONTENT (CMS) -->
+    <div class="admin-section" id="section-pagecms">
+      <div class="main-head"><div><h1>Page Content</h1><p>Change wording on the site, and add image blocks to any page. Changes go live immediately.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Add an image block</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Page</label>
+              <select id="cmsBlockPage">
+                <option value="home">Home</option>
+                <option value="directory">Directory</option>
+                <option value="news">Latest News</option>
+                <option value="editions">Editions</option>
+                <option value="deafcommunity">Deaf Community</option>
+                <option value="about">About</option>
+                <option value="contact">Contact</option>
+              </select>
+            </div>
+            <div><label>Title</label><input id="cmsBlockTitle" placeholder="Headline"></div>
+            <div><label>Subheading</label><input id="cmsBlockSub" placeholder="Small label above the title"></div>
+            <div><label>Order</label><input id="cmsBlockPos" type="number" value="0"></div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-1;"><label>Description</label><input id="cmsBlockDesc" placeholder="A sentence or two"></div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-2;"><label>Image URL</label><input id="cmsBlockImg" placeholder="https://…"></div>
+            <div><label>Button label</label><input id="cmsBlockBtnLabel" placeholder="Read more"></div>
+            <div><label>Button link</label><input id="cmsBlockBtnUrl" placeholder="https://…"></div>
+          </div>
+          <button class="btn btn-solid" style="width:auto; margin-top:10px;" id="cmsAddBlockBtn">Add Block</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Existing blocks</h3></div>
+        <div class="panel-body" id="cmsBlocksBody" style="padding:0;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Reword the site</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Pick a piece of wording and type a replacement. Leave the box empty and save to put the original wording back.</p>
+          <div class="form-row">
+            <div style="grid-column:1/-2;"><label>What to change</label>
+              <select id="cmsContentKey">
+                <option value="home.newstories.title">Home — "New Stories" heading</option>
+                <option value="home.calendar.title">Home — "Calendar Events" heading</option>
+                <option value="home.birthdays.title">Home — Birthdays heading</option>
+                <option value="home.top10.title">Home — Top 10 heading</option>
+                <option value="home.arena.title">Home — "The Arena" heading</option>
+                <option value="home.halloffame.title">Home — "Hall of Fame" heading</option>
+                <option value="home.youtube.title">Home — video section heading</option>
+                <option value="home.goodnews.title">Home — "The good news desk" heading</option>
+                <option value="directory.title">Directory — main heading</option>
+                <option value="directory.packages.title">Directory — "Directory Packages" heading</option>
+              </select>
+            </div>
+            <div><label>&nbsp;</label><button class="btn btn-solid" style="width:100%;" id="cmsSaveContentBtn">Save</button></div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-1;"><label>New wording</label><input id="cmsContentValue" placeholder="Leave empty to restore the original"></div>
+          </div>
+          <div id="cmsContentBody" style="margin-top:16px;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- PUBLISH (admin-only, no payment step) -->
     <div class="admin-section" id="section-publish">
       <div class="main-head"><div><h1>Publish</h1><p>Put content on the site directly. Nothing here charges anyone or goes through the payment portal.</p></div></div>
@@ -710,6 +780,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'notifications') loadNotifications();
     if (section === 'analytics') loadAnalytics(7);
     if (section === 'comments') loadPendingComments();
+    if (section === 'pagecms') loadPageCms();
     if (section === 'publish') loadPublishSection();
     if (section === 'polls') loadPolls();
     if (section === 'reviews') loadPendingReviews();
@@ -957,6 +1028,98 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
     document.getElementById('bdayDay').value = '';
     document.getElementById('bdayMessage').value = '';
     loadBirthdays();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+// Page Content (CMS) — image blocks and wording overrides.
+async function loadPageCms() {
+  const blocksBody = document.getElementById('cmsBlocksBody');
+  const contentBody = document.getElementById('cmsContentBody');
+  if (!blocksBody) return;
+  blocksBody.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/page-cms/admin/blocks');
+    const list = data.blocks || [];
+    if (list.length === 0) {
+      blocksBody.innerHTML = '<div class="empty-state">No blocks yet.</div>';
+    } else {
+      const table = document.createElement('table');
+      table.innerHTML = '<tr><th>Page</th><th>Title</th><th>Order</th><th>Shown</th><th></th></tr>';
+      list.forEach((b) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtmlAdmin(b.page_key)}</td>`
+          + `<td>${escapeHtmlAdmin(b.title || b.subheading || b.description || '(image only)')}</td>`
+          + `<td>${b.position}</td>`
+          + `<td><span class="status-pill ${b.is_visible ? 'approved' : 'rejected'}">${b.is_visible ? 'Live' : 'Hidden'}</span></td>`
+          + `<td><div class="row-actions"><button class="toggle">${b.is_visible ? 'Hide' : 'Show'}</button><button class="reject">Delete</button></div></td>`;
+        tr.querySelector('.toggle').addEventListener('click', async () => {
+          try { await api(`/page-cms/admin/blocks/${b.id}`, { method: 'PATCH', body: JSON.stringify({ isVisible: !b.is_visible }) }); loadPageCms(); }
+          catch (err) { showToast(err.message, true); }
+        });
+        tr.querySelector('.reject').addEventListener('click', async () => {
+          if (!confirm('Delete this block?')) return;
+          try { await api(`/page-cms/admin/blocks/${b.id}`, { method: 'DELETE' }); showToast('Block deleted.'); loadPageCms(); }
+          catch (err) { showToast(err.message, true); }
+        });
+        table.appendChild(tr);
+      });
+      blocksBody.innerHTML = '';
+      blocksBody.appendChild(table);
+    }
+  } catch (err) {
+    blocksBody.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+
+  // Show which wording is currently overridden, so it's obvious what has
+  // been changed from the original.
+  try {
+    const data = await api('/page-cms/admin/content');
+    const rows = data.content || [];
+    contentBody.innerHTML = rows.length === 0
+      ? '<p style="font-size:13px; color:var(--slate);">Nothing has been reworded yet — every page is using its original text.</p>'
+      : '<p style="font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:6px;">Currently changed</p>'
+        + rows.map((r) => `<div style="font-size:13px; padding:5px 0; border-bottom:1px solid var(--paper-line);"><code>${escapeHtmlAdmin(r.page_key + '.' + r.content_key)}</code> → ${escapeHtmlAdmin(r.value)}</div>`).join('');
+  } catch (err) {
+    contentBody.innerHTML = '';
+  }
+}
+
+document.getElementById('cmsAddBlockBtn').addEventListener('click', async () => {
+  const payload = {
+    pageKey: document.getElementById('cmsBlockPage').value,
+    title: document.getElementById('cmsBlockTitle').value.trim(),
+    subheading: document.getElementById('cmsBlockSub').value.trim(),
+    description: document.getElementById('cmsBlockDesc').value.trim(),
+    imageUrl: document.getElementById('cmsBlockImg').value.trim(),
+    buttonLabel: document.getElementById('cmsBlockBtnLabel').value.trim(),
+    buttonUrl: document.getElementById('cmsBlockBtnUrl').value.trim(),
+    position: Number(document.getElementById('cmsBlockPos').value) || 0,
+  };
+  try {
+    await api('/page-cms/admin/blocks', { method: 'POST', body: JSON.stringify(payload) });
+    showToast('Block added — it is live on that page now.');
+    ['cmsBlockTitle', 'cmsBlockSub', 'cmsBlockDesc', 'cmsBlockImg', 'cmsBlockBtnLabel', 'cmsBlockBtnUrl'].forEach((id) => { document.getElementById(id).value = ''; });
+    loadPageCms();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+document.getElementById('cmsSaveContentBtn').addEventListener('click', async () => {
+  const full = document.getElementById('cmsContentKey').value;
+  const dot = full.indexOf('.');
+  const pageKey = full.slice(0, dot);
+  const contentKey = full.slice(dot + 1);
+  try {
+    const res = await api('/page-cms/admin/content', {
+      method: 'PUT',
+      body: JSON.stringify({ pageKey, contentKey, value: document.getElementById('cmsContentValue').value }),
+    });
+    showToast(res.message || 'Saved.');
+    document.getElementById('cmsContentValue').value = '';
+    loadPageCms();
   } catch (err) {
     showToast(err.message, true);
   }
