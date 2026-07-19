@@ -163,6 +163,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="consultants">Sales Consultants</a>
     <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="analytics">Analytics</a>
+    <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="activitylog">Activity Log</a>
     <a data-section="vouchers">Vouchers</a>
@@ -354,6 +355,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
 
     <!-- INQUIRIES -->
+    <!-- COMMENT MODERATION -->
+    <div class="admin-section" id="section-comments">
+      <div class="main-head"><div><h1>Comments</h1><p>Reader comments waiting for review. Nothing appears on an article until you approve it.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="commentsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <div class="admin-section" id="section-inquiries">
       <div class="main-head"><div><h1>Inquiries</h1><p>Messages submitted through the site's Contact form.</p></div></div>
       <div class="panel">
@@ -565,6 +574,9 @@ function enterDashboard(user){
   document.getElementById('appShell').classList.add('active');
   loadQueueTab('news');
   refreshNotifBadge();
+  // Fill the comments badge up front so a waiting queue is visible without
+  // having to open the section first.
+  loadPendingComments();
 }
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -617,6 +629,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'consultants') loadConsultants();
     if (section === 'notifications') loadNotifications();
     if (section === 'analytics') loadAnalytics(7);
+    if (section === 'comments') loadPendingComments();
     if (section === 'inquiries') loadInquiries();
     if (section === 'activitylog') loadActivityLog();
     if (section === 'vouchers') loadVouchers();
@@ -834,6 +847,44 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
     showToast(err.message, true);
   }
 });
+
+// Comment moderation queue — oldest first, so nothing sits waiting behind
+// newer submissions. Approving publishes it on the article immediately.
+async function loadPendingComments() {
+  const body = document.getElementById('commentsBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/comments/pending');
+    const list = data.comments || [];
+    const badge = document.getElementById('commentsBadge');
+    if (badge) { badge.textContent = list.length; badge.style.display = list.length ? 'inline-block' : 'none'; }
+    if (list.length === 0) { body.innerHTML = '<div class="empty-state">No comments waiting for review.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Comment</th><th>By</th><th>On</th><th>When</th><th></th></tr>';
+    list.forEach((c) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="max-width:340px;">${escapeHtmlAdmin(c.body)}</td>`
+        + `<td>${escapeHtmlAdmin(c.author || '')}<br><span style="font-size:10.5px; color:var(--slate);">${escapeHtmlAdmin(c.author_email || '')}</span></td>`
+        + `<td><a href="unplug-magazine.html?p=article&id=${c.article_id}" target="_blank" rel="noopener">${escapeHtmlAdmin(c.article_title || '')}</a></td>`
+        + `<td>${new Date(c.created_at).toLocaleDateString()}</td>`
+        + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        try { await api(`/comments/${c.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) }); showToast('Comment published.'); loadPendingComments(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try { await api(`/comments/${c.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) }); showToast('Comment rejected.'); loadPendingComments(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
 
 async function loadPendingBirthdays() {
   const body = document.getElementById('bdayPendingBody');

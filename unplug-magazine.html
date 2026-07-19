@@ -822,6 +822,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .share-btn.wa{ background:#25D366; }
 .share-btn.tw{ background:#000; }
 .share-btn.cp{ background:var(--slate); border:0; cursor:pointer; }
+/* ---- article comments ---- */
+.comments-wrap{ margin-top:40px; padding-top:26px; border-top:1px solid var(--paper-line); }
+.cmt-title{ font-size:20px; font-weight:600; margin-bottom:16px; }
+.cmt{ padding:14px 0; border-bottom:1px solid var(--paper-line); }
+.cmt-head{ display:flex; align-items:baseline; gap:10px; margin-bottom:5px; }
+.cmt-who{ font-weight:600; font-size:14px; }
+.cmt-when{ font-size:11.5px; color:var(--slate); }
+.cmt-body{ font-size:14.5px; line-height:1.65; color:var(--ink); white-space:pre-wrap; }
+.cmt-reacts{ display:flex; gap:8px; margin-top:9px; flex-wrap:wrap; }
+.cmt-react{ display:inline-flex; align-items:center; gap:5px; background:none; border:1px solid var(--paper-line); border-radius:100px; padding:4px 10px; font-size:12.5px; cursor:pointer; color:var(--ink); }
+.cmt-react:hover{ border-color:var(--red); }
+.cmt-react.on{ border-color:var(--red); background:rgba(210,7,9,0.06); }
+.cmt-react .n{ font-variant-numeric:tabular-nums; }
+.cmt-empty, .cmt-loading{ font-size:14px; color:var(--slate); padding:8px 0; }
+.cmt-signin{ font-size:14px; color:var(--slate); margin-top:16px; }
+.cmt-signin a{ color:var(--red); font-weight:600; }
+.cmt-form{ margin-top:20px; }
+.cmt-label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; color:var(--slate); margin-bottom:7px; }
+.cmt-form textarea{ width:100%; border:1px solid var(--paper-line); padding:11px 13px; font-family:inherit; font-size:14.5px; line-height:1.6; background:#fff; color:var(--ink); resize:vertical; }
+.cmt-form textarea:focus{ outline:2px solid var(--red); outline-offset:1px; }
+.cmt-actions{ display:flex; align-items:center; gap:14px; margin-top:10px; flex-wrap:wrap; }
+.cmt-note{ font-size:12px; color:var(--slate); }
 /* Wrapper so a card's share row can sit OUTSIDE its <a>, while the card
    itself still stretches to fill the grid cell. */
 .card-shell{ display:flex; flex-direction:column; gap:10px; }
@@ -3195,6 +3217,106 @@ function initArticleReader(a, id, shareUrl) {
   }
 
   loadRelatedStories(a, id);
+  loadComments(id);
+}
+
+// Comments. Reading them is public; posting and reacting need a member
+// account, and every new comment waits for admin approval before it shows.
+const REACTIONS = [
+  { key: 'like', glyph: '👍', label: 'Like' },
+  { key: 'love', glyph: '❤️', label: 'Love' },
+  { key: 'clap', glyph: '👏', label: 'Applaud' },
+  { key: 'insightful', glyph: '💡', label: 'Insightful' },
+];
+
+function commentHtml(c) {
+  const when = c.created_at ? new Date(c.created_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  const buttons = REACTIONS.map((r) => {
+    const count = Number(c[r.key + '_count'] || 0);
+    return `<button class="cmt-react" type="button" data-comment-id="${c.id}" data-reaction="${r.key}" aria-label="${r.label}" title="${r.label}">
+      <span aria-hidden="true">${r.glyph}</span><span class="n">${count}</span>
+    </button>`;
+  }).join('');
+  return `<article class="cmt">
+    <div class="cmt-head"><span class="cmt-who">${escapeHtml(c.author || 'Reader')}</span>${when ? `<span class="cmt-when">${when}</span>` : ''}</div>
+    <p class="cmt-body">${escapeHtml(c.body)}</p>
+    <div class="cmt-reacts">${buttons}</div>
+  </article>`;
+}
+
+async function loadComments(articleId) {
+  const wrap = document.getElementById('articleComments');
+  if (!wrap) return;
+  wrap.innerHTML = '<h3 class="cmt-title">Comments</h3><div class="cmt-loading">Loading comments…</div>';
+  let comments = [];
+  try {
+    const data = await api('/comments/article/' + articleId);
+    comments = data.comments || [];
+  } catch (err) {
+    wrap.innerHTML = '<h3 class="cmt-title">Comments</h3><p class="cmt-empty">Comments aren\'t available right now.</p>';
+    return;
+  }
+  const signedIn = !!UnplugAPI.getToken();
+  const list = comments.length
+    ? comments.map(commentHtml).join('')
+    : '<p class="cmt-empty">No comments yet — be the first to say something.</p>';
+  const form = signedIn
+    ? `<form class="cmt-form" id="cmtForm">
+         <label class="cmt-label" for="cmtBody">Join the conversation</label>
+         <textarea id="cmtBody" rows="3" maxlength="2000" placeholder="Share a thought…" required></textarea>
+         <input type="text" class="hp-field" id="hpComment" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+         <div class="cmt-actions"><button class="btn btn-solid" type="submit">Post comment</button>
+         <span class="cmt-note">Comments are reviewed before they appear.</span></div>
+       </form>`
+    : `<p class="cmt-signin">Want to join in? <a href="unplug-member-dashboard.html" target="_blank" rel="noopener">Sign in or create a free account</a> to comment.</p>`;
+  wrap.innerHTML = `<h3 class="cmt-title">Comments${comments.length ? ` (${comments.length})` : ''}</h3>${list}${form}`;
+
+  const formEl = document.getElementById('cmtForm');
+  if (formEl) {
+    formEl.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const bodyEl = document.getElementById('cmtBody');
+      const text = bodyEl.value.trim();
+      if (!text) return;
+      const btn = formEl.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        const res = await api('/comments/article/' + articleId, {
+          method: 'POST',
+          body: JSON.stringify({ body: text, website: document.getElementById('hpComment').value }),
+        });
+        bodyEl.value = '';
+        showToast(res.message || 'Comment sent for review');
+      } catch (err) {
+        showToast(err.message || "Couldn't post your comment");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  wrap.querySelectorAll('.cmt-react').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!UnplugAPI.getToken()) {
+        showToast('Sign in to react to comments');
+        return;
+      }
+      btn.disabled = true;
+      try {
+        await api('/comments/' + btn.getAttribute('data-comment-id') + '/react', {
+          method: 'POST',
+          body: JSON.stringify({ reaction: btn.getAttribute('data-reaction') }),
+        });
+        // Refetch rather than adjust locally: a member only holds one reaction
+        // per comment, so switching reactions moves two counts at once and
+        // guessing client-side would drift out of sync.
+        await loadComments(articleId);
+      } catch (err) {
+        btn.disabled = false;
+        showToast(err.message || "Couldn't record that reaction");
+      }
+    });
+  });
 }
 
 async function loadRelatedStories(a, id) {
@@ -3253,6 +3375,7 @@ async function loadArticleDetail(id) {
       </div>
       <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
       <div class="related-wrap" id="relatedStories"></div>
+      <div class="comments-wrap" id="articleComments"></div>
     `;
     if (a.banner_image_url) {
       const badge = el.querySelector('.print-mark');
