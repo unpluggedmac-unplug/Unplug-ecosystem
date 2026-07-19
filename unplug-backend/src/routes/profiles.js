@@ -217,11 +217,14 @@ const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, ac
 // ---------------------------------------------------------------------------
 router.patch('/profiles/:id', requireOwnerOrAdmin(getProfileOwnerId), async (req, res, next) => {
   try {
-    const fields = ['bio', 'achievements', 'career', 'quote', 'contact_email', 'contact_phone', 'contact_website', 'display_name'];
     const bodyKeyMap = {
       bio: 'bio', achievements: 'achievements', career: 'career', quote: 'quote',
       contactEmail: 'contact_email', contactPhone: 'contact_phone', contactWebsite: 'contact_website',
       displayName: 'display_name',
+      // Location powers the directory map and "near me" search. Town alone is
+      // enough — the API derives coordinates from it — so most listings never
+      // need latitude/longitude filled in by hand.
+      city: 'city', province: 'province', latitude: 'latitude', longitude: 'longitude',
     };
 
     const setClauses = [];

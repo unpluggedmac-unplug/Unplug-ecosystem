@@ -165,6 +165,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="analytics">Analytics</a>
     <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="polls">Polls</a>
+    <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="activitylog">Activity Log</a>
     <a data-section="vouchers">Vouchers</a>
@@ -356,6 +358,22 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
 
     <!-- INQUIRIES -->
+    <!-- DIRECTORY REVIEWS -->
+    <div class="admin-section" id="section-reviews">
+      <div class="main-head"><div><h1>Reviews</h1><p>Ratings and reviews left on directory listings. Nothing shows on a listing until you approve it.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="reviewsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- LISTING CLAIMS -->
+    <div class="admin-section" id="section-claims">
+      <div class="main-head"><div><h1>Listing Claims</h1><p>Members asking to take ownership of a directory listing. Approving transfers the listing to them, so check they really are the owner first.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="claimsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <!-- POLLS -->
     <div class="admin-section" id="section-polls">
       <div class="main-head"><div><h1>Polls</h1><p>Reader polls. Attach one to an article to show it inside that story, or leave the article blank for a standalone poll.</p></div></div>
@@ -599,6 +617,8 @@ function enterDashboard(user){
   // Fill the comments badge up front so a waiting queue is visible without
   // having to open the section first.
   loadPendingComments();
+  loadPendingReviews();
+  loadPendingClaims();
 }
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -653,6 +673,8 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'analytics') loadAnalytics(7);
     if (section === 'comments') loadPendingComments();
     if (section === 'polls') loadPolls();
+    if (section === 'reviews') loadPendingReviews();
+    if (section === 'claims') loadPendingClaims();
     if (section === 'inquiries') loadInquiries();
     if (section === 'activitylog') loadActivityLog();
     if (section === 'vouchers') loadVouchers();
@@ -900,6 +922,82 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
     showToast(err.message, true);
   }
 });
+
+// Directory review moderation.
+async function loadPendingReviews() {
+  const body = document.getElementById('reviewsBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/reviews/pending');
+    const list = data.reviews || [];
+    const badge = document.getElementById('reviewsBadge');
+    if (badge) { badge.textContent = list.length; badge.style.display = list.length ? 'inline-block' : 'none'; }
+    if (list.length === 0) { body.innerHTML = '<div class="empty-state">No reviews waiting for review.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Rating</th><th>Review</th><th>By</th><th>Listing</th><th></th></tr>';
+    list.forEach((r) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</td>`
+        + `<td style="max-width:300px;">${escapeHtmlAdmin(r.body || '—')}</td>`
+        + `<td>${escapeHtmlAdmin(r.reviewer || '')}<br><span style="font-size:10.5px; color:var(--slate);">${escapeHtmlAdmin(r.reviewer_email || '')}</span></td>`
+        + `<td><a href="unplug-magazine.html?p=profile&slug=${encodeURIComponent(r.slug || '')}" target="_blank" rel="noopener">${escapeHtmlAdmin(r.listing || '')}</a></td>`
+        + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        try { await api(`/reviews/${r.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) }); showToast('Review published.'); loadPendingReviews(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try { await api(`/reviews/${r.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) }); showToast('Review rejected.'); loadPendingReviews(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// Listing claims. Approving hands the listing to the claimant, so the
+// confirmation spells that out before it happens.
+async function loadPendingClaims() {
+  const body = document.getElementById('claimsBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/claims/pending');
+    const list = data.claims || [];
+    const badge = document.getElementById('claimsBadge');
+    if (badge) { badge.textContent = list.length; badge.style.display = list.length ? 'inline-block' : 'none'; }
+    if (list.length === 0) { body.innerHTML = '<div class="empty-state">No claims waiting.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Listing</th><th>Claimed by</th><th>Current owner</th><th>Message</th><th></th></tr>';
+    list.forEach((c) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><a href="unplug-magazine.html?p=profile&slug=${encodeURIComponent(c.slug || '')}" target="_blank" rel="noopener">${escapeHtmlAdmin(c.listing || '')}</a></td>`
+        + `<td>${escapeHtmlAdmin(c.claimant_email || '')}</td>`
+        + `<td>${escapeHtmlAdmin(c.current_owner_email || '—')}</td>`
+        + `<td style="max-width:260px;">${escapeHtmlAdmin(c.message || '—')}</td>`
+        + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        if (!confirm(`Transfer "${c.listing}" to ${c.claimant_email}? They will control this listing.`)) return;
+        try { await api(`/claims/${c.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) }); showToast('Listing transferred.'); loadPendingClaims(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try { await api(`/claims/${c.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) }); showToast('Claim rejected.'); loadPendingClaims(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
 
 // Polls. Options are plain text inputs added on the fly; a poll needs at
 // least two, which the backend enforces as well.

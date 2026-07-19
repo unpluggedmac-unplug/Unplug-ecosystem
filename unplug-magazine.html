@@ -822,6 +822,40 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .share-btn.wa{ background:#25D366; }
 .share-btn.tw{ background:#000; }
 .share-btn.cp{ background:var(--slate); border:0; cursor:pointer; }
+/* ---- directory reviews + claim ---- */
+.reviews-wrap{ margin-top:40px; padding-top:26px; border-top:1px solid var(--paper-line); }
+.rv-title{ font-size:20px; font-weight:600; margin-bottom:14px; }
+.stars{ letter-spacing:1px; color:rgba(15,14,14,0.22); }
+.stars .on{ color:#e8a712; }
+.rv-summary{ display:flex; align-items:center; gap:10px; margin-bottom:18px; font-size:14px; }
+.rv-summary strong{ font-size:18px; }
+.rv-summary span{ color:var(--slate); }
+.rv{ padding:13px 0; border-bottom:1px solid var(--paper-line); }
+.rv-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.rv-who{ font-weight:600; font-size:14px; }
+.rv-when{ font-size:11.5px; color:var(--slate); }
+.rv-body{ font-size:14.5px; line-height:1.6; margin-top:6px; white-space:pre-wrap; }
+.rv-empty{ font-size:14px; color:var(--slate); margin-bottom:16px; }
+.rv-signin{ font-size:14px; color:var(--slate); margin-top:16px; }
+.rv-signin a{ color:var(--red); font-weight:600; }
+.rv-form{ margin-top:22px; }
+.rv-label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; color:var(--slate); margin-bottom:7px; }
+.rv-stars-pick{ display:flex; gap:4px; margin-bottom:10px; }
+.rv-star{ background:none; border:none; font-size:26px; line-height:1; cursor:pointer; color:rgba(15,14,14,0.22); padding:0 2px; }
+.rv-star.on, .rv-star:hover{ color:#e8a712; }
+.rv-form textarea{ width:100%; border:1px solid var(--paper-line); padding:11px 13px; font-family:inherit; font-size:14.5px; line-height:1.6; background:#fff; color:var(--ink); resize:vertical; }
+.rv-form textarea:focus{ outline:2px solid var(--red); outline-offset:1px; }
+.rv-actions{ display:flex; align-items:center; gap:14px; margin-top:10px; flex-wrap:wrap; }
+.rv-note{ font-size:12px; color:var(--slate); }
+.rv-claim{ margin-top:26px; padding-top:18px; border-top:1px dashed var(--paper-line); }
+.rv-claim p{ font-size:13.5px; color:var(--slate); margin-bottom:9px; }
+/* ---- directory map + near me ---- */
+.dir-tools{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 18px; }
+.dir-tools-note{ font-size:13px; color:var(--slate); }
+.dir-map{ height:440px; width:100%; border:1px solid var(--paper-line); }
+.dir-map-note{ font-size:12.5px; color:var(--slate); margin:8px 0 20px; }
+.dir-distance{ font-size:12px; color:var(--red); font-weight:600; margin-top:2px; }
+@media(max-width:700px){ .dir-map{ height:320px; } }
 /* ---- personalised feed ---- */
 .foryou-section[hidden]{ display:none; }
 .topic-chips{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 22px; align-items:center; }
@@ -1680,6 +1714,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <option value="Photographers">Photographers</option>
         <option value="TikTokkers">TikTokkers</option>
       </select>
+    </div>
+    <div class="dir-tools">
+      <button class="btn btn-line" type="button" id="dirMapToggle" aria-pressed="false">🗺 Map view</button>
+      <button class="btn btn-line" type="button" id="dirNearMeBtn">📍 Near me</button>
+      <span class="dir-tools-note" id="dirToolsNote"></span>
+    </div>
+    <div id="dirMapPanel" hidden>
+      <div id="dirMap" class="dir-map"></div>
+      <p class="dir-map-note" id="dirMapNote"></p>
     </div>
     <div class="dir-grid" id="dirGrid">
       <div class="dir-empty-state">Loading profiles…</div>
@@ -3082,12 +3125,127 @@ function profileDetailHtml(profile, socials, gallery) {
   return html;
 }
 
+// Reviews and ratings on a directory listing, plus the "claim this listing"
+// route for business owners. Reading is public; rating or claiming needs an
+// account, and both go through admin approval.
+function starsHtml(rating) {
+  let out = '';
+  for (let i = 1; i <= 5; i += 1) out += `<span class="${i <= rating ? 'on' : ''}">★</span>`;
+  return `<span class="stars" aria-label="${rating} out of 5">${out}</span>`;
+}
+
+async function loadProfileReviews(profile) {
+  const wrap = document.getElementById('profileReviews');
+  if (!wrap || !profile) return;
+  let data;
+  try {
+    data = await api('/reviews/profile/' + profile.id);
+  } catch (err) {
+    wrap.innerHTML = '';
+    return;
+  }
+  const reviews = data.reviews || [];
+  const signedIn = !!UnplugAPI.getToken();
+  const summary = data.average === null
+    ? '<p class="rv-empty">No reviews yet — be the first to leave one.</p>'
+    : `<div class="rv-summary">${starsHtml(Math.round(data.average))}<strong>${data.average}</strong><span>from ${data.count} review${data.count === 1 ? '' : 's'}</span></div>`;
+
+  const list = reviews.map((r) => `<article class="rv">
+      <div class="rv-head">${starsHtml(r.rating)}<span class="rv-who">${escapeHtml(r.reviewer || 'Reader')}</span>
+      <span class="rv-when">${new Date(r.created_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' })}</span></div>
+      ${r.body ? `<p class="rv-body">${escapeHtml(r.body)}</p>` : ''}
+    </article>`).join('');
+
+  const form = signedIn
+    ? `<form class="rv-form" id="rvForm">
+         <label class="rv-label">Rate this listing</label>
+         <div class="rv-stars-pick" id="rvStars" role="radiogroup" aria-label="Your rating">
+           ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rv-star" data-value="${n}" role="radio" aria-checked="false" aria-label="${n} star${n === 1 ? '' : 's'}">★</button>`).join('')}
+         </div>
+         <textarea id="rvBody" rows="3" maxlength="1500" placeholder="What was your experience? (optional)"></textarea>
+         <input type="text" class="hp-field" id="hpReview" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+         <div class="rv-actions"><button class="btn btn-solid" type="submit">Submit review</button>
+         <span class="rv-note">Reviews are checked before they appear.</span></div>
+       </form>`
+    : `<p class="rv-signin"><a href="unplug-member-dashboard.html" target="_blank" rel="noopener">Sign in</a> to leave a review.</p>`;
+
+  const claim = signedIn
+    ? `<div class="rv-claim"><p>Is this your listing?</p>
+         <button class="btn btn-line" type="button" id="claimBtn">Claim this listing</button></div>`
+    : '';
+
+  wrap.innerHTML = `<h3 class="rv-title">Reviews</h3>${summary}${list}${form}${claim}`;
+
+  // Star picker
+  let chosen = 0;
+  const starWrap = document.getElementById('rvStars');
+  if (starWrap) {
+    starWrap.querySelectorAll('.rv-star').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        chosen = Number(btn.getAttribute('data-value'));
+        starWrap.querySelectorAll('.rv-star').forEach((b) => {
+          const on = Number(b.getAttribute('data-value')) <= chosen;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-checked', Number(b.getAttribute('data-value')) === chosen ? 'true' : 'false');
+        });
+      });
+    });
+  }
+
+  const rvForm = document.getElementById('rvForm');
+  if (rvForm) {
+    rvForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!chosen) { showToast('Pick a star rating first'); return; }
+      const btn = rvForm.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        const res = await api('/reviews/profile/' + profile.id, {
+          method: 'POST',
+          body: JSON.stringify({
+            rating: chosen,
+            body: document.getElementById('rvBody').value.trim(),
+            website: document.getElementById('hpReview').value,
+          }),
+        });
+        showToast(res.message || 'Review sent for approval');
+        document.getElementById('rvBody').value = '';
+      } catch (err) {
+        showToast(err.message || "Couldn't submit your review");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  const claimBtn = document.getElementById('claimBtn');
+  if (claimBtn) {
+    claimBtn.addEventListener('click', async () => {
+      const message = prompt('Tell us how you\'re connected to this listing (optional):') || '';
+      claimBtn.disabled = true;
+      try {
+        const res = await api('/claims/profile/' + profile.id, {
+          method: 'POST',
+          body: JSON.stringify({ message }),
+        });
+        showToast(res.message || 'Claim submitted');
+      } catch (err) {
+        showToast(err.message || "Couldn't submit your claim");
+      } finally {
+        claimBtn.disabled = false;
+      }
+    });
+  }
+}
+
 async function loadProfileDetail(slug) {
   const container = document.getElementById('profileDetailContent');
   container.innerHTML = '<div class="dir-empty-state">Loading profile…</div>';
   try {
     const data = await api('/profiles/' + encodeURIComponent(slug));
-    container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery);
+    container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery)
+      + '<div class="reviews-wrap" id="profileReviews"></div>';
+    loadProfileReviews(data.profile);
     // Deep-link this profile (shareable/indexable URL + its own title/desc).
     const q = '?p=profile&slug=' + encodeURIComponent(slug);
     history.replaceState({ p: 'profile', slug }, '', q);
@@ -3259,6 +3417,145 @@ function initArticleReader(a, id, shareUrl) {
   loadPoll(id);
   loadComments(id);
 }
+
+// ---------------------------------------------------------------------------
+// Directory map + "near me".
+//
+// Leaflet is fetched only when someone actually opens the map, so readers who
+// never use it don't pay for the library — it matters on expensive mobile data.
+// ---------------------------------------------------------------------------
+let leafletPromise = null;
+function loadLeaflet() {
+  if (leafletPromise) return leafletPromise;
+  leafletPromise = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = () => resolve(window.L);
+    s.onerror = () => reject(new Error('Map library failed to load'));
+    document.head.appendChild(s);
+  });
+  return leafletPromise;
+}
+
+let dirMapInstance = null;
+let dirMapLayer = null;
+
+function currentDirCategory() {
+  const sel = document.getElementById('dirCategorySelect');
+  return sel && sel.value ? sel.value : '';
+}
+
+async function renderDirMap() {
+  const panel = document.getElementById('dirMapPanel');
+  const note = document.getElementById('dirMapNote');
+  if (!panel) return;
+  note.textContent = 'Loading map…';
+  let L, data;
+  try {
+    const cat = currentDirCategory();
+    [L, data] = await Promise.all([
+      loadLeaflet(),
+      api('/directory/map' + (cat ? '?category=' + encodeURIComponent(cat) : '')),
+    ]);
+  } catch (err) {
+    note.textContent = "The map couldn't load right now.";
+    return;
+  }
+  if (!dirMapInstance) {
+    // Centred on South Africa until we have pins to fit to.
+    dirMapInstance = L.map('dirMap').setView([-29.0, 24.0], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 18,
+    }).addTo(dirMapInstance);
+  }
+  if (dirMapLayer) dirMapLayer.remove();
+  dirMapLayer = L.layerGroup().addTo(dirMapInstance);
+
+  const listings = data.listings || [];
+  listings.forEach((l) => {
+    const where = [l.city, l.province].filter(Boolean).join(', ');
+    const marker = L.marker([l.latitude, l.longitude]).addTo(dirMapLayer);
+    marker.bindPopup(
+      `<strong>${escapeHtml(l.display_name)}</strong><br>`
+      + (l.category ? escapeHtml(l.category) + '<br>' : '')
+      + (where ? escapeHtml(where) + '<br>' : '')
+      + (l.approximate ? '<em style="font-size:11px;">Approximate — town centre</em><br>' : '')
+      + `<a href="?p=profile&slug=${encodeURIComponent(l.slug)}">View profile →</a>`
+    );
+  });
+  if (listings.length > 0) {
+    dirMapInstance.fitBounds(listings.map((l) => [l.latitude, l.longitude]), { padding: [30, 30], maxZoom: 12 });
+  }
+  // Say plainly how many listings couldn't be placed, rather than quietly
+  // showing a near-empty map as if that were the whole directory.
+  const unplaced = data.unplaced || 0;
+  note.textContent = listings.length === 0
+    ? `None of the ${data.total} listings have a town set yet, so there's nothing to show on the map. Add a town to a listing and it'll appear here.`
+    : `Showing ${listings.length} of ${data.total} listings.` + (unplaced ? ` ${unplaced} have no town set yet.` : '');
+  // Leaflet needs a nudge when it's revealed inside a previously hidden panel.
+  setTimeout(() => dirMapInstance.invalidateSize(), 50);
+}
+
+(function setupDirectoryTools() {
+  const toggle = document.getElementById('dirMapToggle');
+  const nearBtn = document.getElementById('dirNearMeBtn');
+  const panel = document.getElementById('dirMapPanel');
+  const note = document.getElementById('dirToolsNote');
+  if (!toggle || !panel) return;
+
+  toggle.addEventListener('click', () => {
+    const opening = panel.hidden;
+    panel.hidden = !opening;
+    toggle.setAttribute('aria-pressed', opening ? 'true' : 'false');
+    toggle.textContent = opening ? '🗺 Hide map' : '🗺 Map view';
+    if (opening) renderDirMap();
+  });
+
+  const catSel = document.getElementById('dirCategorySelect');
+  if (catSel) catSel.addEventListener('change', () => { if (!panel.hidden) renderDirMap(); });
+
+  if (nearBtn) nearBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      note.textContent = 'Your browser doesn\'t support location search.';
+      return;
+    }
+    note.textContent = 'Finding your location…';
+    nearBtn.disabled = true;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      try {
+        const cat = currentDirCategory();
+        const q = `/directory/near?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&radiusKm=150`
+          + (cat ? '&category=' + encodeURIComponent(cat) : '');
+        const data = await api(q);
+        const listings = data.listings || [];
+        const grid = document.getElementById('dirGrid');
+        if (listings.length === 0) {
+          note.textContent = 'No listings found within 150 km that have a town set.';
+        } else {
+          note.textContent = `Nearest ${listings.length} listing${listings.length === 1 ? '' : 's'} to you.`;
+          grid.innerHTML = listings.map((l) => {
+            const card = dirCardHtml(l);
+            return card.replace('</h4>', `</h4><p class="dir-distance">${l.distanceKm} km away${l.approximate ? ' (approx.)' : ''}</p>`);
+          }).join('');
+          const more = document.getElementById('dirLoadMoreBtn');
+          if (more) more.style.display = 'none';
+        }
+      } catch (err) {
+        note.textContent = "Couldn't search near you right now.";
+      } finally {
+        nearBtn.disabled = false;
+      }
+    }, () => {
+      note.textContent = 'Location permission was declined, so we can\'t sort by distance.';
+      nearBtn.disabled = false;
+    }, { timeout: 10000 });
+  });
+})();
 
 // "For you" — a personalised feed for signed-in members, ranked by the
 // topics they follow and the categories they've saved from. Signed-out
