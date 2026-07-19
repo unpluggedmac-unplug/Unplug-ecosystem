@@ -822,6 +822,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .share-btn.wa{ background:#25D366; }
 .share-btn.tw{ background:#000; }
 .share-btn.cp{ background:var(--slate); border:0; cursor:pointer; }
+/* ---- reader poll ---- */
+.poll-wrap:empty{ display:none; }
+.poll{ margin-top:34px; border:1px solid var(--paper-line); border-left:3px solid var(--red); padding:20px 22px; background:var(--paper); }
+.poll-kicker{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.14em; font-weight:700; color:var(--red); }
+.poll-q{ font-size:19px; font-weight:600; line-height:1.3; margin:8px 0 16px; }
+.poll-body{ display:flex; flex-direction:column; gap:9px; }
+.poll-opt{ text-align:left; background:#fff; border:1px solid var(--paper-line); padding:11px 14px; font-family:inherit; font-size:14.5px; color:var(--ink); cursor:pointer; transition:border-color .2s, background .2s; }
+.poll-opt:hover:not(:disabled){ border-color:var(--red); background:rgba(210,7,9,0.04); }
+.poll-opt:disabled{ opacity:0.55; cursor:default; }
+.poll-res-top{ display:flex; justify-content:space-between; gap:12px; font-size:14px; margin-bottom:5px; }
+.poll-pct{ font-weight:700; font-variant-numeric:tabular-nums; }
+.poll-bar{ height:8px; background:rgba(15,14,14,0.09); overflow:hidden; }
+.poll-bar span{ display:block; height:100%; background:var(--red); transition:width .5s ease; }
+.poll-foot{ font-size:12px; color:var(--slate); margin-top:14px; }
+@media (prefers-reduced-motion:reduce){ .poll-bar span{ transition:none; } }
 /* ---- article comments ---- */
 .comments-wrap{ margin-top:40px; padding-top:26px; border-top:1px solid var(--paper-line); }
 .cmt-title{ font-size:20px; font-weight:600; margin-bottom:16px; }
@@ -3217,7 +3232,95 @@ function initArticleReader(a, id, shareUrl) {
   }
 
   loadRelatedStories(a, id);
+  loadPoll(id);
   loadComments(id);
+}
+
+// Reader polls. Open to everyone — a random per-browser key keeps casual
+// double-voting down without demanding an account. Once someone has voted
+// (or the poll is closed) we show results instead of the ballot.
+function pollVoterKey() {
+  let key = localStorage.getItem('unplug_voter_key');
+  if (!key) {
+    key = (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+    localStorage.setItem('unplug_voter_key', key);
+  }
+  return key;
+}
+
+function votedPolls() {
+  try { return JSON.parse(localStorage.getItem('unplug_voted_polls') || '[]'); }
+  catch (e) { return []; }
+}
+
+function markPollVoted(pollId) {
+  const list = votedPolls();
+  if (list.indexOf(pollId) === -1) {
+    list.push(pollId);
+    localStorage.setItem('unplug_voted_polls', JSON.stringify(list));
+  }
+}
+
+function pollHtml(poll, showResults) {
+  const total = poll.totalVotes || 0;
+  const body = poll.options.map((o) => {
+    if (!showResults) {
+      return `<button class="poll-opt" type="button" data-option-id="${o.id}">${escapeHtml(o.label)}</button>`;
+    }
+    const pct = total > 0 ? Math.round((o.votes / total) * 100) : 0;
+    return `<div class="poll-res">
+      <div class="poll-res-top"><span>${escapeHtml(o.label)}</span><span class="poll-pct">${pct}%</span></div>
+      <div class="poll-bar"><span style="width:${pct}%"></span></div>
+    </div>`;
+  }).join('');
+  const foot = showResults
+    ? `<p class="poll-foot">${total} ${total === 1 ? 'vote' : 'votes'}${poll.is_open ? '' : ' · voting closed'}</p>`
+    : '<p class="poll-foot">Pick one to see what everyone else thinks.</p>';
+  return `<div class="poll" data-poll-id="${poll.id}">
+    <span class="poll-kicker">Reader poll</span>
+    <h3 class="poll-q">${escapeHtml(poll.question)}</h3>
+    <div class="poll-body">${body}</div>
+    ${foot}
+  </div>`;
+}
+
+async function loadPoll(articleId) {
+  const wrap = document.getElementById('articlePoll');
+  if (!wrap) return;
+  let poll = null;
+  try {
+    const data = await api('/polls/article/' + articleId);
+    poll = data.poll;
+  } catch (err) {
+    wrap.innerHTML = '';
+    return;
+  }
+  if (!poll) { wrap.innerHTML = ''; return; }
+
+  const render = (p) => {
+    const alreadyVoted = votedPolls().indexOf(p.id) !== -1;
+    wrap.innerHTML = pollHtml(p, alreadyVoted || !p.is_open);
+    wrap.querySelectorAll('.poll-opt').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        wrap.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
+        try {
+          const res = await api('/polls/' + p.id + '/vote', {
+            method: 'POST',
+            body: JSON.stringify({
+              optionId: Number(btn.getAttribute('data-option-id')),
+              voterKey: pollVoterKey(),
+            }),
+          });
+          markPollVoted(p.id);
+          render(res.poll);
+        } catch (err) {
+          wrap.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = false; });
+          showToast(err.message || "Couldn't record your vote");
+        }
+      });
+    });
+  };
+  render(poll);
 }
 
 // Comments. Reading them is public; posting and reacting need a member
@@ -3374,6 +3477,7 @@ async function loadArticleDetail(id) {
         ${shareRowHtml(shareUrl, a.title)}
       </div>
       <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
+      <div class="poll-wrap" id="articlePoll"></div>
       <div class="related-wrap" id="relatedStories"></div>
       <div class="comments-wrap" id="articleComments"></div>
     `;
