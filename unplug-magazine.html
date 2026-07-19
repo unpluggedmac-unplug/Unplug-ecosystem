@@ -822,6 +822,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .share-btn.wa{ background:#25D366; }
 .share-btn.tw{ background:#000; }
 .share-btn.cp{ background:var(--slate); border:0; cursor:pointer; }
+/* ---- personalised feed ---- */
+.foryou-section[hidden]{ display:none; }
+.topic-chips{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 22px; align-items:center; }
+.topic-hint{ width:100%; font-size:13px; color:var(--slate); margin:0 0 4px; }
+.topic-chip{ background:#fff; border:1px solid var(--paper-line); border-radius:100px; padding:7px 15px; font-family:inherit; font-size:13px; color:var(--ink); cursor:pointer; transition:border-color .2s, background .2s; }
+.topic-chip:hover:not(:disabled){ border-color:var(--red); }
+.topic-chip.on{ background:var(--red); border-color:var(--red); color:#fff; }
+.topic-chip:disabled{ opacity:0.6; cursor:default; }
 /* ---- reader poll ---- */
 .poll-wrap:empty{ display:none; }
 .poll{ margin-top:34px; border:1px solid var(--paper-line); border-left:3px solid var(--red); padding:20px 22px; background:var(--paper); }
@@ -1276,6 +1284,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
     <div class="grid-3" id="highlightedArticlesGrid">
       <div class="dir-empty-state">Loading...</div>
+    </div>
+  </section>
+
+  <!-- Personalised feed. Hidden entirely for signed-out readers, who get the
+       standard New Stories section below instead. -->
+  <section class="wrap home-section foryou-section" id="forYouSection" hidden>
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Your feed</span>
+        <h2 id="forYouHeading">For you</h2>
+      </div>
+      <button class="view-all" id="forYouTopicsBtn" type="button">Choose topics →</button>
+    </div>
+    <div class="topic-chips" id="forYouTopics" hidden></div>
+    <div class="grid-3" id="forYouGrid">
+      <div class="dir-empty-state">Loading your feed…</div>
     </div>
   </section>
 
@@ -3236,6 +3260,58 @@ function initArticleReader(a, id, shareUrl) {
   loadComments(id);
 }
 
+// "For you" — a personalised feed for signed-in members, ranked by the
+// topics they follow and the categories they've saved from. Signed-out
+// readers never see this section at all.
+async function loadForYou() {
+  const section = document.getElementById('forYouSection');
+  if (!section || !UnplugAPI.getToken()) return;
+  const grid = document.getElementById('forYouGrid');
+  const heading = document.getElementById('forYouHeading');
+  try {
+    const data = await api('/feed/for-you');
+    const articles = data.articles || [];
+    if (articles.length === 0) return; // nothing to show — leave it hidden
+    section.hidden = false;
+    // Don't call it "For you" unless it actually reflects their interests.
+    heading.textContent = data.personalised ? 'For you' : 'Latest stories';
+    grid.innerHTML = articles.map(homeStoryCardHtml).join('');
+  } catch (err) {
+    section.hidden = true;
+  }
+}
+
+async function loadTopicChips() {
+  const wrap = document.getElementById('forYouTopics');
+  if (!wrap) return;
+  try {
+    const data = await api('/feed/topics');
+    const topics = data.topics || [];
+    if (topics.length === 0) { wrap.innerHTML = '<p class="topic-hint">No topics available yet.</p>'; return; }
+    wrap.innerHTML = '<p class="topic-hint">Follow the topics you care about — your feed updates straight away.</p>'
+      + topics.map((t) => `<button class="topic-chip${t.following ? ' on' : ''}" type="button" data-topic-id="${t.id}" aria-pressed="${t.following ? 'true' : 'false'}">${escapeHtml(t.name)}</button>`).join('');
+    wrap.querySelectorAll('.topic-chip').forEach((chip) => {
+      chip.addEventListener('click', async () => {
+        const id = chip.getAttribute('data-topic-id');
+        const following = chip.classList.contains('on');
+        chip.disabled = true;
+        try {
+          await api('/feed/topics/' + id, { method: following ? 'DELETE' : 'POST' });
+          chip.classList.toggle('on', !following);
+          chip.setAttribute('aria-pressed', !following ? 'true' : 'false');
+          loadForYou();
+        } catch (err) {
+          showToast(err.message || "Couldn't update that topic");
+        } finally {
+          chip.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    wrap.innerHTML = '<p class="topic-hint">Topics aren\'t available right now.</p>';
+  }
+}
+
 // Reader polls. Open to everyone — a random per-browser key keeps casual
 // double-voting down without demanding an account. Once someone has voted
 // (or the poll is closed) we show results instead of the ballot.
@@ -4873,9 +4949,28 @@ async function loadTopArticleWeek() {
 // localStorage) so member-only touches like "Save for later" work here too.
 // Silent either way — the magazine itself stays fully readable signed out.
 UnplugAPI.restoreSession(
-  () => { document.body.classList.add('is-member'); },
+  () => {
+    document.body.classList.add('is-member');
+    loadForYou();
+  },
   () => { document.body.classList.remove('is-member'); }
 );
+
+// Topic picker toggles open under the "For you" heading.
+(function setupTopicPicker() {
+  const btn = document.getElementById('forYouTopicsBtn');
+  const wrap = document.getElementById('forYouTopics');
+  if (!btn || !wrap) return;
+  btn.addEventListener('click', () => {
+    const opening = wrap.hidden;
+    wrap.hidden = !opening;
+    btn.textContent = opening ? 'Hide topics ↑' : 'Choose topics →';
+    if (opening && !wrap.dataset.loaded) {
+      wrap.dataset.loaded = '1';
+      loadTopicChips();
+    }
+  });
+})();
 
 trackPageView('home');
 loadLiveVisitors();

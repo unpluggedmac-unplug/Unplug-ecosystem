@@ -33,6 +33,7 @@ const { router: activityLogRoutes } = require('./routes/activityLog');
 const savedArticleRoutes = require('./routes/savedArticles');
 const commentRoutes = require('./routes/comments');
 const pollRoutes = require('./routes/polls');
+const feedRoutes = require('./routes/feed');
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.use('/admin/activity-log', activityLogRoutes);
 app.use('/saved', savedArticleRoutes);
 app.use('/comments', commentRoutes);
 app.use('/polls', pollRoutes);
+app.use('/feed', feedRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,

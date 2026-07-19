@@ -12,9 +12,12 @@ const router = express.Router();
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT a.id, a.title, a.category, a.body, a.created_at, s.saved_at
+      // Category lives on the categories table, not on articles — articles
+      // only carries category_id.
+      `SELECT a.id, a.title, c.name AS category, a.body, a.created_at, s.saved_at
          FROM saved_articles s
          JOIN articles a ON a.id = s.article_id
+         LEFT JOIN categories c ON c.id = a.category_id
         WHERE s.user_id = $1
         ORDER BY s.saved_at DESC`,
       [req.user.id]
