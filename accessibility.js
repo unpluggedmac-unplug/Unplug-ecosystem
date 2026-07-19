@@ -80,6 +80,19 @@
     font-family:'Comic Sans MS','Trebuchet MS',Verdana,sans-serif !important;
     letter-spacing:0.04em !important; word-spacing:0.09em !important; line-height:1.65 !important; }
 
+  /* Reduce motion — neutralise animations, transitions and auto-scrolling for
+     motion-sensitive users, regardless of the OS setting. */
+  html.a11y-motion *, html.a11y-motion *::before, html.a11y-motion *::after{
+    animation-duration:0.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:0.001ms !important; scroll-behavior:auto !important; }
+
+  /* Colour-blind safe — swap the red accent for an Okabe–Ito blue that stays
+     distinguishable under red/green colour blindness, and never rely on colour
+     alone: underline links and outline focus/active states. */
+  html.a11y-cvd{ --red:#0072B2; --maroon:#005a8c; --gold:#E69F00; }
+  html.a11y-cvd a:not(.btn){ text-decoration:underline; }
+  html.a11y-cvd .btn-solid{ background:#0072B2; border-color:#0072B2; color:#fff; }
+
   /* Simplified reading — hide decoration/ads, narrow the measure. */
   html.a11y-simple .ad-slot,
   html.a11y-simple .print-mark,
@@ -124,6 +137,8 @@
       optBtn('contrast', '🌙', 'High contrast') +
       optBtn('dark', '🖤', 'Dark mode') +
       optBtn('dyslexia', '📖', 'Dyslexia font') +
+      optBtn('motion', '🎬', 'Reduce motion') +
+      optBtn('cvd', '🌈', 'Colour-blind') +
       optBtn('simple', '📱', 'Simplified') +
     '</div>' +
     '<button class="a11y-reset" type="button">Reset all</button>';
@@ -172,7 +187,7 @@
   }
 
   function applyAll() {
-    ['sasl', 'contrast', 'dark', 'dyslexia', 'simple'].forEach(function (k) {
+    ['sasl', 'contrast', 'dark', 'dyslexia', 'motion', 'cvd', 'simple'].forEach(function (k) {
       setToggle(k, !!prefs[k]);
     });
     applyFont();
@@ -222,7 +237,7 @@
     speaking = false;
     prefs = {};
     savePrefs();
-    ['sasl', 'contrast', 'dark', 'dyslexia', 'simple'].forEach(function (k) { setToggle(k, false); });
+    ['sasl', 'contrast', 'dark', 'dyslexia', 'motion', 'cvd', 'simple'].forEach(function (k) { setToggle(k, false); });
     applyFont();
     reflect();
   });

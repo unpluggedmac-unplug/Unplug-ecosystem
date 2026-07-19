@@ -621,13 +621,50 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .shoutout-social{ display:flex; gap:10px; margin-top:18px; }
 .shoutout-social a{ width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; color:#fff; transition:background .2s; border:1px solid rgba(255,255,255,0.3); }
 .shoutout-social a:hover{ background:rgba(255,255,255,0.35); }
-/* ---- Ivorymuse partner banner ---- */
-.ivorymuse-card{ display:flex; flex-direction:column; }
-.ivorymuse-title{ font-size:clamp(22px,3vw,32px); font-weight:600; line-height:1.25; color:var(--ink); margin:10px 0 24px; max-width:36ch; }
-.ivorymuse-thumb{ overflow:hidden; margin-bottom:24px; }
-.ivorymuse-thumb img{ display:block; width:100%; height:auto; }
-.ivorymuse-btn{ align-self:flex-start; background:var(--red); border-color:var(--red); color:#fff; }
-.ivorymuse-btn:hover{ background:var(--maroon); border-color:var(--maroon); }
+/* ---- Follow us: social channels ---- */
+.social-follow{ text-align:center; }
+.social-follow-head h2{ font-size:clamp(24px,3.4vw,36px); font-weight:700; margin:8px 0 8px; }
+.social-follow-head p{ color:var(--slate); max-width:52ch; margin:0 auto; font-size:15px; }
+.social-follow-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-top:28px; }
+.social-follow-btn{ display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 8px;
+  border:1px solid var(--paper-line); border-radius:14px; color:var(--ink); text-decoration:none;
+  font-size:12.5px; font-weight:600; transition:transform .2s, border-color .2s, color .2s, background .2s; }
+.social-follow-btn svg{ transition:transform .2s; }
+.social-follow-btn:hover{ transform:translateY(-4px); border-color:currentColor; }
+.social-follow-btn:hover svg{ transform:scale(1.12); }
+.social-follow-btn:focus-visible{ outline:3px solid #1f6feb; outline-offset:2px; }
+.social-follow-btn.ig:hover{ color:#c13584; } .social-follow-btn.fb:hover{ color:#1877f2; }
+.social-follow-btn.tt:hover{ color:#000; } .social-follow-btn.li:hover{ color:#0a66c2; }
+.social-follow-btn.yt:hover{ color:#ff0000; } .social-follow-btn.wa:hover{ color:#25d366; }
+@media(max-width:760px){ .social-follow-grid{ grid-template-columns:repeat(3,1fr); } }
+@media(max-width:380px){ .social-follow-grid{ grid-template-columns:repeat(2,1fr); } }
+
+/* ---- Article reader (progress, byline, toolbar, share, related) ---- */
+#artProgress{ position:fixed; top:0; left:0; height:3px; width:0; background:var(--red); z-index:99999; transition:width .08s linear; }
+.article-byline{ color:var(--slate); font-size:13px; margin:0 0 18px; display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+.article-byline .who{ color:var(--ink); font-weight:600; }
+.reader-toolbar{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 12px; margin:0 0 26px;
+  border:1px solid var(--paper-line); border-radius:12px; background:var(--paper); }
+.reader-toolbar button{ display:inline-flex; align-items:center; gap:6px; border:1px solid var(--paper-line);
+  background:var(--cream); color:var(--ink); border-radius:8px; padding:7px 11px; font-size:12.5px; font-weight:600; cursor:pointer; }
+.reader-toolbar button:hover{ border-color:var(--red); color:var(--red); }
+.reader-toolbar button.on{ background:var(--red); border-color:var(--red); color:#fff; }
+.reader-toolbar select{ border:1px solid var(--paper-line); border-radius:8px; padding:7px; font-size:12.5px; background:var(--cream); color:var(--ink); }
+.reader-toolbar .rdiv{ width:1px; height:22px; background:var(--paper-line); }
+.reader-share{ margin-left:auto; display:flex; gap:6px; }
+.reader-share a, .reader-share button{ width:36px; height:36px; padding:0; justify-content:center; align-items:center; color:var(--ink); }
+.reader-share a:hover, .reader-share button:hover{ border-color:var(--red); color:var(--red); }
+.article-body.rl{ line-height:2.15 !important; }
+.article-body.dys, .article-body.dys *{ font-family:'Comic Sans MS','Trebuchet MS',Verdana,sans-serif !important; letter-spacing:.03em; }
+.related-wrap{ margin-top:44px; border-top:1px solid var(--paper-line); padding-top:24px; }
+.related-wrap h3{ font-size:20px; margin:0 0 16px; }
+.related-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.related-card{ display:block; border:1px solid var(--paper-line); border-radius:12px; padding:14px; text-decoration:none; color:var(--ink); transition:transform .2s, border-color .2s; }
+.related-card:hover{ transform:translateY(-3px); border-color:var(--red); }
+.related-card .rc-tag{ font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--red); font-weight:700; }
+.related-card h4{ font-size:15px; margin:8px 0 6px; line-height:1.25; }
+.related-card .rc-meta{ font-size:12px; color:var(--slate); }
+@media(max-width:700px){ .related-grid{ grid-template-columns:1fr; } .reader-share{ margin-left:0; width:100%; } }
 /* The shout-out recipient's name — made to stand out from the sentence. */
 .shoutout-name{
   font-style:normal; font-weight:900; color:#fff; white-space:nowrap;
@@ -1003,15 +1040,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </div>
 
-  <!-- IVORYMUSE PARTNER BANNER -->
+  <!-- FOLLOW US — SOCIAL CHANNELS -->
   <section class="wrap home-section">
-    <div class="ivorymuse-card">
-      <span class="story-tag">Bridal And Wedding Magazine</span>
-      <h2 class="ivorymuse-title">Find the inspiration. Use the tools. Create your perfect day.</h2>
-      <div class="ivorymuse-thumb">
-        <img src="ivorymuse-banner.jpeg" alt="Ivorymuse — wedding inspiration and planning" loading="lazy" decoding="async">
+    <div class="social-follow">
+      <div class="social-follow-head">
+        <span class="eyebrow">Stay connected</span>
+        <h2>Follow Unplug everywhere</h2>
+        <p>Daily shout-outs, new stories and behind-the-scenes moments — join us on your favourite platform.</p>
       </div>
-      <a class="btn btn-solid ivorymuse-btn" href="https://www.ivorymuse.co.za" target="_blank" rel="noopener">Explore The Ivory Muse →</a>
+      <div class="social-follow-grid">
+        <a class="social-follow-btn ig" href="https://www.instagram.com/un_pluggedmacaz?utm_source=qr&igsh=MW96b3ZpcDJ4N3dpaQ==" target="_blank" rel="noopener" aria-label="Follow Unplug on Instagram">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="0.4" fill="currentColor" stroke="none"/></svg>
+          <span>Instagram</span>
+        </a>
+        <a class="social-follow-btn fb" href="https://www.facebook.com/share/1D97UaRqpk/" target="_blank" rel="noopener" aria-label="Follow Unplug on Facebook">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          <span>Facebook</span>
+        </a>
+        <a class="social-follow-btn tt" href="https://www.tiktok.com/@unplugmagazin?_r=1&_t=ZS-98794AOwLaO" target="_blank" rel="noopener" aria-label="Follow Unplug on TikTok">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.34 6.34 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.73a8.22 8.22 0 0 0 4.84 1.56V6.82a4.85 4.85 0 0 1-1.07-.13z"/></svg>
+          <span>TikTok</span>
+        </a>
+        <a class="social-follow-btn li" href="https://www.linkedin.com/in/unplug-magazine-8356b6309?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener" aria-label="Follow Unplug on LinkedIn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45z"/></svg>
+          <span>LinkedIn</span>
+        </a>
+        <a class="social-follow-btn yt" href="https://youtube.com/@unpluggedmagazineza?si=FWWo49yKAc7zu_7I" target="_blank" rel="noopener" aria-label="Subscribe to Unplug on YouTube">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23 12s0-3.4-.43-5.03a2.6 2.6 0 0 0-1.83-1.84C19.11 4.7 12 4.7 12 4.7s-7.11 0-8.74.43A2.6 2.6 0 0 0 1.43 6.97 27.3 27.3 0 0 0 1 12a27.3 27.3 0 0 0 .43 5.03 2.6 2.6 0 0 0 1.83 1.84C4.89 19.3 12 19.3 12 19.3s7.11 0 8.74-.43a2.6 2.6 0 0 0 1.83-1.84C23 15.4 23 12 23 12zM9.75 15.02V8.98L15 12z"/></svg>
+          <span>YouTube</span>
+        </a>
+        <a class="social-follow-btn wa" href="https://wa.me/27645566814" target="_blank" rel="noopener" aria-label="Chat with Unplug on WhatsApp">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.48-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.87 1.22 3.07.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z"/><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.29A10 10 0 1 0 12 2zm0 18.13a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.06.8.82-3-.19-.31A8.13 8.13 0 1 1 12 20.13z"/></svg>
+          <span>WhatsApp</span>
+        </a>
+      </div>
     </div>
   </section>
 
@@ -1619,6 +1681,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <!-- ============ DIRECTORY PROFILE (EXAMPLE — PREMIUM PACKAGE) ============ -->
 <!-- ============ ARTICLE DETAIL ============ -->
 <main class="page" id="page-articledetail">
+  <div id="artProgress" aria-hidden="true"></div>
   <div class="wrap" style="padding-top:56px; max-width:70ch;">
     <button class="btn btn-line" data-page="news" style="margin-bottom:24px;">← Back to Latest News</button>
     <div id="articleDetailContent">
@@ -3014,26 +3077,150 @@ function newsCardHtml(article) {
   return `<a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb"></div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>`;
 }
 
+// Share buttons (WhatsApp / Facebook / X / native / copy) used on the article
+// reader. `url` should be an absolute, shareable link; `text` a short caption.
+function shareRowHtml(url, text) {
+  const u = encodeURIComponent(url);
+  const t = encodeURIComponent(text);
+  const wa = `https://wa.me/?text=${t}%20${u}`;
+  const fb = `https://www.facebook.com/sharer/sharer.php?u=${u}`;
+  const x = `https://twitter.com/intent/tweet?text=${t}&url=${u}`;
+  return `<div class="reader-share" role="group" aria-label="Share this story">
+    <a class="btn-line" href="${wa}" target="_blank" rel="noopener" title="Share on WhatsApp" aria-label="Share on WhatsApp"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.29A10 10 0 1 0 12 2zm0 18.13a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.06.8.82-3-.19-.31A8.13 8.13 0 1 1 12 20.13zm4.47-5.75c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.48-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.87 1.22 3.07.15.2 2.1 3.2 5.08 4.49 1.86.8 2.6.87 3.53.73.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z"/></svg></a>
+    <a class="btn-line" href="${fb}" target="_blank" rel="noopener" title="Share on Facebook" aria-label="Share on Facebook"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></a>
+    <a class="btn-line" href="${x}" target="_blank" rel="noopener" title="Share on X" aria-label="Share on X"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2.4h3.2l-7.02 8.02L23.5 21.6h-6.62l-5.18-6.78-5.93 6.78H2.56l7.5-8.58L1.7 2.4h6.79l4.68 6.2L18.9 2.4zM17.72 19.6h1.78L7.4 4.32H5.5L17.72 19.6z"/></svg></a>
+    <button class="btn-line" type="button" data-share-copy="${escapeHtml(url)}" title="Copy link" aria-label="Copy link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+  </div>`;
+}
+
+// Wire up the reader toolbar: listen (speech), reading size/spacing/dyslexia,
+// scroll progress, copy-link, and load related stories.
+function initArticleReader(a, id, shareUrl) {
+  const body = document.getElementById('artBody');
+  const bar = document.getElementById('artProgress');
+  let fontStep = 0;
+  const FONT = [16, 18, 20, 23];
+
+  // Scroll progress (only fills while the article page is the active one).
+  function updateProgress() {
+    const page = document.getElementById('page-articledetail');
+    if (!bar || !page || !page.classList.contains('active') || !body) { if (bar) bar.style.width = '0'; return; }
+    const rect = body.getBoundingClientRect();
+    const total = rect.height - window.innerHeight;
+    const done = Math.min(Math.max(-rect.top, 0), Math.max(total, 1));
+    bar.style.width = (total > 0 ? (done / total) * 100 : 0) + '%';
+  }
+  if (!window.__artProgressBound) {
+    window.addEventListener('scroll', () => { if (window.__updateArtProgress) window.__updateArtProgress(); }, { passive: true });
+    window.__artProgressBound = true;
+  }
+  window.__updateArtProgress = updateProgress;
+  updateProgress();
+
+  // Text-to-speech with adjustable speed.
+  const synth = window.speechSynthesis;
+  const listenBtn = document.getElementById('rdListen');
+  const rateSel = document.getElementById('rdRate');
+  let utter = null;
+  function stopSpeak() { if (synth) synth.cancel(); if (listenBtn) { listenBtn.classList.remove('on'); listenBtn.innerHTML = '▶ Listen'; } }
+  if (listenBtn && synth) {
+    listenBtn.addEventListener('click', () => {
+      if (synth.speaking) { stopSpeak(); return; }
+      utter = new SpeechSynthesisUtterance((body.innerText || '').slice(0, 9000));
+      utter.lang = 'en-ZA';
+      utter.rate = parseFloat(rateSel && rateSel.value) || 1;
+      utter.onend = utter.onerror = stopSpeak;
+      synth.cancel(); synth.speak(utter);
+      listenBtn.classList.add('on'); listenBtn.innerHTML = '⏸ Stop';
+    });
+    if (rateSel) rateSel.addEventListener('change', () => { if (synth.speaking) { stopSpeak(); listenBtn.click(); } });
+  } else if (listenBtn) {
+    listenBtn.style.display = 'none';
+  }
+  window.__stopArticleSpeak = stopSpeak;
+
+  // Reading controls scoped to the article body.
+  const applyFont = () => { body.style.fontSize = FONT[fontStep] + 'px'; };
+  const fUp = document.getElementById('rdFontUp');
+  const fDn = document.getElementById('rdFontDown');
+  if (fUp) fUp.addEventListener('click', () => { fontStep = Math.min(fontStep + 1, FONT.length - 1); applyFont(); });
+  if (fDn) fDn.addEventListener('click', () => { fontStep = Math.max(fontStep - 1, 0); applyFont(); });
+  const lineBtn = document.getElementById('rdLine');
+  if (lineBtn) lineBtn.addEventListener('click', () => { body.classList.toggle('rl'); lineBtn.classList.toggle('on'); });
+  const dysBtn = document.getElementById('rdDys');
+  if (dysBtn) dysBtn.addEventListener('click', () => { body.classList.toggle('dys'); dysBtn.classList.toggle('on'); });
+
+  // Copy-link share button.
+  const copyBtn = document.querySelector('[data-share-copy]');
+  if (copyBtn) copyBtn.addEventListener('click', () => {
+    const link = copyBtn.getAttribute('data-share-copy');
+    if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => showToast('Link copied to clipboard'));
+    else showToast(link);
+  });
+
+  loadRelatedStories(a, id);
+}
+
+async function loadRelatedStories(a, id) {
+  const wrap = document.getElementById('relatedStories');
+  if (!wrap || !a.category) return;
+  try {
+    const data = await api('/articles?' + new URLSearchParams({ category: a.category, limit: 6 }).toString());
+    const others = (data.articles || []).filter(x => String(x.id) !== String(id)).slice(0, 3);
+    if (!others.length) return;
+    wrap.innerHTML = '<h3>More in ' + escapeHtml(a.category) + '</h3><div class="related-grid">' +
+      others.map(x => `<a class="related-card" href="?p=article&id=${x.id}" data-related-id="${x.id}">
+        <span class="rc-tag">${escapeHtml(x.category || 'Story')}</span>
+        <h4>${escapeHtml(x.title)}</h4>
+        <span class="rc-meta">${readMinutes(x.body)} min read</span></a>`).join('') + '</div>';
+    wrap.querySelectorAll('[data-related-id]').forEach(card => card.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.scrollTo(0, 0);
+      loadArticleDetail(card.getAttribute('data-related-id'));
+    }));
+  } catch (e) { /* silently skip related on error */ }
+}
+
 async function loadArticleDetail(id) {
+  if (window.__stopArticleSpeak) window.__stopArticleSpeak();
   const el = document.getElementById('articleDetailContent');
   el.innerHTML = '<div class="dir-empty-state">Loading story…</div>';
   trackPageView('article-' + id);
   try {
     const data = await api('/articles/' + id);
     const a = data.article;
+    const submitter = a.kicker_supplied_by || a.author_name || '';
+    const dateStr = a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+    const shareUrl = location.origin + '/?p=article&id=' + id;
     el.innerHTML = `
       ${a.banner_image_url ? `<div style="position:relative; margin-bottom:24px;"><img src="${escapeHtml(a.banner_image_url)}" alt="${escapeHtml(a.title)}" style="width:100%; max-height:420px; object-fit:cover; display:block;"><div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>` : ''}
       <span class="eyebrow">${escapeHtml(a.category || '')}</span>
       ${emotionBadge(a.emotion) ? `<div style="margin:10px 0 0;">${emotionBadge(a.emotion)}</div>` : ''}
-      <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 8px;">${escapeHtml(a.title)}</h1>
-      ${a.kicker_supplied_by ? `<p style="color:var(--slate); font-size:13px; margin-bottom:6px;">Supplied by ${escapeHtml(a.kicker_supplied_by)}</p>` : ''}
-      <p style="color:var(--slate); font-size:13px; margin-bottom:24px;">${readMinutes(a.body)} min read</p>
-      <div class="rich-bio" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
+      <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 10px;">${escapeHtml(a.title)}</h1>
+      <div class="article-byline">
+        ${submitter ? `<span>Submitted by <span class="who">${escapeHtml(submitter)}</span></span>` : ''}
+        ${submitter && dateStr ? '<span>·</span>' : ''}
+        ${dateStr ? `<span>${dateStr}</span>` : ''}
+        <span>·</span><span>${readMinutes(a.body)} min read</span>
+      </div>
+      <div class="reader-toolbar" role="toolbar" aria-label="Reading options">
+        <button id="rdListen" type="button">▶ Listen</button>
+        <select id="rdRate" aria-label="Reading speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select>
+        <span class="rdiv"></span>
+        <button id="rdFontDown" type="button" aria-label="Decrease text size">A−</button>
+        <button id="rdFontUp" type="button" aria-label="Increase text size">A+</button>
+        <button id="rdLine" type="button">↕ Spacing</button>
+        <button id="rdDys" type="button">Dyslexia font</button>
+        ${shareRowHtml(shareUrl, a.title)}
+      </div>
+      <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
+      <div class="related-wrap" id="relatedStories"></div>
     `;
     if (a.banner_image_url) {
       const badge = el.querySelector('.print-mark');
       if (badge) badge.innerHTML = svgMarkup;
     }
+    initArticleReader(a, id, shareUrl);
     // Deep-link this article: distinct, shareable, indexable URL + its own
     // title/description (replaceState overwrites the ?p=articledetail entry).
     const q = '?p=article&id=' + id;
