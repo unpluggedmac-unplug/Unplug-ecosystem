@@ -81,14 +81,44 @@ Already in place:
 
 Known gaps, honestly stated:
 
-- **Email is not configured.** No `SMTP_*` variables are set on Render, so
-  signup verification codes and password resets are written to the server log
-  instead of being sent. New members cannot verify their accounts. This is the
-  most important thing to fix before a real launch.
+- **Email is not sending yet.** See "Outgoing email" below — SMTP from Render
+  times out, so this needs an HTTPS email provider. Until it's done, signup
+  verification codes and password resets are written to the server log instead
+  of being sent, and new members cannot verify their accounts. This is the most
+  important thing to fix before a real launch.
 - **Payment webhooks are unverified** until `PAYFAST_PASSPHRASE` /
   `OZOW_PRIVATE_KEY` are set — do not accept live card payments until they are.
 - **No automated tests**, so regressions are caught by review and manual
   checking rather than CI.
+
+## Outgoing email
+
+**SMTP from Render does not work for this setup.** Diagnosed 2026-07-19:
+`mail.unplugnews.com:465` is reachable from the open internet (full TLS
+handshake, valid `220 cp73.domains.co.za ESMTP Exim` greeting), but from
+Render the same connection times out at the TCP level — before TLS, before
+any password is checked. That's an outbound-port block, either Render's
+anti-spam policy or the South African host firewalling foreign IPs. Changing
+the hostname or port does not fix it.
+
+The backend therefore supports two transports, and prefers HTTPS:
+
+1. **HTTPS API (recommended)** — set **one** of `RESEND_API_KEY` or
+   `BREVO_API_KEY`. These send over port 443, which is never blocked.
+2. **SMTP** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`. Still
+   supported for local development or a host that permits it. If you do use
+   SMTP with this cPanel account, the working values are
+   `cp73.domains.co.za:465` — **not** `mail.unplugnews.com`, whose certificate
+   only covers `*.domains.co.za`.
+
+`SMTP_FROM` sets the sending address for either transport, e.g.
+`Unplug Magazine <no-reply@unplugnews.com>`. To send from the unplugnews.com
+domain via an HTTPS provider you must verify the domain with them first —
+they give you DNS records (SPF/DKIM) to add in cPanel. Until that's done,
+send from the provider's sandbox address.
+
+Check the current state any time: Admin dashboard → **Publish** → **Email
+status**. It reports which provider is active and verifies the credentials.
 
 ## Environment variables (Render)
 

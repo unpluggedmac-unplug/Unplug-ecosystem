@@ -1169,10 +1169,13 @@ async function loadEmailStatus() {
     // fastest question is "did my change take effect?", and this answers it
     // without digging through Render. The password is never sent here.
     const c = s.config || {};
-    const settings = c.host
-      ? `<br><span style="color:var(--slate); font-size:12px;">Using <code>${escapeHtmlAdmin(c.host)}:${escapeHtmlAdmin(String(c.port))}</code>`
-        + ` (${c.secure ? 'SSL' : 'STARTTLS'}) as <code>${escapeHtmlAdmin(c.user || '—')}</code></span>`
-      : '';
+    let settings = '';
+    if (c.provider === 'smtp' && c.host) {
+      settings = `<br><span style="color:var(--slate); font-size:12px;">Using SMTP <code>${escapeHtmlAdmin(c.host)}:${escapeHtmlAdmin(String(c.port))}</code>`
+        + ` (${c.secure ? 'SSL' : 'STARTTLS'}) as <code>${escapeHtmlAdmin(c.user || '—')}</code></span>`;
+    } else if (c.provider) {
+      settings = `<br><span style="color:var(--slate); font-size:12px;">Using the <strong>${escapeHtmlAdmin(c.provider)}</strong> API over HTTPS, sending as <code>${escapeHtmlAdmin(c.from || '—')}</code></span>`;
+    }
     box.innerHTML = `<strong style="color:${ok ? 'var(--green, #2e7d32)' : 'var(--red)'};">`
       + (ok ? '✓ Email is working' : '✕ Email is not working')
       + `</strong><br><span style="color:var(--slate);">${escapeHtmlAdmin(s.message)}</span>${settings}`;
