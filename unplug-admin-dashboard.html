@@ -164,6 +164,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="analytics">Analytics</a>
     <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="publish">Publish</a>
     <a data-section="polls">Polls</a>
     <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
@@ -358,6 +359,43 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
 
     <!-- INQUIRIES -->
+    <!-- PUBLISH (admin-only, no payment step) -->
+    <div class="admin-section" id="section-publish">
+      <div class="main-head"><div><h1>Publish</h1><p>Put content on the site directly. Nothing here charges anyone or goes through the payment portal.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Publish an article</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div style="grid-column:1/-2;"><label>Headline</label><input id="pubTitle" placeholder="Story headline"></div>
+            <div><label>Category</label><select id="pubCategory"><option value="">— none —</option></select></div>
+          </div>
+          <div class="form-row">
+            <div><label>Supplied by (optional)</label><input id="pubKicker" placeholder="e.g. Thandi M."></div>
+            <div><label>Banner image URL (optional)</label><input id="pubBanner" placeholder="https://…"></div>
+            <div><label>Emotion (optional)</label><select id="pubEmotion"><option value="">— none —</option><option value="uplifting">Uplifting</option><option value="inspiring">Inspiring</option><option value="joyful">Joyful</option><option value="reflective">Reflective</option><option value="hopeful">Hopeful</option></select></div>
+          </div>
+          <div style="margin-top:10px;"><label>Story</label>
+            <textarea id="pubBody" rows="10" style="width:100%;" placeholder="Write the story here. Basic HTML is allowed."></textarea>
+          </div>
+          <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="publishArticleBtn">Publish Live</button>
+          <span id="publishArticleNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Add a Top 10 entry</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Adds a directory profile straight onto the Top 10 list, approved and free of charge.</p>
+          <div class="form-row">
+            <div style="grid-column:1/-2;"><label>Profile</label><select id="top10Profile"><option value="">— choose a profile —</option></select></div>
+            <div><label>&nbsp;</label><button class="btn btn-solid" style="width:100%;" id="addTop10Btn">Add to Top 10</button></div>
+          </div>
+          <span id="top10Note" style="font-size:12px; color:var(--slate);"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- DIRECTORY REVIEWS -->
     <div class="admin-section" id="section-reviews">
       <div class="main-head"><div><h1>Reviews</h1><p>Ratings and reviews left on directory listings. Nothing shows on a listing until you approve it.</p></div></div>
@@ -672,6 +710,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'notifications') loadNotifications();
     if (section === 'analytics') loadAnalytics(7);
     if (section === 'comments') loadPendingComments();
+    if (section === 'publish') loadPublishSection();
     if (section === 'polls') loadPolls();
     if (section === 'reviews') loadPendingReviews();
     if (section === 'claims') loadPendingClaims();
@@ -920,6 +959,97 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
     loadBirthdays();
   } catch (err) {
     showToast(err.message, true);
+  }
+});
+
+// Publish section — editorial shortcuts that skip the payment portal.
+// The Top 10 list is competition slug 'top-10'; we look its id up rather
+// than hardcoding, so a reseeded database doesn't silently target the wrong
+// competition.
+let TOP10_COMPETITION_ID = null;
+
+async function loadPublishSection() {
+  const catSel = document.getElementById('pubCategory');
+  const profSel = document.getElementById('top10Profile');
+  if (!catSel || !profSel) return;
+  try {
+    const cats = await api('/news/categories');
+    catSel.innerHTML = '<option value="">— none —</option>'
+      + (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
+  } catch (err) {
+    catSel.innerHTML = '<option value="">Categories unavailable</option>';
+  }
+  try {
+    const dir = await api('/directory?limit=200');
+    const profiles = dir.profiles || dir.directory || [];
+    profSel.innerHTML = '<option value="">— choose a profile —</option>'
+      + profiles.map((p) => `<option value="${p.id}">${escapeHtmlAdmin(p.display_name)}</option>`).join('');
+  } catch (err) {
+    profSel.innerHTML = '<option value="">Profiles unavailable</option>';
+  }
+  if (TOP10_COMPETITION_ID === null) {
+    try {
+      const comps = await api('/competitions');
+      const top10 = (comps.competitions || []).find((c) => c.slug === 'top-10');
+      TOP10_COMPETITION_ID = top10 ? top10.id : null;
+    } catch (err) { /* handled when the button is used */ }
+  }
+}
+
+document.getElementById('publishArticleBtn').addEventListener('click', async () => {
+  const title = document.getElementById('pubTitle').value.trim();
+  const body = document.getElementById('pubBody').value.trim();
+  const note = document.getElementById('publishArticleNote');
+  if (!title || !body) { showToast('A headline and story are both required.', true); return; }
+  const btn = document.getElementById('publishArticleBtn');
+  btn.disabled = true;
+  note.textContent = 'Publishing…';
+  try {
+    const res = await api('/articles', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        body,
+        categoryId: document.getElementById('pubCategory').value || null,
+        kickerSuppliedBy: document.getElementById('pubKicker').value.trim() || null,
+        bannerImageUrl: document.getElementById('pubBanner').value.trim() || null,
+        emotion: document.getElementById('pubEmotion').value || null,
+      }),
+    });
+    showToast(res.message || 'Published.');
+    note.innerHTML = `Live now — <a href="unplug-magazine.html?p=article&id=${res.article.id}" target="_blank" rel="noopener">view it on the site</a>.`;
+    document.getElementById('pubTitle').value = '';
+    document.getElementById('pubBody').value = '';
+    document.getElementById('pubKicker').value = '';
+    document.getElementById('pubBanner').value = '';
+    loadQueueTab('news');
+  } catch (err) {
+    note.textContent = '';
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('addTop10Btn').addEventListener('click', async () => {
+  const profileId = document.getElementById('top10Profile').value;
+  const note = document.getElementById('top10Note');
+  if (!profileId) { showToast('Choose a profile first.', true); return; }
+  if (!TOP10_COMPETITION_ID) { showToast('Could not find the Top 10 list.', true); return; }
+  const btn = document.getElementById('addTop10Btn');
+  btn.disabled = true;
+  try {
+    const res = await api(`/competitions/${TOP10_COMPETITION_ID}/admin-entries`, {
+      method: 'POST',
+      body: JSON.stringify({ profileId: Number(profileId) }),
+    });
+    showToast(res.message || 'Added to the Top 10.');
+    note.textContent = 'Added — it appears on the Top 10 list straight away.';
+  } catch (err) {
+    note.textContent = '';
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
   }
 });
 

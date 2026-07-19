@@ -101,6 +101,22 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'emotion must be one of: ' + ALLOWED_EMOTIONS.join(', ') + '.' });
     }
 
+    // Editorial staff publish straight to the site: no payment step, no
+    // credit spent, and no approval queue — an admin approving their own
+    // submission would just be a formality.
+    if (req.user.role === 'admin') {
+      const published = await pool.query(
+        `INSERT INTO articles (author_user_id, category_id, title, body, kicker_supplied_by, banner_image_url, emotion, status, published_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'approved', now())
+         RETURNING *`,
+        [req.user.id, categoryId || null, title, body, kickerSuppliedBy || null, bannerImageUrl || null, emotion || null]
+      );
+      return res.status(201).json({
+        article: published.rows[0],
+        message: 'Published — this article is live on the site now.',
+      });
+    }
+
     const profileResult = await pool.query(
       'SELECT id, free_article_credits FROM profiles WHERE user_id = $1',
       [req.user.id]

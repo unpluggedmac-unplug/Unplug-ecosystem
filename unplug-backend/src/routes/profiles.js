@@ -101,6 +101,19 @@ router.get('/directory/categories', async (req, res, next) => {
   }
 });
 
+// GET /news/categories — the news-side equivalent, so the admin publish form
+// can offer a real category list instead of asking staff to type an id.
+router.get('/news/categories', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name FROM categories WHERE type = 'news' ORDER BY name ASC`
+    );
+    res.json({ categories: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // GET /profiles/me — the authenticated member's own profile, regardless
 // of status (awaiting_payment/pending/approved/rejected), plus their own
