@@ -1,5 +1,7 @@
 const express = require('express');
 const pool = require('../db');
+const { publicSubmitLimiter } = require('../middleware/rateLimit');
+const honeypot = require('../middleware/honeypot');
 
 const router = express.Router();
 
@@ -83,7 +85,7 @@ router.get('/today', async (req, res, next) => {
 // POST /shoutouts/nominate — public. Anyone can suggest a name+surname for a
 // future shoutout. Enters as 'pending'; nothing appears publicly until an
 // admin approves it, so unauthenticated submission is safe.
-router.post('/nominate', async (req, res, next) => {
+router.post('/nominate', publicSubmitLimiter, honeypot, async (req, res, next) => {
   try {
     const { nomineeName, message, email } = req.body;
     const name = (nomineeName || '').trim();

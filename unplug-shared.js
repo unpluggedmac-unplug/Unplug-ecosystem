@@ -4,10 +4,17 @@
 // independently.
 
 const UnplugAPI = (function () {
-  // Defaults to the live Railway backend. For local development, either set
+  // Live backend on Render. For local development, either set
   // localStorage.unplug_api_base to 'http://localhost:4000', or use the API
   // base input on the admin/checkout/member dashboards.
-  let apiBase = localStorage.getItem('unplug_api_base') || 'https://unplug-ecosystem-production.up.railway.app';
+  const LIVE_API_BASE = 'https://unplug-ecosystem.onrender.com';
+  // Migrate returning visitors off the old Railway backend: if their browser
+  // still has the retired Railway URL cached, drop it so they pick up Render.
+  const savedApiBase = localStorage.getItem('unplug_api_base');
+  if (savedApiBase && savedApiBase.indexOf('railway.app') !== -1) {
+    localStorage.removeItem('unplug_api_base');
+  }
+  let apiBase = localStorage.getItem('unplug_api_base') || LIVE_API_BASE;
   let token = null;
 
   function setApiBase(value) {
@@ -84,7 +91,7 @@ function showToast(message, isError = false) {
 // random ID this browser makes up for itself and stores locally, purely
 // to count "unique visitors" without identifying anyone.
 (function () {
-  const API_BASE = 'https://unplug-ecosystem-production.up.railway.app';
+  const API_BASE = 'https://unplug-ecosystem.onrender.com';
 
   let sessionId = localStorage.getItem('unplug_analytics_session');
   if (!sessionId) {

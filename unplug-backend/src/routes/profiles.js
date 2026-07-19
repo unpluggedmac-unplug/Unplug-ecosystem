@@ -101,6 +101,19 @@ router.get('/directory/categories', async (req, res, next) => {
   }
 });
 
+// GET /news/categories — the news-side equivalent, so the admin publish form
+// can offer a real category list instead of asking staff to type an id.
+router.get('/news/categories', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name FROM categories WHERE type = 'news' ORDER BY name ASC`
+    );
+    res.json({ categories: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // GET /profiles/me — the authenticated member's own profile, regardless
 // of status (awaiting_payment/pending/approved/rejected), plus their own
@@ -217,11 +230,14 @@ const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, ac
 // ---------------------------------------------------------------------------
 router.patch('/profiles/:id', requireOwnerOrAdmin(getProfileOwnerId), async (req, res, next) => {
   try {
-    const fields = ['bio', 'achievements', 'career', 'quote', 'contact_email', 'contact_phone', 'contact_website', 'display_name'];
     const bodyKeyMap = {
       bio: 'bio', achievements: 'achievements', career: 'career', quote: 'quote',
       contactEmail: 'contact_email', contactPhone: 'contact_phone', contactWebsite: 'contact_website',
       displayName: 'display_name',
+      // Location powers the directory map and "near me" search. Town alone is
+      // enough — the API derives coordinates from it — so most listings never
+      // need latitude/longitude filled in by hand.
+      city: 'city', province: 'province', latitude: 'latitude', longitude: 'longitude',
     };
 
     const setClauses = [];

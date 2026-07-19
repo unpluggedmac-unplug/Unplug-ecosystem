@@ -127,6 +127,43 @@ router.post('/competitions/:id/entries', requireAuth, async (req, res, next) => 
   }
 });
 
+// POST /competitions/:id/admin-entries — admin adds any profile to a
+// competition (including the Top 10 list) directly: approved on the spot,
+// zero fee, no payment step. The member-facing route above can only enter
+// the caller's own profile, which is why editorial needs its own door.
+router.post('/competitions/:id/admin-entries', requireRole('admin'), async (req, res, next) => {
+  try {
+    const competitionId = Number(req.params.id);
+    const profileId = Number(req.body.profileId);
+    if (!Number.isInteger(competitionId) || !Number.isInteger(profileId)) {
+      return res.status(400).json({ error: 'A valid competition and profile are required.' });
+    }
+    const competition = await pool.query('SELECT id FROM competitions WHERE id = $1', [competitionId]);
+    if (competition.rows.length === 0) {
+      return res.status(404).json({ error: 'Competition not found.' });
+    }
+    const profile = await pool.query('SELECT id FROM profiles WHERE id = $1', [profileId]);
+    if (profile.rows.length === 0) {
+      return res.status(404).json({ error: 'That profile does not exist.' });
+    }
+    const result = await pool.query(
+      `INSERT INTO competition_entries (competition_id, profile_id, entry_fee, status)
+       VALUES ($1, $2, 0, 'approved')
+       RETURNING *`,
+      [competitionId, profileId]
+    );
+    res.status(201).json({
+      entry: result.rows[0],
+      message: 'Entry added and approved — it is live on the list now.',
+    });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'That profile is already entered in this competition.' });
+    }
+    next(err);
+  }
+});
+
 // GET /entries/mine — the authenticated member's own competition entries,
 // at any status, with their current vote count.
 router.get('/entries/mine', requireAuth, async (req, res, next) => {

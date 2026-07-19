@@ -84,7 +84,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Welcome to Unplug</h2>
     <p class="sub">Browse the site freely, or sign in / create a free account to manage your own profile and submissions.</p>
     <div class="gate-options">
-      <a class="gate-option" href="https://relaxed-cupcake-2e5b2e.netlify.app/" target="_blank">
+      <a class="gate-option" href="https://unplug-magazine.pages.dev/" target="_blank">
         <h3>Visit Site</h3>
         <p>Browse Unplug Magazine — no account needed.</p>
       </a>
@@ -104,7 +104,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Become a Member</h2>
     <p class="sub">Completely free. This just creates your account — nothing here costs anything. You'll only pay later, and only if you choose to use a paid service like publishing an article.</p>
     <div class="error-banner" id="registerError"></div>
-    <div class="field"><label>API Base URL</label><input id="registerApiBaseInput" value="https://unplug-ecosystem-production.up.railway.app"></div>
+    <div class="field" style="display:none;"><label>API Base URL</label><input id="registerApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
     <div class="field-row">
       <div class="field"><label>Email</label><input id="registerEmail" type="email"></div>
       <div class="field"><label>Password (8+ characters)</label><input id="registerPassword" type="password"></div>
@@ -128,7 +128,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Sign In</h2>
     <p class="sub">Sign in to manage your Directory profile, submissions, and entries.</p>
     <div class="error-banner" id="loginError"></div>
-    <div class="field"><label>API Base URL</label><input id="apiBaseInput" value="https://unplug-ecosystem-production.up.railway.app"></div>
+    <div class="field" style="display:none;"><label>API Base URL</label><input id="apiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
     <div class="field-row">
       <div class="field"><label>Email</label><input id="loginEmail" type="email"></div>
       <div class="field"><label>Password</label><input id="loginPassword" type="password"></div>
@@ -143,7 +143,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Reset Your Password</h2>
     <p class="sub" id="forgotSub">Enter your email — we'll send a reset code you can use to set a new password.</p>
     <div class="error-banner" id="forgotError"></div>
-    <div class="field"><label>API Base URL</label><input id="forgotApiBaseInput" value="https://unplug-ecosystem-production.up.railway.app"></div>
+    <div class="field" style="display:none;"><label>API Base URL</label><input id="forgotApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
     <div class="field"><label>Email</label><input id="forgotEmail" type="email"></div>
     <button class="btn btn-solid" id="requestResetBtn">Send Reset Code</button>
 
@@ -207,7 +207,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field"><label>Event Name</label><input id="evt-name"></div>
           <div class="field"><label>Event Date</label><input id="evt-date" type="date"></div>
         </div>
+        <div class="field-row">
+          <div class="field"><label>Start Time</label><input id="evt-start-time" type="time"></div>
+          <div class="field"><label>End Time</label><input id="evt-end-time" type="time"></div>
+        </div>
         <div class="field"><label>Venue</label><input id="evt-venue"></div>
+        <div class="field"><label>Entrance Fee (what attendees pay, e.g. "R50" or "Free")</label><input id="evt-fee" placeholder="Free"></div>
+        <div class="field"><label>Feature Image URL</label><input id="evt-image" placeholder="https://..."></div>
+        <div class="field"><label>Contact Details (shown on the event)</label><input id="evt-contact" placeholder="e.g. 082 000 0000 / email"></div>
+        <div class="field"><label>Event Link (tickets / more info)</label><input id="evt-link" placeholder="https://..."></div>
         <div class="field"><label>Description</label><textarea id="evt-desc" rows="3"></textarea></div>
         <div class="field"><label>Calendar Promotion Start Date (optional)</label><input id="evt-display-start" type="date"></div>
       </div>
@@ -270,6 +278,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <h2>My Competition Entries</h2>
       <p class="sub">Live vote counts update as people vote.</p>
       <div id="entriesContent"><div class="loading-state">Loading…</div></div>
+    </div>
+
+    <!-- MY READING LIST -->
+    <div class="card">
+      <h2>My Reading List</h2>
+      <p class="sub">Stories you saved with the ☆ Save button while reading.</p>
+      <div id="readingListContent"><div class="loading-state">Loading…</div></div>
     </div>
 
   </div>
@@ -513,6 +528,7 @@ function enterMemberDashboard(user){
   loadArticles();
   loadGallery();
   loadEntries();
+  loadReadingList();
 }
 
 // On page load, restore a saved session rather than forcing a fresh
@@ -682,6 +698,59 @@ async function loadEntries() {
     content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
+
+// Reading list — stories saved from the magazine's article reader. Each row
+// links back to the article and can be removed without leaving the dashboard.
+async function loadReadingList() {
+  const content = document.getElementById('readingListContent');
+  if (!content) return;
+  try {
+    const data = await api('/saved');
+    const saved = data.saved || [];
+    if (saved.length === 0) {
+      content.innerHTML = '<div class="empty-state">Nothing saved yet — tap ☆ Save on any story to keep it here.</div>';
+      return;
+    }
+    content.innerHTML = '';
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Story</th><th>Category</th><th>Saved</th><th></th></tr>';
+    saved.forEach((a) => {
+      const tr = document.createElement('tr');
+      const link = document.createElement('a');
+      link.href = 'unplug-magazine.html?p=article&id=' + a.id;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = a.title;
+      const tdTitle = document.createElement('td');
+      tdTitle.appendChild(link);
+      const tdCat = document.createElement('td');
+      tdCat.textContent = a.category || '—';
+      const tdWhen = document.createElement('td');
+      tdWhen.textContent = new Date(a.saved_at).toLocaleDateString();
+      const tdAct = document.createElement('td');
+      const rm = document.createElement('button');
+      rm.className = 'btn-line';
+      rm.textContent = 'Remove';
+      rm.addEventListener('click', async () => {
+        rm.disabled = true;
+        try {
+          await api('/saved/' + a.id, { method: 'DELETE' });
+          tr.remove();
+          if (!table.querySelector('tr:nth-child(2)')) loadReadingList();
+        } catch (e) {
+          rm.disabled = false;
+          showToast('Could not remove: ' + e.message);
+        }
+      });
+      tdAct.appendChild(rm);
+      tr.append(tdTitle, tdCat, tdWhen, tdAct);
+      table.appendChild(tr);
+    });
+    content.appendChild(table);
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
 // ---------------------------------------------------------------------------
 // Submit & Pay — one form covering Article, Event, Gallery, Top 10, Marketplace
 // ---------------------------------------------------------------------------
@@ -738,6 +807,12 @@ async function createSubmission(type) {
         venue: document.getElementById('evt-venue').value.trim() || undefined,
         description: document.getElementById('evt-desc').value.trim() || undefined,
         displayStartDate: document.getElementById('evt-display-start').value || undefined,
+        startTime: document.getElementById('evt-start-time').value || undefined,
+        endTime: document.getElementById('evt-end-time').value || undefined,
+        entranceFee: document.getElementById('evt-fee').value.trim() || undefined,
+        imageUrl: document.getElementById('evt-image').value.trim() || undefined,
+        contactDetails: document.getElementById('evt-contact').value.trim() || undefined,
+        eventLink: document.getElementById('evt-link').value.trim() || undefined,
       }),
     });
     return { linkedType: 'event_listing', linkedId: data.event.id, label: 'Event' };
@@ -811,7 +886,7 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
     }
 
     showToast(`${label} submitted — see payment details below.`);
-    loadArticles(); loadGallery(); loadEntries();
+    loadArticles(); loadGallery(); loadEntries(); loadReadingList();
   } catch (err) {
     showSubmitError(err.message);
   } finally {

@@ -17,7 +17,54 @@
 <meta name="twitter:title" content="Unplug Magazine — Real People. Real Impact.">
 <meta name="twitter:description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.">
 <meta name="twitter:image" content="https://unplug-magazine.pages.dev/social-banner.jpg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://unplug-magazine.pages.dev/#organization",
+      "name": "Unplug Magazine",
+      "url": "https://unplug-magazine.pages.dev",
+      "logo": "https://unplug-magazine.pages.dev/social-banner.jpg",
+      "image": "https://unplug-magazine.pages.dev/social-banner.jpg",
+      "description": "A purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.",
+      "email": "info@unplugnews.com",
+      "telephone": "+27645566814",
+      "areaServed": "ZA",
+      "contactPoint": [{
+        "@type": "ContactPoint",
+        "telephone": "+27645566814",
+        "email": "info@unplugnews.com",
+        "contactType": "customer service",
+        "areaServed": "ZA",
+        "availableLanguage": ["en"]
+      }],
+      "sameAs": [
+        "https://www.instagram.com/un_pluggedmacaz",
+        "https://www.facebook.com/share/1D97UaRqpk/",
+        "https://www.tiktok.com/@unplugmagazin",
+        "https://www.linkedin.com/in/unplug-magazine-8356b6309",
+        "https://youtube.com/@unpluggedmagazineza"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://unplug-magazine.pages.dev/#website",
+      "url": "https://unplug-magazine.pages.dev",
+      "name": "Unplug Magazine",
+      "publisher": { "@id": "https://unplug-magazine.pages.dev/#organization" },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://unplug-magazine.pages.dev/?p=news&q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+  ]
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,900;1,500&family=Inter:wght@400;500;600;700&family=Fraunces:ital@1&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -541,6 +588,21 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 .footer-grid li{ margin-bottom:10px; font-size:14px; }
 .footer-grid li a:hover{ color:var(--cream); }
 .footer-bottom{ border-top:1px solid rgba(247,243,234,0.15); padding-top:24px; font-size:12px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; color:#a39d92; }
+.footer-bottom a:hover{ color:var(--cream); }
+/* Legal pages (privacy / terms) */
+.legal-page{ max-width:800px; padding-bottom:60px; }
+.legal-page h3{ font-size:18px; font-weight:700; margin:28px 0 8px; }
+.legal-page p{ font-size:15px; line-height:1.7; color:var(--ink); margin-bottom:8px; }
+.legal-page ul{ margin:8px 0 8px 20px; }
+.legal-page li{ font-size:15px; line-height:1.7; color:var(--ink); margin-bottom:6px; }
+.legal-page a{ color:var(--red); }
+.consent-note{ font-size:11.5px; color:var(--slate); margin-top:10px; line-height:1.4; }
+.consent-note a{ color:var(--red); }
+/* Skip-to-content link — hidden until keyboard-focused */
+.skip-link{ position:fixed; top:-60px; left:12px; z-index:100001; background:var(--red); color:#fff; padding:10px 16px; font-weight:700; font-size:13px; border-radius:0 0 6px 6px; transition:top .15s; text-decoration:none; }
+.skip-link:focus{ top:0; outline:3px solid #fff; }
+/* Visible keyboard focus everywhere (was relying on default only) */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible{ outline:3px solid #1f6feb; outline-offset:2px; }
 
 /* ---- shoutout banner ---- */
 .shoutout-banner{
@@ -559,13 +621,50 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 .shoutout-social{ display:flex; gap:10px; margin-top:18px; }
 .shoutout-social a{ width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.18); display:flex; align-items:center; justify-content:center; color:#fff; transition:background .2s; border:1px solid rgba(255,255,255,0.3); }
 .shoutout-social a:hover{ background:rgba(255,255,255,0.35); }
-/* ---- Ivorymuse partner banner ---- */
-.ivorymuse-card{ display:flex; flex-direction:column; }
-.ivorymuse-title{ font-size:clamp(22px,3vw,32px); font-weight:600; line-height:1.25; color:var(--ink); margin:10px 0 24px; max-width:36ch; }
-.ivorymuse-thumb{ overflow:hidden; margin-bottom:24px; }
-.ivorymuse-thumb img{ display:block; width:100%; height:auto; }
-.ivorymuse-btn{ align-self:flex-start; background:var(--red); border-color:var(--red); color:#fff; }
-.ivorymuse-btn:hover{ background:var(--maroon); border-color:var(--maroon); }
+/* ---- Follow us: social channels ---- */
+.social-follow{ text-align:center; }
+.social-follow-head h2{ font-size:clamp(24px,3.4vw,36px); font-weight:700; margin:8px 0 8px; }
+.social-follow-head p{ color:var(--slate); max-width:52ch; margin:0 auto; font-size:15px; }
+.social-follow-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-top:28px; }
+.social-follow-btn{ display:flex; flex-direction:column; align-items:center; gap:10px; padding:20px 8px;
+  border:1px solid var(--paper-line); border-radius:14px; color:var(--ink); text-decoration:none;
+  font-size:12.5px; font-weight:600; transition:transform .2s, border-color .2s, color .2s, background .2s; }
+.social-follow-btn svg{ transition:transform .2s; }
+.social-follow-btn:hover{ transform:translateY(-4px); border-color:currentColor; }
+.social-follow-btn:hover svg{ transform:scale(1.12); }
+.social-follow-btn:focus-visible{ outline:3px solid #1f6feb; outline-offset:2px; }
+.social-follow-btn.ig:hover{ color:#c13584; } .social-follow-btn.fb:hover{ color:#1877f2; }
+.social-follow-btn.tt:hover{ color:#000; } .social-follow-btn.li:hover{ color:#0a66c2; }
+.social-follow-btn.yt:hover{ color:#ff0000; } .social-follow-btn.wa:hover{ color:#25d366; }
+@media(max-width:760px){ .social-follow-grid{ grid-template-columns:repeat(3,1fr); } }
+@media(max-width:380px){ .social-follow-grid{ grid-template-columns:repeat(2,1fr); } }
+
+/* ---- Article reader (progress, byline, toolbar, share, related) ---- */
+#artProgress{ position:fixed; top:0; left:0; height:3px; width:0; background:var(--red); z-index:99999; transition:width .08s linear; }
+.article-byline{ color:var(--slate); font-size:13px; margin:0 0 18px; display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+.article-byline .who{ color:var(--ink); font-weight:600; }
+.reader-toolbar{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 12px; margin:0 0 26px;
+  border:1px solid var(--paper-line); border-radius:12px; background:var(--paper); }
+.reader-toolbar button{ display:inline-flex; align-items:center; gap:6px; border:1px solid var(--paper-line);
+  background:var(--cream); color:var(--ink); border-radius:8px; padding:7px 11px; font-size:12.5px; font-weight:600; cursor:pointer; }
+.reader-toolbar button:hover{ border-color:var(--red); color:var(--red); }
+.reader-toolbar button.on{ background:var(--red); border-color:var(--red); color:#fff; }
+.reader-toolbar select{ border:1px solid var(--paper-line); border-radius:8px; padding:7px; font-size:12.5px; background:var(--cream); color:var(--ink); }
+.reader-toolbar .rdiv{ width:1px; height:22px; background:var(--paper-line); }
+.reader-share{ margin-left:auto; display:flex; gap:6px; }
+.reader-share a, .reader-share button{ width:36px; height:36px; padding:0; justify-content:center; align-items:center; color:var(--ink); }
+.reader-share a:hover, .reader-share button:hover{ border-color:var(--red); color:var(--red); }
+.article-body.rl{ line-height:2.15 !important; }
+.article-body.dys, .article-body.dys *{ font-family:'Comic Sans MS','Trebuchet MS',Verdana,sans-serif !important; letter-spacing:.03em; }
+.related-wrap{ margin-top:44px; border-top:1px solid var(--paper-line); padding-top:24px; }
+.related-wrap h3{ font-size:20px; margin:0 0 16px; }
+.related-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.related-card{ display:block; border:1px solid var(--paper-line); border-radius:12px; padding:14px; text-decoration:none; color:var(--ink); transition:transform .2s, border-color .2s; }
+.related-card:hover{ transform:translateY(-3px); border-color:var(--red); }
+.related-card .rc-tag{ font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:var(--red); font-weight:700; }
+.related-card h4{ font-size:15px; margin:8px 0 6px; line-height:1.25; }
+.related-card .rc-meta{ font-size:12px; color:var(--slate); }
+@media(max-width:700px){ .related-grid{ grid-template-columns:1fr; } .reader-share{ margin-left:0; width:100%; } }
 /* The shout-out recipient's name — made to stand out from the sentence. */
 .shoutout-name{
   font-style:normal; font-weight:900; color:#fff; white-space:nowrap;
@@ -657,7 +756,12 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 /* ---- calendar events ---- */
 .calendar-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
 @media(max-width:900px){ .calendar-grid{ grid-template-columns:1fr; } }
-.cal-card{ border:1px solid var(--paper-line); padding:24px; display:flex; flex-direction:column; gap:12px; }
+/* Honeypot spam trap — visually hidden but present in the DOM so bots fill it. */
+.hp-field{ position:absolute !important; left:-9999px !important; top:auto; width:1px; height:1px; overflow:hidden; opacity:0; }
+.cal-card{ border:1px solid var(--paper-line); padding:24px; display:flex; flex-direction:column; gap:12px; cursor:pointer; transition:border-color .2s; }
+.cal-card:hover{ border-color:var(--red); }
+.cal-thumb{ overflow:hidden; margin:-24px -24px 4px; }
+.cal-thumb img{ display:block; width:100%; height:170px; object-fit:cover; }
 .cal-date{ display:flex; align-items:baseline; gap:6px; }
 .cal-day{ font-family:'Playfair Display',serif; font-size:48px; font-weight:700; color:var(--red); line-height:1; }
 .cal-mon{ font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--slate); }
@@ -717,6 +821,107 @@ footer{ background:var(--ink); color:#cfcac0; padding:56px 0 28px; }
 .share-btn.li{ background:#0A66C2; }
 .share-btn.wa{ background:#25D366; }
 .share-btn.tw{ background:#000; }
+.share-btn.cp{ background:var(--slate); border:0; cursor:pointer; }
+/* ---- admin-added page blocks ---- */
+.cms-blocks:empty{ display:none; }
+.cms-block{ display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:center; margin:34px 0; border:1px solid var(--paper-line); }
+.cms-block:only-child{ margin-top:0; }
+.cms-block-img{ overflow:hidden; }
+.cms-block-img img{ display:block; width:100%; height:100%; object-fit:cover; }
+.cms-block-text{ padding:26px 28px; }
+.cms-block-text h2{ font-size:clamp(20px,2.6vw,30px); font-weight:600; line-height:1.25; margin:8px 0 10px; }
+.cms-block-text p{ color:var(--slate); font-size:14.5px; line-height:1.65; }
+.cms-block-btn{ margin-top:16px; display:inline-flex; }
+.cms-block:not(:has(.cms-block-img)){ grid-template-columns:1fr; }
+@media(max-width:760px){ .cms-block{ grid-template-columns:1fr; } }
+/* ---- directory reviews + claim ---- */
+.reviews-wrap{ margin-top:40px; padding-top:26px; border-top:1px solid var(--paper-line); }
+.rv-title{ font-size:20px; font-weight:600; margin-bottom:14px; }
+.stars{ letter-spacing:1px; color:rgba(15,14,14,0.22); }
+.stars .on{ color:#e8a712; }
+.rv-summary{ display:flex; align-items:center; gap:10px; margin-bottom:18px; font-size:14px; }
+.rv-summary strong{ font-size:18px; }
+.rv-summary span{ color:var(--slate); }
+.rv{ padding:13px 0; border-bottom:1px solid var(--paper-line); }
+.rv-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.rv-who{ font-weight:600; font-size:14px; }
+.rv-when{ font-size:11.5px; color:var(--slate); }
+.rv-body{ font-size:14.5px; line-height:1.6; margin-top:6px; white-space:pre-wrap; }
+.rv-empty{ font-size:14px; color:var(--slate); margin-bottom:16px; }
+.rv-signin{ font-size:14px; color:var(--slate); margin-top:16px; }
+.rv-signin a{ color:var(--red); font-weight:600; }
+.rv-form{ margin-top:22px; }
+.rv-label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; color:var(--slate); margin-bottom:7px; }
+.rv-stars-pick{ display:flex; gap:4px; margin-bottom:10px; }
+.rv-star{ background:none; border:none; font-size:26px; line-height:1; cursor:pointer; color:rgba(15,14,14,0.22); padding:0 2px; }
+.rv-star.on, .rv-star:hover{ color:#e8a712; }
+.rv-form textarea{ width:100%; border:1px solid var(--paper-line); padding:11px 13px; font-family:inherit; font-size:14.5px; line-height:1.6; background:#fff; color:var(--ink); resize:vertical; }
+.rv-form textarea:focus{ outline:2px solid var(--red); outline-offset:1px; }
+.rv-actions{ display:flex; align-items:center; gap:14px; margin-top:10px; flex-wrap:wrap; }
+.rv-note{ font-size:12px; color:var(--slate); }
+.rv-claim{ margin-top:26px; padding-top:18px; border-top:1px dashed var(--paper-line); }
+.rv-claim p{ font-size:13.5px; color:var(--slate); margin-bottom:9px; }
+/* ---- directory map + near me ---- */
+.dir-tools{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 18px; }
+.dir-tools-note{ font-size:13px; color:var(--slate); }
+.dir-map{ height:440px; width:100%; border:1px solid var(--paper-line); }
+.dir-map-note{ font-size:12.5px; color:var(--slate); margin:8px 0 20px; }
+.dir-distance{ font-size:12px; color:var(--red); font-weight:600; margin-top:2px; }
+@media(max-width:700px){ .dir-map{ height:320px; } }
+/* ---- personalised feed ---- */
+.foryou-section[hidden]{ display:none; }
+.topic-chips{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 22px; align-items:center; }
+.topic-hint{ width:100%; font-size:13px; color:var(--slate); margin:0 0 4px; }
+.topic-chip{ background:#fff; border:1px solid var(--paper-line); border-radius:100px; padding:7px 15px; font-family:inherit; font-size:13px; color:var(--ink); cursor:pointer; transition:border-color .2s, background .2s; }
+.topic-chip:hover:not(:disabled){ border-color:var(--red); }
+.topic-chip.on{ background:var(--red); border-color:var(--red); color:#fff; }
+.topic-chip:disabled{ opacity:0.6; cursor:default; }
+/* ---- reader poll ---- */
+.poll-wrap:empty{ display:none; }
+.poll{ margin-top:34px; border:1px solid var(--paper-line); border-left:3px solid var(--red); padding:20px 22px; background:var(--paper); }
+.poll-kicker{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.14em; font-weight:700; color:var(--red); }
+.poll-q{ font-size:19px; font-weight:600; line-height:1.3; margin:8px 0 16px; }
+.poll-body{ display:flex; flex-direction:column; gap:9px; }
+.poll-opt{ text-align:left; background:#fff; border:1px solid var(--paper-line); padding:11px 14px; font-family:inherit; font-size:14.5px; color:var(--ink); cursor:pointer; transition:border-color .2s, background .2s; }
+.poll-opt:hover:not(:disabled){ border-color:var(--red); background:rgba(210,7,9,0.04); }
+.poll-opt:disabled{ opacity:0.55; cursor:default; }
+.poll-res-top{ display:flex; justify-content:space-between; gap:12px; font-size:14px; margin-bottom:5px; }
+.poll-pct{ font-weight:700; font-variant-numeric:tabular-nums; }
+.poll-bar{ height:8px; background:rgba(15,14,14,0.09); overflow:hidden; }
+.poll-bar span{ display:block; height:100%; background:var(--red); transition:width .5s ease; }
+.poll-foot{ font-size:12px; color:var(--slate); margin-top:14px; }
+@media (prefers-reduced-motion:reduce){ .poll-bar span{ transition:none; } }
+/* ---- article comments ---- */
+.comments-wrap{ margin-top:40px; padding-top:26px; border-top:1px solid var(--paper-line); }
+.cmt-title{ font-size:20px; font-weight:600; margin-bottom:16px; }
+.cmt{ padding:14px 0; border-bottom:1px solid var(--paper-line); }
+.cmt-head{ display:flex; align-items:baseline; gap:10px; margin-bottom:5px; }
+.cmt-who{ font-weight:600; font-size:14px; }
+.cmt-when{ font-size:11.5px; color:var(--slate); }
+.cmt-body{ font-size:14.5px; line-height:1.65; color:var(--ink); white-space:pre-wrap; }
+.cmt-reacts{ display:flex; gap:8px; margin-top:9px; flex-wrap:wrap; }
+.cmt-react{ display:inline-flex; align-items:center; gap:5px; background:none; border:1px solid var(--paper-line); border-radius:100px; padding:4px 10px; font-size:12.5px; cursor:pointer; color:var(--ink); }
+.cmt-react:hover{ border-color:var(--red); }
+.cmt-react.on{ border-color:var(--red); background:rgba(210,7,9,0.06); }
+.cmt-react .n{ font-variant-numeric:tabular-nums; }
+.cmt-empty, .cmt-loading{ font-size:14px; color:var(--slate); padding:8px 0; }
+.cmt-signin{ font-size:14px; color:var(--slate); margin-top:16px; }
+.cmt-signin a{ color:var(--red); font-weight:600; }
+.cmt-form{ margin-top:20px; }
+.cmt-label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; color:var(--slate); margin-bottom:7px; }
+.cmt-form textarea{ width:100%; border:1px solid var(--paper-line); padding:11px 13px; font-family:inherit; font-size:14.5px; line-height:1.6; background:#fff; color:var(--ink); resize:vertical; }
+.cmt-form textarea:focus{ outline:2px solid var(--red); outline-offset:1px; }
+.cmt-actions{ display:flex; align-items:center; gap:14px; margin-top:10px; flex-wrap:wrap; }
+.cmt-note{ font-size:12px; color:var(--slate); }
+/* Wrapper so a card's share row can sit OUTSIDE its <a>, while the card
+   itself still stretches to fill the grid cell. */
+.card-shell{ display:flex; flex-direction:column; gap:10px; }
+.card-shell > .story-card, .card-shell > .dir-card{ flex:1; }
+.card-shell .share-row{ margin-top:0; }
+.shoutout-share{ margin-top:12px; }
+.shoutout-share .share-label{ color:rgba(255,255,255,0.75); }
+.rank-row .share-row{ margin-top:6px; }
+@media(max-width:700px){ .rank-row .share-row{ margin-top:8px; } }
 
 /* ---- directory tiers ---- */
 .tier-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:0; }
@@ -829,6 +1034,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 </head>
 <body>
 
+<a href="#" class="skip-link" id="skipLink">Skip to content</a>
+
 <!-- shared fingerprint SVG (used across pages as signature motif) -->
 <template id="print-svg">
   <svg viewBox="0 0 140 160" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-linecap="round" stroke-width="4.4">
@@ -934,15 +1141,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </div>
 
-  <!-- IVORYMUSE PARTNER BANNER -->
+  <!-- FOLLOW US — SOCIAL CHANNELS -->
   <section class="wrap home-section">
-    <div class="ivorymuse-card">
-      <span class="story-tag">Bridal And Wedding Magazine</span>
-      <h2 class="ivorymuse-title">Find the inspiration. Use the tools. Create your perfect day.</h2>
-      <div class="ivorymuse-thumb">
-        <img src="ivorymuse-banner.jpeg" alt="Ivorymuse — wedding inspiration and planning" loading="lazy">
+    <div class="social-follow">
+      <div class="social-follow-head">
+        <span class="eyebrow">Stay connected</span>
+        <h2>Follow Unplug everywhere</h2>
+        <p>Daily shout-outs, new stories and behind-the-scenes moments — join us on your favourite platform.</p>
       </div>
-      <a class="btn btn-solid ivorymuse-btn" href="https://www.ivorymuse.co.za" target="_blank" rel="noopener">Explore The Ivory Muse →</a>
+      <div class="social-follow-grid">
+        <a class="social-follow-btn ig" href="https://www.instagram.com/un_pluggedmacaz?utm_source=qr&igsh=MW96b3ZpcDJ4N3dpaQ==" target="_blank" rel="noopener" aria-label="Follow Unplug on Instagram">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="0.4" fill="currentColor" stroke="none"/></svg>
+          <span>Instagram</span>
+        </a>
+        <a class="social-follow-btn fb" href="https://www.facebook.com/share/1D97UaRqpk/" target="_blank" rel="noopener" aria-label="Follow Unplug on Facebook">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          <span>Facebook</span>
+        </a>
+        <a class="social-follow-btn tt" href="https://www.tiktok.com/@unplugmagazin?_r=1&_t=ZS-98794AOwLaO" target="_blank" rel="noopener" aria-label="Follow Unplug on TikTok">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.34 6.34 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.73a8.22 8.22 0 0 0 4.84 1.56V6.82a4.85 4.85 0 0 1-1.07-.13z"/></svg>
+          <span>TikTok</span>
+        </a>
+        <a class="social-follow-btn li" href="https://www.linkedin.com/in/unplug-magazine-8356b6309?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener" aria-label="Follow Unplug on LinkedIn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45z"/></svg>
+          <span>LinkedIn</span>
+        </a>
+        <a class="social-follow-btn yt" href="https://youtube.com/@unpluggedmagazineza?si=FWWo49yKAc7zu_7I" target="_blank" rel="noopener" aria-label="Subscribe to Unplug on YouTube">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23 12s0-3.4-.43-5.03a2.6 2.6 0 0 0-1.83-1.84C19.11 4.7 12 4.7 12 4.7s-7.11 0-8.74.43A2.6 2.6 0 0 0 1.43 6.97 27.3 27.3 0 0 0 1 12a27.3 27.3 0 0 0 .43 5.03 2.6 2.6 0 0 0 1.83 1.84C4.89 19.3 12 19.3 12 19.3s7.11 0 8.74-.43a2.6 2.6 0 0 0 1.83-1.84C23 15.4 23 12 23 12zM9.75 15.02V8.98L15 12z"/></svg>
+          <span>YouTube</span>
+        </a>
+        <a class="social-follow-btn wa" href="https://wa.me/27645566814" target="_blank" rel="noopener" aria-label="Chat with Unplug on WhatsApp">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.48-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.87 1.22 3.07.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z"/><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.29A10 10 0 1 0 12 2zm0 18.13a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.06.8.82-3-.19-.31A8.13 8.13 0 1 1 12 20.13z"/></svg>
+          <span>WhatsApp</span>
+        </a>
+      </div>
     </div>
   </section>
 
@@ -977,10 +1209,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
             <a href="https://wa.me/27645566814" target="_blank" rel="noopener" title="Chat with us on WhatsApp" aria-label="WhatsApp">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.48-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.87 1.22 3.07.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z"/><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.29A10 10 0 1 0 12 2zm0 18.13a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.06.8.82-3-.19-.31A8.13 8.13 0 1 1 12 20.13z"/></svg>
             </a>
-            <a href="https://twitter.com/intent/tweet?text=Shoutout+to+Pierre+Swanepoel!+%40UnplugMag+https://www.unplugnews.com" target="_blank" title="Share on X / Twitter" aria-label="Twitter/X">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2.4h3.2l-7.02 8.02L23.5 21.6h-6.62l-5.18-6.78-5.93 6.78H2.56l7.5-8.58L1.7 2.4h6.79l4.68 6.2L18.9 2.4zM17.72 19.6h1.78L7.4 4.32H5.5L17.72 19.6z"/></svg>
-            </a>
           </div>
+          <!-- Filled by loadShoutout() so the share text names TODAY's person
+               (it used to be hardcoded to one name and never updated). -->
+          <div id="shoutoutShare" class="shoutout-share"></div>
           <button class="btn shoutout-nominate-btn" id="shoutoutNominateBtn">Nominate the next shout-out →</button>
         </div>
       </div>
@@ -998,7 +1230,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="field"><label>Name &amp; surname *</label><input id="shoutoutNomName" type="text" placeholder="e.g. Naledi Mokoena" maxlength="200"></div>
       <div class="field"><label>Why them? (optional)</label><textarea id="shoutoutNomMessage" rows="3" placeholder="A sentence on the impact they're making."></textarea></div>
       <div class="field"><label>Your email (optional)</label><input id="shoutoutNomEmail" type="email" placeholder="So we can let you know if they're featured."></div>
+      <input type="text" name="website" id="hpShoutout" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn btn-solid" id="shoutoutNomSubmit" style="width:100%;">Submit Nomination</button>
+      <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </div>
   </div>
 
@@ -1007,7 +1241,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <span class="print-mark bday-print"></span>
       <div class="birthday-copy">
         <span class="eyebrow" style="color:var(--cream);">Celebrating today</span>
-        <h2>Birthdays we're unplugging for</h2>
+        <h2 data-cms="home.birthdays.title">Birthdays we're unplugging for</h2>
         <p>Every day we celebrate the changemakers in our community marking another year — because the people doing the work deserve to be seen on their day, too.</p>
         <div class="btn-row">
           <button class="btn btn-line" id="submitBirthdayBtn" style="border-color:rgba(255,255,255,0.4); color:var(--cream);">Submit Birthday</button>
@@ -1034,7 +1268,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="field"><label>Name &amp; surname *</label><input id="bdayNameInput" maxlength="160"></div>
       <div class="field"><label>Birthday date *</label><input id="bdayDateInput" type="date"></div>
       <div class="field"><label>Photo URL (optional)</label><input id="bdayPhotoInput" placeholder="https://..."></div>
+      <input type="text" name="website" id="hpBirthday" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn btn-solid" id="bdaySubmitBtn" style="width:100%;">Submit birthday</button>
+      <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </div>
   </div>
 
@@ -1053,49 +1289,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="section-head">
       <div>
         <span class="eyebrow">Upcoming</span>
-        <h2>Calendar Events</h2>
+        <h2 data-cms="home.calendar.title">Calendar Events</h2>
       </div>
       <button class="btn btn-solid cal-submit-btn" id="submitEventBtn">Submit your event →</button>
     </div>
-    <div class="calendar-grid">
-      <div class="cal-card" data-title="Entrepreneurship Bootcamp: Start With What You Have" data-start="20260712T090000" data-end="20260712T130000" data-location="Johannesburg" data-desc="Free entry. Presented by Unplug Magazine.">
-        <div class="cal-date"><span class="cal-day">12</span><span class="cal-mon">JUL</span></div>
-        <div class="cal-info">
-          <span class="cal-tag">Workshop</span>
-          <h4>Entrepreneurship Bootcamp: Start With What You Have</h4>
-          <p>Johannesburg · 09:00–13:00 · Free entry</p>
-        </div>
-        <div class="cal-add-wrap">
-          <button class="btn btn-line cal-btn cal-add-btn">Add to Calendar</button>
-          <div class="cal-add-menu"></div>
-        </div>
-      </div>
-      <div class="cal-card" data-title="Unplug Impact Awards — Q3 Ceremony" data-start="20260718T180000" data-end="20260718T210000" data-location="Cape Town" data-desc="Invite only. Presented by Unplug Magazine.">
-        <div class="cal-date"><span class="cal-day">18</span><span class="cal-mon">JUL</span></div>
-        <div class="cal-info">
-          <span class="cal-tag">Awards</span>
-          <h4>Unplug Impact Awards — Q3 Ceremony</h4>
-          <p>Cape Town · 18:00–21:00 · Invite only</p>
-        </div>
-        <div class="cal-add-wrap">
-          <button class="btn btn-line cal-btn cal-add-btn">Add to Calendar</button>
-          <div class="cal-add-menu"></div>
-        </div>
-      </div>
-      <div class="cal-card" data-title="Township Creative Market &amp; Story Showcase" data-start="20260725T100000" data-end="20260725T160000" data-location="Durban" data-desc="Open to all. Presented by Unplug Magazine.">
-        <div class="cal-date"><span class="cal-day">25</span><span class="cal-mon">JUL</span></div>
-        <div class="cal-info">
-          <span class="cal-tag">Community</span>
-          <h4>Township Creative Market &amp; Story Showcase</h4>
-          <p>Durban · 10:00–16:00 · Open to all</p>
-        </div>
-        <div class="cal-add-wrap">
-          <button class="btn btn-line cal-btn cal-add-btn">Add to Calendar</button>
-          <div class="cal-add-menu"></div>
-        </div>
-      </div>
+    <div class="calendar-grid" id="calendarGrid">
+      <div class="dir-empty-state">Loading events…</div>
     </div>
   </section>
+
+  <!-- EVENT DETAIL MODAL -->
+  <div class="shoutout-modal-overlay" id="eventModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true" style="max-width:520px;">
+      <button class="shoutout-modal-close" id="eventModalClose" aria-label="Close">&times;</button>
+      <div id="eventModalBody"></div>
+    </div>
+  </div>
 
   <section class="wrap home-section">
     <div class="section-head">
@@ -1124,11 +1333,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </section>
 
+  <div class="wrap cms-blocks" data-cms-blocks="home"></div>
+
+  <!-- Personalised feed. Hidden entirely for signed-out readers, who get the
+       standard New Stories section below instead. -->
+  <section class="wrap home-section foryou-section" id="forYouSection" hidden>
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Your feed</span>
+        <h2 id="forYouHeading">For you</h2>
+      </div>
+      <button class="view-all" id="forYouTopicsBtn" type="button">Choose topics →</button>
+    </div>
+    <div class="topic-chips" id="forYouTopics" hidden></div>
+    <div class="grid-3" id="forYouGrid">
+      <div class="dir-empty-state">Loading your feed…</div>
+    </div>
+  </section>
+
   <section class="wrap home-section">
     <div class="section-head">
       <div>
         <span class="eyebrow">Just in</span>
-        <h2>New Stories</h2>
+        <h2 data-cms="home.newstories.title">New Stories</h2>
       </div>
       <button class="view-all" data-page="news">View all stories →</button>
     </div>
@@ -1142,7 +1369,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="section-head">
         <div>
           <span class="eyebrow">The Best Of The Best</span>
-          <h2>This Month's Top 10</h2>
+          <h2 data-cms="home.top10.title">This Month's Top 10</h2>
         </div>
         <button class="view-all" data-page="top10">See full list →</button>
       </div>
@@ -1240,7 +1467,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <h2 class="feature-edition-title">Let's feature you in our upcoming edition</h2>
       <p>Your story, your milestone, your business online. Reach out and let's put you in the next Unplug edition.</p>
       <div class="feature-edition-thumb">
-        <img src="feature-edition.jpeg" alt="Let's feature you in our upcoming edition" loading="lazy">
+        <img src="feature-edition.jpeg" alt="Let's feature you in our upcoming edition" loading="lazy" decoding="async">
       </div>
       <a href="mailto:info@unplugnews.com?subject=Feature%20me%20in%20your%20upcoming%20edition" class="btn btn-solid feature-edition-btn">Get featured →</a>
     </div>
@@ -1252,7 +1479,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="youtube-inner">
         <div class="youtube-copy">
           <span class="eyebrow">Watch on YouTube</span>
-          <h2>Our stories, now on screen</h2>
+          <h2 data-cms="home.youtube.title">Our stories, now on screen</h2>
           <p>Go deeper into the impact. Watch documentary-style mini-features, community spotlights, and behind-the-scenes moments from the people in our Directory.</p>
           <a href="https://youtube.com/@unpluggedmagazineza?si=FWWo49yKAc7zu_7I" target="_blank" rel="noopener" class="btn btn-solid">Visit Our Channel ↗</a>
         </div>
@@ -1272,7 +1499,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="comp-hero">
       <span class="print-mark"></span>
       <span class="eyebrow">Open now</span>
-      <h2>The Arena</h2>
+      <h2 data-cms="home.arena.title">The Arena</h2>
       <p>Nominate someone to enter the arena, whose unplugging good into the world.</p>
       <p>Every year, we crown a new Impact Maker, The Face Of Unplug, chosen by readers, entries, and celebrated across our platform.</p>
       <div class="btn-row">
@@ -1422,7 +1649,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
   <section class="wrap" style="padding-top:24px; padding-bottom:0;">
     <div class="section-head">
-      <div><span class="eyebrow">Once-off pricing</span><h2>Directory Packages</h2></div>
+      <div><span class="eyebrow">Once-off pricing</span><h2 data-cms="directory.packages.title">Directory Packages</h2></div>
       <div class="pkg-type-toggle" id="pkgTypeToggle">
         <button class="active" data-ptype="individual">Individual</button>
         <button data-ptype="business">Business</button>
@@ -1502,6 +1729,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <option value="TikTokkers">TikTokkers</option>
       </select>
     </div>
+    <div class="cms-blocks" data-cms-blocks="directory"></div>
+    <div class="dir-tools">
+      <button class="btn btn-line" type="button" id="dirMapToggle" aria-pressed="false">🗺 Map view</button>
+      <button class="btn btn-line" type="button" id="dirNearMeBtn">📍 Near me</button>
+      <span class="dir-tools-note" id="dirToolsNote"></span>
+    </div>
+    <div id="dirMapPanel" hidden>
+      <div id="dirMap" class="dir-map"></div>
+      <p class="dir-map-note" id="dirMapNote"></p>
+    </div>
     <div class="dir-grid" id="dirGrid">
       <div class="dir-empty-state">Loading profiles…</div>
     </div>
@@ -1573,6 +1810,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <!-- ============ DIRECTORY PROFILE (EXAMPLE — PREMIUM PACKAGE) ============ -->
 <!-- ============ ARTICLE DETAIL ============ -->
 <main class="page" id="page-articledetail">
+  <div id="artProgress" aria-hidden="true"></div>
   <div class="wrap" style="padding-top:56px; max-width:70ch;">
     <button class="btn btn-line" data-page="news" style="margin-bottom:24px;">← Back to Latest News</button>
     <div id="articleDetailContent">
@@ -1845,7 +2083,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   <!-- HALL OF FAME -->
   <section class="wrap" id="hallOfFameSection" style="display:none;">
     <div class="section-head">
-      <div><span class="eyebrow">Past champions</span><h2>Hall of Fame</h2></div>
+      <div><span class="eyebrow">Past champions</span><h2 data-cms="home.halloffame.title">Hall of Fame</h2></div>
     </div>
     <div class="hof-grid" id="hofGrid"></div>
   </section>
@@ -2263,12 +2501,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <p style="font-size:14px; margin-bottom:4px;"><strong>Website:</strong> <a href="https://www.unplugnews.com" style="color:var(--red);">www.unplugnews.com</a></p>
         <p style="font-size:13px; color:var(--slate); margin-top:24px; font-style:italic;">"Where Stories Shape Legacy"</p>
       </div>
-      <form onsubmit="event.preventDefault(); alert('Thanks — we\'ll be in touch soon.');">
+      <form id="contactForm">
+        <input type="text" name="website" id="hpContact" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
         <div class="field"><label for="cname">Name</label><input id="cname" type="text" required></div>
         <div class="field"><label for="cemail">Email</label><input id="cemail" type="email" required></div>
         <div class="field"><label for="csubject">Subject</label><input id="csubject" type="text" required></div>
         <div class="field"><label for="cmsg">Message</label><textarea id="cmsg" rows="5" required></textarea></div>
-        <button class="btn btn-solid" type="submit">Send Message</button>
+        <button class="btn btn-solid" type="submit" id="contactBtn">Send Message</button>
+        <p class="consent-note">By sending this, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
       </form>
     </div>
   </section>
@@ -2389,8 +2629,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         </select></div></div>
     <div class="field"><label>Salary range</label><input id="dcJobSalary" placeholder="e.g. R8 000 – R12 000 / month"></div>
     <div class="field"><label>Tags (tick all that apply)</label><div class="dc-filter-checks" id="dcJobTags"></div></div>
+    <input type="text" name="website" id="hpJob" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
     <label class="dc-agree"><input type="checkbox" id="dcJobAgree"> <span>I confirm this business is a <strong>deaf-friendly employer</strong>. (This is shown in bold on the post.)</span></label>
     <button class="btn btn-solid" id="dcJobSubmit" style="width:100%; margin-top:6px;">Submit vacancy</button>
+    <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="?p=terms" target="_blank" rel="noopener">Terms of Use</a>.</p>
   </div>
 </div>
 
@@ -2408,14 +2650,107 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="field"><label>Certifications</label><textarea id="dcPassCerts" rows="2"></textarea></div>
     <div class="field"><label>Communication preferences</label><input id="dcPassComm" placeholder="e.g. SASL, WhatsApp text, email"></div>
     <div class="field"><label>Availability</label><input id="dcPassAvail" placeholder="e.g. Full-time, immediately"></div>
+    <input type="text" name="website" id="hpPassport" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
     <button class="btn btn-solid" id="dcPassSubmit" style="width:100%; margin-top:6px;">Submit passport</button>
+    <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="?p=terms" target="_blank" rel="noopener">Terms of Use</a>.</p>
   </div>
 </div>
+
+<!-- ============ PRIVACY POLICY ============ -->
+<main class="page" id="page-privacy">
+  <div class="wrap legal-page" style="padding-top:56px;">
+    <span class="eyebrow">Your data</span>
+    <h1 style="font-size:clamp(30px,4vw,46px); margin:14px 0 6px;">Privacy Policy</h1>
+    <p style="color:var(--slate); font-size:13px; margin-bottom:8px;">Last updated: 18 July 2026</p>
+    <p class="lede">This policy explains what personal information Unplug Magazine collects, why, and your rights under South Africa's Protection of Personal Information Act (POPIA).</p>
+
+    <h3>1. Who we are</h3>
+    <p>Unplug Magazine ("we", "us", "our") operates this website. For any privacy question or to exercise your rights below, contact our Information Officer at <a href="mailto:info@unplugnews.com">info@unplugnews.com</a>.</p>
+
+    <h3>2. Information we collect</h3>
+    <ul>
+      <li><strong>Account details</strong> — your email address and a password (stored encrypted) when you register.</li>
+      <li><strong>Things you submit</strong> — names, birthdays and photos, Directory profile details, job vacancies, Opportunity Passports, event details, shout-out nominations, gallery images and article content.</li>
+      <li><strong>Contact &amp; newsletter</strong> — the name, email and message you send us, or the email you use to subscribe.</li>
+      <li><strong>Payments</strong> — the amount and reference for EFT payments. We do not receive or store your card or banking login details.</li>
+      <li><strong>Automatically</strong> — anonymous usage analytics (page views, a random session ID) and your IP address, used only to keep the site secure and prevent spam.</li>
+    </ul>
+
+    <h3>3. How we use your information</h3>
+    <p>To create and manage your account; to display content you have submitted and approved for publication; to process payments; to respond to you; to send you the newsletter if you subscribed; to keep the platform safe (spam/abuse prevention); and to understand, in aggregate, how the site is used.</p>
+
+    <h3>4. Content that becomes public</h3>
+    <p>Some submissions are <strong>published publicly once approved by an admin</strong> — for example Directory profiles, approved shout-outs, job listings and Opportunity Passports. Please only submit information you are comfortable making public. Opportunity Passports never display your contact details; your email is used for verification only.</p>
+
+    <h3>5. Who we share it with</h3>
+    <p>We do <strong>not sell</strong> your personal information. We share it only with service providers that help us run the platform (our hosting, database and email providers) and where required by law. Approved public content is, by its nature, visible to anyone.</p>
+
+    <h3>6. How long we keep it</h3>
+    <p>Account and published content is kept while your account is active. Job listings and Opportunity Passports are shown for 14 days. You can ask us to delete your data at any time (see your rights below).</p>
+
+    <h3>7. Your rights under POPIA</h3>
+    <p>You have the right to access the personal information we hold about you, to ask us to correct or delete it, to object to certain processing, and to withdraw consent (for example, to unsubscribe from the newsletter). To exercise any of these, email <a href="mailto:info@unplugnews.com">info@unplugnews.com</a>. You also have the right to lodge a complaint with the Information Regulator of South Africa.</p>
+
+    <h3>8. Cookies &amp; local storage</h3>
+    <p>We use your browser's local storage to remember your accessibility preferences and to keep you signed in. We use a first-party session identifier for anonymous analytics. We do not use third-party advertising or tracking cookies.</p>
+
+    <h3>9. Children</h3>
+    <p>The site is not intended for children under 18 without the consent of a parent or guardian.</p>
+
+    <h3>10. Changes</h3>
+    <p>We may update this policy from time to time; the "last updated" date above will change accordingly.</p>
+
+    <p style="font-size:12.5px; color:var(--slate); margin-top:28px; font-style:italic;">This policy is provided as a starting point and should be reviewed by a qualified professional and completed with your registered legal entity details before you rely on it commercially.</p>
+  </div>
+</main>
+
+<!-- ============ TERMS OF USE ============ -->
+<main class="page" id="page-terms">
+  <div class="wrap legal-page" style="padding-top:56px;">
+    <span class="eyebrow">The rules</span>
+    <h1 style="font-size:clamp(30px,4vw,46px); margin:14px 0 6px;">Terms of Use</h1>
+    <p style="color:var(--slate); font-size:13px; margin-bottom:8px;">Last updated: 18 July 2026</p>
+    <p class="lede">By using this website you agree to these terms. Please read them carefully.</p>
+
+    <h3>1. Using the site</h3>
+    <p>You may browse freely. Some actions (submitting content, buying a listing) require a free account. You are responsible for keeping your account details secure and for activity under your account.</p>
+
+    <h3>2. Content you submit</h3>
+    <p>You keep ownership of what you submit, but you confirm you have the right to submit it and you grant Unplug Magazine permission to display and promote it on the platform. Don't submit anything unlawful, misleading, hateful, infringing, or that isn't yours to share.</p>
+
+    <h3>3. Moderation</h3>
+    <p>Public submissions are reviewed before they appear, and we may decline, edit for display, or remove any content at our discretion. Job listings and Opportunity Passports appear for 14 days.</p>
+
+    <h3>4. Paid services</h3>
+    <p>Directory packages, article publishing, event listings, edition downloads and competition entries are paid services, currently settled by manual EFT. Prices are shown before you pay and are confirmed on our side once payment reflects.</p>
+
+    <h3>5. Deaf Community features</h3>
+    <p>The jobs board and Opportunity Passports are a community platform — we are not an employer, recruitment agency, or party to any arrangement between users. We don't guarantee the accuracy of third-party listings and are not liable for interactions that result from them. Employers posting a vacancy confirm they are a deaf-friendly employer.</p>
+
+    <h3>6. Intellectual property</h3>
+    <p>The Unplug Magazine name, branding and site design belong to us. Content published by contributors remains theirs.</p>
+
+    <h3>7. Third-party links</h3>
+    <p>We link to partners and social platforms (for example Ivory Muse, our social channels and advertisers). We aren't responsible for the content or practices of those external sites.</p>
+
+    <h3>8. Disclaimer &amp; liability</h3>
+    <p>The site is provided "as is". To the extent permitted by law, we are not liable for any loss arising from your use of the site or reliance on user-submitted content.</p>
+
+    <h3>9. Governing law</h3>
+    <p>These terms are governed by the laws of the Republic of South Africa.</p>
+
+    <h3>10. Contact</h3>
+    <p>Questions about these terms? Email <a href="mailto:info@unplugnews.com">info@unplugnews.com</a>.</p>
+
+    <p style="font-size:12.5px; color:var(--slate); margin-top:28px; font-style:italic;">These terms are a starting template and should be reviewed by a qualified professional before you rely on them commercially.</p>
+  </div>
+</main>
 
 <section class="newsletter">
   <div class="wrap newsletter-inner">
     <h3>Get uplifting news in your inbox, every Friday.</h3>
     <form id="newsletterForm">
+      <input type="text" name="website" id="hpNewsletter" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <input type="email" id="newsletterEmail" placeholder="Your email address" required>
       <button type="submit" id="newsletterBtn">Subscribe</button>
     </form>
@@ -2459,12 +2794,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
     <div class="footer-bottom">
       <span>© 2026 Unplug Magazine. All rights reserved.</span>
-      <span>Privacy Policy · Terms of Use</span>
+      <span><a href="#" data-page="privacy" style="color:inherit;">Privacy Policy</a> · <a href="#" data-page="terms" style="color:inherit;">Terms of Use</a></span>
     </div>
   </div>
 </footer>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script src="unplug-shared.js"></script>
@@ -2665,7 +3000,7 @@ function dirCardHtml(profile) {
   const slug = escapeHtml(profile.slug);
   const secondCategory = escapeHtml(profile.secondary_category || '');
   const deafBadge = profile.deaf_owned_verified ? '<span class="deaf-owned-badge">🤟 Deaf-Owned Verified</span>' : '';
-  return `<a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}${secondCategory ? ' + ' + secondCategory : ''}</p>${deafBadge}</a>`;
+  return `<div class="card-shell"><a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}${secondCategory ? ' + ' + secondCategory : ''}</p>${deafBadge}</a>${shareRow(absUrl('?p=profile&slug=' + encodeURIComponent(profile.slug || '')), profile.display_name)}</div>`;
 }
 
 async function loadDirectory(reset) {
@@ -2805,12 +3140,133 @@ function profileDetailHtml(profile, socials, gallery) {
   return html;
 }
 
+// Reviews and ratings on a directory listing, plus the "claim this listing"
+// route for business owners. Reading is public; rating or claiming needs an
+// account, and both go through admin approval.
+function starsHtml(rating) {
+  let out = '';
+  for (let i = 1; i <= 5; i += 1) out += `<span class="${i <= rating ? 'on' : ''}">★</span>`;
+  return `<span class="stars" aria-label="${rating} out of 5">${out}</span>`;
+}
+
+async function loadProfileReviews(profile) {
+  const wrap = document.getElementById('profileReviews');
+  if (!wrap || !profile) return;
+  let data;
+  try {
+    data = await api('/reviews/profile/' + profile.id);
+  } catch (err) {
+    wrap.innerHTML = '';
+    return;
+  }
+  const reviews = data.reviews || [];
+  const signedIn = !!UnplugAPI.getToken();
+  const summary = data.average === null
+    ? '<p class="rv-empty">No reviews yet — be the first to leave one.</p>'
+    : `<div class="rv-summary">${starsHtml(Math.round(data.average))}<strong>${data.average}</strong><span>from ${data.count} review${data.count === 1 ? '' : 's'}</span></div>`;
+
+  const list = reviews.map((r) => `<article class="rv">
+      <div class="rv-head">${starsHtml(r.rating)}<span class="rv-who">${escapeHtml(r.reviewer || 'Reader')}</span>
+      <span class="rv-when">${new Date(r.created_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' })}</span></div>
+      ${r.body ? `<p class="rv-body">${escapeHtml(r.body)}</p>` : ''}
+    </article>`).join('');
+
+  const form = signedIn
+    ? `<form class="rv-form" id="rvForm">
+         <label class="rv-label">Rate this listing</label>
+         <div class="rv-stars-pick" id="rvStars" role="radiogroup" aria-label="Your rating">
+           ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rv-star" data-value="${n}" role="radio" aria-checked="false" aria-label="${n} star${n === 1 ? '' : 's'}">★</button>`).join('')}
+         </div>
+         <textarea id="rvBody" rows="3" maxlength="1500" placeholder="What was your experience? (optional)"></textarea>
+         <input type="text" class="hp-field" id="hpReview" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+         <div class="rv-actions"><button class="btn btn-solid" type="submit">Submit review</button>
+         <span class="rv-note">Reviews are checked before they appear.</span></div>
+       </form>`
+    : `<p class="rv-signin"><a href="unplug-member-dashboard.html" target="_blank" rel="noopener">Sign in</a> to leave a review.</p>`;
+
+  const claim = signedIn
+    ? `<div class="rv-claim"><p>Is this your listing?</p>
+         <button class="btn btn-line" type="button" id="claimBtn">Claim this listing</button></div>`
+    : '';
+
+  wrap.innerHTML = `<h3 class="rv-title">Reviews</h3>${summary}${list}${form}${claim}`;
+
+  // Star picker
+  let chosen = 0;
+  const starWrap = document.getElementById('rvStars');
+  if (starWrap) {
+    starWrap.querySelectorAll('.rv-star').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        chosen = Number(btn.getAttribute('data-value'));
+        starWrap.querySelectorAll('.rv-star').forEach((b) => {
+          const on = Number(b.getAttribute('data-value')) <= chosen;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-checked', Number(b.getAttribute('data-value')) === chosen ? 'true' : 'false');
+        });
+      });
+    });
+  }
+
+  const rvForm = document.getElementById('rvForm');
+  if (rvForm) {
+    rvForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!chosen) { showToast('Pick a star rating first'); return; }
+      const btn = rvForm.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        const res = await api('/reviews/profile/' + profile.id, {
+          method: 'POST',
+          body: JSON.stringify({
+            rating: chosen,
+            body: document.getElementById('rvBody').value.trim(),
+            website: document.getElementById('hpReview').value,
+          }),
+        });
+        showToast(res.message || 'Review sent for approval');
+        document.getElementById('rvBody').value = '';
+      } catch (err) {
+        showToast(err.message || "Couldn't submit your review");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  const claimBtn = document.getElementById('claimBtn');
+  if (claimBtn) {
+    claimBtn.addEventListener('click', async () => {
+      const message = prompt('Tell us how you\'re connected to this listing (optional):') || '';
+      claimBtn.disabled = true;
+      try {
+        const res = await api('/claims/profile/' + profile.id, {
+          method: 'POST',
+          body: JSON.stringify({ message }),
+        });
+        showToast(res.message || 'Claim submitted');
+      } catch (err) {
+        showToast(err.message || "Couldn't submit your claim");
+      } finally {
+        claimBtn.disabled = false;
+      }
+    });
+  }
+}
+
 async function loadProfileDetail(slug) {
   const container = document.getElementById('profileDetailContent');
   container.innerHTML = '<div class="dir-empty-state">Loading profile…</div>';
   try {
     const data = await api('/profiles/' + encodeURIComponent(slug));
-    container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery);
+    container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery)
+      + '<div class="reviews-wrap" id="profileReviews"></div>';
+    loadProfileReviews(data.profile);
+    // Deep-link this profile (shareable/indexable URL + its own title/desc).
+    const q = '?p=profile&slug=' + encodeURIComponent(slug);
+    history.replaceState({ p: 'profile', slug }, '', q);
+    seoSetUrl(q);
+    document.title = data.profile.display_name + ' — Unplug Directory';
+    seoSetDescription(data.profile.bio || (data.profile.display_name + ' on the Unplug Magazine Directory.'));
   } catch (err) {
     container.innerHTML = '<div class="dir-empty-state">This profile could not be found.</div>';
   }
@@ -2844,34 +3300,635 @@ function emotionBadge(emotion) {
   return `<span class="emotion-badge emotion-${emotion}">${e.emoji} ${e.label}</span>`;
 }
 
+// Turns article body HTML (which for WordPress-imported stories includes
+// <!-- wp:… --> block comments and tags) into a clean plain-text excerpt.
+function textExcerpt(html, len) {
+  const text = (html || '')
+    .replace(/<!--[\s\S]*?-->/g, ' ')  // strip HTML / WordPress block comments
+    .replace(/<[^>]*>/g, ' ')          // strip tags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return escapeHtml(text.slice(0, len)) + (text.length > len ? '…' : '');
+}
+
 function newsCardHtml(article) {
   const title = escapeHtml(article.title);
-  const excerpt = escapeHtml((article.body || '').slice(0, 140)) + (article.body && article.body.length > 140 ? '…' : '');
+  const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `Supplied by ${escapeHtml(article.kicker_supplied_by)}` : '';
-  return `<a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb"></div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>`;
+  // The share row sits OUTSIDE the card anchor — nesting links inside an <a>
+  // is invalid and would also trigger the card's navigation handler.
+  return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb"></div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}</div>`;
+}
+
+// Share buttons (WhatsApp / Facebook / X / native / copy) used on the article
+// reader. `url` should be an absolute, shareable link; `text` a short caption.
+function shareRowHtml(url, text) {
+  const u = encodeURIComponent(url);
+  const t = encodeURIComponent(text);
+  const wa = `https://wa.me/?text=${t}%20${u}`;
+  const fb = `https://www.facebook.com/sharer/sharer.php?u=${u}`;
+  const x = `https://twitter.com/intent/tweet?text=${t}&url=${u}`;
+  return `<div class="reader-share" role="group" aria-label="Share this story">
+    <a class="btn-line" href="${wa}" target="_blank" rel="noopener" title="Share on WhatsApp" aria-label="Share on WhatsApp"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.29A10 10 0 1 0 12 2zm0 18.13a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.06.8.82-3-.19-.31A8.13 8.13 0 1 1 12 20.13zm4.47-5.75c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.48-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.87 1.22 3.07.15.2 2.1 3.2 5.08 4.49 1.86.8 2.6.87 3.53.73.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z"/></svg></a>
+    <a class="btn-line" href="${fb}" target="_blank" rel="noopener" title="Share on Facebook" aria-label="Share on Facebook"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></a>
+    <a class="btn-line" href="${x}" target="_blank" rel="noopener" title="Share on X" aria-label="Share on X"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2.4h3.2l-7.02 8.02L23.5 21.6h-6.62l-5.18-6.78-5.93 6.78H2.56l7.5-8.58L1.7 2.4h6.79l4.68 6.2L18.9 2.4zM17.72 19.6h1.78L7.4 4.32H5.5L17.72 19.6z"/></svg></a>
+    <button class="btn-line" type="button" data-share-copy="${escapeHtml(url)}" title="Copy link" aria-label="Copy link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+  </div>`;
+}
+
+// Wire up the reader toolbar: listen (speech), reading size/spacing/dyslexia,
+// scroll progress, copy-link, and load related stories.
+function initArticleReader(a, id, shareUrl) {
+  const body = document.getElementById('artBody');
+  const bar = document.getElementById('artProgress');
+  let fontStep = 0;
+  const FONT = [16, 18, 20, 23];
+
+  // Scroll progress (only fills while the article page is the active one).
+  function updateProgress() {
+    const page = document.getElementById('page-articledetail');
+    if (!bar || !page || !page.classList.contains('active') || !body) { if (bar) bar.style.width = '0'; return; }
+    const rect = body.getBoundingClientRect();
+    const total = rect.height - window.innerHeight;
+    const done = Math.min(Math.max(-rect.top, 0), Math.max(total, 1));
+    bar.style.width = (total > 0 ? (done / total) * 100 : 0) + '%';
+  }
+  if (!window.__artProgressBound) {
+    window.addEventListener('scroll', () => { if (window.__updateArtProgress) window.__updateArtProgress(); }, { passive: true });
+    window.__artProgressBound = true;
+  }
+  window.__updateArtProgress = updateProgress;
+  updateProgress();
+
+  // Text-to-speech with adjustable speed.
+  const synth = window.speechSynthesis;
+  const listenBtn = document.getElementById('rdListen');
+  const rateSel = document.getElementById('rdRate');
+  let utter = null;
+  function stopSpeak() { if (synth) synth.cancel(); if (listenBtn) { listenBtn.classList.remove('on'); listenBtn.innerHTML = '▶ Listen'; } }
+  if (listenBtn && synth) {
+    listenBtn.addEventListener('click', () => {
+      if (synth.speaking) { stopSpeak(); return; }
+      utter = new SpeechSynthesisUtterance((body.innerText || '').slice(0, 9000));
+      utter.lang = 'en-ZA';
+      utter.rate = parseFloat(rateSel && rateSel.value) || 1;
+      utter.onend = utter.onerror = stopSpeak;
+      synth.cancel(); synth.speak(utter);
+      listenBtn.classList.add('on'); listenBtn.innerHTML = '⏸ Stop';
+    });
+    if (rateSel) rateSel.addEventListener('change', () => { if (synth.speaking) { stopSpeak(); listenBtn.click(); } });
+  } else if (listenBtn) {
+    listenBtn.style.display = 'none';
+  }
+  window.__stopArticleSpeak = stopSpeak;
+
+  // Reading controls scoped to the article body.
+  const applyFont = () => { body.style.fontSize = FONT[fontStep] + 'px'; };
+  const fUp = document.getElementById('rdFontUp');
+  const fDn = document.getElementById('rdFontDown');
+  if (fUp) fUp.addEventListener('click', () => { fontStep = Math.min(fontStep + 1, FONT.length - 1); applyFont(); });
+  if (fDn) fDn.addEventListener('click', () => { fontStep = Math.max(fontStep - 1, 0); applyFont(); });
+  const lineBtn = document.getElementById('rdLine');
+  if (lineBtn) lineBtn.addEventListener('click', () => { body.classList.toggle('rl'); lineBtn.classList.toggle('on'); });
+  const dysBtn = document.getElementById('rdDys');
+  if (dysBtn) dysBtn.addEventListener('click', () => { body.classList.toggle('dys'); dysBtn.classList.toggle('on'); });
+
+  // "Save for later" — the reading list lives against the member's account,
+  // so signed-out readers get pointed at the dashboard rather than a failure.
+  const saveBtn = document.getElementById('rdSave');
+  if (saveBtn) {
+    const articleId = Number(saveBtn.getAttribute('data-article-id'));
+    let isSaved = false;
+    const paint = () => {
+      saveBtn.textContent = isSaved ? '★ Saved' : '☆ Save';
+      saveBtn.setAttribute('aria-pressed', isSaved ? 'true' : 'false');
+    };
+    if (UnplugAPI.getToken()) {
+      api('/saved/ids')
+        .then((d) => { isSaved = (d.ids || []).indexOf(articleId) !== -1; paint(); })
+        .catch(() => { /* not fatal — leave the button in its default state */ });
+    }
+    saveBtn.addEventListener('click', async () => {
+      if (!UnplugAPI.getToken()) {
+        showToast('Sign in to save stories to your reading list');
+        window.open('unplug-member-dashboard.html', '_blank', 'noopener');
+        return;
+      }
+      try {
+        await api('/saved/' + articleId, { method: isSaved ? 'DELETE' : 'POST' });
+        isSaved = !isSaved;
+        paint();
+        showToast(isSaved ? 'Saved to your reading list' : 'Removed from your reading list');
+      } catch (err) {
+        showToast("Couldn't update your reading list right now");
+      }
+    });
+  }
+
+  loadRelatedStories(a, id);
+  loadPoll(id);
+  loadComments(id);
+}
+
+// ---------------------------------------------------------------------------
+// Admin-editable page content.
+//
+// Two mechanisms, both additive: an element tagged data-cms="home.hero.title"
+// has its text replaced when an override exists, and a container tagged
+// data-cms-blocks="home" is filled with any image blocks for that page. If
+// the CMS is empty or unreachable, every page keeps its built-in wording —
+// the site never depends on the database to be readable.
+// ---------------------------------------------------------------------------
+function cmsBlockHtml(b) {
+  const img = b.image_url
+    ? `<div class="cms-block-img"><img src="${escapeHtml(b.image_url)}" alt="${escapeHtml(b.title || '')}" loading="lazy" decoding="async"></div>`
+    : '';
+  const btn = (b.button_label && b.button_url)
+    ? `<a class="btn btn-solid cms-block-btn" href="${escapeHtml(b.button_url)}">${escapeHtml(b.button_label)}</a>`
+    : '';
+  return `<section class="cms-block">
+    ${img}
+    <div class="cms-block-text">
+      ${b.subheading ? `<span class="eyebrow">${escapeHtml(b.subheading)}</span>` : ''}
+      ${b.title ? `<h2>${escapeHtml(b.title)}</h2>` : ''}
+      ${b.description ? `<p>${escapeHtml(b.description)}</p>` : ''}
+      ${btn}
+    </div>
+  </section>`;
+}
+
+async function applyPageCms() {
+  let cms;
+  try {
+    cms = await api('/page-cms');
+  } catch (err) {
+    return; // leave the built-in content in place
+  }
+  const content = cms.content || {};
+  document.querySelectorAll('[data-cms]').forEach((el) => {
+    const value = content[el.getAttribute('data-cms')];
+    // textContent, not innerHTML — page copy is text, and this keeps any
+    // stray markup in the CMS from executing.
+    if (typeof value === 'string' && value.trim()) el.textContent = value;
+  });
+  const blocks = cms.blocks || {};
+  document.querySelectorAll('[data-cms-blocks]').forEach((wrap) => {
+    const list = blocks[wrap.getAttribute('data-cms-blocks')] || [];
+    wrap.innerHTML = list.map(cmsBlockHtml).join('');
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Directory map + "near me".
+//
+// Leaflet is fetched only when someone actually opens the map, so readers who
+// never use it don't pay for the library — it matters on expensive mobile data.
+// ---------------------------------------------------------------------------
+let leafletPromise = null;
+function loadLeaflet() {
+  if (leafletPromise) return leafletPromise;
+  leafletPromise = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = () => resolve(window.L);
+    s.onerror = () => reject(new Error('Map library failed to load'));
+    document.head.appendChild(s);
+  });
+  return leafletPromise;
+}
+
+let dirMapInstance = null;
+let dirMapLayer = null;
+
+function currentDirCategory() {
+  const sel = document.getElementById('dirCategorySelect');
+  return sel && sel.value ? sel.value : '';
+}
+
+async function renderDirMap() {
+  const panel = document.getElementById('dirMapPanel');
+  const note = document.getElementById('dirMapNote');
+  if (!panel) return;
+  note.textContent = 'Loading map…';
+  let L, data;
+  try {
+    const cat = currentDirCategory();
+    [L, data] = await Promise.all([
+      loadLeaflet(),
+      api('/directory/map' + (cat ? '?category=' + encodeURIComponent(cat) : '')),
+    ]);
+  } catch (err) {
+    note.textContent = "The map couldn't load right now.";
+    return;
+  }
+  if (!dirMapInstance) {
+    // Centred on South Africa until we have pins to fit to.
+    dirMapInstance = L.map('dirMap').setView([-29.0, 24.0], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 18,
+    }).addTo(dirMapInstance);
+  }
+  if (dirMapLayer) dirMapLayer.remove();
+  dirMapLayer = L.layerGroup().addTo(dirMapInstance);
+
+  const listings = data.listings || [];
+  listings.forEach((l) => {
+    const where = [l.city, l.province].filter(Boolean).join(', ');
+    const marker = L.marker([l.latitude, l.longitude]).addTo(dirMapLayer);
+    marker.bindPopup(
+      `<strong>${escapeHtml(l.display_name)}</strong><br>`
+      + (l.category ? escapeHtml(l.category) + '<br>' : '')
+      + (where ? escapeHtml(where) + '<br>' : '')
+      + (l.approximate ? '<em style="font-size:11px;">Approximate — town centre</em><br>' : '')
+      + `<a href="?p=profile&slug=${encodeURIComponent(l.slug)}">View profile →</a>`
+    );
+  });
+  if (listings.length > 0) {
+    dirMapInstance.fitBounds(listings.map((l) => [l.latitude, l.longitude]), { padding: [30, 30], maxZoom: 12 });
+  }
+  // Say plainly how many listings couldn't be placed, rather than quietly
+  // showing a near-empty map as if that were the whole directory.
+  const unplaced = data.unplaced || 0;
+  note.textContent = listings.length === 0
+    ? `None of the ${data.total} listings have a town set yet, so there's nothing to show on the map. Add a town to a listing and it'll appear here.`
+    : `Showing ${listings.length} of ${data.total} listings.` + (unplaced ? ` ${unplaced} have no town set yet.` : '');
+  // Leaflet needs a nudge when it's revealed inside a previously hidden panel.
+  setTimeout(() => dirMapInstance.invalidateSize(), 50);
+}
+
+(function setupDirectoryTools() {
+  const toggle = document.getElementById('dirMapToggle');
+  const nearBtn = document.getElementById('dirNearMeBtn');
+  const panel = document.getElementById('dirMapPanel');
+  const note = document.getElementById('dirToolsNote');
+  if (!toggle || !panel) return;
+
+  toggle.addEventListener('click', () => {
+    const opening = panel.hidden;
+    panel.hidden = !opening;
+    toggle.setAttribute('aria-pressed', opening ? 'true' : 'false');
+    toggle.textContent = opening ? '🗺 Hide map' : '🗺 Map view';
+    if (opening) renderDirMap();
+  });
+
+  const catSel = document.getElementById('dirCategorySelect');
+  if (catSel) catSel.addEventListener('change', () => { if (!panel.hidden) renderDirMap(); });
+
+  if (nearBtn) nearBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      note.textContent = 'Your browser doesn\'t support location search.';
+      return;
+    }
+    note.textContent = 'Finding your location…';
+    nearBtn.disabled = true;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      try {
+        const cat = currentDirCategory();
+        const q = `/directory/near?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&radiusKm=150`
+          + (cat ? '&category=' + encodeURIComponent(cat) : '');
+        const data = await api(q);
+        const listings = data.listings || [];
+        const grid = document.getElementById('dirGrid');
+        if (listings.length === 0) {
+          note.textContent = 'No listings found within 150 km that have a town set.';
+        } else {
+          note.textContent = `Nearest ${listings.length} listing${listings.length === 1 ? '' : 's'} to you.`;
+          grid.innerHTML = listings.map((l) => {
+            const card = dirCardHtml(l);
+            return card.replace('</h4>', `</h4><p class="dir-distance">${l.distanceKm} km away${l.approximate ? ' (approx.)' : ''}</p>`);
+          }).join('');
+          const more = document.getElementById('dirLoadMoreBtn');
+          if (more) more.style.display = 'none';
+        }
+      } catch (err) {
+        note.textContent = "Couldn't search near you right now.";
+      } finally {
+        nearBtn.disabled = false;
+      }
+    }, () => {
+      note.textContent = 'Location permission was declined, so we can\'t sort by distance.';
+      nearBtn.disabled = false;
+    }, { timeout: 10000 });
+  });
+})();
+
+// "For you" — a personalised feed for signed-in members, ranked by the
+// topics they follow and the categories they've saved from. Signed-out
+// readers never see this section at all.
+async function loadForYou() {
+  const section = document.getElementById('forYouSection');
+  if (!section || !UnplugAPI.getToken()) return;
+  const grid = document.getElementById('forYouGrid');
+  const heading = document.getElementById('forYouHeading');
+  try {
+    const data = await api('/feed/for-you');
+    const articles = data.articles || [];
+    if (articles.length === 0) return; // nothing to show — leave it hidden
+    section.hidden = false;
+    // Don't call it "For you" unless it actually reflects their interests.
+    heading.textContent = data.personalised ? 'For you' : 'Latest stories';
+    grid.innerHTML = articles.map(homeStoryCardHtml).join('');
+  } catch (err) {
+    section.hidden = true;
+  }
+}
+
+async function loadTopicChips() {
+  const wrap = document.getElementById('forYouTopics');
+  if (!wrap) return;
+  try {
+    const data = await api('/feed/topics');
+    const topics = data.topics || [];
+    if (topics.length === 0) { wrap.innerHTML = '<p class="topic-hint">No topics available yet.</p>'; return; }
+    wrap.innerHTML = '<p class="topic-hint">Follow the topics you care about — your feed updates straight away.</p>'
+      + topics.map((t) => `<button class="topic-chip${t.following ? ' on' : ''}" type="button" data-topic-id="${t.id}" aria-pressed="${t.following ? 'true' : 'false'}">${escapeHtml(t.name)}</button>`).join('');
+    wrap.querySelectorAll('.topic-chip').forEach((chip) => {
+      chip.addEventListener('click', async () => {
+        const id = chip.getAttribute('data-topic-id');
+        const following = chip.classList.contains('on');
+        chip.disabled = true;
+        try {
+          await api('/feed/topics/' + id, { method: following ? 'DELETE' : 'POST' });
+          chip.classList.toggle('on', !following);
+          chip.setAttribute('aria-pressed', !following ? 'true' : 'false');
+          loadForYou();
+        } catch (err) {
+          showToast(err.message || "Couldn't update that topic");
+        } finally {
+          chip.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    wrap.innerHTML = '<p class="topic-hint">Topics aren\'t available right now.</p>';
+  }
+}
+
+// Reader polls. Open to everyone — a random per-browser key keeps casual
+// double-voting down without demanding an account. Once someone has voted
+// (or the poll is closed) we show results instead of the ballot.
+function pollVoterKey() {
+  let key = localStorage.getItem('unplug_voter_key');
+  if (!key) {
+    key = (Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+    localStorage.setItem('unplug_voter_key', key);
+  }
+  return key;
+}
+
+function votedPolls() {
+  try { return JSON.parse(localStorage.getItem('unplug_voted_polls') || '[]'); }
+  catch (e) { return []; }
+}
+
+function markPollVoted(pollId) {
+  const list = votedPolls();
+  if (list.indexOf(pollId) === -1) {
+    list.push(pollId);
+    localStorage.setItem('unplug_voted_polls', JSON.stringify(list));
+  }
+}
+
+function pollHtml(poll, showResults) {
+  const total = poll.totalVotes || 0;
+  const body = poll.options.map((o) => {
+    if (!showResults) {
+      return `<button class="poll-opt" type="button" data-option-id="${o.id}">${escapeHtml(o.label)}</button>`;
+    }
+    const pct = total > 0 ? Math.round((o.votes / total) * 100) : 0;
+    return `<div class="poll-res">
+      <div class="poll-res-top"><span>${escapeHtml(o.label)}</span><span class="poll-pct">${pct}%</span></div>
+      <div class="poll-bar"><span style="width:${pct}%"></span></div>
+    </div>`;
+  }).join('');
+  const foot = showResults
+    ? `<p class="poll-foot">${total} ${total === 1 ? 'vote' : 'votes'}${poll.is_open ? '' : ' · voting closed'}</p>`
+    : '<p class="poll-foot">Pick one to see what everyone else thinks.</p>';
+  return `<div class="poll" data-poll-id="${poll.id}">
+    <span class="poll-kicker">Reader poll</span>
+    <h3 class="poll-q">${escapeHtml(poll.question)}</h3>
+    <div class="poll-body">${body}</div>
+    ${foot}
+  </div>`;
+}
+
+async function loadPoll(articleId) {
+  const wrap = document.getElementById('articlePoll');
+  if (!wrap) return;
+  let poll = null;
+  try {
+    const data = await api('/polls/article/' + articleId);
+    poll = data.poll;
+  } catch (err) {
+    wrap.innerHTML = '';
+    return;
+  }
+  if (!poll) { wrap.innerHTML = ''; return; }
+
+  const render = (p) => {
+    const alreadyVoted = votedPolls().indexOf(p.id) !== -1;
+    wrap.innerHTML = pollHtml(p, alreadyVoted || !p.is_open);
+    wrap.querySelectorAll('.poll-opt').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        wrap.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
+        try {
+          const res = await api('/polls/' + p.id + '/vote', {
+            method: 'POST',
+            body: JSON.stringify({
+              optionId: Number(btn.getAttribute('data-option-id')),
+              voterKey: pollVoterKey(),
+            }),
+          });
+          markPollVoted(p.id);
+          render(res.poll);
+        } catch (err) {
+          wrap.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = false; });
+          showToast(err.message || "Couldn't record your vote");
+        }
+      });
+    });
+  };
+  render(poll);
+}
+
+// Comments. Reading them is public; posting and reacting need a member
+// account, and every new comment waits for admin approval before it shows.
+const REACTIONS = [
+  { key: 'like', glyph: '👍', label: 'Like' },
+  { key: 'love', glyph: '❤️', label: 'Love' },
+  { key: 'clap', glyph: '👏', label: 'Applaud' },
+  { key: 'insightful', glyph: '💡', label: 'Insightful' },
+];
+
+function commentHtml(c) {
+  const when = c.created_at ? new Date(c.created_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  const buttons = REACTIONS.map((r) => {
+    const count = Number(c[r.key + '_count'] || 0);
+    return `<button class="cmt-react" type="button" data-comment-id="${c.id}" data-reaction="${r.key}" aria-label="${r.label}" title="${r.label}">
+      <span aria-hidden="true">${r.glyph}</span><span class="n">${count}</span>
+    </button>`;
+  }).join('');
+  return `<article class="cmt">
+    <div class="cmt-head"><span class="cmt-who">${escapeHtml(c.author || 'Reader')}</span>${when ? `<span class="cmt-when">${when}</span>` : ''}</div>
+    <p class="cmt-body">${escapeHtml(c.body)}</p>
+    <div class="cmt-reacts">${buttons}</div>
+  </article>`;
+}
+
+async function loadComments(articleId) {
+  const wrap = document.getElementById('articleComments');
+  if (!wrap) return;
+  wrap.innerHTML = '<h3 class="cmt-title">Comments</h3><div class="cmt-loading">Loading comments…</div>';
+  let comments = [];
+  try {
+    const data = await api('/comments/article/' + articleId);
+    comments = data.comments || [];
+  } catch (err) {
+    wrap.innerHTML = '<h3 class="cmt-title">Comments</h3><p class="cmt-empty">Comments aren\'t available right now.</p>';
+    return;
+  }
+  const signedIn = !!UnplugAPI.getToken();
+  const list = comments.length
+    ? comments.map(commentHtml).join('')
+    : '<p class="cmt-empty">No comments yet — be the first to say something.</p>';
+  const form = signedIn
+    ? `<form class="cmt-form" id="cmtForm">
+         <label class="cmt-label" for="cmtBody">Join the conversation</label>
+         <textarea id="cmtBody" rows="3" maxlength="2000" placeholder="Share a thought…" required></textarea>
+         <input type="text" class="hp-field" id="hpComment" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+         <div class="cmt-actions"><button class="btn btn-solid" type="submit">Post comment</button>
+         <span class="cmt-note">Comments are reviewed before they appear.</span></div>
+       </form>`
+    : `<p class="cmt-signin">Want to join in? <a href="unplug-member-dashboard.html" target="_blank" rel="noopener">Sign in or create a free account</a> to comment.</p>`;
+  wrap.innerHTML = `<h3 class="cmt-title">Comments${comments.length ? ` (${comments.length})` : ''}</h3>${list}${form}`;
+
+  const formEl = document.getElementById('cmtForm');
+  if (formEl) {
+    formEl.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const bodyEl = document.getElementById('cmtBody');
+      const text = bodyEl.value.trim();
+      if (!text) return;
+      const btn = formEl.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        const res = await api('/comments/article/' + articleId, {
+          method: 'POST',
+          body: JSON.stringify({ body: text, website: document.getElementById('hpComment').value }),
+        });
+        bodyEl.value = '';
+        showToast(res.message || 'Comment sent for review');
+      } catch (err) {
+        showToast(err.message || "Couldn't post your comment");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  wrap.querySelectorAll('.cmt-react').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!UnplugAPI.getToken()) {
+        showToast('Sign in to react to comments');
+        return;
+      }
+      btn.disabled = true;
+      try {
+        await api('/comments/' + btn.getAttribute('data-comment-id') + '/react', {
+          method: 'POST',
+          body: JSON.stringify({ reaction: btn.getAttribute('data-reaction') }),
+        });
+        // Refetch rather than adjust locally: a member only holds one reaction
+        // per comment, so switching reactions moves two counts at once and
+        // guessing client-side would drift out of sync.
+        await loadComments(articleId);
+      } catch (err) {
+        btn.disabled = false;
+        showToast(err.message || "Couldn't record that reaction");
+      }
+    });
+  });
+}
+
+async function loadRelatedStories(a, id) {
+  const wrap = document.getElementById('relatedStories');
+  if (!wrap || !a.category) return;
+  try {
+    const data = await api('/articles?' + new URLSearchParams({ category: a.category, limit: 6 }).toString());
+    const others = (data.articles || []).filter(x => String(x.id) !== String(id)).slice(0, 3);
+    if (!others.length) return;
+    wrap.innerHTML = '<h3>More in ' + escapeHtml(a.category) + '</h3><div class="related-grid">' +
+      others.map(x => `<a class="related-card" href="?p=article&id=${x.id}" data-related-id="${x.id}">
+        <span class="rc-tag">${escapeHtml(x.category || 'Story')}</span>
+        <h4>${escapeHtml(x.title)}</h4>
+        <span class="rc-meta">${readMinutes(x.body)} min read</span></a>`).join('') + '</div>';
+    wrap.querySelectorAll('[data-related-id]').forEach(card => card.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.scrollTo(0, 0);
+      loadArticleDetail(card.getAttribute('data-related-id'));
+    }));
+  } catch (e) { /* silently skip related on error */ }
 }
 
 async function loadArticleDetail(id) {
+  if (window.__stopArticleSpeak) window.__stopArticleSpeak();
   const el = document.getElementById('articleDetailContent');
   el.innerHTML = '<div class="dir-empty-state">Loading story…</div>';
   trackPageView('article-' + id);
   try {
     const data = await api('/articles/' + id);
     const a = data.article;
+    const submitter = a.kicker_supplied_by || a.author_name || '';
+    const dateStr = a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+    const shareUrl = location.origin + '/?p=article&id=' + id;
     el.innerHTML = `
       ${a.banner_image_url ? `<div style="position:relative; margin-bottom:24px;"><img src="${escapeHtml(a.banner_image_url)}" alt="${escapeHtml(a.title)}" style="width:100%; max-height:420px; object-fit:cover; display:block;"><div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>` : ''}
       <span class="eyebrow">${escapeHtml(a.category || '')}</span>
       ${emotionBadge(a.emotion) ? `<div style="margin:10px 0 0;">${emotionBadge(a.emotion)}</div>` : ''}
-      <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 8px;">${escapeHtml(a.title)}</h1>
-      ${a.kicker_supplied_by ? `<p style="color:var(--slate); font-size:13px; margin-bottom:6px;">Supplied by ${escapeHtml(a.kicker_supplied_by)}</p>` : ''}
-      <p style="color:var(--slate); font-size:13px; margin-bottom:24px;">${readMinutes(a.body)} min read</p>
-      <div class="rich-bio" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
+      <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 10px;">${escapeHtml(a.title)}</h1>
+      <div class="article-byline">
+        ${submitter ? `<span>Submitted by <span class="who">${escapeHtml(submitter)}</span></span>` : ''}
+        ${submitter && dateStr ? '<span>·</span>' : ''}
+        ${dateStr ? `<span>${dateStr}</span>` : ''}
+        <span>·</span><span>${readMinutes(a.body)} min read</span>
+      </div>
+      <div class="reader-toolbar" role="toolbar" aria-label="Reading options">
+        <button id="rdListen" type="button">▶ Listen</button>
+        <select id="rdRate" aria-label="Reading speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select>
+        <span class="rdiv"></span>
+        <button id="rdFontDown" type="button" aria-label="Decrease text size">A−</button>
+        <button id="rdFontUp" type="button" aria-label="Increase text size">A+</button>
+        <button id="rdLine" type="button">↕ Spacing</button>
+        <button id="rdDys" type="button">Dyslexia font</button>
+        <span class="rdiv"></span>
+        <button id="rdSave" type="button" data-article-id="${id}" aria-pressed="false">☆ Save</button>
+        ${shareRowHtml(shareUrl, a.title)}
+      </div>
+      <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
+      <div class="poll-wrap" id="articlePoll"></div>
+      <div class="related-wrap" id="relatedStories"></div>
+      <div class="comments-wrap" id="articleComments"></div>
     `;
     if (a.banner_image_url) {
       const badge = el.querySelector('.print-mark');
       if (badge) badge.innerHTML = svgMarkup;
     }
+    initArticleReader(a, id, shareUrl);
+    // Deep-link this article: distinct, shareable, indexable URL + its own
+    // title/description (replaceState overwrites the ?p=articledetail entry).
+    const q = '?p=article&id=' + id;
+    history.replaceState({ p: 'article', id }, '', q);
+    seoSetUrl(q);
+    document.title = a.title + ' — Unplug Magazine';
+    seoSetDescription((a.body || '').replace(/<[^>]*>/g, '').trim());
   } catch (err) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load this story right now.</div>';
   }
@@ -3064,7 +4121,7 @@ function renderTop10(sorted){
     <div class="rank-row" style="${i===9?'border-bottom:none;':''}">
       <span class="rank-num">${String(i+1).padStart(2,'0')}</span>
       <div class="rank-photo"><img src="${avatarUrl(p.display_name)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
-      <div><div class="rank-name">${escapeHtml(p.display_name)}</div><div class="rank-cause">${escapeHtml(p.category || '')}</div></div>
+      <div><div class="rank-name">${escapeHtml(p.display_name)}</div><div class="rank-cause">${escapeHtml(p.category || '')}</div>${shareRow(absUrl(p.slug ? '?p=profile&slug=' + encodeURIComponent(p.slug) : '?p=top10'), p.display_name + ' on the Unplug Top 10')}</div>
       <span class="rank-badge">${isEntryNew(p) ? 'New Entry' : 'Verified'}</span>
     </div>`).join('');
 }
@@ -3130,7 +4187,7 @@ function renderFullList(sorted){
     <div class="rank-row" style="${i===listToShow.length-1?'border-bottom:none;':''}">
       <span class="rank-num">${String(rank).padStart(2,'0')}</span>
       <div class="rank-photo"><img src="${avatarUrl(p.display_name)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
-      <div><div class="rank-name">${escapeHtml(p.display_name)}</div><div class="rank-cause">${escapeHtml(p.category || '')}</div></div>
+      <div><div class="rank-name">${escapeHtml(p.display_name)}</div><div class="rank-cause">${escapeHtml(p.category || '')}</div>${shareRow(absUrl(p.slug ? '?p=profile&slug=' + encodeURIComponent(p.slug) : '?p=top10'), p.display_name + ' on the Unplug Top 10')}</div>
       <span class="rank-badge">${isEntryNew(p) ? 'New Entry' : 'Verified'}</span>
     </div>`;
   }).join('');
@@ -3210,19 +4267,49 @@ async function loadTop10(showLoading){
 // they already pointed at the general site URL for every card, not
 // per-article data, so there's nothing item-specific to wire there.
 // ---------------------------------------------------------------------------
-const SHARE_ROW_HTML = `<div class="share-row">
+// Absolute, shareable link to a deep-linked view (e.g. absUrl('?p=article&id=7')).
+function absUrl(query) {
+  return location.origin + location.pathname + (query || '');
+}
+
+// Per-item share row used by every card and section: each one passes its OWN
+// url + caption, so readers share that specific story / profile / shout-out
+// rather than just the homepage. Instagram has no web share intent, so a
+// copy-link button takes its slot (paste-anywhere works for IG stories too).
+function shareRow(url, text) {
+  const u = encodeURIComponent(url);
+  const t = encodeURIComponent(text);
+  return `<div class="share-row" role="group" aria-label="Share this">
         <span class="share-label">Share:</span>
-        <a class="share-btn ig" href="https://www.instagram.com/" target="_blank" title="Share on Instagram"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="0.4" fill="currentColor" stroke="none"/></svg></a>
-        <a class="share-btn fb" href="https://www.facebook.com/sharer/sharer.php?u=https://www.unplugnews.com" target="_blank" title="Share on Facebook"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></a>
-        <a class="share-btn tt" href="https://www.tiktok.com/" target="_blank" title="Share on TikTok"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.73a8.22 8.22 0 0 0 4.84 1.56V6.82a4.85 4.85 0 0 1-1.07-.13z"/></svg></a>
-        <a class="share-btn li" href="https://www.linkedin.com/sharing/share-offsite/?url=https://www.unplugnews.com" target="_blank" title="Share on LinkedIn"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>
-        <a class="share-btn wa" href="https://wa.me/?text=https://www.unplugnews.com" target="_blank" title="Share on WhatsApp"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></a>
-        <a class="share-btn tw" href="https://twitter.com/intent/tweet?url=https://www.unplugnews.com" target="_blank" title="Share on X / Twitter"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2.4h3.2l-7.02 8.02L23.5 21.6h-6.62l-5.18-6.78-5.93 6.78H2.56l7.5-8.58L1.7 2.4h6.79l4.68 6.2L18.9 2.4zM17.72 19.6h1.78L7.4 4.32H5.5L17.72 19.6z"/></svg></a>
+        <a class="share-btn wa" href="https://wa.me/?text=${t}%20${u}" target="_blank" rel="noopener" title="Share on WhatsApp" aria-label="Share on WhatsApp"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.29A10 10 0 1 0 12 2zm0 18.13a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.06.8.82-3-.19-.31A8.13 8.13 0 1 1 12 20.13z"/></svg></a>
+        <a class="share-btn fb" href="https://www.facebook.com/sharer/sharer.php?u=${u}" target="_blank" rel="noopener" title="Share on Facebook" aria-label="Share on Facebook"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></a>
+        <a class="share-btn tw" href="https://twitter.com/intent/tweet?text=${t}&url=${u}" target="_blank" rel="noopener" title="Share on X" aria-label="Share on X"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2.4h3.2l-7.02 8.02L23.5 21.6h-6.62l-5.18-6.78-5.93 6.78H2.56l7.5-8.58L1.7 2.4h6.79l4.68 6.2L18.9 2.4zM17.72 19.6h1.78L7.4 4.32H5.5L17.72 19.6z"/></svg></a>
+        <a class="share-btn li" href="https://www.linkedin.com/sharing/share-offsite/?url=${u}" target="_blank" rel="noopener" title="Share on LinkedIn" aria-label="Share on LinkedIn"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>
+        <button class="share-btn cp" type="button" data-share-copy="${escapeHtml(url)}" title="Copy link" aria-label="Copy link"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
       </div>`;
+}
+
+// One delegated listener covers every copy button on the page, including the
+// many that get rendered into cards after load.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-share-copy]');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const link = btn.getAttribute('data-share-copy');
+  if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => showToast('Link copied to clipboard'));
+  else showToast(link);
+});
+
+// Share links live inside clickable cards, so stop the card's own navigation
+// handler from firing when someone taps a share icon.
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.share-row a')) e.stopPropagation();
+}, true);
 
 function homeStoryCardHtml(article) {
   const title = escapeHtml(article.title);
-  const excerpt = escapeHtml((article.body || '').slice(0, 140)) + (article.body && article.body.length > 140 ? '…' : '');
+  const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `<span class="story-kicker">Supplied by <strong>${escapeHtml(article.kicker_supplied_by)}</strong></span>` : '';
   return `<article class="story-card">
@@ -3232,7 +4319,7 @@ function homeStoryCardHtml(article) {
         <p>${excerpt}</p>
         <span class="story-meta">${readMinutes(article.body)} min read${category ? ' · ' + category : ''}</span>
       ${kicker}
-${SHARE_ROW_HTML}
+${shareRow(absUrl('?p=article&id=' + article.id), article.title)}
 </article>`;
 }
 
@@ -3270,9 +4357,10 @@ async function loadNewStories() {
 function homeDirCardHtml(profile) {
   const name = escapeHtml(profile.display_name);
   const category = escapeHtml(profile.category || '');
+  const shareUrl = absUrl('?p=profile&slug=' + encodeURIComponent(profile.slug || ''));
   return `<div class="dir-card-wrap">
         <div class="dir-card"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}</p></div>
-        <div class="share-row" style="margin-top:8px; justify-content:flex-start;"></div>
+        ${shareRow(shareUrl, profile.display_name)}
       </div>`;
 }
 
@@ -3723,6 +4811,33 @@ document.querySelectorAll('.print-mark').forEach((el, i) => {
 });
 
 // page navigation
+// Keep the canonical + og:url in sync with the current deep-link URL.
+function seoSetUrl(query){
+  const base = 'https://unplug-magazine.pages.dev';
+  const url = base + '/' + (query || '');
+  const c = document.querySelector('link[rel="canonical"]'); if (c) c.href = url;
+  const o = document.querySelector('meta[property="og:url"]'); if (o) o.setAttribute('content', url);
+}
+function seoSetDescription(text){
+  if (!text) return;
+  const d = document.querySelector('meta[name="description"]'); if (d) d.setAttribute('content', text.slice(0, 300));
+}
+
+// On first load and on browser back/forward, route from the ?p= URL so deep
+// links (e.g. shared article/profile URLs) open the right content.
+function routeFromUrl(){
+  window.__seoSuppress = true;
+  try {
+    const params = new URLSearchParams(location.search);
+    const p = params.get('p');
+    if (p === 'article' && params.get('id')) { goToPage('articledetail'); loadArticleDetail(params.get('id')); }
+    else if (p === 'profile' && params.get('slug')) { goToPage('directoryprofile'); loadProfileDetail(params.get('slug')); }
+    else if (p && document.getElementById('page-' + p)) { goToPage(p); }
+    else { goToPage('home'); }
+  } finally { window.__seoSuppress = false; }
+}
+window.addEventListener('popstate', routeFromUrl);
+
 function goToPage(pageId){
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + pageId);
@@ -3743,9 +4858,19 @@ function goToPage(pageId){
     brandplacement: 'Marketplace — Unplug Magazine',
     about: 'About Us — Unplug Magazine',
     contact: 'Contact Us — Unplug Magazine',
+    privacy: 'Privacy Policy — Unplug Magazine',
+    terms: 'Terms of Use — Unplug Magazine',
   };
   document.title = PAGE_TITLES[pageId] || 'Unplug Magazine';
 
+  // Deep-linkable URL: reflect the current page in the address bar so pages
+  // are shareable, bookmarkable and individually indexable. Query params are
+  // used (not paths) so a refresh always serves index.html on the static host.
+  if (!window.__seoSuppress) {
+    const url = pageId === 'home' ? '/' : ('?p=' + encodeURIComponent(pageId));
+    history.pushState({ p: pageId }, '', url);
+    seoSetUrl(url === '/' ? '' : url);
+  }
 
   if (pageId === 'directory' && !directoryLoadedOnce) {
     directoryLoadedOnce = true;
@@ -3927,11 +5052,12 @@ async function loadDeafPassports() {
         const id = form.dataset.id;
         const nameEl = form.querySelector('.dc-c-name');
         const textEl = form.querySelector('.dc-c-text');
+        const hpEl = form.querySelector('.dc-c-hp');
         if (!textEl.value.trim()) return;
         try {
           await api(`/deaf-community/passports/${id}/comments`, {
             method: 'POST',
-            body: JSON.stringify({ commenterName: nameEl.value.trim() || undefined, comment: textEl.value.trim() }),
+            body: JSON.stringify({ commenterName: nameEl.value.trim() || undefined, comment: textEl.value.trim(), website: hpEl ? hpEl.value : '' }),
           });
           textEl.value = '';
           loadPassportComments(id);
@@ -3958,6 +5084,7 @@ function dcPassportHtml(p) {
     <div class="dc-comments" data-id="${p.id}">
       <div class="dc-comment-thread" id="dc-comments-${p.id}"></div>
       <form class="dc-comment-form" data-id="${p.id}">
+        <input type="text" name="website" class="dc-c-hp hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
         <input class="dc-c-name" placeholder="Your name (optional)" maxlength="120">
         <input class="dc-c-text" placeholder="Leave a comment of support…" maxlength="500" required>
         <button class="btn btn-line" type="submit">Post</button>
@@ -4005,6 +5132,7 @@ function setupDcJobModal() {
       salaryRange: document.getElementById('dcJobSalary').value.trim() || undefined,
       filters,
       deafFriendlyAgreed: document.getElementById('dcJobAgree').checked,
+      website: document.getElementById('hpJob').value,
     };
     if (!payload.businessName || !payload.title || !payload.description || !payload.applyEmail) {
       msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Please fill in all required fields.'; return;
@@ -4047,6 +5175,7 @@ function setupDcPassportModal() {
       certifications: document.getElementById('dcPassCerts').value.trim() || undefined,
       communicationPreferences: document.getElementById('dcPassComm').value.trim() || undefined,
       availability: document.getElementById('dcPassAvail').value.trim() || undefined,
+      website: document.getElementById('hpPassport').value,
     };
     if (!payload.name || !payload.email) {
       msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Name and email are required.'; return;
@@ -4176,6 +5305,35 @@ async function loadTopArticleWeek() {
   }
 }
 
+// Pick up a session started on the member dashboard (same origin, same
+// localStorage) so member-only touches like "Save for later" work here too.
+// Silent either way — the magazine itself stays fully readable signed out.
+UnplugAPI.restoreSession(
+  () => {
+    document.body.classList.add('is-member');
+    loadForYou();
+  },
+  () => { document.body.classList.remove('is-member'); }
+);
+
+// Topic picker toggles open under the "For you" heading.
+(function setupTopicPicker() {
+  const btn = document.getElementById('forYouTopicsBtn');
+  const wrap = document.getElementById('forYouTopics');
+  if (!btn || !wrap) return;
+  btn.addEventListener('click', () => {
+    const opening = wrap.hidden;
+    wrap.hidden = !opening;
+    btn.textContent = opening ? 'Hide topics ↑' : 'Choose topics →';
+    if (opening && !wrap.dataset.loaded) {
+      wrap.dataset.loaded = '1';
+      loadTopicChips();
+    }
+  });
+})();
+
+applyPageCms();
+
 trackPageView('home');
 loadLiveVisitors();
 loadTopArticleWeek();
@@ -4183,6 +5341,68 @@ loadShoutout();
 setupCalendarEvents();
 loadYoutubeImage();
 setInterval(loadLiveVisitors, 30000);
+
+// If the page was opened via a deep link (?p=news, ?p=article&id=5, …),
+// route to that content. A plain home load needs nothing (home is default).
+if (location.search) routeFromUrl();
+
+// ---------------------------------------------------------------------------
+// Accessibility: skip-to-content link + modal focus management. For a
+// Deaf/accessibility-first brand, keyboard + screen-reader users must be able
+// to move around cleanly.
+// ---------------------------------------------------------------------------
+(function a11yEnhancements() {
+  // Skip link jumps focus to the currently active page's content.
+  const skip = document.getElementById('skipLink');
+  if (skip) {
+    skip.addEventListener('click', (e) => {
+      e.preventDefault();
+      const active = document.querySelector('.page.active') || document.querySelector('main');
+      if (active) {
+        active.setAttribute('tabindex', '-1');
+        active.focus();
+        active.scrollIntoView();
+      }
+    });
+  }
+
+  // Modal focus trap + restore. Watches the .open class on every modal/overlay
+  // so we don't have to touch each open/close call site.
+  const overlays = document.querySelectorAll('.shoutout-modal-overlay, .site-search-overlay');
+  function focusables(container) {
+    return [...container.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )].filter((el) => el.offsetParent !== null);
+  }
+  overlays.forEach((modal) => {
+    const dialog = modal.querySelector('[role="dialog"]') || modal;
+    if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+    let lastFocused = null;
+    function onOpen() {
+      lastFocused = document.activeElement;
+      const f = focusables(modal);
+      (f[0] || dialog).focus();
+    }
+    function onClose() {
+      if (lastFocused && lastFocused.focus) lastFocused.focus();
+      lastFocused = null;
+    }
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || !modal.classList.contains('open')) return;
+      const items = focusables(modal);
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    let wasOpen = false;
+    new MutationObserver(() => {
+      const open = modal.classList.contains('open');
+      if (open && !wasOpen) { wasOpen = true; onOpen(); }
+      else if (!open && wasOpen) { wasOpen = false; onClose(); }
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+  });
+})();
 
 // If an admin has chosen a YouTube section image, show it (linking to the
 // channel) in place of the embedded playlist.
@@ -4209,77 +5429,143 @@ async function loadYoutubeImage() {
 //    visitor's own calendar: Google Calendar (web) or a downloadable .ics
 //    file that Apple Calendar / Outlook import.
 // ---------------------------------------------------------------------------
+const CAL_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+let calEventsById = {};
+
+// Build "YYYYMMDDTHHMMSS" from a date "YYYY-MM-DD" and time "HH:MM".
+function calStamp(dateStr, timeStr) {
+  const d = String(dateStr).slice(0, 10).replace(/-/g, '');
+  const t = (timeStr || '00:00').replace(':', '') + '00';
+  return d + 'T' + t;
+}
+// Times are South African (UTC+2, no DST) — pin to +02:00 so the calendar
+// entry is correct for everyone, not the viewer's own timezone.
+function calParseStamp(s) {
+  const utcMs = Date.UTC(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8), +s.slice(9,11), +s.slice(11,13), 0);
+  return new Date(utcMs - 2 * 3600 * 1000);
+}
+function calUtcStamp(d) { return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+
+function calAddLinks(ev) {
+  const title = ev.name || 'Unplug Event';
+  const location = ev.venue || '';
+  const desc = (ev.description || '') + (ev.entrance_fee ? '\nEntrance: ' + ev.entrance_fee : '') + (ev.event_link ? '\n' + ev.event_link : '');
+  let startUtc, endUtc;
+  if (ev.start_time) {
+    startUtc = calUtcStamp(calParseStamp(calStamp(ev.event_date, ev.start_time)));
+    endUtc = calUtcStamp(calParseStamp(calStamp(ev.event_date, ev.end_time || ev.start_time)));
+  } else {
+    // all-day: use the date only (Google wants start/next-day)
+    const d = String(ev.event_date).slice(0, 10).replace(/-/g, '');
+    const next = new Date(String(ev.event_date).slice(0,10) + 'T00:00:00Z'); next.setUTCDate(next.getUTCDate()+1);
+    startUtc = d; endUtc = calUtcStamp(next).slice(0, 8);
+  }
+  const gcal = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+    + '&text=' + encodeURIComponent(title) + '&dates=' + startUtc + '/' + endUtc
+    + '&location=' + encodeURIComponent(location) + '&details=' + encodeURIComponent(desc);
+  const dt = ev.start_time ? ('DTSTART:' + startUtc + '\r\nDTEND:' + endUtc)
+    : ('DTSTART;VALUE=DATE:' + startUtc + '\r\nDTEND;VALUE=DATE:' + endUtc);
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Unplug Magazine//EN','BEGIN:VEVENT',
+    'UID:' + startUtc + '-' + ev.id + '@unplugnews.com', 'DTSTAMP:' + calUtcStamp(new Date()),
+    dt, 'SUMMARY:' + title, 'LOCATION:' + location, 'DESCRIPTION:' + (desc || '').replace(/\n/g, '\\n'),
+    'END:VEVENT','END:VCALENDAR'].join('\r\n');
+  return {
+    gcal,
+    icsHref: 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics),
+    icsFile: title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.ics',
+  };
+}
+
+function calCardHtml(ev) {
+  const dateStr = String(ev.event_date).slice(0, 10);
+  const day = dateStr.slice(8, 10);
+  const mon = CAL_MONTHS[parseInt(dateStr.slice(5, 7), 10) - 1] || '';
+  const timeTxt = ev.start_time ? (ev.start_time + (ev.end_time ? '–' + ev.end_time : '')) : '';
+  const metaBits = [ev.venue, timeTxt, ev.entrance_fee].filter(Boolean).map(escapeHtml).join(' · ');
+  const img = ev.image_url ? `<div class="cal-thumb"><img src="${escapeHtml(ev.image_url)}" alt="${escapeHtml(ev.name)}" loading="lazy" decoding="async"></div>` : '';
+  return `<div class="cal-card" data-id="${ev.id}">
+    ${img}
+    <div class="cal-date"><span class="cal-day">${day}</span><span class="cal-mon">${mon}</span></div>
+    <div class="cal-info">
+      <h4>${escapeHtml(ev.name)}</h4>
+      <p>${metaBits}</p>
+    </div>
+    <div class="cal-add-wrap">
+      <button class="btn btn-line cal-btn cal-add-btn">Add to Calendar</button>
+      <div class="cal-add-menu"></div>
+    </div>
+  </div>`;
+}
+
+async function loadCalendarEvents() {
+  const grid = document.getElementById('calendarGrid');
+  if (!grid) return;
+  try {
+    const data = await api('/events/upcoming?limit=6');
+    calEventsById = {};
+    (data.events || []).forEach((ev) => { calEventsById[ev.id] = ev; });
+    if (!data.events || data.events.length === 0) {
+      grid.innerHTML = '<div class="dir-empty-state">No upcoming events yet — check back soon, or submit yours.</div>';
+      return;
+    }
+    grid.innerHTML = data.events.map(calCardHtml).join('');
+
+    grid.querySelectorAll('.cal-card').forEach((card) => {
+      const ev = calEventsById[card.dataset.id];
+      const menu = card.querySelector('.cal-add-menu');
+      const wrap = card.querySelector('.cal-add-wrap');
+      const btn = card.querySelector('.cal-add-btn');
+      const links = calAddLinks(ev);
+      menu.innerHTML = `<a href="${links.gcal}" target="_blank" rel="noopener">Google Calendar</a>`
+        + `<a href="${links.icsHref}" download="${links.icsFile}">Apple / Outlook (.ics)</a>`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.cal-add-wrap.open').forEach((w) => { if (w !== wrap) w.classList.remove('open'); });
+        wrap.classList.toggle('open');
+      });
+      menu.addEventListener('click', (e) => { e.stopPropagation(); wrap.classList.remove('open'); });
+      // Clicking the card (not the add-to-cal button) opens the detail modal.
+      card.addEventListener('click', () => openEventModal(ev));
+    });
+  } catch (err) {
+    grid.innerHTML = '<div class="dir-empty-state">Couldn\'t load events right now.</div>';
+  }
+}
+
+function openEventModal(ev) {
+  const modal = document.getElementById('eventModal');
+  const body = document.getElementById('eventModalBody');
+  if (!modal || !body) return;
+  const dateStr = new Date(String(ev.event_date).slice(0,10) + 'T00:00:00')
+    .toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const timeTxt = ev.start_time ? (ev.start_time + (ev.end_time ? ' – ' + ev.end_time : '')) : '';
+  body.innerHTML =
+    (ev.image_url ? `<img src="${escapeHtml(ev.image_url)}" alt="${escapeHtml(ev.name)}" style="width:100%; max-height:220px; object-fit:cover; margin-bottom:14px;">` : '') +
+    `<span class="eyebrow" style="color:var(--red);">Event</span>
+     <h3 style="font-family:'Playfair Display',serif; font-size:24px; margin:8px 0 10px;">${escapeHtml(ev.name)}</h3>
+     <p style="font-size:13.5px; color:var(--slate); margin-bottom:10px;">📅 ${dateStr}${timeTxt ? ' · ⏰ ' + escapeHtml(timeTxt) : ''}${ev.venue ? ' · 📍 ' + escapeHtml(ev.venue) : ''}</p>
+     ${ev.entrance_fee ? `<p style="font-size:14px; margin-bottom:8px;"><strong>Entrance:</strong> ${escapeHtml(ev.entrance_fee)}</p>` : ''}
+     ${ev.description ? `<p style="font-size:14px; line-height:1.6; color:var(--ink); margin-bottom:12px;">${escapeHtml(ev.description)}</p>` : ''}
+     ${ev.contact_details ? `<p style="font-size:13.5px; color:var(--slate); margin-bottom:6px;"><strong>Contact:</strong> ${escapeHtml(ev.contact_details)}</p>` : ''}
+     ${ev.event_link ? `<a href="${escapeHtml(ev.event_link)}" target="_blank" rel="noopener" class="btn btn-solid" style="margin-top:6px;">More info / tickets →</a>` : ''}`;
+  modal.classList.add('open');
+}
+
 function setupCalendarEvents() {
   const submitBtn = document.getElementById('submitEventBtn');
   if (submitBtn) submitBtn.addEventListener('click', goToMemberDashboard);
 
-  // Turn "20260712T090000" into a Date. The wall-clock time is South African
-  // Standard Time (UTC+2, no daylight saving), so we pin it to +02:00 rather
-  // than the viewer's local zone — otherwise the event would land at the
-  // wrong absolute time for anyone outside SA.
-  function parseStamp(s) {
-    const utcMs = Date.UTC(
-      +s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8),
-      +s.slice(9, 11), +s.slice(11, 13), +s.slice(13, 15) || 0
-    );
-    return new Date(utcMs - 2 * 3600 * 1000);
+  const modal = document.getElementById('eventModal');
+  if (modal) {
+    document.getElementById('eventModalClose').addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
   }
-  // UTC stamp (YYYYMMDDTHHMMSSZ) for calendar links.
-  function toUtcStamp(d) {
-    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  }
-
-  document.querySelectorAll('.cal-card').forEach((card) => {
-    const menu = card.querySelector('.cal-add-menu');
-    const wrap = card.querySelector('.cal-add-wrap');
-    const btn = card.querySelector('.cal-add-btn');
-    if (!menu || !wrap || !btn) return;
-
-    const title = card.dataset.title || 'Unplug Event';
-    const location = card.dataset.location || '';
-    const desc = card.dataset.desc || '';
-    const start = parseStamp(card.dataset.start);
-    const end = parseStamp(card.dataset.end);
-    const startUtc = toUtcStamp(start);
-    const endUtc = toUtcStamp(end);
-
-    // Google Calendar link.
-    const gcal = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
-      + '&text=' + encodeURIComponent(title)
-      + '&dates=' + startUtc + '/' + endUtc
-      + '&location=' + encodeURIComponent(location)
-      + '&details=' + encodeURIComponent(desc);
-
-    // .ics file for Apple Calendar / Outlook.
-    const ics = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Unplug Magazine//EN',
-      'BEGIN:VEVENT',
-      'UID:' + startUtc + '-' + Math.random().toString(36).slice(2) + '@unplugnews.com',
-      'DTSTAMP:' + toUtcStamp(new Date()),
-      'DTSTART:' + startUtc, 'DTEND:' + endUtc,
-      'SUMMARY:' + title, 'LOCATION:' + location, 'DESCRIPTION:' + desc,
-      'END:VEVENT', 'END:VCALENDAR',
-    ].join('\r\n');
-    const icsHref = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
-    const icsFile = title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '.ics';
-
-    menu.innerHTML =
-      `<a href="${gcal}" target="_blank" rel="noopener">Google Calendar</a>` +
-      `<a href="${icsHref}" download="${icsFile}">Apple / Outlook (.ics)</a>`;
-
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.querySelectorAll('.cal-add-wrap.open').forEach((w) => { if (w !== wrap) w.classList.remove('open'); });
-      wrap.classList.toggle('open');
-    });
-    // Close after picking an option.
-    menu.addEventListener('click', () => wrap.classList.remove('open'));
-  });
-
-  // Click anywhere else closes any open calendar menu.
+  // Click anywhere closes any open add-to-calendar menu.
   document.addEventListener('click', () => {
     document.querySelectorAll('.cal-add-wrap.open').forEach((w) => w.classList.remove('open'));
   });
+
+  loadCalendarEvents();
 }
 
 // ---------------------------------------------------------------------------
@@ -4299,6 +5585,13 @@ async function loadShoutout() {
     }
   } catch (err) {
     /* leave the existing markup name in place on failure */
+  }
+  // Build the share row from whatever name ended up on screen (live or the
+  // fallback), so readers always share the shout-out they're actually seeing.
+  const shareEl = document.getElementById('shoutoutShare');
+  if (shareEl) {
+    const who = nameEl.textContent.trim();
+    shareEl.innerHTML = shareRow(absUrl('?p=home'), 'Shout-out to ' + who + ' — Unplug Magazine');
   }
 }
 
@@ -4332,6 +5625,34 @@ async function loadShoutout() {
   });
 })();
 
+// Contact form — posts to /inquiries (was previously a fake alert).
+(function setupContactForm() {
+  const form = document.getElementById('contactForm');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('contactBtn');
+    const payload = {
+      name: document.getElementById('cname').value.trim(),
+      email: document.getElementById('cemail').value.trim(),
+      subject: document.getElementById('csubject').value.trim(),
+      message: document.getElementById('cmsg').value.trim(),
+      website: document.getElementById('hpContact').value,
+    };
+    if (!payload.name || !payload.email || !payload.message) return;
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      const data = await api('/inquiries', { method: 'POST', body: JSON.stringify(payload) });
+      showToast(data.message || 'Thanks — we\'ll be in touch soon.');
+      form.reset();
+    } catch (err) {
+      showToast(err.message || 'Could not send right now.', true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send Message';
+    }
+  });
+})();
+
 // Newsletter subscribe — stores the email via POST /newsletter/subscribe.
 (function setupNewsletter() {
   const form = document.getElementById('newsletterForm');
@@ -4344,7 +5665,7 @@ async function loadShoutout() {
     if (!email) return;
     btn.disabled = true; btn.textContent = '...';
     try {
-      const data = await api('/newsletter/subscribe', { method: 'POST', body: JSON.stringify({ email }) });
+      const data = await api('/newsletter/subscribe', { method: 'POST', body: JSON.stringify({ email, website: document.getElementById('hpNewsletter').value }) });
       showToast(data.message || 'Subscribed — welcome to Unplug!');
       emailEl.value = '';
     } catch (err) {
@@ -4379,7 +5700,7 @@ async function loadShoutout() {
       try {
         const data = await api('/birthdays/submit', {
           method: 'POST',
-          body: JSON.stringify({ name, birthMonth: parseInt(mm, 10), birthDay: parseInt(dd, 10), photoUrl: photoUrl || undefined }),
+          body: JSON.stringify({ name, birthMonth: parseInt(mm, 10), birthDay: parseInt(dd, 10), photoUrl: photoUrl || undefined, website: document.getElementById('hpBirthday').value }),
         });
         msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for review!';
         document.getElementById('bdayNameInput').value = '';
@@ -4411,9 +5732,10 @@ async function loadShoutout() {
         if (!data.birthdays.length) { body.innerHTML = '<p style="color:var(--slate); font-size:14px;">No birthdays listed this month yet.</p>'; return; }
         body.innerHTML = '<div style="display:flex; flex-direction:column; gap:8px;">' +
           data.birthdays.map((b) =>
-            `<div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--paper-line);">
+            `<div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--paper-line); flex-wrap:wrap;">
                <span style="font-weight:700; color:var(--red); min-width:54px; font-size:13px;">${MONTHS[b.birth_month-1].slice(0,3).toUpperCase()} ${String(b.birth_day).padStart(2,'0')}</span>
                <span style="font-size:14.5px;">${escapeHtml(b.name)}</span>
+               <span style="margin-left:auto;">${shareRow(absUrl('?p=home'), 'Happy birthday ' + b.name + '! — from Unplug Magazine')}</span>
              </div>`).join('') + '</div>';
       } catch (err) {
         body.innerHTML = '<p style="color:var(--slate); font-size:14px;">Couldn\'t load birthdays right now.</p>';
@@ -4458,7 +5780,7 @@ async function loadShoutout() {
     try {
       const data = await api('/shoutouts/nominate', {
         method: 'POST',
-        body: JSON.stringify({ nomineeName, message, email }),
+        body: JSON.stringify({ nomineeName, message, email, website: document.getElementById('hpShoutout').value }),
       });
       showMsg(data.message || 'Thanks — submitted for review!', false);
       document.getElementById('shoutoutNomName').value = '';

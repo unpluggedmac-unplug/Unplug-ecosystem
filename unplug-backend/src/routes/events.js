@@ -15,7 +15,10 @@ router.get('/upcoming', async (req, res, next) => {
     const countResult = await pool.query(`SELECT COUNT(*) FROM events WHERE ${condition}`);
 
     const result = await pool.query(
-      `SELECT id, name, event_date, venue, description
+      `SELECT id, name, event_date, venue, description, image_url, entrance_fee,
+              contact_details, event_link,
+              to_char(start_time, 'HH24:MI') AS start_time,
+              to_char(end_time, 'HH24:MI') AS end_time
        FROM events
        WHERE ${condition}
        ORDER BY event_date ASC
@@ -34,7 +37,8 @@ router.get('/upcoming', async (req, res, next) => {
 // POST /events — member submits (enters as 'pending').
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { name, eventDate, venue, description, displayStartDate } = req.body;
+    const { name, eventDate, venue, description, displayStartDate,
+            imageUrl, entranceFee, contactDetails, eventLink, startTime, endTime } = req.body;
     if (!name || !eventDate) {
       return res.status(400).json({ error: 'name and eventDate are required.' });
     }
@@ -46,10 +50,13 @@ router.post('/', requireAuth, async (req, res, next) => {
     const hasCredit = profileResult.rows.length > 0 && profileResult.rows[0].free_event_credits > 0;
 
     const result = await pool.query(
-      `INSERT INTO events (organizer_user_id, name, event_date, venue, description, display_start_date, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO events (organizer_user_id, name, event_date, venue, description, display_start_date,
+                           image_url, entrance_fee, contact_details, event_link, start_time, end_time, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
-      [req.user.id, name, eventDate, venue || null, description || null, displayStartDate || null, hasCredit ? 'pending' : 'awaiting_payment']
+      [req.user.id, name, eventDate, venue || null, description || null, displayStartDate || null,
+       imageUrl || null, entranceFee || null, contactDetails || null, eventLink || null,
+       startTime || null, endTime || null, hasCredit ? 'pending' : 'awaiting_payment']
     );
 
     if (hasCredit) {

@@ -1,11 +1,13 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { publicSubmitLimiter } = require('../middleware/rateLimit');
+const honeypot = require('../middleware/honeypot');
 
 const router = express.Router();
 
 // POST /inquiries — public. This is what the site's Contact form submits to.
-router.post('/', async (req, res, next) => {
+router.post('/', publicSubmitLimiter, honeypot, async (req, res, next) => {
   try {
     const { name, email, subject, message } = req.body;
     if (!name || !email || !message) {
