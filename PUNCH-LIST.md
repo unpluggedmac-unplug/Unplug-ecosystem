@@ -23,14 +23,28 @@
   `levvleup.co.za` onto Unplug's site for a few minutes. Deleted and
   re-added scoped to `unplugnews.com` only. Lesson: NEVER use the
   all-domains option in that cPanel Redirects tool.
-  **Known gap (optional):** only `/` redirects — old deep links like
-  `unplugnews.com/gallery/` still serve the old WordPress pages. Fix if
-  wanted: re-add the rule with "Wild Card Redirect" ticked (domain
-  explicitly `unplugnews.com`), then re-verify all three domains.
-  **Next follow-ups now that the domain is live:** update SEO
-  canonical/OG/sitemap URLs from `unplug-magazine.pages.dev` to
-  `https://www.unplugnews.com`, and set `CORS_ORIGINS` on Render to the
-  real domain(s) when ready to lock down.
+  **Deep links — ALSO DONE (2026-07-19 evening):** old WordPress URLs like
+  `unplugnews.com/gallery/` now 301 to the same path on the new site,
+  path preserved. The cPanel-generated redirect rule existed but sat BELOW
+  the WordPress rewrite block in
+  `/home/ivorymus/public_html/unplugnews.com/.htaccess`, so WordPress's
+  catch-all (`RewriteRule . /index.php [L]`) swallowed every deep link
+  first. Fixed by moving the redirect block to the TOP of that file
+  (above `# BEGIN WordPress`) and removing the duplicate at the bottom.
+  **SEO — DONE (2026-07-19):** canonical/OG/structured-data/sitemap/robots
+  all now use `https://www.unplugnews.com` (72 sitemap URLs, the backend
+  sitemap default in `src/routes/sitemap.js`, and the member-dashboard
+  link). Verified live after deploy.
+  **CORS — DONE (2026-07-19):** `CORS_ORIGINS` set on Render to
+  `https://www.unplugnews.com,https://unplug-magazine.pages.dev`.
+  Verified: both origins get the right `Access-Control-Allow-Origin`,
+  unknown origins get none. (Note: `/health` never carries CORS headers —
+  that's normal, it's outside the CORS middleware; test against a real
+  route like `/directory` when checking.)
+  **→ The old-site → new-site merge is fully COMPLETE.** Remaining ideas
+  (old WordPress hosting can eventually be downgraded to email-only +
+  redirect duty; submit the sitemap in Google Search Console for the new
+  domain) are optional and non-urgent.
 - **⚠️ Backend moved off Railway to Render** — `LIVE_API_BASE` in
   `unplug-shared.js` is now `https://unplug-ecosystem.onrender.com`, not the
   old Railway URL. `unplug-shared.js` auto-clears any cached Railway URL
