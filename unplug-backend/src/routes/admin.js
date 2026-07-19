@@ -875,9 +875,20 @@ router.get('/email-status', requireRole('admin'), async (req, res) => {
     });
   }
   const cfg = emailConfig();
+  // Name the transport that's actually in use. Saying "SMTP" while sending
+  // over an HTTPS API would send the next person debugging this down exactly
+  // the wrong path.
+  const label = cfg.provider === 'smtp' ? 'SMTP' : `The ${cfg.provider} API`;
   try {
     await verifyConnection();
-    res.json({ configured: true, connectionOk: true, config: cfg, message: 'SMTP is configured and the mail server accepted our credentials.' });
+    res.json({
+      configured: true,
+      connectionOk: true,
+      config: cfg,
+      message: cfg.provider === 'smtp'
+        ? 'SMTP is configured and the mail server accepted our credentials.'
+        : `${label} is configured and accepted our key.`,
+    });
   } catch (err) {
     // Configured but not working is the most dangerous state — it looks fine
     // from the outside, so report the reason AND the settings in use, which
@@ -886,7 +897,7 @@ router.get('/email-status', requireRole('admin'), async (req, res) => {
       configured: true,
       connectionOk: false,
       config: cfg,
-      message: 'SMTP is configured but the connection failed: ' + err.message,
+      message: `${label} is configured but failed: ${err.message}`,
     });
   }
 });
