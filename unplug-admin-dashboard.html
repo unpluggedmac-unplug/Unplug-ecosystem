@@ -1155,16 +1155,37 @@ async function loadEmailStatus() {
   const box = document.getElementById('emailStatusBox');
   if (!box) return;
   box.textContent = 'Checking…';
+  // Hard timeout. Without one, a wrong saved API address leaves this stuck on
+  // "Checking…" forever, which looks like the check itself is broken rather
+  // than the address being wrong. 20s also clears a Render cold start (~50s
+  // is the worst case, so we say so rather than failing silently).
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('timed out')), 20000));
   try {
-    const s = await api('/admin/email-status');
+    const s = await Promise.race([api('/admin/email-status'), timeout]);
     const ok = s.configured && s.connectionOk;
     box.style.borderColor = ok ? 'var(--green, #2e7d32)' : 'var(--red)';
     box.innerHTML = `<strong style="color:${ok ? 'var(--green, #2e7d32)' : 'var(--red)'};">`
       + (ok ? '✓ Email is working' : '✕ Email is not working')
       + `</strong><br><span style="color:var(--slate);">${escapeHtmlAdmin(s.message)}</span>`;
   } catch (err) {
+    // Name the address we actually called. Every failure mode here (mixed
+    // content, a stale saved address, a sleeping server) looks identical
+    // otherwise, and the address is usually the answer.
     box.style.borderColor = 'var(--red)';
-    box.textContent = 'Could not check email status: ' + err.message;
+    box.innerHTML = '<strong style="color:var(--red);">✕ Could not reach the server</strong><br>'
+      + '<span style="color:var(--slate);">' + escapeHtmlAdmin(err.message) + '</span><br>'
+      + '<span style="color:var(--slate); font-size:12px;">Tried: <code>' + escapeHtmlAdmin(API_BASE) + '</code>'
+      + (err.message === 'timed out' ? ' — if the server was asleep it can take up to a minute; press Re-check.' : '')
+      + '</span><br>'
+      + '<button class="btn btn-line" style="width:auto; margin-top:8px; font-size:11px;" id="resetApiBaseBtn">Reset server address</button>';
+    const reset = document.getElementById('resetApiBaseBtn');
+    if (reset) reset.addEventListener('click', () => {
+      localStorage.removeItem('unplug_api_base');
+      API_BASE = LIVE_API_BASE;
+      showToast('Server address reset. Re-checking…');
+      loadEmailStatus();
+    });
   }
 }
 
