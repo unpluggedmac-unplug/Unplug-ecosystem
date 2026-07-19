@@ -10,12 +10,27 @@
   activate (it was sitting on "Inactive (Requires DNS setup)" even though
   the CNAME was already correct — clicking the recheck button is what
   flipped it to Active, not waiting).
-- **Still pending:** the root/apex `unplugnews.com` (no `www`) still has an
-  `A` record pointing at the old cPanel host (`169.239.218.73`, the old
-  WordPress site). A root domain can't take a CNAME, so this needs either a
-  domain-forward at domains.co.za (`unplugnews.com` → `https://www.unplugnews.com`)
-  or a full DNS/nameserver move to Cloudflare. **Do not touch the MX/SPF/TXT
-  records in that zone** — email is live on this domain.
+- **Root/apex `unplugnews.com` — ALSO DONE (2026-07-19 afternoon):** solved
+  with a cPanel 301 redirect on the old WordPress hosting (cPanel →
+  Redirects: domain `unplugnews.com`, `/` → `https://www.unplugnews.com`,
+  Permanent). DNS still points the apex at the old host (`169.239.218.73`)
+  ON PURPOSE — the old server's only job now is issuing that redirect.
+  Verified: `unplugnews.com` (http & https) → 301 → new site (200);
+  `levvleup.co.za` + `ivorymuse.co.za` (same account) unaffected; email
+  untouched.
+  ⚠️ **Incident during setup:** the redirect was first added with the
+  domain dropdown on "** All Public Domains **", which hijacked
+  `levvleup.co.za` onto Unplug's site for a few minutes. Deleted and
+  re-added scoped to `unplugnews.com` only. Lesson: NEVER use the
+  all-domains option in that cPanel Redirects tool.
+  **Known gap (optional):** only `/` redirects — old deep links like
+  `unplugnews.com/gallery/` still serve the old WordPress pages. Fix if
+  wanted: re-add the rule with "Wild Card Redirect" ticked (domain
+  explicitly `unplugnews.com`), then re-verify all three domains.
+  **Next follow-ups now that the domain is live:** update SEO
+  canonical/OG/sitemap URLs from `unplug-magazine.pages.dev` to
+  `https://www.unplugnews.com`, and set `CORS_ORIGINS` on Render to the
+  real domain(s) when ready to lock down.
 - **⚠️ Backend moved off Railway to Render** — `LIVE_API_BASE` in
   `unplug-shared.js` is now `https://unplug-ecosystem.onrender.com`, not the
   old Railway URL. `unplug-shared.js` auto-clears any cached Railway URL

@@ -12,7 +12,11 @@ file over anything remembered from previous conversations.
   Both work. **Also live (2026-07-19):** `https://www.unplugnews.com` — a
   Cloudflare Pages custom domain pointed at the same project via a `www`
   CNAME at the registrar (domains.co.za). The bare/root `unplugnews.com`
-  (no `www`) is NOT cut over yet — still serves the old WordPress site.
+  301-redirects to the `www` site via a cPanel redirect on the OLD
+  WordPress hosting (its apex A record still points there on purpose —
+  the old server just issues the redirect). Old deep links (e.g.
+  `/gallery/`) still serve old WordPress pages unless the wildcard
+  redirect gets added later.
 - **Backend API:** https://unplug-ecosystem.onrender.com — Render, NOT
   Railway (moved 2026-07-1x; if you see a `railway.app` URL anywhere, it's
   stale/retired — don't debug against it). Health check: `/health` →
