@@ -3,6 +3,7 @@ const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { sendEmail, isConfigured, verifyConnection, config: emailConfig } = require('../utils/email');
+const { probe } = require('../utils/portProbe');
 
 const router = express.Router();
 
@@ -887,6 +888,42 @@ router.get('/email-status', requireRole('admin'), async (req, res) => {
       config: cfg,
       message: 'SMTP is configured but the connection failed: ' + err.message,
     });
+  }
+});
+
+// GET /admin/smtp-probe — can this server reach mail ports at all?
+//
+// "Connection timeout" looks the same whether the host blocks outbound SMTP
+// or the mail server is refusing us, and that distinction decides the whole
+// approach: a host-wide block means no SMTP provider will ever work and we
+// must send over HTTPS, while a single unreachable mail server means another
+// SMTP provider (e.g. Gmail) is still fine. Testing several targets from
+// here is the only way to tell. No credentials are used — this opens a TCP
+// connection and immediately closes it.
+router.get('/smtp-probe', requireRole('admin'), async (req, res, next) => {
+  try {
+    const targets = [
+      ['mail.unplugnews.com', 465],
+      ['cp73.domains.co.za', 465],
+      ['smtp.gmail.com', 465],
+      ['smtp.gmail.com', 587],
+      // Control: HTTPS must succeed, otherwise the probe itself is meaningless.
+      ['api.resend.com', 443],
+    ];
+    const results = await Promise.all(targets.map(([h, p]) => probe(h, p)));
+    const mailPorts = results.filter((r) => r.port !== 443);
+    const anyMailOpen = mailPorts.some((r) => r.result === 'open');
+    const httpsOk = results.some((r) => r.port === 443 && r.result === 'open');
+    res.json({
+      results,
+      verdict: !httpsOk
+        ? 'Outbound networking looks broken entirely — even HTTPS failed, so treat these results with suspicion.'
+        : anyMailOpen
+          ? 'This server CAN reach some mail servers, so outbound SMTP is not blocked host-wide. The specific mail server that timed out is the problem — another SMTP provider would work.'
+          : 'This server cannot reach ANY mail port while HTTPS works, so outbound SMTP is blocked here. Email must be sent over an HTTPS API (Resend or Brevo).',
+    });
+  } catch (err) {
+    next(err);
   }
 });
 
