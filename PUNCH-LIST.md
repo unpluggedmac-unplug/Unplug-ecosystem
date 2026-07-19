@@ -1,5 +1,27 @@
 # Unplug Magazine — Punch List
-*Last updated: 2026-07-15 (post-hosting-migration)*
+*Last updated: 2026-07-19*
+
+## ✅ DOMAIN CUTOVER — www live (2026-07-19)
+
+- **`https://www.unplugnews.com` now serves the real Unplug Magazine site** —
+  confirmed HTTP 200, real `<title>`. Path: `www` CNAME added at
+  domains.co.za → `unplug-magazine.pages.dev`, then Cloudflare Pages →
+  `unplug-magazine` project → Custom domains → "Check DNS records" to
+  activate (it was sitting on "Inactive (Requires DNS setup)" even though
+  the CNAME was already correct — clicking the recheck button is what
+  flipped it to Active, not waiting).
+- **Still pending:** the root/apex `unplugnews.com` (no `www`) still has an
+  `A` record pointing at the old cPanel host (`169.239.218.73`, the old
+  WordPress site). A root domain can't take a CNAME, so this needs either a
+  domain-forward at domains.co.za (`unplugnews.com` → `https://www.unplugnews.com`)
+  or a full DNS/nameserver move to Cloudflare. **Do not touch the MX/SPF/TXT
+  records in that zone** — email is live on this domain.
+- **⚠️ Backend moved off Railway to Render** — `LIVE_API_BASE` in
+  `unplug-shared.js` is now `https://unplug-ecosystem.onrender.com`, not the
+  old Railway URL. `unplug-shared.js` auto-clears any cached Railway URL
+  from returning visitors' `localStorage`. **CLAUDE.md's "Backend API" line
+  is stale and needs updating too** (Railway is retired/no longer the
+  backend — don't waste time debugging against the old Railway URL).
 
 ## ✅ CONTENT MIGRATION FROM unplugnews.com (2026-07-17) — done, verified live
 

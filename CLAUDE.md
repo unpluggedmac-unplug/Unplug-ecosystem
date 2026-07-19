@@ -6,13 +6,19 @@ file over anything remembered from previous conversations.
 
 ## The system (current truth — do not "fix" any of this)
 
-- **Live site (the ONLY frontend):** https://unplug-magazine.pages.dev
-  — Cloudflare Pages, auto-deploys on every push to `main`. Cloudflare
-  serves "pretty URLs": `/unplug-magazine.html` redirects to
-  `/unplug-magazine`. Both work.
-- **Backend API:** https://unplug-ecosystem-production.up.railway.app
-  — Railway, root directory `unplug-backend`, auto-deploys on push.
-  Health check: `/health` → `{"status":"ok"}`.
+- **Live site (the ONLY frontend):** https://unplug-magazine.pages.dev —
+  Cloudflare Pages, auto-deploys on every push to `main`. Cloudflare serves
+  "pretty URLs": `/unplug-magazine.html` redirects to `/unplug-magazine`.
+  Both work. **Also live (2026-07-19):** `https://www.unplugnews.com` — a
+  Cloudflare Pages custom domain pointed at the same project via a `www`
+  CNAME at the registrar (domains.co.za). The bare/root `unplugnews.com`
+  (no `www`) is NOT cut over yet — still serves the old WordPress site.
+- **Backend API:** https://unplug-ecosystem.onrender.com — Render, NOT
+  Railway (moved 2026-07-1x; if you see a `railway.app` URL anywhere, it's
+  stale/retired — don't debug against it). Health check: `/health` →
+  `{"status":"ok"}`. `unplug-shared.js`'s `LIVE_API_BASE` is the source of
+  truth for this URL and also auto-clears any Railway URL cached in a
+  returning visitor's `localStorage`.
 - **Database:** Supabase (PostgreSQL), pooled connection string in
   Railway's `DATABASE_URL`. **Migrations run AUTOMATICALLY on every
   deploy** (the `start` script runs them before booting) — to change the
@@ -28,6 +34,8 @@ file over anything remembered from previous conversations.
   NOT an outage. Do not try to fix it, do not make the repo public.
 - **Netlify** — the old site was deleted. Never reference `netlify.app`
   URLs.
+- **Railway** — the backend was moved to Render. Never reference
+  `railway.app` URLs as if they're live.
 
 ## Hard editing rules (each one prevented/caused a real incident)
 
