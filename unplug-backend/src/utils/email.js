@@ -21,6 +21,13 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     port: SMTP_PORT,
     secure: SMTP_SECURE,
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    // Nodemailer's defaults let a bad host/port hang for minutes. A wrong
+    // port typically opens the socket and then goes silent, so the greeting
+    // timeout is the one that actually catches it. Failing in ~10s with a
+    // real reason beats a caller-side timeout that says nothing.
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
   console.log(`[email] SMTP configured: ${process.env.SMTP_HOST}:${SMTP_PORT} (secure=${SMTP_SECURE})`);
 } else {
@@ -31,6 +38,19 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
 
 function isConfigured() {
   return transporter !== null;
+}
+
+// Host/port/secure and the sending address — safe to surface to an admin, and
+// the fastest way to tell whether an env change actually took effect. The
+// password is never included.
+function config() {
+  return {
+    host: process.env.SMTP_HOST || null,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
+    user: process.env.SMTP_USER || null,
+    from: process.env.SMTP_FROM || null,
+  };
 }
 
 // Confirms the credentials and connection actually work, without sending
@@ -56,4 +76,4 @@ async function sendEmail({ to, subject, text }) {
   });
 }
 
-module.exports = { sendEmail, isConfigured, verifyConnection };
+module.exports = { sendEmail, isConfigured, verifyConnection, config };

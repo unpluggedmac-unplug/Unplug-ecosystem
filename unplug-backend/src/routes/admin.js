@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
-const { sendEmail, isConfigured, verifyConnection } = require('../utils/email');
+const { sendEmail, isConfigured, verifyConnection, config: emailConfig } = require('../utils/email');
 
 const router = express.Router();
 
@@ -873,15 +873,18 @@ router.get('/email-status', requireRole('admin'), async (req, res) => {
       message: 'SMTP is not set up. Verification codes and password resets are being written to the server log instead of sent, so new members cannot verify their accounts.',
     });
   }
+  const cfg = emailConfig();
   try {
     await verifyConnection();
-    res.json({ configured: true, connectionOk: true, message: 'SMTP is configured and the mail server accepted our credentials.' });
+    res.json({ configured: true, connectionOk: true, config: cfg, message: 'SMTP is configured and the mail server accepted our credentials.' });
   } catch (err) {
     // Configured but not working is the most dangerous state — it looks fine
-    // from the outside, so report the reason rather than a bare failure.
+    // from the outside, so report the reason AND the settings in use, which
+    // is the quickest way to see whether an env change actually took effect.
     res.json({
       configured: true,
       connectionOk: false,
+      config: cfg,
       message: 'SMTP is configured but the connection failed: ' + err.message,
     });
   }

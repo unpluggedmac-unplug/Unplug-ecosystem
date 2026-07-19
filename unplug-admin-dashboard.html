@@ -1165,9 +1165,17 @@ async function loadEmailStatus() {
     const s = await Promise.race([api('/admin/email-status'), timeout]);
     const ok = s.configured && s.connectionOk;
     box.style.borderColor = ok ? 'var(--green, #2e7d32)' : 'var(--red)';
+    // Show the settings actually in use. After changing an env var the
+    // fastest question is "did my change take effect?", and this answers it
+    // without digging through Render. The password is never sent here.
+    const c = s.config || {};
+    const settings = c.host
+      ? `<br><span style="color:var(--slate); font-size:12px;">Using <code>${escapeHtmlAdmin(c.host)}:${escapeHtmlAdmin(String(c.port))}</code>`
+        + ` (${c.secure ? 'SSL' : 'STARTTLS'}) as <code>${escapeHtmlAdmin(c.user || '—')}</code></span>`
+      : '';
     box.innerHTML = `<strong style="color:${ok ? 'var(--green, #2e7d32)' : 'var(--red)'};">`
       + (ok ? '✓ Email is working' : '✕ Email is not working')
-      + `</strong><br><span style="color:var(--slate);">${escapeHtmlAdmin(s.message)}</span>`;
+      + `</strong><br><span style="color:var(--slate);">${escapeHtmlAdmin(s.message)}</span>${settings}`;
   } catch (err) {
     // Name the address we actually called. Every failure mode here (mixed
     // content, a stale saved address, a sleeping server) looks identical
