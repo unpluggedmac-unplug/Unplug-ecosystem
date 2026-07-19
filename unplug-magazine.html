@@ -6,28 +6,28 @@
 <title>Unplug Magazine — Real People. Real Impact.</title>
 <meta name="description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them — Directory profiles, uplifting news, and community spotlights.">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://unplug-magazine.pages.dev">
+<link rel="canonical" href="https://www.unplugnews.com">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Unplug Magazine">
 <meta property="og:title" content="Unplug Magazine — Real People. Real Impact.">
 <meta property="og:description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.">
-<meta property="og:image" content="https://unplug-magazine.pages.dev/social-banner.jpg">
-<meta property="og:url" content="https://unplug-magazine.pages.dev">
+<meta property="og:image" content="https://www.unplugnews.com/social-banner.jpg">
+<meta property="og:url" content="https://www.unplugnews.com">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Unplug Magazine — Real People. Real Impact.">
 <meta name="twitter:description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.">
-<meta name="twitter:image" content="https://unplug-magazine.pages.dev/social-banner.jpg">
+<meta name="twitter:image" content="https://www.unplugnews.com/social-banner.jpg">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@graph": [
     {
       "@type": "Organization",
-      "@id": "https://unplug-magazine.pages.dev/#organization",
+      "@id": "https://www.unplugnews.com/#organization",
       "name": "Unplug Magazine",
-      "url": "https://unplug-magazine.pages.dev",
-      "logo": "https://unplug-magazine.pages.dev/social-banner.jpg",
-      "image": "https://unplug-magazine.pages.dev/social-banner.jpg",
+      "url": "https://www.unplugnews.com",
+      "logo": "https://www.unplugnews.com/social-banner.jpg",
+      "image": "https://www.unplugnews.com/social-banner.jpg",
       "description": "A purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.",
       "email": "info@unplugnews.com",
       "telephone": "+27645566814",
@@ -50,13 +50,13 @@
     },
     {
       "@type": "WebSite",
-      "@id": "https://unplug-magazine.pages.dev/#website",
-      "url": "https://unplug-magazine.pages.dev",
+      "@id": "https://www.unplugnews.com/#website",
+      "url": "https://www.unplugnews.com",
       "name": "Unplug Magazine",
-      "publisher": { "@id": "https://unplug-magazine.pages.dev/#organization" },
+      "publisher": { "@id": "https://www.unplugnews.com/#organization" },
       "potentialAction": {
         "@type": "SearchAction",
-        "target": "https://unplug-magazine.pages.dev/?p=news&q={search_term_string}",
+        "target": "https://www.unplugnews.com/?p=news&q={search_term_string}",
         "query-input": "required name=search_term_string"
       }
     }
@@ -4813,7 +4813,7 @@ document.querySelectorAll('.print-mark').forEach((el, i) => {
 // page navigation
 // Keep the canonical + og:url in sync with the current deep-link URL.
 function seoSetUrl(query){
-  const base = 'https://unplug-magazine.pages.dev';
+  const base = 'https://www.unplugnews.com';
   const url = base + '/' + (query || '');
   const c = document.querySelector('link[rel="canonical"]'); if (c) c.href = url;
   const o = document.querySelector('meta[property="og:url"]'); if (o) o.setAttribute('content', url);
@@ -5617,7 +5617,7 @@ async function loadShoutout() {
     else if (digits.startsWith('27') === false && digits.length <= 9) digits = '27' + digits; // bare 9-digit
     if (digits.length < 10) { msg.className = 'shoutout-form-msg show error'; msg.textContent = 'That number looks too short.'; return; }
     const text = encodeURIComponent(
-      "Hi! I'd love to nominate you for Unplug Magazine's Arena — you're doing good in the world and deserve to be seen. Take a look: https://unplug-magazine.pages.dev"
+      "Hi! I'd love to nominate you for Unplug Magazine's Arena — you're doing good in the world and deserve to be seen. Take a look: https://www.unplugnews.com"
     );
     window.open(`https://wa.me/${digits}?text=${text}`, '_blank', 'noopener');
     modal.classList.remove('open');

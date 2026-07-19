@@ -6,7 +6,7 @@ const router = express.Router();
 // The public site lives on a different host to this API, so the sitemap has
 // to name that host explicitly. SITE_URL lets it follow the domain when
 // unplugnews.com goes live without a code change.
-const SITE_URL = (process.env.SITE_URL || 'https://unplug-magazine.pages.dev').replace(/\/$/, '');
+const SITE_URL = (process.env.SITE_URL || 'https://www.unplugnews.com').replace(/\/$/, '');
 
 // Pages that always exist, with rough change frequencies. Home and news move
 // often; the legal pages almost never do.

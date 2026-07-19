@@ -14,5 +14,5 @@ Disallow: /unplug-checkout.html
 # in Search Console. The second is generated from live content by the API, so
 # stories and listings published since the last static rebuild are still
 # discoverable (submit it under the API host to have it fully trusted).
-Sitemap: https://unplug-magazine.pages.dev/sitemap.xml
+Sitemap: https://www.unplugnews.com/sitemap.xml
 Sitemap: https://unplug-ecosystem.onrender.com/sitemap.xml
