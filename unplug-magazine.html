@@ -3162,6 +3162,38 @@ function initArticleReader(a, id, shareUrl) {
   const dysBtn = document.getElementById('rdDys');
   if (dysBtn) dysBtn.addEventListener('click', () => { body.classList.toggle('dys'); dysBtn.classList.toggle('on'); });
 
+  // "Save for later" — the reading list lives against the member's account,
+  // so signed-out readers get pointed at the dashboard rather than a failure.
+  const saveBtn = document.getElementById('rdSave');
+  if (saveBtn) {
+    const articleId = Number(saveBtn.getAttribute('data-article-id'));
+    let isSaved = false;
+    const paint = () => {
+      saveBtn.textContent = isSaved ? '★ Saved' : '☆ Save';
+      saveBtn.setAttribute('aria-pressed', isSaved ? 'true' : 'false');
+    };
+    if (UnplugAPI.getToken()) {
+      api('/saved/ids')
+        .then((d) => { isSaved = (d.ids || []).indexOf(articleId) !== -1; paint(); })
+        .catch(() => { /* not fatal — leave the button in its default state */ });
+    }
+    saveBtn.addEventListener('click', async () => {
+      if (!UnplugAPI.getToken()) {
+        showToast('Sign in to save stories to your reading list');
+        window.open('unplug-member-dashboard.html', '_blank', 'noopener');
+        return;
+      }
+      try {
+        await api('/saved/' + articleId, { method: isSaved ? 'DELETE' : 'POST' });
+        isSaved = !isSaved;
+        paint();
+        showToast(isSaved ? 'Saved to your reading list' : 'Removed from your reading list');
+      } catch (err) {
+        showToast("Couldn't update your reading list right now");
+      }
+    });
+  }
+
   loadRelatedStories(a, id);
 }
 
@@ -3215,6 +3247,8 @@ async function loadArticleDetail(id) {
         <button id="rdFontUp" type="button" aria-label="Increase text size">A+</button>
         <button id="rdLine" type="button">↕ Spacing</button>
         <button id="rdDys" type="button">Dyslexia font</button>
+        <span class="rdiv"></span>
+        <button id="rdSave" type="button" data-article-id="${id}" aria-pressed="false">☆ Save</button>
         ${shareRowHtml(shareUrl, a.title)}
       </div>
       <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
@@ -4607,6 +4641,14 @@ async function loadTopArticleWeek() {
     if (document.getElementById('topArticleWeek')) document.getElementById('topArticleWeek').textContent = '—';
   }
 }
+
+// Pick up a session started on the member dashboard (same origin, same
+// localStorage) so member-only touches like "Save for later" work here too.
+// Silent either way — the magazine itself stays fully readable signed out.
+UnplugAPI.restoreSession(
+  () => { document.body.classList.add('is-member'); },
+  () => { document.body.classList.remove('is-member'); }
+);
 
 trackPageView('home');
 loadLiveVisitors();

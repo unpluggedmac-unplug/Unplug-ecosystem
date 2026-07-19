@@ -30,6 +30,7 @@ const deafCommunityRoutes = require('./routes/deafCommunity');
 const newsletterRoutes = require('./routes/newsletter');
 const publicSettingsRoutes = require('./routes/publicSettings');
 const { router: activityLogRoutes } = require('./routes/activityLog');
+const savedArticleRoutes = require('./routes/savedArticles');
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use('/deaf-community', deafCommunityRoutes);
 app.use('/newsletter', newsletterRoutes);
 app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
+app.use('/saved', savedArticleRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,

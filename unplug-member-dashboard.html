@@ -280,6 +280,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div id="entriesContent"><div class="loading-state">Loading…</div></div>
     </div>
 
+    <!-- MY READING LIST -->
+    <div class="card">
+      <h2>My Reading List</h2>
+      <p class="sub">Stories you saved with the ☆ Save button while reading.</p>
+      <div id="readingListContent"><div class="loading-state">Loading…</div></div>
+    </div>
+
   </div>
 </div>
 
@@ -521,6 +528,7 @@ function enterMemberDashboard(user){
   loadArticles();
   loadGallery();
   loadEntries();
+  loadReadingList();
 }
 
 // On page load, restore a saved session rather than forcing a fresh
@@ -690,6 +698,59 @@ async function loadEntries() {
     content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
+
+// Reading list — stories saved from the magazine's article reader. Each row
+// links back to the article and can be removed without leaving the dashboard.
+async function loadReadingList() {
+  const content = document.getElementById('readingListContent');
+  if (!content) return;
+  try {
+    const data = await api('/saved');
+    const saved = data.saved || [];
+    if (saved.length === 0) {
+      content.innerHTML = '<div class="empty-state">Nothing saved yet — tap ☆ Save on any story to keep it here.</div>';
+      return;
+    }
+    content.innerHTML = '';
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Story</th><th>Category</th><th>Saved</th><th></th></tr>';
+    saved.forEach((a) => {
+      const tr = document.createElement('tr');
+      const link = document.createElement('a');
+      link.href = 'unplug-magazine.html?p=article&id=' + a.id;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = a.title;
+      const tdTitle = document.createElement('td');
+      tdTitle.appendChild(link);
+      const tdCat = document.createElement('td');
+      tdCat.textContent = a.category || '—';
+      const tdWhen = document.createElement('td');
+      tdWhen.textContent = new Date(a.saved_at).toLocaleDateString();
+      const tdAct = document.createElement('td');
+      const rm = document.createElement('button');
+      rm.className = 'btn-line';
+      rm.textContent = 'Remove';
+      rm.addEventListener('click', async () => {
+        rm.disabled = true;
+        try {
+          await api('/saved/' + a.id, { method: 'DELETE' });
+          tr.remove();
+          if (!table.querySelector('tr:nth-child(2)')) loadReadingList();
+        } catch (e) {
+          rm.disabled = false;
+          showToast('Could not remove: ' + e.message);
+        }
+      });
+      tdAct.appendChild(rm);
+      tr.append(tdTitle, tdCat, tdWhen, tdAct);
+      table.appendChild(tr);
+    });
+    content.appendChild(table);
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
 // ---------------------------------------------------------------------------
 // Submit & Pay — one form covering Article, Event, Gallery, Top 10, Marketplace
 // ---------------------------------------------------------------------------
@@ -825,7 +886,7 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
     }
 
     showToast(`${label} submitted — see payment details below.`);
-    loadArticles(); loadGallery(); loadEntries();
+    loadArticles(); loadGallery(); loadEntries(); loadReadingList();
   } catch (err) {
     showSubmitError(err.message);
   } finally {
