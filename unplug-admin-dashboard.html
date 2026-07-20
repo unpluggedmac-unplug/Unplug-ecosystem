@@ -455,13 +455,39 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="form-row">
             <div><label>Supplied by (optional)</label><input id="pubKicker" placeholder="e.g. Thandi M."></div>
             <div><label>Banner image URL (optional)</label><input id="pubBanner" placeholder="https://…"></div>
-            <div><label>Emotion (optional)</label><select id="pubEmotion"><option value="">— none —</option><option value="uplifting">Uplifting</option><option value="inspiring">Inspiring</option><option value="joyful">Joyful</option><option value="reflective">Reflective</option><option value="hopeful">Hopeful</option></select></div>
+            <div><label>Emotion (optional)</label><select id="pubEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
           </div>
           <div style="margin-top:10px;"><label>Story</label>
             <textarea id="pubBody" rows="10" style="width:100%;" placeholder="Write the story here. Basic HTML is allowed."></textarea>
           </div>
           <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="publishArticleBtn">Publish Live</button>
           <span id="publishArticleNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Edit a published article</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div style="grid-column:1/-2;"><label>Article</label><select id="editArticleSelect"><option value="">— choose an article —</option></select></div>
+            <div><label>&nbsp;</label><button class="btn btn-line" style="width:100%;" id="loadArticleBtn">Load for editing</button></div>
+          </div>
+          <div id="editArticleFields" style="display:none; margin-top:12px;">
+            <div class="form-row">
+              <div style="grid-column:1/-2;"><label>Headline</label><input id="editTitle"></div>
+              <div><label>Category</label><select id="editCategory"><option value="">— none —</option></select></div>
+            </div>
+            <div class="form-row">
+              <div><label>Supplied by (optional)</label><input id="editKicker"></div>
+              <div><label>Banner image URL (optional)</label><input id="editBanner"></div>
+              <div><label>Emotion (optional)</label><select id="editEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
+            </div>
+            <div style="margin-top:10px;"><label>Story</label>
+              <textarea id="editBody" rows="14" style="width:100%;"></textarea>
+            </div>
+            <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="saveArticleBtn">Save Changes</button>
+            <span id="editArticleNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
+          </div>
         </div>
       </div>
 
@@ -807,7 +833,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'analytics') loadAnalytics(7);
     if (section === 'comments') loadPendingComments();
     if (section === 'pagecms') loadPageCms();
-    if (section === 'publish') { loadPublishSection(); loadEmailStatus(); }
+    if (section === 'publish') { loadPublishSection(); loadEditArticleList(); loadEmailStatus(); }
     if (section === 'polls') loadPolls();
     if (section === 'reviews') loadPendingReviews();
     if (section === 'claims') loadPendingClaims();
@@ -1257,8 +1283,11 @@ async function loadPublishSection() {
   if (!catSel || !profSel) return;
   try {
     const cats = await api('/news/categories');
-    catSel.innerHTML = '<option value="">— none —</option>'
+    const catOptions = '<option value="">— none —</option>'
       + (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
+    catSel.innerHTML = catOptions;
+    const editCatSel = document.getElementById('editCategory');
+    if (editCatSel) editCatSel.innerHTML = catOptions;
   } catch (err) {
     catSel.innerHTML = '<option value="">Categories unavailable</option>';
   }
@@ -1306,6 +1335,79 @@ document.getElementById('publishArticleBtn').addEventListener('click', async () 
     document.getElementById('pubKicker').value = '';
     document.getElementById('pubBanner').value = '';
     loadQueueTab('news');
+  } catch (err) {
+    note.textContent = '';
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// --- Edit a published article ---
+async function loadEditArticleList() {
+  const sel = document.getElementById('editArticleSelect');
+  if (!sel) return;
+  try {
+    // Fetch every published article (paged, the API caps a page at 100).
+    let page = 1, all = [];
+    for (;;) {
+      const res = await api(`/articles?limit=100&page=${page}`);
+      all = all.concat(res.articles || []);
+      if (page >= (res.pagination?.totalPages || 1) || page >= 10) break;
+      page += 1;
+    }
+    sel.innerHTML = '<option value="">— choose an article —</option>'
+      + all.map((a) => `<option value="${a.id}">#${a.id} — ${escapeHtmlAdmin(a.title)}</option>`).join('');
+  } catch (err) {
+    sel.innerHTML = '<option value="">Articles unavailable</option>';
+  }
+}
+
+document.getElementById('loadArticleBtn').addEventListener('click', async () => {
+  const id = document.getElementById('editArticleSelect').value;
+  const note = document.getElementById('editArticleNote');
+  if (!id) { showToast('Choose an article first.', true); return; }
+  try {
+    const res = await api(`/articles/${id}`);
+    const a = res.article;
+    document.getElementById('editTitle').value = a.title || '';
+    document.getElementById('editCategory').value = a.category_id || '';
+    document.getElementById('editKicker').value = a.kicker_supplied_by || '';
+    document.getElementById('editBanner').value = a.banner_image_url || '';
+    document.getElementById('editEmotion').value = a.emotion || '';
+    document.getElementById('editBody').value = a.body || '';
+    document.getElementById('editArticleFields').style.display = '';
+    note.textContent = '';
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+document.getElementById('saveArticleBtn').addEventListener('click', async () => {
+  const id = document.getElementById('editArticleSelect').value;
+  const title = document.getElementById('editTitle').value.trim();
+  const body = document.getElementById('editBody').value.trim();
+  const note = document.getElementById('editArticleNote');
+  if (!id) { showToast('Choose an article first.', true); return; }
+  if (!title || !body) { showToast('A headline and story are both required.', true); return; }
+  const btn = document.getElementById('saveArticleBtn');
+  btn.disabled = true;
+  note.textContent = 'Saving…';
+  try {
+    await api(`/articles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title,
+        body,
+        categoryId: document.getElementById('editCategory').value || null,
+        kickerSuppliedBy: document.getElementById('editKicker').value.trim() || null,
+        bannerImageUrl: document.getElementById('editBanner').value.trim() || null,
+        emotion: document.getElementById('editEmotion').value || null,
+      }),
+    });
+    showToast('Saved — the changes are live.');
+    note.innerHTML = `Saved — <a href="unplug-magazine.html?p=article&id=${id}" target="_blank" rel="noopener">view it on the site</a>.`;
+    loadEditArticleList();
   } catch (err) {
     note.textContent = '';
     showToast(err.message, true);

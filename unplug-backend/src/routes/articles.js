@@ -148,13 +148,15 @@ router.post('/', requireAuth, async (req, res, next) => {
 // PATCH /articles/:id — owner or admin can edit before/after approval.
 router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, next) => {
   try {
-    const { title, body, kickerSuppliedBy, emotion } = req.body;
+    const { title, body, kickerSuppliedBy, emotion, categoryId, bannerImageUrl } = req.body;
     const setClauses = [];
     const values = [];
 
     if (title !== undefined) { values.push(title); setClauses.push(`title = $${values.length}`); }
     if (body !== undefined) { values.push(body); setClauses.push(`body = $${values.length}`); }
     if (kickerSuppliedBy !== undefined) { values.push(kickerSuppliedBy); setClauses.push(`kicker_supplied_by = $${values.length}`); }
+    if (categoryId !== undefined) { values.push(categoryId || null); setClauses.push(`category_id = $${values.length}`); }
+    if (bannerImageUrl !== undefined) { values.push(bannerImageUrl || null); setClauses.push(`banner_image_url = $${values.length}`); }
     if (emotion !== undefined) {
       if (emotion && !ALLOWED_EMOTIONS.includes(emotion)) {
         return res.status(400).json({ error: 'emotion must be one of: ' + ALLOWED_EMOTIONS.join(', ') + '.' });
