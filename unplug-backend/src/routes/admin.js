@@ -879,6 +879,91 @@ router.patch('/shoutouts/:id/reject', requireRole('admin'), async (req, res, nex
   }
 });
 
+// GET /admin/shoutouts — every shout-out in one list, each with the date it
+// ran or is expected to run.
+//
+// The expected date is an ESTIMATE and is labelled as one. The homepage shows
+// one shout-out per day and takes the head of the queue, so position in the
+// queue is the number of days away — but that only holds if nothing is
+// approved, rejected or added ahead of it in the meantime. It is a planning
+// aid, not a promise to the nominee.
+router.get('/shoutouts', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `WITH queue AS (
+         SELECT n.id,
+                ROW_NUMBER() OVER (ORDER BY n.created_at ASC) AS position
+           FROM shoutout_nominations n
+          WHERE n.status = 'approved'
+            AND NOT EXISTS (SELECT 1 FROM shoutout_schedule s WHERE s.nomination_id = n.id)
+       )
+       SELECT n.id, n.nominee_name, n.message, n.submitted_by_email,
+              n.status, n.source, n.created_at, n.available_from,
+              sch.shoutout_date AS shown_on,
+              CASE
+                WHEN sch.shoutout_date IS NOT NULL THEN NULL
+                WHEN n.status <> 'approved' THEN NULL
+                -- Whichever comes later: the end of the waiting period, or the
+                -- day its turn in the queue comes up.
+                ELSE GREATEST(n.available_from, CURRENT_DATE + q.position::int)
+              END AS estimated_date
+         FROM shoutout_nominations n
+         LEFT JOIN shoutout_schedule sch ON sch.nomination_id = n.id
+         LEFT JOIN queue q ON q.id = n.id
+        ORDER BY n.created_at DESC
+        LIMIT 300`
+    );
+    res.json({ shoutouts: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/shoutouts — admin adds a shout-out directly.
+//
+// Goes in approved and available immediately: an admin adding a name IS the
+// editorial decision, so there is nothing to review and no reason to wait.
+router.post('/shoutouts', requireRole('admin'), async (req, res, next) => {
+  try {
+    const name = (req.body.nomineeName || '').trim();
+    const message = (req.body.message || '').trim();
+    if (!name) return res.status(400).json({ error: 'A name and surname are required.' });
+    if (name.length > 200) return res.status(400).json({ error: 'That name is too long.' });
+
+    const result = await pool.query(
+      `INSERT INTO shoutout_nominations
+         (nominee_name, message, status, source, available_from)
+       VALUES ($1, $2, 'approved', 'admin', CURRENT_DATE)
+       RETURNING *`,
+      [name, message || null]
+    );
+    res.status(201).json({ shoutout: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /admin/shoutouts/:id — remove a shout-out entirely.
+//
+// A shout-out that has already run is history and stays: shoutout_schedule
+// references it, and deleting it would blank out the record of what the
+// homepage showed that day. Reject it instead if it should not run again.
+router.delete('/shoutouts/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const used = await pool.query('SELECT 1 FROM shoutout_schedule WHERE nomination_id = $1', [req.params.id]);
+    if (used.rowCount > 0) {
+      return res.status(409).json({
+        error: 'This shout-out has already been shown on the homepage, so it is kept as a record. Reject it instead to stop it running again.',
+      });
+    }
+    const result = await pool.query('DELETE FROM shoutout_nominations WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Nomination not found.' });
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /admin/email-status — is outgoing email actually configured? Signup
 // verification and password resets depend on it, and when it's missing the
 // failure is invisible: codes get written to the server log and the member

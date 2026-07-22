@@ -230,10 +230,27 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- SHOUTOUTS -->
     <div class="admin-section" id="section-shoutouts">
-      <div class="main-head"><div><h1>Shoutout Nominations</h1><p>Public nominations for "The Guy Says". Approve one to add it to the homepage's daily rotation; each approved name is shown once, oldest first. With none approved, a seeded South African name is shown as the daily fallback.</p></div></div>
+      <div class="main-head"><div><h1>Shout-outs</h1><p>"The Guy Says" on the homepage shows one name a day, oldest approved first. Public nominations wait seven days after being submitted before they can run — time to catch anything sent in bad faith. Names you add here skip the wait and are approved straight away. With nothing in the queue, a South African name from the seeded list is shown.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Add a Shout-out</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Name and surname</label><input id="shoutoutAddName" placeholder="e.g. Naledi Mokoena"></div>
+            <div><label>Note (optional)</label><input id="shoutoutAddMessage" placeholder="Why they're being recognised"></div>
+            <div style="display:flex; align-items:flex-end;"><button class="btn btn-solid" style="width:100%;" id="addShoutoutBtn">Add</button></div>
+          </div>
+        </div>
+      </div>
+
       <div class="panel">
         <div class="panel-head"><h3>Pending Nominations</h3></div>
         <div class="panel-body" id="shoutoutsBody" style="padding:0;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>All Shout-outs</h3></div>
+        <div class="panel-body" id="shoutoutAllBody" style="padding:0;"></div>
       </div>
     </div>
 
@@ -1956,6 +1973,9 @@ function escapeHtmlAdmin(str) {
 async function loadShoutoutNominations() {
   const body = document.getElementById('shoutoutsBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
+  // Kicked off up front, not after the try/catch — the pending list returns
+  // early when it's empty, which is exactly when the full list matters most.
+  loadAllShoutouts();
   try {
     const data = await api('/admin/shoutouts/pending');
     const noms = data.nominations || [];
@@ -1981,6 +2001,76 @@ async function loadShoutoutNominations() {
         try { await api(`/admin/shoutouts/${n.id}/reject`, { method: 'PATCH' }); showToast('Rejected.'); loadShoutoutNominations(); }
         catch (err) { showToast(err.message, true); }
       });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+document.getElementById('addShoutoutBtn').addEventListener('click', async () => {
+  const nameEl = document.getElementById('shoutoutAddName');
+  const messageEl = document.getElementById('shoutoutAddMessage');
+  const nomineeName = nameEl.value.trim();
+  if (!nomineeName) { showToast('Enter a name and surname.', true); return; }
+  try {
+    await api('/admin/shoutouts', {
+      method: 'POST',
+      body: JSON.stringify({ nomineeName, message: messageEl.value.trim() }),
+    });
+    showToast('Shout-out added to the queue.');
+    nameEl.value = '';
+    messageEl.value = '';
+    loadShoutoutNominations();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+// Every shout-out with the date it ran or is expected to run. The estimate is
+// labelled as one — it assumes the queue ahead of it doesn't change.
+async function loadAllShoutouts() {
+  const body = document.getElementById('shoutoutAllBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/shoutouts');
+    const rows = data.shoutouts || [];
+    if (rows.length === 0) {
+      body.innerHTML = '<div class="empty-state">No shout-outs yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Name</th><th>Note</th><th>Source</th><th>Status</th><th>Submitted</th><th>Date shown</th><th></th></tr>';
+    rows.forEach((s) => {
+      const tr = document.createElement('tr');
+      let when = '—';
+      if (s.shown_on) {
+        when = new Date(s.shown_on).toLocaleDateString();
+      } else if (s.estimated_date) {
+        when = `<span style="color:var(--muted);">approx. ${new Date(s.estimated_date).toLocaleDateString()}</span>`;
+      } else if (s.status === 'pending') {
+        when = `<span style="color:var(--muted);">not approved yet</span>`;
+      }
+      tr.innerHTML = `<td>${escapeHtmlAdmin(s.nominee_name)}</td>`
+        + `<td>${escapeHtmlAdmin(s.message || '—')}</td>`
+        + `<td>${s.source === 'admin' ? 'Added by admin' : 'Public'}</td>`
+        + `<td>${s.status}</td>`
+        + `<td>${new Date(s.created_at).toLocaleDateString()}</td>`
+        + `<td>${when}</td>`
+        + `<td><div class="row-actions">${s.shown_on ? '' : '<button class="reject">Delete</button>'}</div></td>`;
+      const del = tr.querySelector('.reject');
+      if (del) {
+        del.addEventListener('click', async () => {
+          if (!confirm(`Delete the shout-out for ${s.nominee_name}? This cannot be undone.`)) return;
+          try {
+            await api(`/admin/shoutouts/${s.id}`, { method: 'DELETE' });
+            showToast('Shout-out deleted.');
+            loadShoutoutNominations();
+          } catch (err) { showToast(err.message, true); }
+        });
+      }
       table.appendChild(tr);
     });
     body.innerHTML = '';

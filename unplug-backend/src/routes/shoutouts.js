@@ -14,7 +14,8 @@ const router = express.Router();
 //   1. If today's shoutout is already materialized in shoutout_schedule,
 //      return it.
 //   2. Otherwise pick the oldest approved nomination that has never been
-//      scheduled before and lock it in for today.
+//      scheduled before, has served its waiting period, and lock it in for
+//      today.
 //   3. If there are no approved nominations left, fall back to a seeded
 //      South African name (rotated by day-of-year so it changes daily).
 // Steps 2/3 use INSERT ... ON CONFLICT DO NOTHING so concurrent first-of-day
@@ -27,6 +28,7 @@ router.get('/today', async (req, res, next) => {
        SELECT CURRENT_DATE, n.id
        FROM shoutout_nominations n
        WHERE n.status = 'approved'
+         AND n.available_from <= CURRENT_DATE
          AND NOT EXISTS (
            SELECT 1 FROM shoutout_schedule s WHERE s.nomination_id = n.id
          )
@@ -102,7 +104,10 @@ router.post('/nominate', publicSubmitLimiter, honeypot, async (req, res, next) =
       [name, (message || '').trim() || null, (email || '').trim() || null]
     );
     res.status(201).json({
-      message: 'Thanks! Your shoutout nomination has been submitted for review.',
+      // Says the week out loud. Someone who nominates a friend and sees
+      // nothing for days should know that's the process working, not a
+      // submission that vanished.
+      message: 'Thanks! Your shout-out nomination has been submitted for review. Approved nominations go into a queue and appear about a week later.',
     });
   } catch (err) {
     next(err);
