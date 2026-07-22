@@ -1313,11 +1313,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button class="shoutout-modal-close" id="birthdayModalClose" aria-label="Close">&times;</button>
       <span class="eyebrow" style="color:var(--red);">Celebrating together</span>
       <h3 style="font-family:'Playfair Display',serif; font-size:23px; margin:8px 0 4px;">Submit a birthday</h3>
-      <p style="font-size:13.5px; color:var(--slate); margin-bottom:16px;">We'll feature it on the homepage on the day (once approved).</p>
+      <p style="font-size:13.5px; color:var(--slate); margin-bottom:16px;">We'll feature it on the homepage on the day (once approved), and send you a birthday message.</p>
       <div class="shoutout-form-msg" id="birthdayMsg"></div>
       <div class="field"><label>Name &amp; surname *</label><input id="bdayNameInput" maxlength="160"></div>
       <div class="field"><label>Birthday date *</label><input id="bdayDateInput" type="date"></div>
-      <div class="field"><label>Photo URL (optional)</label><input id="bdayPhotoInput" placeholder="https://..."></div>
+      <div class="field"><label>Email *</label><input id="bdayEmailInput" type="email" maxlength="255" placeholder="you@example.com">
+        <span style="font-size:12px; color:var(--slate);">So we can send your birthday message on the day.</span></div>
       <input type="text" name="website" id="hpBirthday" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn btn-solid" id="bdaySubmitBtn" style="width:100%;">Submit birthday</button>
       <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
@@ -5946,20 +5947,26 @@ async function loadShoutout() {
     document.getElementById('bdaySubmitBtn').addEventListener('click', async () => {
       const name = document.getElementById('bdayNameInput').value.trim();
       const dateVal = document.getElementById('bdayDateInput').value; // YYYY-MM-DD
-      const photoUrl = document.getElementById('bdayPhotoInput').value.trim();
+      const email = document.getElementById('bdayEmailInput').value.trim();
       if (!name || !dateVal) { msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Name and birthday date are required.'; return; }
+      // Required, because the birthday message has nowhere to go without it.
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        msg.className = 'shoutout-form-msg show error';
+        msg.textContent = 'A valid email address is required so we can send your birthday message.';
+        return;
+      }
       const [, mm, dd] = dateVal.split('-');
       const btn = document.getElementById('bdaySubmitBtn');
       btn.disabled = true; btn.textContent = 'Submitting...';
       try {
         const data = await api('/birthdays/submit', {
           method: 'POST',
-          body: JSON.stringify({ name, birthMonth: parseInt(mm, 10), birthDay: parseInt(dd, 10), photoUrl: photoUrl || undefined, website: document.getElementById('hpBirthday').value }),
+          body: JSON.stringify({ name, birthMonth: parseInt(mm, 10), birthDay: parseInt(dd, 10), email, website: document.getElementById('hpBirthday').value }),
         });
         msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for review!';
         document.getElementById('bdayNameInput').value = '';
         document.getElementById('bdayDateInput').value = '';
-        document.getElementById('bdayPhotoInput').value = '';
+        document.getElementById('bdayEmailInput').value = '';
       } catch (err) {
         msg.className = 'shoutout-form-msg show error'; msg.textContent = err.message;
       } finally {

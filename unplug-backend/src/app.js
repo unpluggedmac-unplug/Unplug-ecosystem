@@ -109,9 +109,34 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
+// Birthday greetings.
+//
+// Checked hourly rather than once a day: on a free instance the process is
+// restarted often and sleeps when idle, so a once-daily timer would simply
+// miss most days. The send is idempotent (one greeting per person per year),
+// so checking often costs a cheap query and sends nothing extra.
+//
+// This still only fires while the instance is awake. For a guarantee, point
+// an external scheduler at POST /birthdays/send-greetings with
+// BIRTHDAY_CRON_SECRET — see OPERATIONS.md.
+const { sendDueBirthdayEmails } = require('./utils/birthdayMailer');
+const BIRTHDAY_CHECK_MS = 60 * 60 * 1000;
+setInterval(() => {
+  sendDueBirthdayEmails()
+    .then((r) => { if (r && r.sent) console.log(`[birthday] sent ${r.sent} greeting(s) for ${r.date}`); })
+    .catch((err) => console.error('[birthday] check failed:', err.message));
+}, BIRTHDAY_CHECK_MS);
+
 const port = process.env.PORT || 4000;
 app.listen(port, () => {
   console.log(`Unplug backend listening on port ${port}`);
+  // Also run shortly after boot, so a restart during the day still catches
+  // anyone whose birthday it is.
+  setTimeout(() => {
+    sendDueBirthdayEmails()
+      .then((r) => { if (r && r.sent) console.log(`[birthday] sent ${r.sent} greeting(s) for ${r.date}`); })
+      .catch((err) => console.error('[birthday] startup check failed:', err.message));
+  }, 20000);
 });
 
 module.exports = app;

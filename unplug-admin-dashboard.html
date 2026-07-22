@@ -1817,16 +1817,34 @@ async function loadBirthdays() {
   const body = document.getElementById('birthdaysBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {
-    const data = await api('/birthdays/month');
+    // The whole year, ordered from 1 January — not just this month, so the
+    // full calendar can be checked at a glance.
+    const data = await api('/birthdays/all');
     if (!data.birthdays || data.birthdays.length === 0) {
-      body.innerHTML = '<div class="empty-state">No birthdays scheduled this month.</div>';
+      body.innerHTML = '<div class="empty-state">No approved birthdays yet.</div>';
       return;
     }
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Name</th><th>Date</th><th></th></tr>';
+    table.innerHTML = '<tr><th>Date</th><th>Name</th><th>Email</th><th>Greeting</th><th></th></tr>';
+    let lastMonth = null;
     data.birthdays.forEach((b) => {
+      // A month heading makes a year-long list readable.
+      if (b.birth_month !== lastMonth) {
+        lastMonth = b.birth_month;
+        const hd = document.createElement('tr');
+        hd.innerHTML = `<td colspan="5" style="background:var(--paper); font-weight:700; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--slate);">${MONTHS[b.birth_month - 1]}</td>`;
+        table.appendChild(hd);
+      }
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${b.name}</td><td>${b.birth_month}/${b.birth_day}</td><td><div class="row-actions"><button class="reject">Remove</button></div></td>`;
+      const greeted = b.greeted_this_year
+        ? '<span class="status-pill approved">Sent</span>'
+        : (b.email ? '<span class="status-pill pending">Scheduled</span>' : '<span class="status-pill rejected">No email</span>');
+      tr.innerHTML = `<td>${MONTHS[b.birth_month - 1]} ${String(b.birth_day).padStart(2, '0')}</td>`
+        + `<td>${escapeHtmlAdmin(b.name)}</td>`
+        + `<td style="font-size:11.5px;">${escapeHtmlAdmin(b.email || '—')}</td>`
+        + `<td>${greeted}</td>`
+        + `<td><div class="row-actions"><button class="reject">Delete</button></div></td>`;
       tr.querySelector('.reject').addEventListener('click', async () => {
         try {
           await api(`/birthdays/${b.id}`, { method: 'DELETE' });

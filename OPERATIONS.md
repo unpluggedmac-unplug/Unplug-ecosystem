@@ -60,6 +60,37 @@ work:
 - `https://unplug-ecosystem.onrender.com/articles` — proves the database is
   actually reachable, not just the web process
 
+## Birthday greetings
+
+Members who submit a birthday get an automatic email on the day. The send is
+idempotent — one greeting per person per year — so it can safely be triggered
+as often as you like.
+
+It runs in two ways:
+
+1. **Inside the app**, checked hourly and shortly after each boot. This is
+   enough *while the instance is awake*, but Render's free tier sleeps when
+   idle, so on a quiet day it can miss.
+2. **Externally**, which is the reliable route. Point a scheduler at:
+
+   ```
+   POST https://unplug-ecosystem.onrender.com/birthdays/send-greetings
+   Authorization: Bearer <BIRTHDAY_CRON_SECRET>
+   ```
+
+   Set `BIRTHDAY_CRON_SECRET` on Render to any long random string. Free
+   options that can do a daily authenticated POST include cron-job.org and
+   GitHub Actions. An admin can also trigger it while signed in.
+
+Dates are evaluated in **Africa/Johannesburg**, not UTC — otherwise for two
+hours every night the server's idea of "today" is yesterday here, and
+greetings would go out on the wrong date.
+
+**This depends on email working.** Until `unplugnews.com` is verified with
+Resend, greetings only reach the Resend account owner's own address; everyone
+else silently gets nothing. The send reports failures rather than swallowing
+them, and a failed send is retried on the next run.
+
 ## Security posture
 
 Already in place:
