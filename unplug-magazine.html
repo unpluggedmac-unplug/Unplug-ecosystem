@@ -895,6 +895,23 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .topic-chip:hover:not(:disabled){ border-color:var(--red); }
 .topic-chip.on{ background:var(--red); border-color:var(--red); color:#fff; }
 .topic-chip:disabled{ opacity:0.6; cursor:default; }
+/* ---- rich article parts ---- */
+.article-subtitle{ font-style:italic; font-size:clamp(16px,2vw,20px); line-height:1.5; color:var(--slate); margin:0 0 6px; max-width:60ch; }
+.art-part{ margin-top:30px; }
+.art-part h2{ font-size:clamp(20px,2.6vw,26px); font-weight:600; line-height:1.3; margin:0 0 10px; }
+.art-figure{ margin:18px 0 0; }
+.art-figure img{ width:100%; height:auto; display:block; border:1px solid var(--paper-line); }
+.art-figure figcaption{ font-size:12.5px; color:var(--slate); margin-top:7px; font-style:italic; }
+.art-conclusion h2{ color:var(--red); }
+.art-takeaways{ margin-top:34px; padding:20px 22px; background:var(--paper); border-left:3px solid var(--red); }
+.art-takeaways h2{ font-size:17px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 10px; }
+.art-takeaways ul{ margin:0; padding-left:20px; }
+.art-takeaways li{ font-size:14.5px; line-height:1.6; margin-bottom:7px; }
+.art-cta{ margin-top:26px; }
+.art-keywords{ margin-top:26px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.art-keywords-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; color:var(--slate); width:100%; margin-bottom:2px; }
+.art-keyword{ background:none; border:1px solid var(--paper-line); border-radius:100px; padding:5px 13px; font-family:inherit; font-size:12.5px; color:var(--ink); cursor:pointer; transition:border-color .2s, background .2s; }
+.art-keyword:hover{ border-color:var(--red); background:rgba(210,7,9,0.05); }
 /* ---- reader poll ---- */
 .poll-wrap:empty{ display:none; }
 .poll{ margin-top:34px; border:1px solid var(--paper-line); border-left:3px solid var(--red); padding:20px 22px; background:var(--paper); }
@@ -3749,6 +3766,81 @@ async function loadTopicChips() {
   }
 }
 
+// Clicking a topic on an article runs it through the site search, so the
+// keywords are a way into the rest of the coverage rather than decoration.
+// Delegated because articles render after load.
+document.addEventListener('click', (e) => {
+  const chip = e.target.closest('.art-keyword');
+  if (!chip) return;
+  const term = chip.getAttribute('data-term') || '';
+  const openBtn = document.getElementById('searchOpenBtn');
+  const input = document.getElementById('siteSearchInput');
+  if (!openBtn || !input) return;
+  openBtn.click();
+  // open() clears the field and focuses on a timer, so fill it just after.
+  setTimeout(() => {
+    input.value = term;
+    input.dispatchEvent(new Event('input'));
+  }, 60);
+});
+
+// ---------------------------------------------------------------------------
+// Rich article parts. Each returns an empty string when its data is absent,
+// so articles written before these existed render exactly as they did.
+// ---------------------------------------------------------------------------
+function articleSectionsHtml(sections) {
+  if (!sections || sections.length === 0) return '';
+  return sections.map((s) => {
+    const figure = s.image_url
+      ? `<figure class="art-figure">
+           <img src="${escapeHtml(s.image_url)}" alt="${escapeHtml(s.image_note || s.sub_heading || '')}" loading="lazy" decoding="async">
+           ${s.image_note ? `<figcaption>${escapeHtml(s.image_note)}</figcaption>` : ''}
+         </figure>`
+      : '';
+    return `<section class="art-part">
+      ${s.sub_heading ? `<h2>${escapeHtml(s.sub_heading)}</h2>` : ''}
+      ${s.paragraph ? renderRichText(s.paragraph) : ''}
+      ${figure}
+    </section>`;
+  }).join('');
+}
+
+function articleConclusionHtml(a) {
+  if (!a.conclusion) return '';
+  return `<section class="art-part art-conclusion">
+    <h2>In closing</h2>
+    ${renderRichText(a.conclusion)}
+  </section>`;
+}
+
+function articleTakeawaysHtml(a) {
+  const list = a.key_takeaways || [];
+  if (list.length === 0) return '';
+  return `<aside class="art-takeaways" aria-label="Key takeaways">
+    <h2>Key takeaways</h2>
+    <ul>${list.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>
+  </aside>`;
+}
+
+function articleCtaHtml(a) {
+  if (!a.cta_label || !a.cta_url) return '';
+  return `<div class="art-cta">
+    <a class="btn btn-solid" href="${escapeHtml(a.cta_url)}" target="_blank" rel="noopener">${escapeHtml(a.cta_label)}</a>
+  </div>`;
+}
+
+// Keywords double as navigation: each one runs the site search, so a reader
+// who cares about a topic can find the rest of it. Tags are shown alongside
+// because they read better to a person than the raw keywords do.
+function articleKeywordsHtml(a) {
+  const terms = (a.tags && a.tags.length ? a.tags : a.keywords) || [];
+  if (terms.length === 0) return '';
+  return `<div class="art-keywords">
+    <span class="art-keywords-label">Topics in this story</span>
+    ${terms.map((k) => `<button type="button" class="art-keyword" data-term="${escapeHtml(k)}">${escapeHtml(k)}</button>`).join('')}
+  </div>`;
+}
+
 // Reader polls. Open to everyone — a random per-browser key keeps casual
 // double-voting down without demanding an account. Once someone has voted
 // (or the poll is closed) we show results instead of the ballot.
@@ -3971,6 +4063,7 @@ async function loadArticleDetail(id) {
       <span class="eyebrow">${escapeHtml(a.category || '')}</span>
       ${emotionBadge(a.emotion) ? `<div style="margin:10px 0 0;">${emotionBadge(a.emotion)}</div>` : ''}
       <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 10px;">${escapeHtml(a.title)}</h1>
+      ${a.subtitle ? `<p class="article-subtitle">${escapeHtml(a.subtitle)}</p>` : ''}
       <div class="article-byline">
         ${submitter ? `<span>Submitted by <span class="who">${escapeHtml(submitter)}</span></span>` : ''}
         ${submitter && dateStr ? '<span>·</span>' : ''}
@@ -3989,7 +4082,10 @@ async function loadArticleDetail(id) {
         <button id="rdSave" type="button" data-article-id="${id}" aria-pressed="false">☆ Save</button>
         ${shareRowHtml(shareUrl, a.title)}
       </div>
-      <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}</div>
+      <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}${articleSectionsHtml(data.sections)}${articleConclusionHtml(a)}</div>
+      ${articleTakeawaysHtml(a)}
+      ${articleCtaHtml(a)}
+      ${articleKeywordsHtml(a)}
       <div class="poll-wrap" id="articlePoll"></div>
       <div class="related-wrap" id="relatedStories"></div>
       <div class="comments-wrap" id="articleComments"></div>
@@ -4004,8 +4100,13 @@ async function loadArticleDetail(id) {
     const q = '?p=article&id=' + id;
     history.replaceState({ p: 'article', id }, '', q);
     seoSetUrl(q);
-    document.title = a.title + ' — Unplug Magazine';
-    seoSetDescription((a.body || '').replace(/<[^>]*>/g, '').trim());
+    document.title = (a.seo_title || a.title) + ' — Unplug Magazine';
+    // Prefer the meta description an editor wrote or approved; only fall back
+    // to raw body text when there isn't one, since a stripped opening
+    // paragraph often reads badly as a social card summary.
+    seoSetDescription(a.meta_description || (a.body || '').replace(/<[^>]*>/g, '').trim());
+    seoSetTitle(a.seo_title || a.title);
+    seoSetImage(a.banner_image_url);
   } catch (err) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load this story right now.</div>';
   }
@@ -4897,7 +4998,39 @@ function seoSetUrl(query){
 }
 function seoSetDescription(text){
   if (!text) return;
-  const d = document.querySelector('meta[name="description"]'); if (d) d.setAttribute('content', text.slice(0, 300));
+  const value = text.slice(0, 300);
+  // Search engines read name="description"; Facebook, WhatsApp and LinkedIn
+  // read og:description, and X reads twitter:description. Setting only the
+  // first — as this did — meant a shared article showed the site's generic
+  // blurb instead of what the story was actually about.
+  const targets = [
+    'meta[name="description"]',
+    'meta[property="og:description"]',
+    'meta[name="twitter:description"]',
+  ];
+  targets.forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (el) el.setAttribute('content', value);
+  });
+}
+
+// The picture a social card shows. Falls back to the site banner when a story
+// has no image of its own, so a share is never left with a blank card.
+const SEO_DEFAULT_IMAGE = 'https://www.unplugnews.com/social-banner.jpg';
+function seoSetImage(url){
+  const value = url || SEO_DEFAULT_IMAGE;
+  ['meta[property="og:image"]', 'meta[name="twitter:image"]'].forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (el) el.setAttribute('content', value);
+  });
+}
+
+function seoSetTitle(title){
+  if (!title) return;
+  ['meta[property="og:title"]', 'meta[name="twitter:title"]'].forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (el) el.setAttribute('content', title);
+  });
 }
 
 // On first load and on browser back/forward, route from the ?p= URL so deep
