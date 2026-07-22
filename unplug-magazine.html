@@ -907,6 +907,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .art-takeaways h2{ font-size:17px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 10px; }
 .art-takeaways ul{ margin:0; padding-left:20px; }
 .art-takeaways li{ font-size:14.5px; line-height:1.6; margin-bottom:7px; }
+.art-gallery{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:26px; }
+.art-gallery figure{ margin:0; }
+.art-gallery img{ width:100%; height:100%; aspect-ratio:4/3; object-fit:cover; display:block; border:1px solid var(--paper-line); }
+.art-links{ margin-top:26px; padding:16px 18px; border:1px solid var(--paper-line); }
+.art-links-label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; color:var(--slate); margin-bottom:8px; }
+.art-links ul{ margin:0; padding-left:18px; }
+.art-links li{ font-size:14px; line-height:1.7; }
+.art-links a{ color:var(--red); }
 .art-cta{ margin-top:26px; }
 .art-keywords{ margin-top:26px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .art-keywords-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; color:var(--slate); width:100%; margin-bottom:2px; }
@@ -3806,6 +3814,39 @@ function articleSectionsHtml(sections) {
   }).join('');
 }
 
+// Plain-text bodies are written in a normal textarea, so blank lines mean
+// paragraph breaks. Rendered through escapeHtml first: this text was typed by
+// a member, and passing it through the rich-text path would let markup they
+// typed become live markup on the page.
+function articleBodyHtml(a) {
+  if (a.body_format === 'text') {
+    return String(a.body || '')
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  }
+  return renderRichText(a.body);
+}
+
+function articleGalleryHtml(a) {
+  const images = a.gallery_images || [];
+  if (images.length === 0) return '';
+  return `<div class="art-gallery">
+    ${images.map((src) => `<figure><img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async"></figure>`).join('')}
+  </div>`;
+}
+
+function articleLinksHtml(a) {
+  const links = a.links || [];
+  if (links.length === 0) return '';
+  return `<div class="art-links">
+    <span class="art-links-label">Find out more</span>
+    <ul>${links.map((l) => `<li><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener nofollow">${escapeHtml(l.label || l.url)}</a></li>`).join('')}</ul>
+  </div>`;
+}
+
 function articleConclusionHtml(a) {
   if (!a.conclusion) return '';
   return `<section class="art-part art-conclusion">
@@ -4083,8 +4124,9 @@ async function loadArticleDetail(id) {
         <button id="rdSave" type="button" data-article-id="${id}" aria-pressed="false">☆ Save</button>
         ${shareRowHtml(shareUrl, a.title)}
       </div>
-      <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${renderRichText(a.body)}${articleSectionsHtml(data.sections)}${articleConclusionHtml(a)}</div>
+      <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${articleBodyHtml(a)}${articleSectionsHtml(data.sections)}${articleGalleryHtml(a)}${articleConclusionHtml(a)}</div>
       ${articleTakeawaysHtml(a)}
+      ${articleLinksHtml(a)}
       ${articleCtaHtml(a)}
       ${articleKeywordsHtml(a)}
       <div class="poll-wrap" id="articlePoll"></div>

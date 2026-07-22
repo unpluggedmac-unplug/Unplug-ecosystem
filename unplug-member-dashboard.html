@@ -190,7 +190,19 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field"><label>Story</label><textarea id="art-body" rows="4"></textarea></div>
         <p id="art-readtime-hint" style="font-size:12px; color:var(--slate); margin-top:-4px;">Aim for a 3-6 minute read (roughly 600-1200 words). Current: 0 words, ~0 min.</p>
         <div class="field"><label>Supplied By (kicker byline)</label><input id="art-kicker"></div>
-        <div class="field"><label>Banner Image URL (optional)</label><input id="art-banner" placeholder="https://..."></div>
+        <div class="field"><label>Cover image</label>
+          <div id="art-cover-upload"></div>
+          <span style="font-size:12px; color:var(--slate);">The main picture shown with your story.</span>
+        </div>
+        <div class="field"><label>More images (up to 5)</label>
+          <div id="art-gallery-upload"></div>
+          <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="art-add-image">+ Add another image</button>
+        </div>
+        <div class="field"><label>Links (optional)</label>
+          <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:6px;">Social media or anything else you'd like readers to visit.</span>
+          <div id="art-links"></div>
+          <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="art-add-link">+ Add a link</button>
+        </div>
         <div class="field"><label>Emotion (optional)</label>
           <select id="art-emotion">
             <option value="">— none —</option>
@@ -294,6 +306,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
 <div class="toast" id="toast"></div>
 
+<script src="image-upload.js"></script>
 <script>
 // API base. Defaults to the LIVE backend: an http://localhost fallback on an
 // https page is blocked by the browser as mixed content, which surfaces as a
@@ -310,6 +323,9 @@ const LIVE_API_BASE = "https://unplug-ecosystem.onrender.com";
   }
 })();
 let API_BASE = localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
+
+// The upload widget needs the API base and the signed-in session.
+UnplugUpload.init({ getApiBase: () => API_BASE, getToken: () => AUTH_TOKEN });
 let AUTH_TOKEN = null;
 
 async function api(path, options = {}) {
@@ -855,6 +871,72 @@ function hideSubmitError() {
 
 // Creates the underlying record for whichever type is selected, and
 // returns { linkedType, linkedId } to hand straight to /payments/initiate.
+// Article images and links. Uploads go to the site's own storage — a pasted
+// URL points at someone else's server and can vanish or change.
+const ART_MAX_GALLERY = 5;
+
+function artEnsureCoverField() {
+  const el = document.getElementById('art-cover-upload');
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('cover', '');
+}
+
+function artAddGallerySlot() {
+  const wrap = document.getElementById('art-gallery-upload');
+  if (wrap.children.length >= ART_MAX_GALLERY) {
+    showToast(`You can add up to ${ART_MAX_GALLERY} images besides the cover.`);
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'art-gallery-row';
+  row.style.cssText = 'display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;';
+  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', '')}</div>`;
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn btn-line';
+  remove.style.cssText = 'width:auto; padding:6px 12px;';
+  remove.textContent = '×';
+  remove.addEventListener('click', () => row.remove());
+  row.appendChild(remove);
+  wrap.appendChild(row);
+}
+
+function artAddLinkRow() {
+  const wrap = document.getElementById('art-links');
+  const row = document.createElement('div');
+  row.className = 'art-link-row';
+  row.style.cssText = 'display:flex; gap:8px; margin-bottom:8px;';
+  row.innerHTML = `<input class="art-link-label" placeholder="Label, e.g. Instagram" style="flex:1;">
+    <input class="art-link-url" placeholder="https://…" style="flex:2;">`;
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn btn-line';
+  remove.style.cssText = 'width:auto; padding:6px 12px;';
+  remove.textContent = '×';
+  remove.addEventListener('click', () => row.remove());
+  row.appendChild(remove);
+  wrap.appendChild(row);
+}
+
+function artCollectGallery() {
+  return [...document.querySelectorAll('#art-gallery-upload .art-gallery-row')]
+    .map((r) => UnplugUpload.valueOf(r))
+    .filter(Boolean);
+}
+
+function artCollectLinks() {
+  return [...document.querySelectorAll('#art-links .art-link-row')]
+    .map((r) => ({
+      label: r.querySelector('.art-link-label').value.trim(),
+      url: r.querySelector('.art-link-url').value.trim(),
+    }))
+    .filter((l) => l.url);
+}
+
+document.getElementById('art-add-image').addEventListener('click', artAddGallerySlot);
+artEnsureCoverField();
+document.getElementById('submitType').addEventListener('change', artEnsureCoverField);
+document.getElementById('art-add-link').addEventListener('click', artAddLinkRow);
+
 async function createSubmission(type) {
   if (type === 'article') {
     const title = document.getElementById('art-title').value.trim();
@@ -864,8 +946,13 @@ async function createSubmission(type) {
       method: 'POST',
       body: JSON.stringify({
         title, body,
+        // Written in a plain textarea, so line breaks become paragraphs
+        // rather than collapsing into one block.
+        bodyFormat: 'text',
         kickerSuppliedBy: document.getElementById('art-kicker').value.trim() || undefined,
-        bannerImageUrl: document.getElementById('art-banner').value.trim() || undefined,
+        bannerImageUrl: UnplugUpload.valueOf(document.getElementById('art-cover-upload')) || undefined,
+        galleryImages: artCollectGallery(),
+        links: artCollectLinks(),
         emotion: document.getElementById('art-emotion').value || undefined,
       }),
     });
