@@ -822,6 +822,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .share-btn.wa{ background:#25D366; }
 .share-btn.tw{ background:#000; }
 .share-btn.cp{ background:var(--slate); border:0; cursor:pointer; }
+/* ---- language picker ---- */
+.lang-picker-wrap{ display:inline-flex; align-items:center; margin-left:auto; }
+#langPicker{ font-family:inherit; font-size:12.5px; padding:5px 8px; border:1px solid var(--paper-line);
+  background:var(--cream); color:var(--ink); cursor:pointer; border-radius:2px; }
+#langPicker:focus-visible{ outline:2px solid var(--red); outline-offset:1px; }
+.sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+@media(max-width:900px){ .lang-picker-wrap{ margin-left:0; } }
 /* ---- POPIA consent bar ---- */
 .consent-bar[hidden]{ display:none; }
 .consent-bar{ position:fixed; left:0; right:0; bottom:0; z-index:900; background:var(--black); color:#fff;
@@ -1052,8 +1060,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <div class="consent-bar" id="consentBar" role="region" aria-label="Privacy choices" hidden>
   <p>We'd like to count visits so we know which stories land. It's anonymous, and entirely your choice — the site works exactly the same either way. <a href="?p=privacy">Read our privacy policy</a>.</p>
   <div class="consent-actions">
-    <button class="btn btn-line" type="button" id="consentDecline">No thanks</button>
-    <button class="btn btn-solid" type="button" id="consentAccept">Allow</button>
+    <button class="btn btn-line" type="button" id="consentDecline" data-i18n="consent.decline">No thanks</button>
+    <button class="btn btn-solid" type="button" id="consentAccept" data-i18n="consent.accept">Allow</button>
   </div>
 </div>
 
@@ -1113,20 +1121,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
     <nav class="main-nav" id="mainNav">
-      <button data-page="home" class="active">Home</button>
-      <button data-page="news">Latest News</button>
-      <button data-page="directory">Directory</button>
-      <button data-page="gallery">Gallery</button>
-      <button data-page="editions">Editions</button>
-      <button data-page="top10">Top 10</button>
-      <button data-page="competitions">Competitions</button>
-      <button data-page="investors">Investors</button>
-      <button data-page="brandplacement">Marketplace</button>
-      <button data-page="deafcommunity">Deaf Community</button>
-      <button data-page="about">About</button>
-      <button data-page="contact">Contact</button>
+      <button data-page="home" class="active" data-i18n="nav.home">Home</button>
+      <button data-page="news" data-i18n="nav.news">Latest News</button>
+      <button data-page="directory" data-i18n="nav.directory">Directory</button>
+      <button data-page="gallery" data-i18n="nav.gallery">Gallery</button>
+      <button data-page="editions" data-i18n="nav.editions">Editions</button>
+      <button data-page="top10" data-i18n="nav.top10">Top 10</button>
+      <button data-page="competitions" data-i18n="nav.competitions">Competitions</button>
+      <button data-page="investors" data-i18n="nav.investors">Investors</button>
+      <button data-page="brandplacement" data-i18n="nav.marketplace">Marketplace</button>
+      <button data-page="deafcommunity" data-i18n="nav.deafcommunity">Deaf Community</button>
+      <button data-page="about" data-i18n="nav.about">About</button>
+      <button data-page="contact" data-i18n="nav.contact">Contact</button>
     </nav>
-    <button class="header-search-btn" id="searchOpenBtn" aria-label="Search the site">
+    <label class="lang-picker-wrap">
+      <span class="sr-only" data-i18n="ui.language">Language</span>
+      <select id="langPicker" aria-label="Choose language"></select>
+    </label>
+    <button class="header-search-btn" id="searchOpenBtn" aria-label="Search the site" data-i18n-aria="ui.search">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     </button>
     <a href="#" class="header-cta" id="submitCta">Submit a Story</a>
@@ -1262,7 +1274,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <span class="print-mark bday-print"></span>
       <div class="birthday-copy">
         <span class="eyebrow" style="color:var(--cream);">Celebrating today</span>
-        <h2 data-cms="home.birthdays.title">Birthdays we're unplugging for</h2>
+        <h2 data-cms="home.birthdays.title" data-i18n="home.birthdays.title">Birthdays we're unplugging for</h2>
         <p>Every day we celebrate the changemakers in our community marking another year — because the people doing the work deserve to be seen on their day, too.</p>
         <div class="btn-row">
           <button class="btn btn-line" id="submitBirthdayBtn" style="border-color:rgba(255,255,255,0.4); color:var(--cream);">Submit Birthday</button>
@@ -1310,7 +1322,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="section-head">
       <div>
         <span class="eyebrow">Upcoming</span>
-        <h2 data-cms="home.calendar.title">Calendar Events</h2>
+        <h2 data-cms="home.calendar.title" data-i18n="home.calendar.title">Calendar Events</h2>
       </div>
       <button class="btn btn-solid cal-submit-btn" id="submitEventBtn">Submit your event →</button>
     </div>
@@ -1376,7 +1388,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="section-head">
       <div>
         <span class="eyebrow">Just in</span>
-        <h2 data-cms="home.newstories.title">New Stories</h2>
+        <h2 data-cms="home.newstories.title" data-i18n="home.newstories.title">New Stories</h2>
       </div>
       <button class="view-all" data-page="news">View all stories →</button>
     </div>
@@ -1390,7 +1402,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="section-head">
         <div>
           <span class="eyebrow">The Best Of The Best</span>
-          <h2 data-cms="home.top10.title">This Month's Top 10</h2>
+          <h2 data-cms="home.top10.title" data-i18n="home.top10.title">This Month's Top 10</h2>
         </div>
         <button class="view-all" data-page="top10">See full list →</button>
       </div>
@@ -1500,7 +1512,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="youtube-inner">
         <div class="youtube-copy">
           <span class="eyebrow">Watch on YouTube</span>
-          <h2 data-cms="home.youtube.title">Our stories, now on screen</h2>
+          <h2 data-cms="home.youtube.title" data-i18n="home.youtube.title">Our stories, now on screen</h2>
           <p>Go deeper into the impact. Watch documentary-style mini-features, community spotlights, and behind-the-scenes moments from the people in our Directory.</p>
           <a href="https://youtube.com/@unpluggedmagazineza?si=FWWo49yKAc7zu_7I" target="_blank" rel="noopener" class="btn btn-solid">Visit Our Channel ↗</a>
         </div>
@@ -1520,7 +1532,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="comp-hero">
       <span class="print-mark"></span>
       <span class="eyebrow">Open now</span>
-      <h2 data-cms="home.arena.title">The Arena</h2>
+      <h2 data-cms="home.arena.title" data-i18n="home.arena.title">The Arena</h2>
       <p>Nominate someone to enter the arena, whose unplugging good into the world.</p>
       <p>Every year, we crown a new Impact Maker, The Face Of Unplug, chosen by readers, entries, and celebrated across our platform.</p>
       <div class="btn-row">
@@ -1670,7 +1682,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
   <section class="wrap" style="padding-top:24px; padding-bottom:0;">
     <div class="section-head">
-      <div><span class="eyebrow">Once-off pricing</span><h2 data-cms="directory.packages.title">Directory Packages</h2></div>
+      <div><span class="eyebrow">Once-off pricing</span><h2 data-cms="directory.packages.title" data-i18n="directory.packages.title">Directory Packages</h2></div>
       <div class="pkg-type-toggle" id="pkgTypeToggle">
         <button class="active" data-ptype="individual">Individual</button>
         <button data-ptype="business">Business</button>
@@ -2104,7 +2116,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   <!-- HALL OF FAME -->
   <section class="wrap" id="hallOfFameSection" style="display:none;">
     <div class="section-head">
-      <div><span class="eyebrow">Past champions</span><h2 data-cms="home.halloffame.title">Hall of Fame</h2></div>
+      <div><span class="eyebrow">Past champions</span><h2 data-cms="home.halloffame.title" data-i18n="home.halloffame.title">Hall of Fame</h2></div>
     </div>
     <div class="hof-grid" id="hofGrid"></div>
   </section>
@@ -3493,7 +3505,7 @@ function setConsent(choice) {
 // ---------------------------------------------------------------------------
 // Admin-editable page content.
 //
-// Two mechanisms, both additive: an element tagged data-cms="home.hero.title"
+// Two mechanisms, both additive: an element tagged data-cms="home.hero.title" data-i18n="home.hero.title"
 // has its text replaced when an override exists, and a container tagged
 // data-cms-blocks="home" is filled with any image blocks for that page. If
 // the CMS is empty or unreachable, every page keeps its built-in wording —
@@ -3529,7 +3541,15 @@ async function applyPageCms() {
     const value = content[el.getAttribute('data-cms')];
     // textContent, not innerHTML — page copy is text, and this keeps any
     // stray markup in the CMS from executing.
-    if (typeof value === 'string' && value.trim()) el.textContent = value;
+    if (typeof value === 'string' && value.trim()) {
+      el.textContent = value;
+      // An admin typed this wording deliberately, so it wins over the
+      // generic translation. Marking it lets the language switcher leave it
+      // alone instead of silently reverting the edit. The trade-off is that
+      // an overridden heading shows in the language it was written in — the
+      // alternative would be discarding an explicit editorial decision.
+      el.setAttribute('data-cms-applied', '1');
+    }
   });
   const blocks = cms.blocks || {};
   document.querySelectorAll('[data-cms-blocks]').forEach((wrap) => {
@@ -5880,6 +5900,7 @@ document.querySelectorAll('.poster-slideshow').forEach((widget) => {
 });
 
 </script>
+<script src="i18n.js" defer></script>
 <script src="accessibility.js" defer></script>
 <script src="chatbot.js" defer></script>
 </body>
