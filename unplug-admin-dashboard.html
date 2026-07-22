@@ -446,6 +446,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="panel">
+        <div class="panel-head"><h3>Article metadata</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Articles published before search metadata existed have no URL slug, social-share summary or keywords. This fills those in from each article's own text. It never overwrites wording you've already set.</p>
+          <button class="btn btn-line" style="width:auto;" id="backfillMetaBtn">Fill in missing metadata</button>
+          <span id="backfillMetaNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
+        </div>
+      </div>
+
+      <div class="panel">
         <div class="panel-head"><h3>Publish an article</h3></div>
         <div class="panel-body">
           <div class="form-row">
@@ -1307,6 +1316,23 @@ async function loadPublishSection() {
     } catch (err) { /* handled when the button is used */ }
   }
 }
+
+document.getElementById('backfillMetaBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('backfillMetaBtn');
+  const note = document.getElementById('backfillMetaNote');
+  btn.disabled = true;
+  note.textContent = 'Working through the archive…';
+  try {
+    const res = await api('/articles/backfill-metadata', { method: 'POST' });
+    note.textContent = res.message;
+    showToast(res.message);
+  } catch (err) {
+    note.textContent = '';
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById('publishArticleBtn').addEventListener('click', async () => {
   const title = document.getElementById('pubTitle').value.trim();

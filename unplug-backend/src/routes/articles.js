@@ -318,6 +318,59 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
   }
 });
 
+// POST /articles/backfill-metadata — admin. Generates the derived fields for
+// articles published before this existed. Without it the whole feature only
+// helps future articles while everything already published stays bare: no
+// slug, no social-share summary, no keywords for search.
+//
+// Only fills what is missing — an editor's own wording is never overwritten —
+// and reports what it touched rather than claiming silent success.
+router.post('/backfill-metadata', requireRole('admin'), async (req, res, next) => {
+  try {
+    const categories = await pool.query("SELECT id, name FROM categories WHERE type = 'news'");
+    const pending = await pool.query(
+      `SELECT id, title, body, category_id, slug, meta_description, key_takeaways, keywords, tags
+         FROM articles
+        WHERE slug IS NULL OR meta_description IS NULL OR key_takeaways IS NULL
+        ORDER BY id`
+    );
+    const updated = [];
+    for (const article of pending.rows) {
+      const sections = await loadSections(article.id);
+      const derived = deriveMetadata({
+        title: article.title,
+        body: article.body,
+        sections: sections.map((s) => ({ sub_heading: s.sub_heading, paragraph: s.paragraph })),
+        categories: categories.rows,
+      });
+      const slug = article.slug || await uniqueSlug(derived.slug, article.id);
+      await pool.query(
+        `UPDATE articles SET
+           slug = COALESCE(slug, $1),
+           meta_description = COALESCE(meta_description, $2),
+           key_takeaways = COALESCE(key_takeaways, $3),
+           keywords = COALESCE(keywords, $4),
+           tags = COALESCE(tags, $5),
+           seo_title = COALESCE(seo_title, title),
+           suggested_category_id = COALESCE(suggested_category_id, CASE WHEN category_id IS NULL THEN $6 ELSE NULL END)
+         WHERE id = $7`,
+        [slug, derived.metaDescription, derived.keyTakeaways, derived.keywords,
+          derived.tags, derived.suggestedCategoryId, article.id]
+      );
+      updated.push({ id: article.id, title: article.title, slug });
+    }
+    res.json({
+      processed: updated.length,
+      articles: updated,
+      message: updated.length
+        ? `Filled in metadata for ${updated.length} article${updated.length === 1 ? '' : 's'}. Existing wording was left untouched.`
+        : 'Every article already has its metadata — nothing to do.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /articles/:id — admin only. Deliberately not open to the author:
 // once a piece is published other people may have linked to, saved or
 // commented on it, so removing it is an editorial decision. Sections,
