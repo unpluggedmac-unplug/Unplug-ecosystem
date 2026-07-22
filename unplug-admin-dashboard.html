@@ -2295,19 +2295,27 @@ async function loadConsultants() {
   document.getElementById('consultantReportPanel').style.display = 'none';
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {
-    const data = await api('/admin/sales-consultants');
+    // The performance endpoint already returns every consultant plus their
+    // referral totals, so one call replaces the plain list.
+    const data = await api('/sales-consultants/performance');
     if (!data.consultants || data.consultants.length === 0) {
       body.innerHTML = '<div class="empty-state">No consultants added yet.</div>';
       return;
     }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Name</th><th>Email</th><th>Commission</th><th>Status</th><th></th></tr>';
+    table.innerHTML = '<tr><th>Name</th><th>Email</th><th>Commission</th><th>Sales</th><th>Revenue</th><th>Owed</th><th>Last sale</th><th>Status</th><th></th></tr>';
     data.consultants.forEach((c) => {
       const tr = document.createElement('tr');
+      const pending = c.pending_referrals > 0
+        ? ` <span style="color:var(--muted); font-weight:400;">(+${c.pending_referrals} pending)</span>` : '';
       tr.innerHTML = `
-        <td><a href="#" style="color:var(--red); font-weight:600; text-decoration:none;">${c.name}</a></td>
+        <td><a href="#" style="color:var(--red); font-weight:600; text-decoration:none;">${c.name}</a>${c.user_id ? '' : ' <span style="color:var(--muted); font-size:11px;">no linked account</span>'}</td>
         <td>${c.email || '—'}</td>
         <td>${c.commission_pct}%</td>
+        <td>${c.confirmed_referrals}${pending}</td>
+        <td>R${Number(c.revenue).toFixed(2)}</td>
+        <td style="color:var(--red); font-weight:600;">R${Number(c.commission_due).toFixed(2)}</td>
+        <td>${c.last_sale_at ? new Date(c.last_sale_at).toLocaleDateString() : '—'}</td>
         <td>${c.active ? 'Active' : 'Inactive'}</td>
         <td><div class="row-actions"><button class="${c.active ? 'reject' : 'approve'}">${c.active ? 'Deactivate' : 'Activate'}</button></div></td>`;
       tr.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); loadConsultantReport(c.id, c.name); });
@@ -2341,6 +2349,7 @@ async function loadConsultantReport(id, name) {
     const data = await api(`/admin/sales-consultants/${id}/payments`);
     if (!data.payments || data.payments.length === 0) {
       bodyEl.innerHTML = '<div class="empty-state">No confirmed sales attributed to this consultant yet.</div>';
+      loadConsultantSubmissions(id, bodyEl);
       return;
     }
     const summary = document.createElement('p');
@@ -2358,8 +2367,43 @@ async function loadConsultantReport(id, name) {
     bodyEl.innerHTML = '';
     bodyEl.appendChild(summary);
     bodyEl.appendChild(table);
+    loadConsultantSubmissions(id, bodyEl);
   } catch (err) {
     bodyEl.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// Consultants publish free, so what they've put on the site is appended to the
+// commission report — sales and free publishing are the two halves of what a
+// consultant costs and earns.
+async function loadConsultantSubmissions(id, bodyEl) {
+  const block = document.createElement('div');
+  block.style.cssText = 'margin-top:22px;';
+  block.innerHTML = '<h4 style="font-size:13px; margin-bottom:8px;">Published by this consultant</h4><div class="loading-state">Loading…</div>';
+  bodyEl.appendChild(block);
+
+  try {
+    const data = await api(`/sales-consultants/${id}/submissions`);
+    const heading = '<h4 style="font-size:13px; margin-bottom:8px;">Published by this consultant</h4>';
+    if (!data.linked) {
+      block.innerHTML = heading + '<div class="empty-state">No member account is linked to this consultant, so their submissions can\'t be attributed. Link one by giving the consultant record the same email address as their sign-in.</div>';
+      return;
+    }
+    if (data.submissions.length === 0) {
+      block.innerHTML = heading + '<div class="empty-state">Nothing published yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Date</th><th>Type</th><th>Title</th><th>Status</th></tr>';
+    data.submissions.forEach((s) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${new Date(s.created_at).toLocaleDateString()}</td><td>${s.kind}</td><td>${escapeHtml(s.label || '')}</td><td>${s.status}</td>`;
+      table.appendChild(tr);
+    });
+    block.innerHTML = heading;
+    block.appendChild(table);
+  } catch (err) {
+    block.innerHTML = `<div class="empty-state">Could not load submissions: ${err.message}</div>`;
   }
 }
 

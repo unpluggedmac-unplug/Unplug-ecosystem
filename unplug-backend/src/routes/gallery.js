@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { publishesFree } = require("../utils/publishingRights");
 const { getPagination, paginationMeta } = require('../utils/pagination');
 
 const router = express.Router();
@@ -65,7 +66,8 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     // Tier-based free photo allowance — only applies when this bundle is
     // attached to the member's own Directory profile.
-    let skipPayment = false;
+    // Editorial staff and consultants never pay for a gallery bundle.
+    let skipPayment = publishesFree(req.user);
     if (finalOwnerType === 'profile' && ownerId) {
       const profileResult = await pool.query(
         'SELECT id, type, package_tier, free_gallery_credits FROM profiles WHERE id = $1 AND user_id = $2',

@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { publishesFree, statusForNewSubmission } = require("../utils/publishingRights");
 const { getPagination, paginationMeta } = require('../utils/pagination');
 
 const router = express.Router();
@@ -56,10 +57,10 @@ router.post('/', requireAuth, async (req, res, next) => {
        RETURNING *`,
       [req.user.id, name, eventDate, venue || null, description || null, displayStartDate || null,
        imageUrl || null, entranceFee || null, contactDetails || null, eventLink || null,
-       startTime || null, endTime || null, hasCredit ? 'pending' : 'awaiting_payment']
+       startTime || null, endTime || null, statusForNewSubmission(req.user, hasCredit)]
     );
 
-    if (hasCredit) {
+    if (hasCredit && !publishesFree(req.user)) {
       await pool.query('UPDATE profiles SET free_event_credits = free_event_credits - 1 WHERE id = $1', [profileResult.rows[0].id]);
     }
 

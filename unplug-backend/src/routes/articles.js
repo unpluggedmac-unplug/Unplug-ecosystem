@@ -3,6 +3,7 @@ const pool = require('../db');
 const { requireAuth, requireOwnerOrAdmin, requireRole } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { deriveMetadata, slugify } = require('../utils/articleMeta');
+const { publishesFree, statusForNewSubmission } = require('../utils/publishingRights');
 
 const router = express.Router();
 
@@ -187,24 +188,21 @@ router.post('/', requireAuth, async (req, res, next) => {
     const derived = deriveMetadata({ title, body, sections, categories: categories.rows });
     const slug = await uniqueSlug(derived.slug);
 
-    const isAdmin = req.user.role === 'admin';
-    let status = 'awaiting_payment';
+    let status;
     let profileId = null;
 
-    if (isAdmin) {
-      // Editorial staff publish straight to the site: no payment step, no
-      // credit spent, and no approval queue — an admin approving their own
-      // submission would just be a formality.
-      status = 'approved';
+    if (publishesFree(req.user)) {
+      // Admin publishes live; a consultant still goes through approval but
+      // never through payment. No credit is spent either way.
+      status = statusForNewSubmission(req.user, false);
     } else {
       const profileResult = await client.query(
         'SELECT id, free_article_credits FROM profiles WHERE user_id = $1',
         [req.user.id]
       );
-      if (profileResult.rows.length > 0 && profileResult.rows[0].free_article_credits > 0) {
-        status = 'pending';
-        profileId = profileResult.rows[0].id;
-      }
+      const hasCredit = profileResult.rows.length > 0 && profileResult.rows[0].free_article_credits > 0;
+      status = statusForNewSubmission(req.user, hasCredit);
+      if (hasCredit) profileId = profileResult.rows[0].id;
     }
 
     await client.query('BEGIN');
@@ -243,9 +241,14 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
     await client.query('COMMIT');
 
+    // A consultant reaches 'pending' without spending a credit, so the credit
+    // wording would be wrong for them — telling someone they used a credit
+    // they still have is a small lie that costs trust.
     const messages = {
       approved: 'Published — this article is live on the site now.',
-      pending: 'Article created using your free Article credit — submitted for approval, no payment needed.',
+      pending: req.user.role === 'consultant'
+        ? 'Article submitted for approval — no payment needed.'
+        : 'Article created using your free Article credit — submitted for approval, no payment needed.',
       awaiting_payment: 'Article created — call POST /payments/initiate with linkedType "article_publish" and this article\'s id (R95.00) to submit it for approval.',
     };
     res.status(201).json({
