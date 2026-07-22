@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { spendCredit, balanceFor, historyFor } = require('../utils/accountCredit');
 
 const router = express.Router();
 
@@ -324,6 +325,21 @@ async function applyPaymentEffect(payment) {
 // package, an upgrade, etc). Returns what the frontend needs to either
 // redirect to a hosted checkout (PayFast/Ozow) or show bank details (EFT).
 // ---------------------------------------------------------------------------
+// GET /payments/credit — the member's own credit balance and where it came
+// from. The policy tells people their credit is on their profile, so there
+// has to be somewhere they can actually see it.
+router.get('/credit', requireAuth, async (req, res, next) => {
+  try {
+    const [balance, history] = await Promise.all([
+      balanceFor(req.user.id),
+      historyFor(req.user.id),
+    ]);
+    res.json({ balance, history });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok', 'sales_consultant', 'other'];
 
 router.post('/initiate', requireAuth, async (req, res, next) => {
@@ -357,21 +373,67 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
 
     const reference = generateReference();
 
-    const result = await pool.query(
-      `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, referral_source, sales_consultant_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [req.user.id, finalAmount, method, reference, linkedType, linkedId, referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null]
-    );
-    const payment = result.rows[0];
+    // Account credit (from a declined or cancelled submission) comes off what
+    // is still owed, after any voucher. The deduction and the payment row are
+    // written in ONE transaction: spending someone's credit and then failing
+    // to create the payment would take their money and give them nothing.
+    let payment;
+    let creditUsed = 0;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      creditUsed = await spendCredit(
+        client,
+        req.user.id,
+        finalAmount,
+        `Applied to ${linkedType} #${linkedId} (${reference})`
+      );
+      const payable = Number((finalAmount - creditUsed).toFixed(2));
+
+      const result = await client.query(
+        `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, referral_source, sales_consultant_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [req.user.id, payable, method, reference, linkedType, linkedId, referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null]
+      );
+      payment = result.rows[0];
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
 
     if (appliedVoucher) {
       await recordVoucherRedemption(appliedVoucher.id, req.user.id, linkedType, linkedId, amount - finalAmount);
     }
 
+    // Credit covered the whole amount, so there is nothing to pay. Sending the
+    // member to a gateway for R0.00 — or to EFT instructions telling them to
+    // transfer nothing — would leave the submission stuck awaiting a payment
+    // that can never arrive. Confirm it here instead.
+    if (Number(payment.amount) === 0) {
+      await pool.query(
+        `UPDATE payments SET status = 'confirmed', confirmed_at = now() WHERE id = $1`,
+        [payment.id]
+      );
+      const confirmed = await pool.query('SELECT * FROM payments WHERE id = $1', [payment.id]);
+      await applyPaymentEffect(confirmed.rows[0]);
+      return res.status(201).json({
+        payment: confirmed.rows[0],
+        creditUsed,
+        paidInFull: true,
+        message: `Covered in full by your R${creditUsed.toFixed(2)} account credit — nothing to pay.`,
+      });
+    }
+
     if (method === 'eft') {
       return res.status(201).json({
         payment,
+        creditUsed,
         instructions: {
           bank: 'FNB / RMB',
           accountName: 'Unplug',
@@ -389,7 +451,10 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     // this reference. Stubbed here since that requires live credentials.
     res.status(201).json({
       payment,
-      redirectUrl: `https://sandbox.${method}.example.com/checkout?ref=${reference}&amount=${amount}`,
+      creditUsed,
+      // payment.amount, not the original price — the gateway must charge what
+      // is actually still owed after voucher and credit, not the list price.
+      redirectUrl: `https://sandbox.${method}.example.com/checkout?ref=${reference}&amount=${payment.amount}`,
       note: `Stub URL — replace with a real ${method === 'payfast' ? 'PayFast' : 'Ozow'} checkout link once merchant credentials are available.`,
     });
   } catch (err) {

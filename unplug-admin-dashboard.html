@@ -1160,6 +1160,7 @@ async function loadQueueTab(key) {
         if (cfg.resource === 'profiles') {
           actionTd.querySelectorAll('.approve')[1].addEventListener('click', () => actOnQueueItem(cfg, row.id, 'verify'));
         }
+        addDeclineWithCreditButton(actionTd, cfg.resource, row.id, () => loadQueueTab(key));
       }
       tr.appendChild(actionTd);
       table.appendChild(tr);
@@ -1170,6 +1171,45 @@ async function loadQueueTab(key) {
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
+}
+
+// "Decline & credit R…" — the decline path from the Refund & Cancellation
+// Policy. Rejecting alone keeps the member's money for something we refused to
+// publish; this hands it back as account credit in the same action.
+//
+// The button is added only once we know there IS a confirmed payment, and it
+// shows the actual amount. An admin should never have to click a money button
+// to discover what it will do, and a "Decline & credit" button on a free
+// submission would just be confusing.
+async function addDeclineWithCreditButton(container, resource, itemId, onDone) {
+  let info;
+  try {
+    info = await api(`/admin/content/${resource}/${itemId}/payment`);
+  } catch (err) {
+    return; // no payment info available — leave the normal buttons alone
+  }
+  if (!info.payable || !info.payment || info.payment.alreadyCredited) return;
+
+  const amount = Number(info.payment.amount);
+  if (!(amount > 0)) return;
+
+  const row = container.querySelector('.row-actions') || container;
+  const btn = document.createElement('button');
+  btn.className = 'reject';
+  btn.textContent = `Decline & credit R${amount.toFixed(2)}`;
+  btn.addEventListener('click', async () => {
+    if (!confirm(`Decline this and add R${amount.toFixed(2)} to the member's account as credit?\n\nThey can spend it on any future service. This does not send money back to their bank.`)) return;
+    btn.disabled = true;
+    try {
+      const res = await api(`/admin/content/${resource}/${itemId}/decline-with-credit`, { method: 'POST' });
+      showToast(res.message || 'Declined and credited.');
+      if (onDone) onDone();
+    } catch (err) {
+      showToast(err.message, true);
+      btn.disabled = false;
+    }
+  });
+  row.appendChild(btn);
 }
 
 async function actOnQueueItem(cfg, id, action) {
@@ -2084,6 +2124,12 @@ async function loadManageContent() {
         + `<td><div class="row-actions">${manageEditable.length ? '<button class="approve">Edit</button>' : ''}<button class="reject">Delete</button></div></td>`;
       const editBtn = tr.querySelector('.approve');
       if (editBtn) editBtn.addEventListener('click', () => openManageEditor(resource, item));
+      // Only offered while the item is still awaiting a decision — crediting
+      // something already approved and live is a different situation, and the
+      // policy says an active service isn't refunded.
+      if (item.status === 'pending') {
+        addDeclineWithCreditButton(tr.querySelector('.row-actions'), resource, item.id, loadManageContent);
+      }
       tr.querySelector('.reject').addEventListener('click', async () => {
         if (!confirm('Delete this permanently? This cannot be undone. To hide it instead, reject it from the Approval Queue.')) return;
         try {

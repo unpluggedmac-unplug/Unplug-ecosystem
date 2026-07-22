@@ -15,6 +15,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { findPaidPayment, balanceFor, RESOURCE_PAYMENT_TYPES } = require('../utils/accountCredit');
 
 const router = express.Router();
 
@@ -202,6 +203,124 @@ router.delete('/:resource/:id', requireRole('admin'), async (req, res, next) => 
     res.json({ deleted: true });
   } catch (err) {
     next(err);
+  }
+});
+
+// GET /admin/content/:resource/:id/payment — what would happen if this were
+// declined. Lets the dashboard show the real amount on the button instead of
+// asking the admin to click and find out.
+router.get('/:resource/:id/payment', requireRole('admin'), async (req, res, next) => {
+  try {
+    const spec = resourceFor(req, res);
+    if (!spec) return;
+    const id = idFor(req, res);
+    if (id === null) return;
+
+    if (!RESOURCE_PAYMENT_TYPES[req.params.resource]) {
+      return res.json({ payable: false });
+    }
+    const payment = await findPaidPayment(req.params.resource, id);
+    if (!payment) return res.json({ payable: true, payment: null });
+
+    res.json({
+      payable: true,
+      payment: {
+        id: payment.id,
+        amount: Number(payment.amount),
+        alreadyCredited: !!payment.credited_at,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/content/:resource/:id/decline-with-credit
+//
+// The decline path from the Refund & Cancellation Policy: reject the
+// submission and put what they paid back on their account as credit, in one
+// action so the two can't come apart.
+//
+// Both writes plus the payment flag happen in a single transaction. Rejecting
+// the item and then failing to credit would take someone's money for something
+// we refused to publish, which is the exact failure this endpoint exists to
+// prevent.
+router.post('/:resource/:id/decline-with-credit', requireRole('admin'), async (req, res, next) => {
+  const spec = resourceFor(req, res);
+  if (!spec) return;
+  const id = idFor(req, res);
+  if (id === null) return;
+
+  if (spec.hasStatus === false) {
+    return res.status(400).json({ error: 'This content type is not something that gets approved or paid for.' });
+  }
+  if (!RESOURCE_PAYMENT_TYPES[req.params.resource]) {
+    return res.status(400).json({ error: 'This content type has no paid submissions, so there is nothing to credit.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const payment = await findPaidPayment(req.params.resource, id, client);
+    if (!payment) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        error: 'No confirmed payment was found for this submission, so there is nothing to credit. Reject it normally instead.',
+      });
+    }
+    if (payment.credited_at) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'This payment has already been credited back to the member. Nothing further was done.',
+      });
+    }
+
+    // The unique index on payment_id is the real protection against a double
+    // credit; this insert is what trips it if two requests race.
+    await client.query(
+      `INSERT INTO account_credits (user_id, amount, reason, note, payment_id, created_by)
+       VALUES ($1, $2, 'declined_submission', $3, $4, $5)`,
+      [
+        payment.user_id,
+        payment.amount,
+        (req.body.note || '').trim() || `Declined ${req.params.resource} #${id}`,
+        payment.id,
+        req.user.id,
+      ]
+    );
+
+    await client.query('UPDATE payments SET credited_at = now() WHERE id = $1', [payment.id]);
+
+    const updated = await client.query(
+      `UPDATE ${spec.table} SET status = 'rejected' WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (updated.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'That item no longer exists.' });
+    }
+
+    await client.query('COMMIT');
+
+    const balance = await balanceFor(payment.user_id);
+    res.json({
+      declined: true,
+      credited: Number(payment.amount),
+      userId: payment.user_id,
+      newBalance: balance,
+      message: `Declined. R${Number(payment.amount).toFixed(2)} was added to their account as credit.`,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    // The unique index firing means another request credited this payment
+    // first. That's the guard working, not a server fault.
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'This payment has already been credited back to the member.' });
+    }
+    next(err);
+  } finally {
+    client.release();
   }
 });
 
