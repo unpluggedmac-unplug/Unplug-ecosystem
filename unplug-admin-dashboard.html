@@ -95,6 +95,21 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .pill{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:3px 9px; border-radius:20px; display:inline-block; }
 .pill.pending{ background:rgba(210,7,9,0.1); color:var(--red); }
 .pill.approved{ background:rgba(46,125,50,0.1); color:var(--green, #2e7d32); }
+
+/* ---- image upload widget ---- */
+.img-upload{ display:flex; flex-direction:column; gap:6px; }
+.img-upload-input{ font-size:12px; }
+.img-upload-status{ font-size:11.5px; color:var(--slate); min-height:14px; }
+.img-upload-status.ok{ color:var(--green); }
+.img-upload-status.error{ color:var(--red); }
+.img-upload-preview{ max-width:160px; max-height:110px; object-fit:cover; border:1px solid var(--paper-line); }
+/* ---- article editor sections ---- */
+.art-section{ border:1px solid var(--paper-line); background:#fff; padding:16px; margin-bottom:14px; }
+.art-section-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.art-section-head strong{ font-size:11px; letter-spacing:0.08em; color:var(--slate); }
+.art-section-remove{ background:none; border:none; cursor:pointer; font-size:15px; color:var(--red); }
+.art-section label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin:10px 0 4px; }
+.art-section input, .art-section textarea{ width:100%; border:1px solid var(--paper-line); padding:9px 12px; font-size:14px; font-family:inherit; background:#fff; }
 </style>
 </head>
 <body>
@@ -253,7 +268,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div><label>Name *</label><input id="hofName" placeholder="e.g. Thandi Mokoena"></div>
             <div><label>Title / category</label><input id="hofTitle" placeholder="The Face of Unplug"></div>
           </div>
-          <div class="field" style="margin-top:12px;"><label>Photo URL</label><input id="hofPhoto" placeholder="https://..."></div>
+          <div class="field" style="margin-top:12px;"><label>Photo</label><div id="hofPhotoUpload"></div></div>
           <div class="field"><label>Description</label><textarea id="hofDesc" rows="2"></textarea></div>
           <button class="btn btn-solid" style="width:auto;" id="addHofBtn">Add Winner</button>
         </div>
@@ -268,7 +283,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>YouTube section image</h3></div>
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Paste an image URL to show in the homepage "Watch on YouTube" block (it links to the channel). Leave blank to keep the embedded playlist.</p>
-          <div class="field"><label>Image URL</label><input id="ytImageInput" placeholder="https://..."></div>
+          <div class="field"><label>Image</label><div id="ytImageUpload"></div></div>
           <button class="btn btn-solid" style="width:auto;" id="saveYtImageBtn">Save</button>
         </div>
       </div>
@@ -387,7 +402,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div style="grid-column:1/-1;"><label>Description</label><input id="cmsBlockDesc" placeholder="A sentence or two"></div>
           </div>
           <div class="form-row">
-            <div style="grid-column:1/-2;"><label>Image URL</label><input id="cmsBlockImg" placeholder="https://…"></div>
+            <div style="grid-column:1/-2;"><label>Image</label><div id="cmsBlockImgUpload"></div></div>
             <div><label>Button label</label><input id="cmsBlockBtnLabel" placeholder="Read more"></div>
             <div><label>Button link</label><input id="cmsBlockBtnUrl" placeholder="https://…"></div>
           </div>
@@ -455,47 +470,73 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h3>Publish an article</h3></div>
+        <div class="panel-head"><h3 id="artEditorHeading">Write an article</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div style="grid-column:1/-2;"><label>Headline</label><input id="pubTitle" placeholder="Story headline"></div>
-            <div><label>Category</label><select id="pubCategory"><option value="">— none —</option></select></div>
+            <div style="grid-column:1/-2;"><label>Article</label>
+              <select id="artPick"><option value="">— new article —</option></select>
+            </div>
+            <div><label>&nbsp;</label><button class="btn btn-line" style="width:100%;" id="artLoadBtn">Load</button></div>
           </div>
-          <div class="form-row">
-            <div><label>Supplied by (optional)</label><input id="pubKicker" placeholder="e.g. Thandi M."></div>
-            <div><label>Banner image URL (optional)</label><input id="pubBanner" placeholder="https://…"></div>
-            <div><label>Emotion (optional)</label><select id="pubEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
-          </div>
-          <div style="margin-top:10px;"><label>Story</label>
-            <textarea id="pubBody" rows="10" style="width:100%;" placeholder="Write the story here. Basic HTML is allowed."></textarea>
-          </div>
-          <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="publishArticleBtn">Publish Live</button>
-          <span id="publishArticleNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
-        </div>
-      </div>
 
-      <div class="panel">
-        <div class="panel-head"><h3>Edit a published article</h3></div>
-        <div class="panel-body">
-          <div class="form-row">
-            <div style="grid-column:1/-2;"><label>Article</label><select id="editArticleSelect"><option value="">— choose an article —</option></select></div>
-            <div><label>&nbsp;</label><button class="btn btn-line" style="width:100%;" id="loadArticleBtn">Load for editing</button></div>
+          <div class="form-row" style="margin-top:14px;">
+            <div style="grid-column:1/-2;"><label>Headline</label><input id="artTitle" placeholder="The headline readers see"></div>
+            <div><label>Category</label><select id="artCategory"><option value="">— none —</option></select></div>
           </div>
-          <div id="editArticleFields" style="display:none; margin-top:12px;">
+          <div class="form-row">
+            <div style="grid-column:1/-1;"><label>Subtitle <span style="font-style:italic; color:var(--slate);">(shown in italics under the headline)</span></label>
+              <input id="artSubtitle" style="font-style:italic;" placeholder="A short line that adds context"></div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-2;"><label>SEO title <span style="color:var(--slate);">(defaults to the headline)</span></label><input id="artSeoTitle" placeholder="Title used by Google and browser tabs"></div>
+            <div><label>URL slug</label><input id="artSlug" placeholder="auto-generated"></div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-1;"><label>Meta description <span style="color:var(--slate);">(the summary shown when this is shared on social media)</span></label>
+              <input id="artMeta" maxlength="320" placeholder="Left blank, this is written for you from the article">
+              <span id="artMetaCount" style="font-size:11px; color:var(--slate);"></span></div>
+          </div>
+          <div class="form-row">
+            <div><label>Supplied by (optional)</label><input id="artKicker" placeholder="e.g. Thandi M."></div>
+            <div><label>Emotion (optional)</label><select id="artEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
+            <div><label>Main image</label><div id="artBannerUpload"></div></div>
+          </div>
+
+          <div style="margin-top:14px;"><label>Opening / main story</label>
+            <textarea id="artBody" rows="8" style="width:100%;" placeholder="Write the opening of the story here."></textarea>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; margin:20px 0 8px;">
+            <h3 style="margin:0;">Sections</h3>
+            <button class="btn btn-line" style="width:auto;" id="artAddSection">+ Add section</button>
+          </div>
+          <p style="font-size:12.5px; color:var(--slate); margin-bottom:10px;">Each section is a new part of the article: a sub heading, a paragraph, and optionally a picture with a note. Leave any field blank if you don't need it — empty sections won't appear on the live article.</p>
+          <div id="artSections"></div>
+
+          <div style="margin-top:16px;"><label>Conclusion (optional)</label>
+            <textarea id="artConclusion" rows="4" style="width:100%;" placeholder="How the story closes."></textarea>
+          </div>
+          <div class="form-row" style="margin-top:10px;">
+            <div><label>Call-to-action label (optional)</label><input id="artCtaLabel" placeholder="e.g. Join the community"></div>
+            <div style="grid-column:2/-1;"><label>Call-to-action link</label><input id="artCtaUrl" placeholder="https://…"></div>
+          </div>
+
+          <div id="artDerived" style="display:none; margin-top:18px; padding:14px; border:1px solid var(--paper-line); background:var(--paper);">
+            <strong style="font-size:13px;">Generated from the article — edit anything that reads badly</strong>
+            <p style="font-size:12px; color:var(--slate); margin:4px 0 12px;">These are pulled from the text you wrote, not invented. Whatever you leave here is what publishes.</p>
+            <div style="margin-bottom:10px;"><label>Key takeaways (one per line)</label><textarea id="artTakeaways" rows="4" style="width:100%;"></textarea></div>
             <div class="form-row">
-              <div style="grid-column:1/-2;"><label>Headline</label><input id="editTitle"></div>
-              <div><label>Category</label><select id="editCategory"><option value="">— none —</option></select></div>
+              <div><label>Keywords (comma separated)</label><input id="artKeywords"></div>
+              <div><label>Tags (comma separated)</label><input id="artTags"></div>
             </div>
-            <div class="form-row">
-              <div><label>Supplied by (optional)</label><input id="editKicker"></div>
-              <div><label>Banner image URL (optional)</label><input id="editBanner"></div>
-              <div><label>Emotion (optional)</label><select id="editEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
-            </div>
-            <div style="margin-top:10px;"><label>Story</label>
-              <textarea id="editBody" rows="14" style="width:100%;"></textarea>
-            </div>
-            <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="saveArticleBtn">Save Changes</button>
-            <span id="editArticleNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
+            <div id="artSuggestedCat" style="font-size:12.5px; color:var(--slate); margin-top:8px;"></div>
+          </div>
+
+          <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-solid" style="width:auto;" id="artSaveBtn">Publish Live</button>
+            <button class="btn btn-line" style="width:auto; display:none;" id="artDeleteBtn">Delete article</button>
+            <button class="btn btn-line" style="width:auto;" id="artResetBtn">Start a new article</button>
+            <span id="artNote" style="font-size:12px; color:var(--slate);"></span>
           </div>
         </div>
       </div>
@@ -610,6 +651,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
 <div class="toast" id="toast"></div>
 
+<script src="image-upload.js"></script>
 <script>
 // ---------------------------------------------------------------------------
 // State
@@ -629,6 +671,9 @@ const LIVE_API_BASE = "https://unplug-ecosystem.onrender.com";
   }
 })();
 let API_BASE = localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
+
+// The upload widget needs to know where the API is and who is signed in.
+UnplugUpload.init({ getApiBase: () => API_BASE, getToken: () => AUTH_TOKEN });
 let AUTH_TOKEN = null;
 let CURRENT_USER = null;
 
@@ -842,7 +887,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'analytics') loadAnalytics(7);
     if (section === 'comments') loadPendingComments();
     if (section === 'pagecms') loadPageCms();
-    if (section === 'publish') { loadPublishSection(); loadEditArticleList(); loadEmailStatus(); }
+    if (section === 'publish') { loadPublishSection(); loadEmailStatus(); }
     if (section === 'polls') loadPolls();
     if (section === 'reviews') loadPendingReviews();
     if (section === 'claims') loadPendingClaims();
@@ -1096,6 +1141,7 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
 
 // Page Content (CMS) — image blocks and wording overrides.
 async function loadPageCms() {
+  if (!document.querySelector("#cmsBlockImgUpload .img-upload")) document.getElementById("cmsBlockImgUpload").innerHTML = UnplugUpload.fieldHtml("blockImage", "");
   const blocksBody = document.getElementById('cmsBlocksBody');
   const contentBody = document.getElementById('cmsContentBody');
   if (!blocksBody) return;
@@ -1153,7 +1199,7 @@ document.getElementById('cmsAddBlockBtn').addEventListener('click', async () => 
     title: document.getElementById('cmsBlockTitle').value.trim(),
     subheading: document.getElementById('cmsBlockSub').value.trim(),
     description: document.getElementById('cmsBlockDesc').value.trim(),
-    imageUrl: document.getElementById('cmsBlockImg').value.trim(),
+    imageUrl: UnplugUpload.valueOf(document.getElementById('cmsBlockImgUpload')),
     buttonLabel: document.getElementById('cmsBlockBtnLabel').value.trim(),
     buttonUrl: document.getElementById('cmsBlockBtnUrl').value.trim(),
     position: Number(document.getElementById('cmsBlockPos').value) || 0,
@@ -1161,7 +1207,8 @@ document.getElementById('cmsAddBlockBtn').addEventListener('click', async () => 
   try {
     await api('/page-cms/admin/blocks', { method: 'POST', body: JSON.stringify(payload) });
     showToast('Block added — it is live on that page now.');
-    ['cmsBlockTitle', 'cmsBlockSub', 'cmsBlockDesc', 'cmsBlockImg', 'cmsBlockBtnLabel', 'cmsBlockBtnUrl'].forEach((id) => { document.getElementById(id).value = ''; });
+    ['cmsBlockTitle', 'cmsBlockSub', 'cmsBlockDesc', 'cmsBlockBtnLabel', 'cmsBlockBtnUrl'].forEach((id) => { document.getElementById(id).value = ''; });
+    document.getElementById('cmsBlockImgUpload').innerHTML = UnplugUpload.fieldHtml('blockImage', '');
     loadPageCms();
   } catch (err) {
     showToast(err.message, true);
@@ -1287,16 +1334,13 @@ document.getElementById('testEmailBtn').addEventListener('click', async () => {
 let TOP10_COMPETITION_ID = null;
 
 async function loadPublishSection() {
-  const catSel = document.getElementById('pubCategory');
+  const catSel = document.getElementById('artCategory');
   const profSel = document.getElementById('top10Profile');
   if (!catSel || !profSel) return;
   try {
     const cats = await api('/news/categories');
-    const catOptions = '<option value="">— none —</option>'
+    catSel.innerHTML = '<option value="">— none —</option>'
       + (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
-    catSel.innerHTML = catOptions;
-    const editCatSel = document.getElementById('editCategory');
-    if (editCatSel) editCatSel.innerHTML = catOptions;
   } catch (err) {
     catSel.innerHTML = '<option value="">Categories unavailable</option>';
   }
@@ -1315,51 +1359,207 @@ async function loadPublishSection() {
       TOP10_COMPETITION_ID = top10 ? top10.id : null;
     } catch (err) { /* handled when the button is used */ }
   }
+  // Seed the editor: an empty banner upload field and the article picker.
+  if (!document.querySelector('#artBannerUpload .img-upload')) {
+    document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '');
+  }
+  artLoadPickList();
 }
 
-document.getElementById('backfillMetaBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('backfillMetaBtn');
-  const note = document.getElementById('backfillMetaNote');
-  btn.disabled = true;
-  note.textContent = 'Working through the archive…';
+// ---------------------------------------------------------------------------
+// Article editor. One form handles both writing a new article and editing an
+// existing one — the difference is only whether an id is loaded, so there's
+// no second near-identical form to keep in step.
+// ---------------------------------------------------------------------------
+let ART_EDITING_ID = null;
+
+function artSectionHtml(index, data) {
+  const d = data || {};
+  return `<div class="art-section" data-index="${index}">
+    <div class="art-section-head">
+      <strong>SECTION ${index + 1}</strong>
+      <button type="button" class="art-section-remove" title="Remove this section" aria-label="Remove section ${index + 1}">🗑</button>
+    </div>
+    <label>Sub heading</label>
+    <input class="art-sec-heading" value="${(d.sub_heading || '').replace(/"/g, '&quot;')}" placeholder="e.g. Why this matters">
+    <label>Paragraph</label>
+    <textarea class="art-sec-para" rows="4" placeholder="Write this part of the story…">${d.paragraph || ''}</textarea>
+    <label>Picture (optional)</label>
+    <div class="art-sec-image">${UnplugUpload.fieldHtml('sectionImage', d.image_url || '')}</div>
+    <label>Note by the picture (optional)</label>
+    <input class="art-sec-note" value="${(d.image_note || '').replace(/"/g, '&quot;')}" placeholder="Caption or credit">
+  </div>`;
+}
+
+function artRenderSections(sections) {
+  const wrap = document.getElementById('artSections');
+  wrap.innerHTML = (sections && sections.length ? sections : []).map((s, i) => artSectionHtml(i, s)).join('');
+  artRenumber();
+}
+
+// Section numbers are positional, so they're recalculated after any add or
+// remove rather than being baked in when the row was created.
+function artRenumber() {
+  document.querySelectorAll('#artSections .art-section').forEach((el, i) => {
+    el.setAttribute('data-index', i);
+    el.querySelector('.art-section-head strong').textContent = `SECTION ${i + 1}`;
+  });
+}
+
+function artCollectSections() {
+  return [...document.querySelectorAll('#artSections .art-section')].map((el) => ({
+    subHeading: el.querySelector('.art-sec-heading').value.trim(),
+    paragraph: el.querySelector('.art-sec-para').value.trim(),
+    imageUrl: UnplugUpload.valueOf(el.querySelector('.art-sec-image')),
+    imageNote: el.querySelector('.art-sec-note').value.trim(),
+  }));
+}
+
+document.getElementById('artAddSection').addEventListener('click', () => {
+  const wrap = document.getElementById('artSections');
+  wrap.insertAdjacentHTML('beforeend', artSectionHtml(wrap.children.length, null));
+  artRenumber();
+});
+
+document.getElementById('artSections').addEventListener('click', (e) => {
+  if (!e.target.closest('.art-section-remove')) return;
+  e.target.closest('.art-section').remove();
+  artRenumber();
+});
+
+// Live character count — the meta description is what shows on a social card,
+// and search engines cut it around 160 characters.
+document.getElementById('artMeta').addEventListener('input', () => {
+  const n = document.getElementById('artMeta').value.length;
+  const el = document.getElementById('artMetaCount');
+  el.textContent = `${n} characters` + (n > 160 ? ' — over 160, social cards will trim this' : '');
+  el.style.color = n > 160 ? 'var(--red)' : 'var(--slate)';
+});
+
+function artShowDerived(a) {
+  const box = document.getElementById('artDerived');
+  box.style.display = '';
+  document.getElementById('artTakeaways').value = (a.key_takeaways || []).join('\n');
+  document.getElementById('artKeywords').value = (a.keywords || []).join(', ');
+  document.getElementById('artTags').value = (a.tags || []).join(', ');
+  const sug = document.getElementById('artSuggestedCat');
+  if (a.suggested_category_id && !a.category_id) {
+    const opt = [...document.getElementById('artCategory').options].find((o) => o.value == a.suggested_category_id);
+    sug.textContent = opt ? `Suggested category: ${opt.textContent} — set it above if that's right.` : '';
+  } else {
+    sug.textContent = '';
+  }
+}
+
+function artReset() {
+  ART_EDITING_ID = null;
+  ['artTitle', 'artSubtitle', 'artSeoTitle', 'artSlug', 'artMeta', 'artKicker', 'artBody', 'artConclusion', 'artCtaLabel', 'artCtaUrl'].forEach((id) => { document.getElementById(id).value = ''; });
+  document.getElementById('artCategory').value = '';
+  document.getElementById('artEmotion').value = '';
+  document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '');
+  artRenderSections([]);
+  document.getElementById('artDerived').style.display = 'none';
+  document.getElementById('artDeleteBtn').style.display = 'none';
+  document.getElementById('artPick').value = '';
+  document.getElementById('artEditorHeading').textContent = 'Write an article';
+  document.getElementById('artSaveBtn').textContent = 'Publish Live';
+  document.getElementById('artNote').textContent = '';
+  document.getElementById('artMetaCount').textContent = '';
+}
+
+document.getElementById('artResetBtn').addEventListener('click', artReset);
+
+async function artLoadPickList() {
+  const sel = document.getElementById('artPick');
   try {
-    const res = await api('/articles/backfill-metadata', { method: 'POST' });
-    note.textContent = res.message;
-    showToast(res.message);
+    const data = await api('/articles?limit=100');
+    sel.innerHTML = '<option value="">— new article —</option>'
+      + (data.articles || []).map((a) => `<option value="${a.id}">${escapeHtmlAdmin(a.title)}</option>`).join('');
+  } catch (err) { /* leave the "new article" option in place */ }
+}
+
+document.getElementById('artLoadBtn').addEventListener('click', async () => {
+  const id = document.getElementById('artPick').value;
+  if (!id) { artReset(); return; }
+  const note = document.getElementById('artNote');
+  note.textContent = 'Loading…';
+  try {
+    const data = await api('/articles/' + id);
+    const a = data.article;
+    ART_EDITING_ID = a.id;
+    document.getElementById('artTitle').value = a.title || '';
+    document.getElementById('artSubtitle').value = a.subtitle || '';
+    document.getElementById('artSeoTitle').value = a.seo_title || '';
+    document.getElementById('artSlug').value = a.slug || '';
+    document.getElementById('artMeta').value = a.meta_description || '';
+    document.getElementById('artKicker').value = a.kicker_supplied_by || '';
+    document.getElementById('artCategory').value = a.category_id || '';
+    document.getElementById('artEmotion').value = a.emotion || '';
+    document.getElementById('artBody').value = a.body || '';
+    document.getElementById('artConclusion').value = a.conclusion || '';
+    document.getElementById('artCtaLabel').value = a.cta_label || '';
+    document.getElementById('artCtaUrl').value = a.cta_url || '';
+    document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', a.banner_image_url || '');
+    artRenderSections(data.sections || []);
+    artShowDerived(a);
+    document.getElementById('artDeleteBtn').style.display = '';
+    document.getElementById('artEditorHeading').textContent = 'Edit article';
+    document.getElementById('artSaveBtn').textContent = 'Save Changes';
+    document.getElementById('artMeta').dispatchEvent(new Event('input'));
+    note.textContent = '';
   } catch (err) {
     note.textContent = '';
     showToast(err.message, true);
-  } finally {
-    btn.disabled = false;
   }
 });
 
-document.getElementById('publishArticleBtn').addEventListener('click', async () => {
-  const title = document.getElementById('pubTitle').value.trim();
-  const body = document.getElementById('pubBody').value.trim();
-  const note = document.getElementById('publishArticleNote');
-  if (!title || !body) { showToast('A headline and story are both required.', true); return; }
-  const btn = document.getElementById('publishArticleBtn');
+document.getElementById('artSaveBtn').addEventListener('click', async () => {
+  const title = document.getElementById('artTitle').value.trim();
+  const body = document.getElementById('artBody').value.trim();
+  const note = document.getElementById('artNote');
+  if (!title || !body) { showToast('A headline and the opening story are both required.', true); return; }
+
+  const payload = {
+    title,
+    body,
+    subtitle: document.getElementById('artSubtitle').value.trim() || null,
+    seoTitle: document.getElementById('artSeoTitle').value.trim() || null,
+    metaDescription: document.getElementById('artMeta').value.trim() || null,
+    categoryId: document.getElementById('artCategory').value || null,
+    kickerSuppliedBy: document.getElementById('artKicker').value.trim() || null,
+    emotion: document.getElementById('artEmotion').value || null,
+    bannerImageUrl: UnplugUpload.valueOf(document.getElementById('artBannerUpload')) || null,
+    conclusion: document.getElementById('artConclusion').value.trim() || null,
+    ctaLabel: document.getElementById('artCtaLabel').value.trim() || null,
+    ctaUrl: document.getElementById('artCtaUrl').value.trim() || null,
+    sections: artCollectSections(),
+  };
+  // Only sent when editing: on a new article these are generated server-side,
+  // and sending empty values would overwrite that with nothing.
+  if (ART_EDITING_ID) {
+    payload.slug = document.getElementById('artSlug').value.trim() || undefined;
+    payload.keyTakeaways = document.getElementById('artTakeaways').value.split('\n').map((s) => s.trim()).filter(Boolean);
+    payload.keywords = document.getElementById('artKeywords').value.split(',').map((s) => s.trim()).filter(Boolean);
+    payload.tags = document.getElementById('artTags').value.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+
+  const btn = document.getElementById('artSaveBtn');
   btn.disabled = true;
-  note.textContent = 'Publishing…';
+  note.textContent = 'Saving…';
   try {
-    const res = await api('/articles', {
-      method: 'POST',
-      body: JSON.stringify({
-        title,
-        body,
-        categoryId: document.getElementById('pubCategory').value || null,
-        kickerSuppliedBy: document.getElementById('pubKicker').value.trim() || null,
-        bannerImageUrl: document.getElementById('pubBanner').value.trim() || null,
-        emotion: document.getElementById('pubEmotion').value || null,
-      }),
-    });
-    showToast(res.message || 'Published.');
-    note.innerHTML = `Live now — <a href="unplug-magazine.html?p=article&id=${res.article.id}" target="_blank" rel="noopener">view it on the site</a>.`;
-    document.getElementById('pubTitle').value = '';
-    document.getElementById('pubBody').value = '';
-    document.getElementById('pubKicker').value = '';
-    document.getElementById('pubBanner').value = '';
+    const res = ART_EDITING_ID
+      ? await api('/articles/' + ART_EDITING_ID, { method: 'PATCH', body: JSON.stringify(payload) })
+      : await api('/articles', { method: 'POST', body: JSON.stringify(payload) });
+    const a = res.article;
+    ART_EDITING_ID = a.id;
+    document.getElementById('artEditorHeading').textContent = 'Edit article';
+    document.getElementById('artSaveBtn').textContent = 'Save Changes';
+    document.getElementById('artDeleteBtn').style.display = '';
+    document.getElementById('artSlug').value = a.slug || '';
+    artShowDerived(a);
+    note.innerHTML = `Live — <a href="unplug-magazine.html?p=article&id=${a.id}" target="_blank" rel="noopener">view it on the site</a>.`;
+    showToast(res.message || 'Saved.');
+    artLoadPickList();
     loadQueueTab('news');
   } catch (err) {
     note.textContent = '';
@@ -1369,76 +1569,18 @@ document.getElementById('publishArticleBtn').addEventListener('click', async () 
   }
 });
 
-// --- Edit a published article ---
-async function loadEditArticleList() {
-  const sel = document.getElementById('editArticleSelect');
-  if (!sel) return;
+document.getElementById('artDeleteBtn').addEventListener('click', async () => {
+  if (!ART_EDITING_ID) return;
+  const title = document.getElementById('artTitle').value.trim();
+  if (!confirm(`Delete "${title}"? This removes the article, its sections and its comments for good.`)) return;
   try {
-    // Fetch every published article (paged, the API caps a page at 100).
-    let page = 1, all = [];
-    for (;;) {
-      const res = await api(`/articles?limit=100&page=${page}`);
-      all = all.concat(res.articles || []);
-      if (page >= (res.pagination?.totalPages || 1) || page >= 10) break;
-      page += 1;
-    }
-    sel.innerHTML = '<option value="">— choose an article —</option>'
-      + all.map((a) => `<option value="${a.id}">#${a.id} — ${escapeHtmlAdmin(a.title)}</option>`).join('');
-  } catch (err) {
-    sel.innerHTML = '<option value="">Articles unavailable</option>';
-  }
-}
-
-document.getElementById('loadArticleBtn').addEventListener('click', async () => {
-  const id = document.getElementById('editArticleSelect').value;
-  const note = document.getElementById('editArticleNote');
-  if (!id) { showToast('Choose an article first.', true); return; }
-  try {
-    const res = await api(`/articles/${id}`);
-    const a = res.article;
-    document.getElementById('editTitle').value = a.title || '';
-    document.getElementById('editCategory').value = a.category_id || '';
-    document.getElementById('editKicker').value = a.kicker_supplied_by || '';
-    document.getElementById('editBanner').value = a.banner_image_url || '';
-    document.getElementById('editEmotion').value = a.emotion || '';
-    document.getElementById('editBody').value = a.body || '';
-    document.getElementById('editArticleFields').style.display = '';
-    note.textContent = '';
+    await api('/articles/' + ART_EDITING_ID, { method: 'DELETE' });
+    showToast('Article deleted.');
+    artReset();
+    artLoadPickList();
+    loadQueueTab('news');
   } catch (err) {
     showToast(err.message, true);
-  }
-});
-
-document.getElementById('saveArticleBtn').addEventListener('click', async () => {
-  const id = document.getElementById('editArticleSelect').value;
-  const title = document.getElementById('editTitle').value.trim();
-  const body = document.getElementById('editBody').value.trim();
-  const note = document.getElementById('editArticleNote');
-  if (!id) { showToast('Choose an article first.', true); return; }
-  if (!title || !body) { showToast('A headline and story are both required.', true); return; }
-  const btn = document.getElementById('saveArticleBtn');
-  btn.disabled = true;
-  note.textContent = 'Saving…';
-  try {
-    await api(`/articles/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        title,
-        body,
-        categoryId: document.getElementById('editCategory').value || null,
-        kickerSuppliedBy: document.getElementById('editKicker').value.trim() || null,
-        bannerImageUrl: document.getElementById('editBanner').value.trim() || null,
-        emotion: document.getElementById('editEmotion').value || null,
-      }),
-    });
-    showToast('Saved — the changes are live.');
-    note.innerHTML = `Saved — <a href="unplug-magazine.html?p=article&id=${id}" target="_blank" rel="noopener">view it on the site</a>.`;
-    loadEditArticleList();
-  } catch (err) {
-    note.textContent = '';
-    showToast(err.message, true);
-  } finally {
-    btn.disabled = false;
   }
 });
 
@@ -1815,18 +1957,20 @@ document.getElementById('addHofBtn').addEventListener('click', async () => {
     name,
     year: document.getElementById('hofYear').value || undefined,
     title: document.getElementById('hofTitle').value.trim() || undefined,
-    photoUrl: document.getElementById('hofPhoto').value.trim() || undefined,
+    photoUrl: UnplugUpload.valueOf(document.getElementById('hofPhotoUpload')) || undefined,
     description: document.getElementById('hofDesc').value.trim() || undefined,
   };
   try {
     await api('/hall-of-fame', { method: 'POST', body: JSON.stringify(payload) });
     showToast('Winner added.');
-    ['hofYear', 'hofName', 'hofTitle', 'hofPhoto', 'hofDesc'].forEach((id) => document.getElementById(id).value = '');
+    ['hofYear', 'hofName', 'hofTitle', 'hofDesc'].forEach((id) => document.getElementById(id).value = '');
+    document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', '');
     loadHallOfFame();
   } catch (err) { showToast(err.message, true); }
 });
 
 async function loadHallOfFame() {
+  if (!document.querySelector("#hofPhotoUpload .img-upload")) document.getElementById("hofPhotoUpload").innerHTML = UnplugUpload.fieldHtml("hofPhoto", "");
   const body = document.getElementById('hofBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {
@@ -1858,13 +2002,13 @@ async function loadSiteSettings() {
   try {
     const data = await api('/admin/settings');
     const yt = (data.settings || []).find((s) => s.key === 'youtube_image_url');
-    document.getElementById('ytImageInput').value = yt ? yt.value : '';
+    document.getElementById('ytImageUpload').innerHTML = UnplugUpload.fieldHtml('ytImage', yt ? yt.value : '');
   } catch (err) {
     showToast(err.message, true);
   }
 }
 document.getElementById('saveYtImageBtn').addEventListener('click', async () => {
-  const value = document.getElementById('ytImageInput').value.trim();
+  const value = UnplugUpload.valueOf(document.getElementById('ytImageUpload'));
   try {
     await api('/admin/settings/youtube_image_url', { method: 'PATCH', body: JSON.stringify({ value }) });
     showToast('Saved.');
