@@ -4998,7 +4998,10 @@ function seoSetUrl(query){
 }
 function seoSetDescription(text){
   if (!text) return;
-  const value = text.slice(0, 300);
+  // Collapse whitespace before trimming: stripped HTML leaves runs of blank
+  // lines, and those render as ugly gaps in a social card preview.
+  const value = String(text).replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (!value) return;
   // Search engines read name="description"; Facebook, WhatsApp and LinkedIn
   // read og:description, and X reads twitter:description. Setting only the
   // first — as this did — meant a shared article showed the site's generic
@@ -5018,7 +5021,13 @@ function seoSetDescription(text){
 // has no image of its own, so a share is never left with a blank card.
 const SEO_DEFAULT_IMAGE = 'https://www.unplugnews.com/social-banner.jpg';
 function seoSetImage(url){
-  const value = url || SEO_DEFAULT_IMAGE;
+  // Social platforms fetch og:image from their own servers, so a relative
+  // path resolves against nothing and the card comes out blank. Many of our
+  // imported images are stored as site-relative paths, so make it absolute.
+  let value = url || SEO_DEFAULT_IMAGE;
+  if (value && !/^https?:\/\//i.test(value)) {
+    value = 'https://www.unplugnews.com' + (value.startsWith('/') ? '' : '/') + value;
+  }
   ['meta[property="og:image"]', 'meta[name="twitter:image"]'].forEach((sel) => {
     const el = document.querySelector(sel);
     if (el) el.setAttribute('content', value);
