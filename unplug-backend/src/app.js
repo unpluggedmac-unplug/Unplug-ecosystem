@@ -75,6 +75,7 @@ app.use('/uploads', uploadRoutes);
 // POST / route registered just above it.
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/agreements', agreementRoutes);
+app.use('/admin/content', require('./routes/adminContent'));
 app.use('/admin/bulk-email', bulkEmailRoutes);
 app.use('/editions', editionRoutes);
 app.use('/analytics', analyticsRoutes);

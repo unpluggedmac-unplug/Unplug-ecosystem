@@ -166,6 +166,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   <div class="sidebar">
     <div class="brand">Unplug Admin</div>
     <a class="active" data-section="queue">Approval Queue</a>
+    <a data-section="manage">Manage Content</a>
     <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="edcal">Editions Calendar</a>
     <a data-section="deafjobs">Deaf Jobs <span id="deafJobsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
@@ -225,6 +226,50 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel">
         <div class="panel-head"><h3>This Month</h3></div>
         <div class="panel-body" id="birthdaysBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- MANAGE CONTENT -->
+    <div class="admin-section" id="section-manage">
+      <div class="main-head"><div><h1>Manage Content</h1><p>The Approval Queue only shows what's waiting. This shows everything, whatever its status — so you can find something already approved, fix a mistake in it, or take it down. Deleting is permanent; rejecting only hides it.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Browse</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Content type</label>
+              <select id="manageResource">
+                <option value="articles">Articles</option>
+                <option value="events">Events</option>
+                <option value="profiles">Directory profiles</option>
+                <option value="gallery">Gallery images</option>
+                <option value="investors">Investor profiles</option>
+                <option value="marketplace">Marketplace listings</option>
+                <option value="highlights">Highlights</option>
+                <option value="entries">Competition entries</option>
+                <option value="top10-entries">Top 10 entries</option>
+                <option value="edcal">Editions calendar (Save the Dates)</option>
+              </select>
+            </div>
+            <div><label>Status</label>
+              <select id="manageStatus">
+                <option value="">All</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="awaiting_payment">Awaiting payment</option>
+              </select>
+            </div>
+            <div style="display:flex; align-items:flex-end;"><button class="btn btn-solid" style="width:100%;" id="manageLoadBtn">Load</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 id="manageListTitle">Items</h3></div>
+        <div class="panel-body" id="manageBody" style="padding:0;"></div>
+      </div>
+      <div class="panel" id="manageEditPanel" style="display:none;">
+        <div class="panel-head"><h3 id="manageEditTitle">Edit</h3></div>
+        <div class="panel-body" id="manageEditBody"></div>
       </div>
     </div>
 
@@ -904,6 +949,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     document.querySelectorAll('.admin-section').forEach((s) => s.classList.remove('active'));
     const section = link.dataset.section;
     document.getElementById('section-' + section).classList.add('active');
+    if (section === 'manage') loadManageContent();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'edcal') loadEdcalDates();
     if (section === 'deafjobs') loadDeafJobs();
@@ -1958,6 +2004,131 @@ async function loadBirthdays() {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Manage Content — list / edit / delete any content type, at any status
+// ---------------------------------------------------------------------------
+// The columns shown are whatever the row actually has, minus the noisy ones.
+// Driving the table off the data rather than a per-type column list means a
+// new field added to a table shows up here without this file changing.
+const MANAGE_HIDE_COLUMNS = ['id', 'user_id', 'owner_id', 'profile_id', 'advertiser_id',
+  'competition_id', 'category_id', 'target_id', 'author_user_id', 'organizer_user_id'];
+
+// Which fields the server will accept edits for, from the last load.
+let manageEditable = [];
+
+function manageCellText(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  const str = String(value);
+  // Dates arrive as ISO strings; show them the way a person reads them.
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return new Date(str).toLocaleDateString();
+  return str.length > 90 ? str.slice(0, 90) + '…' : str;
+}
+
+async function loadManageContent() {
+  const resource = document.getElementById('manageResource').value;
+  const status = document.getElementById('manageStatus').value;
+  const body = document.getElementById('manageBody');
+  document.getElementById('manageEditPanel').style.display = 'none';
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+
+  try {
+    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+    const data = await api(`/admin/content/${resource}${query}`);
+    manageEditable = data.editable || [];
+    const items = data.items || [];
+    document.getElementById('manageListTitle').textContent = `Items (${items.length})`;
+    if (items.length === 0) {
+      body.innerHTML = '<div class="empty-state">Nothing here.</div>';
+      return;
+    }
+
+    const columns = Object.keys(items[0]).filter((c) => !MANAGE_HIDE_COLUMNS.includes(c));
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = columns.map((c) => `<th>${escapeHtmlAdmin(c.replace(/_/g, ' '))}</th>`).join('') + '<th></th>';
+    table.appendChild(head);
+
+    items.forEach((item) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = columns.map((c) => `<td>${escapeHtmlAdmin(manageCellText(item[c]))}</td>`).join('')
+        + `<td><div class="row-actions">${manageEditable.length ? '<button class="approve">Edit</button>' : ''}<button class="reject">Delete</button></div></td>`;
+      const editBtn = tr.querySelector('.approve');
+      if (editBtn) editBtn.addEventListener('click', () => openManageEditor(resource, item));
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        if (!confirm('Delete this permanently? This cannot be undone. To hide it instead, reject it from the Approval Queue.')) return;
+        try {
+          await api(`/admin/content/${resource}/${item.id}`, { method: 'DELETE' });
+          showToast('Deleted.');
+          loadManageContent();
+        } catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// Only the fields the server said it will accept get an input, so the form
+// can't offer an edit that would be silently discarded.
+function openManageEditor(resource, item) {
+  const panel = document.getElementById('manageEditPanel');
+  const body = document.getElementById('manageEditBody');
+  document.getElementById('manageEditTitle').textContent = `Edit #${item.id}`;
+  panel.style.display = 'block';
+
+  body.innerHTML = '';
+  const inputs = {};
+  manageEditable.forEach((field) => {
+    const wrap = document.createElement('div');
+    wrap.style.marginBottom = '12px';
+    const label = document.createElement('label');
+    label.textContent = field.replace(/_/g, ' ');
+    // Long-form fields get a textarea; a one-line input for a body of text is
+    // unusable for the person who has to fix a typo in the middle of it.
+    const isLong = ['body', 'bio', 'description', 'achievements', 'career', 'quote'].includes(field);
+    const input = document.createElement(isLong ? 'textarea' : 'input');
+    if (isLong) input.rows = 6;
+    if (/_date$|^event_date$|_from$|_to$/.test(field)) input.type = 'date';
+    const value = item[field];
+    input.value = value == null ? ''
+      : (input.type === 'date' && /^\d{4}-\d{2}-\d{2}/.test(String(value)) ? String(value).slice(0, 10) : String(value));
+    input.style.width = '100%';
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    body.appendChild(wrap);
+    inputs[field] = input;
+  });
+
+  const save = document.createElement('button');
+  save.className = 'btn btn-solid';
+  save.textContent = 'Save changes';
+  save.addEventListener('click', async () => {
+    const payload = {};
+    Object.keys(inputs).forEach((f) => { payload[f] = inputs[f].value; });
+    save.disabled = true;
+    try {
+      await api(`/admin/content/${resource}/${item.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      showToast('Saved.');
+      panel.style.display = 'none';
+      loadManageContent();
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      save.disabled = false;
+    }
+  });
+  body.appendChild(save);
+}
+
+document.getElementById('manageLoadBtn').addEventListener('click', loadManageContent);
+document.getElementById('manageResource').addEventListener('change', loadManageContent);
+document.getElementById('manageStatus').addEventListener('change', loadManageContent);
 
 // ---------------------------------------------------------------------------
 // Shoutout nominations — approve/reject public suggestions for "The Guy Says"
