@@ -504,6 +504,20 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
           <div style="margin-top:14px;"><label>Opening / main story</label>
             <textarea id="artBody" rows="8" style="width:100%;" placeholder="Write the opening of the story here."></textarea>
+            <label style="margin-top:8px;"><input type="checkbox" id="artPlainText" style="width:auto; margin-right:6px;">Plain text — turn my line breaks into paragraphs (leave off if you're pasting HTML)</label>
+          </div>
+
+          <div class="form-row" style="margin-top:14px;">
+            <div style="grid-column:1/-1;"><label>More images (up to 5, besides the main image)</label>
+              <div id="artGallery"></div>
+              <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="artAddImage">+ Add another image</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-1;"><label>Links (social media or anything else)</label>
+              <div id="artLinks"></div>
+              <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="artAddLink">+ Add a link</button>
+            </div>
           </div>
 
           <div style="display:flex; align-items:center; justify-content:space-between; margin:20px 0 8px;">
@@ -1415,6 +1429,60 @@ function artCollectSections() {
   }));
 }
 
+// Gallery and links, same shape as the member form so an article behaves the
+// same whoever wrote it.
+const ART_MAX_GALLERY = 5;
+
+function artAddGallerySlot(value) {
+  const wrap = document.getElementById('artGallery');
+  if (wrap.children.length >= ART_MAX_GALLERY) {
+    showToast(`Up to ${ART_MAX_GALLERY} images besides the main image.`, true);
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'art-gallery-row';
+  row.style.cssText = 'display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;';
+  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', value || '')}</div>`;
+  const remove = document.createElement('button');
+  remove.type = 'button'; remove.className = 'btn btn-line';
+  remove.style.cssText = 'width:auto; padding:6px 12px;'; remove.textContent = '×';
+  remove.addEventListener('click', () => row.remove());
+  row.appendChild(remove);
+  wrap.appendChild(row);
+}
+
+function artAddLinkRow(link) {
+  const wrap = document.getElementById('artLinks');
+  const row = document.createElement('div');
+  row.className = 'art-link-row';
+  row.style.cssText = 'display:flex; gap:8px; margin-bottom:8px;';
+  row.innerHTML = `<input class="art-link-label" placeholder="Label, e.g. Instagram" style="flex:1;" value="${escapeHtmlAdmin((link && link.label) || '')}">
+    <input class="art-link-url" placeholder="https://…" style="flex:2;" value="${escapeHtmlAdmin((link && link.url) || '')}">`;
+  const remove = document.createElement('button');
+  remove.type = 'button'; remove.className = 'btn btn-line';
+  remove.style.cssText = 'width:auto; padding:6px 12px;'; remove.textContent = '×';
+  remove.addEventListener('click', () => row.remove());
+  row.appendChild(remove);
+  wrap.appendChild(row);
+}
+
+function artCollectGallery() {
+  return [...document.querySelectorAll('#artGallery .art-gallery-row')]
+    .map((r) => UnplugUpload.valueOf(r)).filter(Boolean);
+}
+
+function artCollectLinks() {
+  return [...document.querySelectorAll('#artLinks .art-link-row')]
+    .map((r) => ({
+      label: r.querySelector('.art-link-label').value.trim(),
+      url: r.querySelector('.art-link-url').value.trim(),
+    }))
+    .filter((l) => l.url);
+}
+
+document.getElementById('artAddImage').addEventListener('click', () => artAddGallerySlot());
+document.getElementById('artAddLink').addEventListener('click', () => artAddLinkRow());
+
 document.getElementById('artAddSection').addEventListener('click', () => {
   const wrap = document.getElementById('artSections');
   wrap.insertAdjacentHTML('beforeend', artSectionHtml(wrap.children.length, null));
@@ -1458,6 +1526,9 @@ function artReset() {
   document.getElementById('artEmotion').value = '';
   document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '');
   artRenderSections([]);
+  document.getElementById("artGallery").innerHTML = "";
+  document.getElementById("artLinks").innerHTML = "";
+  document.getElementById("artPlainText").checked = false;
   document.getElementById('artDerived').style.display = 'none';
   document.getElementById('artDeleteBtn').style.display = 'none';
   document.getElementById('artPick').value = '';
@@ -1501,6 +1572,11 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     document.getElementById('artCtaUrl').value = a.cta_url || '';
     document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', a.banner_image_url || '');
     artRenderSections(data.sections || []);
+    document.getElementById("artGallery").innerHTML = "";
+    (a.gallery_images || []).forEach((url) => artAddGallerySlot(url));
+    document.getElementById("artLinks").innerHTML = "";
+    (a.links || []).forEach((l) => artAddLinkRow(l));
+    document.getElementById("artPlainText").checked = a.body_format === "text";
     artShowDerived(a);
     document.getElementById('artDeleteBtn').style.display = '';
     document.getElementById('artEditorHeading').textContent = 'Edit article';
@@ -1533,6 +1609,9 @@ document.getElementById('artSaveBtn').addEventListener('click', async () => {
     ctaLabel: document.getElementById('artCtaLabel').value.trim() || null,
     ctaUrl: document.getElementById('artCtaUrl').value.trim() || null,
     sections: artCollectSections(),
+    galleryImages: artCollectGallery(),
+    links: artCollectLinks(),
+    bodyFormat: document.getElementById("artPlainText").checked ? "text" : "html",
   };
   // Only sent when editing: on a new article these are generated server-side,
   // and sending empty values would overwrite that with nothing.
