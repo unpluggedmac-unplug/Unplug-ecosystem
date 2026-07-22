@@ -42,6 +42,29 @@ async function replaceSections(client, articleId, sections) {
   return clean.length;
 }
 
+const MAX_GALLERY_IMAGES = 5;
+
+// Normalises the gallery to at most five non-empty URLs.
+function cleanGallery(images) {
+  if (!Array.isArray(images)) return null;
+  return images.map((u) => String(u || '').trim()).filter(Boolean).slice(0, MAX_GALLERY_IMAGES);
+}
+
+// Normalises links to [{label, url}]. Anything without a URL is dropped —
+// a labelled link that goes nowhere is worse than no link. Only http(s) is
+// accepted: a javascript: URL here would run in every reader's browser.
+function cleanLinks(links) {
+  if (!Array.isArray(links)) return null;
+  return links
+    .map((l) => ({
+      label: String((l && l.label) || '').trim().slice(0, 80),
+      url: String((l && l.url) || '').trim(),
+    }))
+    .filter((l) => l.url && /^https?:\/\//i.test(l.url))
+    .map((l) => ({ label: l.label || l.url.replace(/^https?:\/\//i, '').split('/')[0], url: l.url }))
+    .slice(0, 12);
+}
+
 async function loadSections(articleId) {
   const result = await pool.query(
     `SELECT id, position, sub_heading, paragraph, image_url, image_note
@@ -146,12 +169,16 @@ router.post('/', requireAuth, async (req, res, next) => {
     const {
       title, body, categoryId, kickerSuppliedBy, bannerImageUrl, emotion,
       seoTitle, subtitle, metaDescription, conclusion, ctaLabel, ctaUrl, sections,
+      galleryImages, links, bodyFormat,
     } = req.body;
     if (!title || !body) {
       return res.status(400).json({ error: 'title and body are required.' });
     }
     if (emotion && !ALLOWED_EMOTIONS.includes(emotion)) {
       return res.status(400).json({ error: 'emotion must be one of: ' + ALLOWED_EMOTIONS.join(', ') + '.' });
+    }
+    if (Array.isArray(galleryImages) && galleryImages.filter(Boolean).length > MAX_GALLERY_IMAGES) {
+      return res.status(400).json({ error: `You can add up to ${MAX_GALLERY_IMAGES} images besides the cover image.` });
     }
 
     // Derive the metadata from what was actually submitted, sections
@@ -185,8 +212,9 @@ router.post('/', requireAuth, async (req, res, next) => {
       `INSERT INTO articles
         (author_user_id, category_id, title, body, kicker_supplied_by, banner_image_url, emotion,
          status, published_at, seo_title, subtitle, meta_description, conclusion, cta_label, cta_url,
-         slug, key_takeaways, keywords, tags, suggested_category_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         slug, key_takeaways, keywords, tags, suggested_category_id,
+         gallery_images, links, body_format)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        RETURNING *`,
       [
         req.user.id, categoryId || null, title, body, kickerSuppliedBy || null,
@@ -202,6 +230,9 @@ router.post('/', requireAuth, async (req, res, next) => {
         (ctaUrl || '').trim() || null,
         slug, derived.keyTakeaways, derived.keywords, derived.tags,
         categoryId ? null : derived.suggestedCategoryId,
+        cleanGallery(galleryImages),
+        JSON.stringify(cleanLinks(links) || []),
+        bodyFormat === 'text' ? 'text' : 'html',
       ]
     );
     const article = result.rows[0];
@@ -270,6 +301,21 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
     if (Array.isArray(keyTakeaways)) { values.push(keyTakeaways.filter(Boolean)); setClauses.push(`key_takeaways = $${values.length}`); }
     if (Array.isArray(keywords)) { values.push(keywords.filter(Boolean)); setClauses.push(`keywords = $${values.length}`); }
     if (Array.isArray(tags)) { values.push(tags.filter(Boolean)); setClauses.push(`tags = $${values.length}`); }
+    if (req.body.galleryImages !== undefined) {
+      const cleaned = cleanGallery(req.body.galleryImages);
+      if (Array.isArray(req.body.galleryImages) && req.body.galleryImages.filter(Boolean).length > MAX_GALLERY_IMAGES) {
+        return res.status(400).json({ error: `You can add up to ${MAX_GALLERY_IMAGES} images besides the cover image.` });
+      }
+      values.push(cleaned); setClauses.push(`gallery_images = $${values.length}`);
+    }
+    if (req.body.links !== undefined) {
+      values.push(JSON.stringify(cleanLinks(req.body.links) || []));
+      setClauses.push(`links = $${values.length}`);
+    }
+    if (req.body.bodyFormat !== undefined) {
+      values.push(req.body.bodyFormat === 'text' ? 'text' : 'html');
+      setClauses.push(`body_format = $${values.length}`);
+    }
     if (slug !== undefined && String(slug).trim()) {
       values.push(await uniqueSlug(slugify(slug), Number(req.params.id)));
       setClauses.push(`slug = $${values.length}`);
