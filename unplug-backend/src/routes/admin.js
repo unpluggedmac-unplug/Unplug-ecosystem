@@ -56,8 +56,26 @@ router.get('/vouchers', requireRole('admin'), async (req, res, next) => {
 router.post('/vouchers', requireRole('admin'), async (req, res, next) => {
   try {
     const { code, discountType, discountValue, serviceRestriction, expiresAt } = req.body;
-    if (!code || !discountType || !discountValue || !expiresAt) {
-      return res.status(400).json({ error: 'code, discountType, discountValue, and expiresAt are all required.' });
+    if (!discountType || !discountValue || !expiresAt) {
+      return res.status(400).json({ error: 'discountType, discountValue and expiresAt are all required.' });
+    }
+    // Codes are generated unless one is supplied. Hand-typed codes tend to
+    // collide or get guessed; these are random and skip characters that are
+    // easy to misread aloud or in print (0/O, 1/I).
+    let finalCode = (code || '').toUpperCase().trim();
+    if (!finalCode) {
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      for (let attempt = 0; attempt < 20 && !finalCode; attempt += 1) {
+        let candidate = 'UNP-';
+        for (let i = 0; i < 6; i += 1) {
+          candidate += alphabet[Math.floor(Math.random() * alphabet.length)];
+        }
+        const clash = await pool.query('SELECT 1 FROM vouchers WHERE code = $1', [candidate]);
+        if (clash.rowCount === 0) finalCode = candidate;
+      }
+      if (!finalCode) {
+        return res.status(500).json({ error: 'Could not generate a unique voucher code. Please try again.' });
+      }
     }
     if (!['percent', 'fixed'].includes(discountType)) {
       return res.status(400).json({ error: 'discountType must be "percent" or "fixed".' });
@@ -65,7 +83,7 @@ router.post('/vouchers', requireRole('admin'), async (req, res, next) => {
     const result = await pool.query(
       `INSERT INTO vouchers (code, discount_type, discount_value, service_restriction, expires_at, created_by)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [code.toUpperCase().trim(), discountType, discountValue, serviceRestriction || null, expiresAt, req.user.id]
+      [finalCode, discountType, discountValue, serviceRestriction || null, expiresAt, req.user.id]
     );
     await logActivity(req.user.id, 'voucher_created', `Voucher ${result.rows[0].code} — ${discountType} ${discountValue}`);
     res.status(201).json({ voucher: result.rows[0] });

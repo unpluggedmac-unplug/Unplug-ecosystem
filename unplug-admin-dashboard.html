@@ -611,7 +611,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="main-head"><div><h1>Vouchers</h1><p>Create and manage voucher codes members can redeem at checkout.</p></div></div>
       <div class="panel" style="padding:20px;">
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:20px;">
-          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Code</label><input id="voucherCodeInput" placeholder="e.g. UNPLUG2026" style="padding:8px;"></div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Code <span style="color:var(--slate);">(leave blank to generate)</span></label><input id="voucherCodeInput" placeholder="auto-generated" style="padding:8px;"></div>
           <div><label style="display:block; font-size:12px; margin-bottom:4px;">Discount Type</label>
             <select id="voucherDiscountType" style="padding:8px;">
               <option value="percent">Percent (%)</option>
@@ -1950,6 +1950,9 @@ async function loadEdcalDates() {
 // ---------------------------------------------------------------------------
 // Hall of Fame — past competition winners
 // ---------------------------------------------------------------------------
+// Null when adding, an id when the form was loaded from an existing entry.
+let HOF_EDITING_ID = null;
+
 document.getElementById('addHofBtn').addEventListener('click', async () => {
   const name = document.getElementById('hofName').value.trim();
   if (!name) { showToast('Name is required.', true); return; }
@@ -1961,8 +1964,15 @@ document.getElementById('addHofBtn').addEventListener('click', async () => {
     description: document.getElementById('hofDesc').value.trim() || undefined,
   };
   try {
-    await api('/hall-of-fame', { method: 'POST', body: JSON.stringify(payload) });
-    showToast('Winner added.');
+    if (HOF_EDITING_ID) {
+      await api(`/hall-of-fame/${HOF_EDITING_ID}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      showToast('Changes saved.');
+    } else {
+      await api('/hall-of-fame', { method: 'POST', body: JSON.stringify(payload) });
+      showToast('Winner added.');
+    }
+    HOF_EDITING_ID = null;
+    document.getElementById('addHofBtn').textContent = 'Add Winner';
     ['hofYear', 'hofName', 'hofTitle', 'hofDesc'].forEach((id) => document.getElementById(id).value = '');
     document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', '');
     loadHallOfFame();
@@ -1978,12 +1988,27 @@ async function loadHallOfFame() {
     const winners = data.winners || [];
     if (winners.length === 0) { body.innerHTML = '<div class="empty-state">No winners added yet.</div>'; return; }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Year</th><th>Name</th><th>Title</th><th></th></tr>';
+    table.innerHTML = '<tr><th>Photo</th><th>Year</th><th>Name</th><th>Title</th><th></th></tr>';
     winners.forEach((w) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${w.year || '—'}</td><td>${escapeHtmlAdmin(w.name)}</td><td>${escapeHtmlAdmin(w.title || '—')}</td>`
-        + `<td><div class="row-actions"><button class="reject">Remove</button></div></td>`;
+      tr.innerHTML = `<td>${w.photo_url ? `<img src="${escapeHtmlAdmin(w.photo_url)}" alt="" style="width:44px;height:44px;object-fit:cover;">` : '—'}</td>`
+        + `<td>${w.year || '—'}</td><td>${escapeHtmlAdmin(w.name)}</td><td>${escapeHtmlAdmin(w.title || '—')}</td>`
+        + `<td><div class="row-actions"><button class="approve">Edit</button><button class="reject">Delete</button></div></td>`;
+      // Editing loads the entry back into the form above, so a typo can be
+      // corrected without deleting and retyping the whole record.
+      tr.querySelector('.approve').addEventListener('click', () => {
+        document.getElementById('hofYear').value = w.year || '';
+        document.getElementById('hofName').value = w.name || '';
+        document.getElementById('hofTitle').value = w.title || '';
+        document.getElementById('hofDesc').value = w.description || '';
+        document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', w.photo_url || '');
+        HOF_EDITING_ID = w.id;
+        document.getElementById('addHofBtn').textContent = 'Save Changes';
+        showToast('Loaded for editing — change what you need and save.');
+        document.getElementById('hofName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
       tr.querySelector('.reject').addEventListener('click', async () => {
+        if (!confirm(`Delete "${w.name}" from the Hall of Fame?`)) return;
         try { await api(`/hall-of-fame/${w.id}`, { method: 'DELETE' }); showToast('Removed.'); loadHallOfFame(); }
         catch (err) { showToast(err.message, true); }
       });
@@ -2484,18 +2509,21 @@ document.getElementById('createVoucherBtn').addEventListener('click', async () =
   const serviceRestriction = document.getElementById('voucherServiceRestriction').value;
   const expiresAt = document.getElementById('voucherExpiresAt').value;
 
-  if (!code || !discountValue || !expiresAt) {
-    errorEl.textContent = 'Code, discount value, and expiry date are all required.';
+  // Code is optional now — the server generates a unique one when it's blank.
+  if (!discountValue || !expiresAt) {
+    errorEl.textContent = 'Discount value and expiry date are both required.';
     errorEl.style.display = 'block';
     return;
   }
 
   try {
-    await api('/admin/vouchers', {
+    const res = await api('/admin/vouchers', {
       method: 'POST',
-      body: JSON.stringify({ code, discountType, discountValue, serviceRestriction: serviceRestriction || null, expiresAt }),
+      body: JSON.stringify({ code: code || null, discountType, discountValue, serviceRestriction: serviceRestriction || null, expiresAt }),
     });
-    showToast('Voucher created.');
+    // Show the generated code — otherwise an admin who left the field blank
+    // has no idea what to give the customer without hunting the list.
+    showToast(`Voucher created: ${res.voucher.code}`);
     document.getElementById('voucherCodeInput').value = '';
     document.getElementById('voucherDiscountValue').value = '';
     document.getElementById('voucherExpiresAt').value = '';

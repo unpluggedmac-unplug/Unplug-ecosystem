@@ -396,6 +396,35 @@ router.post('/hall-of-fame', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// PATCH /hall-of-fame/:id — admin edits a winner. Previously the only way to
+// correct a typo was to delete the entry and retype it, which loses the row.
+router.patch('/hall-of-fame/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const map = { year: 'year', name: 'name', title: 'title', photoUrl: 'photo_url', description: 'description' };
+    const sets = [];
+    const values = [];
+    for (const [bodyKey, column] of Object.entries(map)) {
+      if (req.body[bodyKey] !== undefined) {
+        const raw = req.body[bodyKey];
+        values.push(bodyKey === 'year'
+          ? (raw ? parseInt(raw, 10) : null)
+          : (String(raw || '').trim() || null));
+        sets.push(`${column} = $${values.length}`);
+      }
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+    values.push(req.params.id);
+    const result = await pool.query(
+      `UPDATE hall_of_fame SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'That entry no longer exists.' });
+    res.json({ winner: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /hall-of-fame/:id — admin removes a winner.
 router.delete('/hall-of-fame/:id', requireRole('admin'), async (req, res, next) => {
   try {
