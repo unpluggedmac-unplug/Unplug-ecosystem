@@ -56,15 +56,28 @@ router.post('/register', registerLimiter, async (req, res, next) => {
        VALUES ($1, $2, now() + interval '15 minutes')`,
       [user.id, code]
     );
-    await sendEmail({
-      to: email,
-      subject: 'Verify your Unplug account',
-      text: `Welcome to Unplug! Your verification code is: ${code}\n\nThis code expires in 15 minutes.`,
-    });
+    // The account already exists at this point, so a send failure must not
+    // fail the request: the caller would see an error, try again, and be told
+    // the email is already registered — stuck with an account they can't
+    // verify. Report it honestly in the message instead.
+    let emailSent = true;
+    try {
+      await sendEmail({
+        to: email,
+        subject: 'Verify your Unplug account',
+        text: `Welcome to Unplug! Your verification code is: ${code}\n\nThis code expires in 15 minutes.`,
+      });
+    } catch (mailErr) {
+      emailSent = false;
+      console.error('[auth] signup verification email failed to send:', mailErr.message);
+    }
 
     res.status(201).json({
       user,
-      message: 'Account created. Check your email for a 6-digit verification code, then call POST /auth/verify-email to activate your account.',
+      emailSent,
+      message: emailSent
+        ? 'Account created. Check your email for a 6-digit verification code, then call POST /auth/verify-email to activate your account.'
+        : 'Account created, but we could not send your verification email just now. Use "Resend code" in a moment, or contact us if it keeps failing.',
     });
   } catch (err) {
     next(err);
@@ -127,7 +140,13 @@ router.post('/resend-verification', emailActionLimiter, async (req, res, next) =
          VALUES ($1, $2, now() + interval '15 minutes')`,
         [userResult.rows[0].id, code]
       );
-      await sendEmail({ to: email, subject: 'Your new Unplug verification code', text: `Your verification code is: ${code}\n\nThis code expires in 15 minutes.` });
+      // Best-effort: a send failure must not turn the generic response above
+      // into a 500, which would confirm the account exists.
+      try {
+        await sendEmail({ to: email, subject: 'Your new Unplug verification code', text: `Your verification code is: ${code}\n\nThis code expires in 15 minutes.` });
+      } catch (mailErr) {
+        console.error('[auth] verification email failed to send:', mailErr.message);
+      }
     }
     res.json({ message: 'If that account needs verifying, a new code has been sent.' });
   } catch (err) {
@@ -215,13 +234,21 @@ router.post('/magic-link/request', emailActionLimiter, async (req, res, next) =>
             [user.id, token]
           );
           const link = `${SITE_URL}/unplug-member-dashboard.html?magic=${token}`;
-          await sendEmail({
-            to: user.email,
-            subject: 'Your Unplug sign-in link',
-            text: `Here's your sign-in link for Unplug:\n\n${link}\n\n`
-              + `It works once and expires in 15 minutes.\n\n`
-              + `If you didn't ask to sign in, you can ignore this email — nobody can access your account without this link.`,
-          });
+          // Best-effort: a delivery failure must not change the response.
+          // If it did, an error for real accounts and a success for unknown
+          // ones would reveal exactly which addresses are registered — the
+          // enumeration this endpoint's generic message exists to prevent.
+          try {
+            await sendEmail({
+              to: user.email,
+              subject: 'Your Unplug sign-in link',
+              text: `Here's your sign-in link for Unplug:\n\n${link}\n\n`
+                + `It works once and expires in 15 minutes.\n\n`
+                + `If you didn't ask to sign in, you can ignore this email — nobody can access your account without this link.`,
+            });
+          } catch (mailErr) {
+            console.error('[auth] magic link email failed to send:', mailErr.message);
+          }
         }
       }
     }
@@ -291,11 +318,18 @@ router.post('/forgot-password', emailActionLimiter, async (req, res, next) => {
          VALUES ($1, $2, now() + interval '1 hour')`,
         [user.id, token]
       );
-      await sendEmail({
-        to: destination,
-        subject: 'Reset your Unplug password',
-        text: `Someone requested a password reset for your Unplug account.\n\nYour reset code is: ${token}\n\nThis expires in 1 hour. If you didn't request this, you can ignore this email.`,
-      });
+      // Best-effort, for the same reason as the magic link above: if a send
+      // failure bubbled up, real accounts would 500 while unknown ones got a
+      // cheerful success, revealing which addresses are registered.
+      try {
+        await sendEmail({
+          to: destination,
+          subject: 'Reset your Unplug password',
+          text: `Someone requested a password reset for your Unplug account.\n\nYour reset code is: ${token}\n\nThis expires in 1 hour. If you didn't request this, you can ignore this email.`,
+        });
+      } catch (mailErr) {
+        console.error('[auth] password reset email failed to send:', mailErr.message);
+      }
     }
 
     res.json({ message: 'If that account exists, a reset link has been sent.' });
