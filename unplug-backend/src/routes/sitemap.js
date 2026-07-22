@@ -23,6 +23,7 @@ const STATIC_PAGES = [
   { path: '/unplug-magazine.html?p=contact', freq: 'monthly', priority: '0.5' },
   { path: '/unplug-magazine.html?p=privacy', freq: 'yearly', priority: '0.3' },
   { path: '/unplug-magazine.html?p=terms', freq: 'yearly', priority: '0.3' },
+  { path: '/unplug-magazine.html?p=refunds', freq: 'yearly', priority: '0.3' },
 ];
 
 // & < > etc. must be escaped inside XML or the whole document fails to parse

@@ -494,12 +494,40 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
                 <option value="home.goodnews.title">Home — "The good news desk" heading</option>
                 <option value="directory.title">Directory — main heading</option>
                 <option value="directory.packages.title">Directory — "Directory Packages" heading</option>
+                <option value="refunds.heading">Refund Policy — page heading</option>
+                <option value="refunds.updated">Refund Policy — "Last updated" line</option>
+                <option value="refunds.lede">Refund Policy — opening summary</option>
+                <option value="refunds.s1.title">Refund Policy — 1. What you are paying for (heading)</option>
+                <option value="refunds.s1.body">Refund Policy — 1. What you are paying for (text)</option>
+                <option value="refunds.s2.title">Refund Policy — 2. We review before we publish (heading)</option>
+                <option value="refunds.s2.body">Refund Policy — 2. We review before we publish (text)</option>
+                <option value="refunds.s3.title">Refund Policy — 3. If we decline your paid submission (heading)</option>
+                <option value="refunds.s3.body">Refund Policy — 3. If we decline your paid submission (text)</option>
+                <option value="refunds.s4.title">Refund Policy — 4. If you cancel before active (heading)</option>
+                <option value="refunds.s4.body">Refund Policy — 4. If you cancel before active (text)</option>
+                <option value="refunds.s5.title">Refund Policy — 5. Once a service is active (heading)</option>
+                <option value="refunds.s5.body">Refund Policy — 5. Once a service is active (text)</option>
+                <option value="refunds.s6.title">Refund Policy — 6. Using your credit (heading)</option>
+                <option value="refunds.s6.body">Refund Policy — 6. Using your credit (text)</option>
+                <option value="refunds.s7.title">Refund Policy — 7. If we cannot deliver (heading)</option>
+                <option value="refunds.s7.body">Refund Policy — 7. If we cannot deliver (text)</option>
+                <option value="refunds.s8.title">Refund Policy — 8. Duplicate payments (heading)</option>
+                <option value="refunds.s8.body">Refund Policy — 8. Duplicate payments (text)</option>
+                <option value="refunds.s9.title">Refund Policy — 9. How to cancel (heading)</option>
+                <option value="refunds.s9.body">Refund Policy — 9. How to cancel (text)</option>
+                <option value="refunds.s10.title">Refund Policy — 10. Your rights under SA law (heading)</option>
+                <option value="refunds.s10.body">Refund Policy — 10. Your rights under SA law (text)</option>
+                <option value="refunds.s11.title">Refund Policy — 11. Contact (heading)</option>
+                <option value="refunds.s11.body">Refund Policy — 11. Contact (text)</option>
               </select>
             </div>
             <div><label>&nbsp;</label><button class="btn btn-solid" style="width:100%;" id="cmsSaveContentBtn">Save</button></div>
           </div>
           <div class="form-row">
-            <div style="grid-column:1/-1;"><label>New wording</label><input id="cmsContentValue" placeholder="Leave empty to restore the original"></div>
+            <!-- A textarea, not a single-line input: policy paragraphs run to
+                 several sentences and a one-line box makes fixing a word in
+                 the middle of one genuinely painful. -->
+            <div style="grid-column:1/-1;"><label>New wording</label><textarea id="cmsContentValue" rows="5" style="width:100%;" placeholder="Leave empty to restore the original"></textarea></div>
           </div>
           <div id="cmsContentBody" style="margin-top:16px;"></div>
         </div>
