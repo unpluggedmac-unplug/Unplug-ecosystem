@@ -2624,10 +2624,38 @@ async function loadUsers() {
   try {
     const data = await api('/admin/users');
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Email</th><th>Role</th><th>Joined</th></tr>';
+    table.innerHTML = '<tr><th>Email</th><th>Role</th><th>Published content</th><th>Joined</th><th></th></tr>';
     data.users.forEach((u) => {
+      const owns = (u.published_articles || 0) + (u.approved_profiles || 0)
+        + (u.published_events || 0) + (u.confirmed_payments || 0);
+      const parts = [];
+      if (u.published_articles) parts.push(`${u.published_articles} article${u.published_articles > 1 ? 's' : ''}`);
+      if (u.approved_profiles) parts.push(`${u.approved_profiles} profile${u.approved_profiles > 1 ? 's' : ''}`);
+      if (u.published_events) parts.push(`${u.published_events} event${u.published_events > 1 ? 's' : ''}`);
+      if (u.confirmed_payments) parts.push(`${u.confirmed_payments} payment${u.confirmed_payments > 1 ? 's' : ''}`);
+      const ownsLabel = parts.length ? parts.join(', ') : '—';
+
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${u.email}</td><td>${u.role}</td><td>${new Date(u.created_at).toLocaleDateString()}</td>`;
+      // An account is deletable only if it's not an admin and owns nothing
+      // published — the same rule the server enforces, shown here so the button
+      // isn't offered when it would just be refused.
+      const deletable = u.role !== 'admin' && owns === 0;
+      tr.innerHTML = `<td>${escapeHtmlAdmin(u.email)}</td><td>${u.role}</td>`
+        + `<td>${escapeHtmlAdmin(ownsLabel)}</td>`
+        + `<td>${new Date(u.created_at).toLocaleDateString()}</td>`
+        + `<td><div class="row-actions">${deletable ? '<button class="reject">Delete</button>'
+            : '<span style="color:var(--slate); font-size:12px;">kept</span>'}</div></td>`;
+      const del = tr.querySelector('.reject');
+      if (del) {
+        del.addEventListener('click', async () => {
+          if (!confirm(`Delete ${u.email}?\n\nThis permanently removes the account. It owns no published content, so nothing on the live site is affected. This cannot be undone.`)) return;
+          try {
+            await api(`/admin/users/${u.id}`, { method: 'DELETE' });
+            showToast('Account deleted.');
+            loadUsers();
+          } catch (err) { showToast(err.message, true); }
+        });
+      }
       table.appendChild(tr);
     });
     body.innerHTML = '';

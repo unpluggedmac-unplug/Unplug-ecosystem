@@ -25,10 +25,76 @@ function creditsForTier(type, tier) {
 // wired: requireRole('admin') first, then the actual query.
 router.get('/users', requireRole('admin'), async (req, res, next) => {
   try {
+    // Each account carries a count of the PUBLISHED content it owns. Deleting a
+    // user cascades to everything they own, so the admin has to be able to see,
+    // before deleting, whether an account is a stray signup or the author of
+    // live articles. The count is what the delete guard blocks on too.
     const result = await pool.query(
-      'SELECT id, email, phone, role, created_at FROM users ORDER BY created_at DESC'
+      `SELECT u.id, u.email, u.phone, u.role, u.created_at,
+              (SELECT COUNT(*) FROM articles a WHERE a.author_user_id = u.id AND a.status = 'approved')::int AS published_articles,
+              (SELECT COUNT(*) FROM profiles p WHERE p.user_id = u.id AND p.status = 'approved')::int       AS approved_profiles,
+              (SELECT COUNT(*) FROM events e WHERE e.organizer_user_id = u.id AND e.status = 'approved')::int AS published_events,
+              (SELECT COUNT(*) FROM payments pm WHERE pm.user_id = u.id AND pm.status = 'confirmed')::int    AS confirmed_payments
+         FROM users u
+        ORDER BY u.created_at DESC`
     );
     res.json({ users: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /admin/users/:id — remove an account.
+//
+// Guarded on purpose. Deleting a user cascades to everything they own —
+// articles, profiles, events, payment history — so this refuses to delete an
+// account that owns anything PUBLISHED or any confirmed payment. That is the
+// "keep content-owning accounts" rule made mechanical: a member who authored
+// live articles can't be wiped by a mis-click; their content would have to be
+// reassigned first. Stray signups with nothing published delete cleanly.
+router.delete('/users/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid user id is required.' });
+
+    // Never let an admin delete the account they're signed in with — that's
+    // always a mistake, and it would lock them out mid-action.
+    if (id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot delete the account you are signed in with.' });
+    }
+
+    const target = await pool.query('SELECT id, email, role FROM users WHERE id = $1', [id]);
+    if (target.rowCount === 0) return res.status(404).json({ error: 'That account no longer exists.' });
+
+    // Other admins aren't deletable through this tool — losing an admin should
+    // be a deliberate act, not a row in a members cleanup.
+    if (target.rows[0].role === 'admin') {
+      return res.status(403).json({ error: 'Admin accounts cannot be deleted here. Change the role first if this is intended.' });
+    }
+
+    const owned = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM articles WHERE author_user_id = $1 AND status = 'approved')::int AS articles,
+         (SELECT COUNT(*) FROM profiles WHERE user_id = $1 AND status = 'approved')::int         AS profiles,
+         (SELECT COUNT(*) FROM events WHERE organizer_user_id = $1 AND status = 'approved')::int  AS events,
+         (SELECT COUNT(*) FROM payments WHERE user_id = $1 AND status = 'confirmed')::int         AS payments`,
+      [id]
+    );
+    const o = owned.rows[0];
+    const blockers = [];
+    if (o.articles) blockers.push(`${o.articles} published article${o.articles > 1 ? 's' : ''}`);
+    if (o.profiles) blockers.push(`${o.profiles} approved profile${o.profiles > 1 ? 's' : ''}`);
+    if (o.events) blockers.push(`${o.events} published event${o.events > 1 ? 's' : ''}`);
+    if (o.payments) blockers.push(`${o.payments} confirmed payment${o.payments > 1 ? 's' : ''}`);
+    if (blockers.length > 0) {
+      return res.status(409).json({
+        error: `This account owns ${blockers.join(', ')}. Deleting it would remove that content too. Reassign or remove the content first, then delete the account.`,
+      });
+    }
+
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    logActivity(req.user.id, 'user_deleted', `${target.rows[0].email} (#${id})`);
+    res.json({ deleted: true });
   } catch (err) {
     next(err);
   }
