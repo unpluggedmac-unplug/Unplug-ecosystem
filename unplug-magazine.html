@@ -845,7 +845,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .cms-blocks:empty{ display:none; }
 .cms-block{ display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:center; margin:34px 0; border:1px solid var(--paper-line); }
 .cms-block:only-child{ margin-top:0; }
-.cms-block-img{ overflow:hidden; }
+/* Banner images are supplied at 1920x1080 (16:9); holding that ratio keeps
+   every block a clean banner shape regardless of how much text sits beside it,
+   and object-fit:cover crops rather than distorts anything slightly off-ratio. */
+.cms-block-img{ overflow:hidden; aspect-ratio:16/9; }
 .cms-block-img img{ display:block; width:100%; height:100%; object-fit:cover; }
 .cms-block-text{ padding:26px 28px; }
 .cms-block-text h2{ font-size:clamp(20px,2.6vw,30px); font-weight:600; line-height:1.25; margin:8px 0 10px; }
@@ -1597,6 +1600,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ LATEST NEWS ============ -->
 <main class="page" id="page-news">
+  <div class="wrap cms-blocks" data-cms-blocks="news"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">Latest News</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">The good news desk</h1>
@@ -1890,6 +1894,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ GALLERY ============ -->
 <main class="page" id="page-gallery">
+  <div class="wrap cms-blocks" data-cms-blocks="gallery"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">Community Gallery</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Faces of impact</h1>
@@ -1968,6 +1973,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ EDITIONS ============ -->
 <main class="page" id="page-editions">
+  <div class="wrap cms-blocks" data-cms-blocks="editions"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">The Archive</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Every Edition, In One Place</h1>
@@ -2031,6 +2037,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ TOP 10 ============ -->
 <main class="page" id="page-top10">
+  <div class="wrap cms-blocks" data-cms-blocks="top10"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">Verified Impact · Q3 2026</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">The Top 10 Impact List</h1>
@@ -2123,6 +2130,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ COMPETITIONS ============ -->
 <main class="page" id="page-competitions">
+  <div class="wrap cms-blocks" data-cms-blocks="competitions"></div>
   <div class="wrap" style="padding-top:56px;">
     <div class="comp-hero" id="arenaHero">
       <span class="print-mark"></span>
@@ -2205,6 +2213,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ INVESTORS ============ -->
 <main class="page" id="page-investors">
+  <div class="wrap cms-blocks" data-cms-blocks="investors"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">Investor Relations</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Backing the platform behind the impact</h1>
@@ -2308,6 +2317,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ ABOUT ============ -->
 <main class="page" id="page-about">
+  <div class="wrap cms-blocks" data-cms-blocks="about"></div>
   <div class="wrap about-hero">
     <span class="eyebrow">Our Mission</span>
     <h1 style="font-size:clamp(32px,5vw,56px); margin:14px 0 18px;">Good news is still news.</h1>
@@ -2407,6 +2417,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ BRAND PLACEMENT ============ -->
 <main class="page" id="page-brandplacement">
+  <div class="wrap cms-blocks" data-cms-blocks="brandplacement"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">Advertise With Us</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Marketplace</h1>
@@ -2541,6 +2552,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ CONTACT ============ -->
 <main class="page" id="page-contact">
+  <div class="wrap cms-blocks" data-cms-blocks="contact"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">Reach Us</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Contact Us</h1>
@@ -2629,6 +2641,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <!-- ============ DEAF COMMUNITY ============ -->
 <main class="page" id="page-deafcommunity">
+  <div class="wrap cms-blocks" data-cms-blocks="deafcommunity"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">Built for our community</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Deaf Community</h1>
