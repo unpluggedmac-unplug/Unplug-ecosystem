@@ -842,6 +842,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .consent-bar .btn-line:hover{ background:#fff; color:var(--ink); }
 @media(max-width:640px){ .consent-actions{ width:100%; } .consent-actions .btn{ flex:1; } }
 /* ---- admin-added page blocks ---- */
+/* Welcome gate overlay (first-visit greeting on the homepage). */
+.welcome-overlay{ position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(20,14,12,0.72); backdrop-filter:blur(4px); }
+.welcome-overlay[hidden]{ display:none; }
+.welcome-card{ background:var(--cream,#faf6f0); max-width:560px; width:100%; padding:34px 32px 30px; border:1px solid var(--paper-line,#e7ded2); box-shadow:0 24px 60px rgba(0,0,0,0.28); position:relative; max-height:92vh; overflow-y:auto; }
+.welcome-close{ position:absolute; top:12px; right:14px; background:none; border:none; font-size:26px; line-height:1; color:var(--slate,#7a726a); cursor:pointer; padding:4px 8px; }
+.welcome-close:hover{ color:var(--maroon,#7a1f2b); }
+.welcome-card h2{ font-family:'Playfair Display',serif; font-size:clamp(24px,4vw,32px); margin:0 0 8px; color:var(--ink,#22201e); }
+.welcome-sub{ color:var(--slate,#7a726a); font-size:14.5px; line-height:1.6; margin:0 0 20px; }
+.welcome-options{ display:flex; flex-direction:column; gap:12px; }
+.welcome-option{ display:block; width:100%; text-align:left; background:#fff; border:1px solid var(--paper-line,#e7ded2); padding:16px 18px; cursor:pointer; text-decoration:none; transition:border-color .15s, transform .05s; }
+.welcome-option:hover{ border-color:var(--maroon,#7a1f2b); }
+.welcome-option:active{ transform:scale(0.995); }
+.welcome-option h3{ font-family:'Playfair Display',serif; font-size:18px; margin:0 0 3px; color:var(--ink,#22201e); }
+.welcome-option p{ font-size:13px; color:var(--slate,#7a726a); margin:0; line-height:1.5; }
+
 .cms-blocks:empty{ display:none; }
 .cms-block{ display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:center; margin:34px 0; border:1px solid var(--paper-line); }
 .cms-block:only-child{ margin-top:0; }
@@ -1082,6 +1097,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <body>
 
 <a href="#" class="skip-link" id="skipLink">Skip to content</a>
+
+<!-- WELCOME GATE — greets first-time visitors on the homepage. It's an overlay,
+     not a redirect, so the magazine content stays in the page underneath: search
+     engines and social scrapers still read everything, and a reader is one click
+     from the stories. Shown once per browser session (sessionStorage) so it
+     welcomes, rather than nags on every click. -->
+<div class="welcome-overlay" id="welcomeOverlay" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" hidden>
+  <div class="welcome-card">
+    <button class="welcome-close" id="welcomeClose" aria-label="Close and browse the site">&times;</button>
+    <h2 id="welcomeTitle" data-cms="welcome.title">Welcome to Unplug</h2>
+    <p class="welcome-sub" data-cms="welcome.sub">Browse the site freely, or sign in / create a free account to manage your own profile and submissions.</p>
+    <div class="welcome-options">
+      <button class="welcome-option" id="welcomeVisit">
+        <h3 data-cms="welcome.visit.title">Visit Site</h3>
+        <p data-cms="welcome.visit.body">Browse Unplug Magazine — no account needed.</p>
+      </button>
+      <a class="welcome-option" id="welcomeJoin" href="unplug-member-dashboard.html">
+        <h3 data-cms="welcome.join.title">Become a Member</h3>
+        <p data-cms="welcome.join.body">Free to join. You only pay when you use a paid service (like publishing an article).</p>
+      </a>
+      <a class="welcome-option" id="welcomeSignin" href="unplug-member-dashboard.html">
+        <h3 data-cms="welcome.signin.title">Sign In</h3>
+        <p data-cms="welcome.signin.body">Already have an account? Sign in here.</p>
+      </a>
+    </div>
+  </div>
+</div>
 
 <!-- POPIA consent. Hidden until the script decides it's needed, so returning
      readers who already chose never see it flash on screen. -->
@@ -3082,6 +3124,45 @@ function choosePackage(tier) {
 function goToMemberDashboard() {
   window.location.href = MEMBER_DASHBOARD_URL;
 }
+
+// Welcome gate — greets a visitor once per browser session on the homepage.
+// It's an overlay over the real page (not a redirect), so content and SEO are
+// untouched; "Visit Site" just dismisses it. Skipped on deep links (a shared
+// article URL) so people land on the thing they clicked, not a gate.
+(function setupWelcomeGate() {
+  const overlay = document.getElementById('welcomeOverlay');
+  if (!overlay) return;
+  const SEEN_KEY = 'unplug_welcome_seen';
+
+  let alreadySeen = false;
+  try { alreadySeen = sessionStorage.getItem(SEEN_KEY) === '1'; } catch (e) { /* private mode */ }
+
+  // Only greet on a plain homepage load (no ?p=... deep link).
+  const isHomeEntry = !location.search || location.search === '?p=home';
+
+  function dismiss() {
+    overlay.setAttribute('hidden', '');
+    document.body.style.overflow = '';
+    try { sessionStorage.setItem(SEEN_KEY, '1'); } catch (e) { /* ignore */ }
+  }
+
+  document.getElementById('welcomeVisit').addEventListener('click', dismiss);
+  document.getElementById('welcomeClose').addEventListener('click', dismiss);
+  // Clicking the dark backdrop (outside the card) also dismisses.
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
+  // Become a Member / Sign In navigate away; mark seen so returning-in-session
+  // doesn't re-show the gate.
+  document.getElementById('welcomeJoin').addEventListener('click', () => { try { sessionStorage.setItem(SEEN_KEY, '1'); } catch (e) {} });
+  document.getElementById('welcomeSignin').addEventListener('click', () => { try { sessionStorage.setItem(SEEN_KEY, '1'); } catch (e) {} });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hasAttribute('hidden')) dismiss(); });
+
+  if (!alreadySeen && isHomeEntry) {
+    overlay.removeAttribute('hidden');
+    document.body.style.overflow = 'hidden'; // stop the page scrolling behind it
+    const first = document.getElementById('welcomeVisit');
+    if (first) first.focus();
+  }
+})();
 
 // ---------------------------------------------------------------------------
 // Directory — real data from GET /directory (replaces the old static demo
