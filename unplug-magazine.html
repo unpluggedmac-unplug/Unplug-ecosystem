@@ -1355,11 +1355,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <button class="btn btn-solid" id="viewMonthListBtn" style="background:var(--red); border-color:var(--red);">View This Month List</button>
         </div>
       </div>
-      <div class="birthday-list">
-        <div class="birthday-row"><div class="bday-photo"></div><span class="bday-date">JUL 04</span><div class="bday-text"><span class="bday-name">Naledi Mokoena</span><span class="bday-cause">Youth Mentorship</span></div></div>
-        <div class="birthday-row"><div class="bday-photo"></div><span class="bday-date">JUL 05</span><div class="bday-text"><span class="bday-name">Sipho Radebe</span><span class="bday-cause">Education</span></div></div>
-        <div class="birthday-row"><div class="bday-photo"></div><span class="bday-date">JUL 07</span><div class="bday-text"><span class="bday-name">Amahle Zulu</span><span class="bday-cause">Environment</span></div></div>
-        <div class="birthday-row"><div class="bday-photo"></div><span class="bday-date">JUL 09</span><div class="bday-text"><span class="bday-name">Musa Ndlovu</span><span class="bday-cause">Career Development</span></div></div>
+      <div class="birthday-list" id="birthdayTodayList">
+        <p style="color:rgba(247,243,234,0.7); font-size:14px; margin:0;">Loading…</p>
       </div>
     </div>
   </section>
@@ -6161,6 +6158,35 @@ async function loadShoutout() {
 // Birthday submission + "this month" list.
 (function setupBirthdays() {
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  // --- homepage "Celebrating today" strip: real approved birthdays for
+  // today's date, not placeholder names. No invented "cause" tag — the
+  // birthdays table has no such column, so we show the submitter's own
+  // message if they left one, and nothing if they didn't.
+  async function loadTodayBirthdays() {
+    const list = document.getElementById('birthdayTodayList');
+    if (!list) return;
+    try {
+      const data = await api('/birthdays/today');
+      const items = data.birthdays || [];
+      if (!items.length) {
+        list.innerHTML = '<p style="color:rgba(247,243,234,0.7); font-size:14px; margin:0;">No birthdays today — check back tomorrow, or view this month\'s list.</p>';
+        return;
+      }
+      const now = new Date();
+      const dateLabel = MONTHS[now.getMonth()].slice(0, 3).toUpperCase() + ' ' + String(now.getDate()).padStart(2, '0');
+      list.innerHTML = items.slice(0, 6).map((b) => {
+        const photoStyle = b.photo_url
+          ? ` style="background-image:url('${escapeHtml(b.photo_url)}'); background-size:cover; background-position:center;"`
+          : '';
+        const causeLine = b.message ? `<span class="bday-cause">${escapeHtml(b.message)}</span>` : '';
+        return `<div class="birthday-row"><div class="bday-photo"${photoStyle}></div><span class="bday-date">${dateLabel}</span><div class="bday-text"><span class="bday-name">${escapeHtml(b.name)}</span>${causeLine}</div></div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = '<p style="color:rgba(247,243,234,0.7); font-size:14px; margin:0;">Couldn\'t load today\'s birthdays right now.</p>';
+    }
+  }
+  loadTodayBirthdays();
 
   // --- submit birthday ---
   const modal = document.getElementById('birthdayModal');
