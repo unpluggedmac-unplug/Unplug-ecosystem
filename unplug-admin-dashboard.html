@@ -171,6 +171,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a class="active" data-section="queue">Approval Queue</a>
     <a data-section="manage">Manage Content</a>
     <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="calevents">Calendar Events</a>
     <a data-section="edcal">Editions Calendar</a>
     <a data-section="deafjobs">Deaf Jobs <span id="deafJobsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="deafpassports">Deaf Passports <span id="deafPassportsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
@@ -301,6 +302,40 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel">
         <div class="panel-head"><h3>All Shout-outs</h3></div>
         <div class="panel-body" id="shoutoutAllBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- CALENDAR EVENTS -->
+    <div class="admin-section" id="section-calevents">
+      <div class="main-head"><div><h1>Calendar Events</h1><p>Add and edit the events shown in the homepage "Calendar Events" section. Anything you add here goes live approved and free — no payment step.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3 id="calevFormTitle">Add an event</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Event name</label><input id="calevName" placeholder="e.g. Deaf Awareness Expo"></div>
+            <div><label>Date</label><input id="calevDate" type="date"></div>
+          </div>
+          <div class="form-row">
+            <div><label>Start time (optional)</label><input id="calevStart" type="time"></div>
+            <div><label>End time (optional)</label><input id="calevEnd" type="time"></div>
+            <div><label>Venue</label><input id="calevVenue" placeholder="e.g. Sandton Convention Centre"></div>
+          </div>
+          <div class="form-row">
+            <div><label>Entrance fee</label><input id="calevFee" placeholder='e.g. "R50" or "Free"'></div>
+            <div><label>Contact details</label><input id="calevContact" placeholder="phone / email shown on the event"></div>
+            <div><label>Event link (tickets / info)</label><input id="calevLink" placeholder="https://…"></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>Feature image <span style="font-weight:400; color:var(--slate);">— 800 × 1200px (2:3 portrait)</span></label><div id="calevImgUpload"></div></div>
+          <div class="field" style="margin-top:12px;"><label>Description</label><textarea id="calevDesc" rows="3"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label>Show on calendar from (optional)</label><input id="calevDisplayStart" type="date"></div>
+          <button class="btn btn-solid" style="width:auto; margin-top:14px;" id="calevSaveBtn">Add event</button>
+          <button class="btn btn-line" style="width:auto; margin-top:14px; display:none;" id="calevCancelBtn">Cancel edit</button>
+          <span id="calevNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>All events</h3></div>
+        <div class="panel-body" id="calevBody" style="padding:0;"></div>
       </div>
     </div>
 
@@ -1086,6 +1121,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     document.getElementById('section-' + section).classList.add('active');
     if (section === 'manage') loadManageContent();
     if (section === 'shoutouts') loadShoutoutNominations();
+    if (section === 'calevents') loadCalEvents();
     if (section === 'edcal') loadEdcalDates();
     if (section === 'deafjobs') loadDeafJobs();
     if (section === 'deafpassports') loadDeafPassports();
@@ -2803,6 +2839,124 @@ async function loadAllShoutouts() {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Calendar Events — admin adds/edits the homepage "Calendar Events".
+// ---------------------------------------------------------------------------
+// Null when adding, an id when the form was loaded from an existing event.
+let CALEV_EDITING_ID = null;
+let CALEV_ORIGINAL = null; // loaded values, for undo
+
+function calevReadForm() {
+  return {
+    name: document.getElementById('calevName').value.trim(),
+    eventDate: document.getElementById('calevDate').value,
+    startTime: document.getElementById('calevStart').value || null,
+    endTime: document.getElementById('calevEnd').value || null,
+    venue: document.getElementById('calevVenue').value.trim(),
+    entranceFee: document.getElementById('calevFee').value.trim(),
+    contactDetails: document.getElementById('calevContact').value.trim(),
+    eventLink: document.getElementById('calevLink').value.trim(),
+    imageUrl: UnplugUpload.valueOf(document.getElementById('calevImgUpload')) || '',
+    description: document.getElementById('calevDesc').value.trim(),
+    displayStartDate: document.getElementById('calevDisplayStart').value || null,
+  };
+}
+
+function calevResetForm() {
+  CALEV_EDITING_ID = null;
+  CALEV_ORIGINAL = null;
+  ['calevName', 'calevDate', 'calevStart', 'calevEnd', 'calevVenue', 'calevFee', 'calevContact', 'calevLink', 'calevDesc', 'calevDisplayStart'].forEach((id) => { document.getElementById(id).value = ''; });
+  document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', '');
+  document.getElementById('calevFormTitle').textContent = 'Add an event';
+  document.getElementById('calevSaveBtn').textContent = 'Add event';
+  document.getElementById('calevCancelBtn').style.display = 'none';
+  document.getElementById('calevNote').textContent = '';
+}
+
+async function loadCalEvents() {
+  if (!document.querySelector('#calevImgUpload .img-upload')) {
+    document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', '');
+  }
+  const body = document.getElementById('calevBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/events/admin/all');
+    const events = data.events || [];
+    if (events.length === 0) { body.innerHTML = '<div class="empty-state">No events yet.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Date</th><th>Event</th><th>Venue</th><th>Status</th><th></th></tr>';
+    events.forEach((ev) => {
+      const dateStr = new Date(String(ev.event_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${dateStr}</td><td>${escapeHtmlAdmin(ev.name)}</td><td>${escapeHtmlAdmin(ev.venue || '—')}</td><td>${ev.status}</td>`
+        + `<td><div class="row-actions"><button class="approve">Edit</button><button class="reject">Delete</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', () => calevLoadForEdit(ev));
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        if (!confirm(`Delete "${ev.name}"? This can't be undone.`)) return;
+        try { await api(`/admin/content/events/${ev.id}`, { method: 'DELETE' }); showToast('Event deleted.'); if (CALEV_EDITING_ID === ev.id) calevResetForm(); loadCalEvents(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+function calevLoadForEdit(ev) {
+  CALEV_EDITING_ID = ev.id;
+  document.getElementById('calevName').value = ev.name || '';
+  document.getElementById('calevDate').value = String(ev.event_date).slice(0, 10);
+  document.getElementById('calevStart').value = ev.start_time || '';
+  document.getElementById('calevEnd').value = ev.end_time || '';
+  document.getElementById('calevVenue').value = ev.venue || '';
+  document.getElementById('calevFee').value = ev.entrance_fee || '';
+  document.getElementById('calevContact').value = ev.contact_details || '';
+  document.getElementById('calevLink').value = ev.event_link || '';
+  document.getElementById('calevDesc').value = ev.description || '';
+  document.getElementById('calevDisplayStart').value = ev.display_start_date ? String(ev.display_start_date).slice(0, 10) : '';
+  document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', ev.image_url || '');
+  CALEV_ORIGINAL = calevReadForm(); // snapshot after fields are set
+  document.getElementById('calevFormTitle').textContent = 'Edit — ' + ev.name;
+  document.getElementById('calevSaveBtn').textContent = 'Update event';
+  document.getElementById('calevCancelBtn').style.display = 'inline-block';
+  document.getElementById('calevName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+document.getElementById('calevCancelBtn').addEventListener('click', calevResetForm);
+
+document.getElementById('calevSaveBtn').addEventListener('click', async () => {
+  const payload = calevReadForm();
+  if (!payload.name || !payload.eventDate) { showToast('Event name and date are required.', true); return; }
+  const btn = document.getElementById('calevSaveBtn');
+  btn.disabled = true;
+  try {
+    if (CALEV_EDITING_ID) {
+      const eventId = CALEV_EDITING_ID;
+      const before = CALEV_ORIGINAL;
+      await api(`/events/${eventId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      showToast('Event updated.');
+      if (before) {
+        showUndoBar('Event updated.', async () => {
+          await api(`/events/${eventId}`, { method: 'PATCH', body: JSON.stringify(before) });
+          loadCalEvents();
+        });
+      }
+    } else {
+      await api('/events', { method: 'POST', body: JSON.stringify(payload) });
+      showToast('Event added — live on the homepage calendar.');
+    }
+    calevResetForm();
+    loadCalEvents();
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Editions calendar — admin marks upcoming "Save the Date" days

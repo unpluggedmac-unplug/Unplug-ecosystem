@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireRole } = require('../middleware/auth');
 const { publishesFree, statusForNewSubmission } = require("../utils/publishingRights");
 const { getPagination, paginationMeta } = require('../utils/pagination');
 
@@ -70,6 +70,66 @@ router.post('/', requireAuth, async (req, res, next) => {
         ? 'Event created using your free Event credit — submitted for approval, no payment needed.'
         : 'Event created — call POST /payments/initiate with linkedType "event_listing" and this event\'s id (R300.00) to submit it for approval.',
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /events/admin/all — admin, every event at every status (incl. past),
+// for the Calendar Events editor. Newest event date first.
+router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, name, event_date, venue, description, image_url, entrance_fee,
+              contact_details, event_link, display_start_date, status,
+              to_char(start_time, 'HH24:MI') AS start_time,
+              to_char(end_time, 'HH24:MI') AS end_time
+         FROM events
+        ORDER BY event_date DESC
+        LIMIT 300`
+    );
+    res.json({ events: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /events/:id — admin edits any calendar event. Only the fields sent are
+// changed, so editing one field never blanks the rest. A blank string clears
+// an optional field.
+router.patch('/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid event id is required.' });
+
+    const map = {
+      name: 'name', eventDate: 'event_date', venue: 'venue', description: 'description',
+      displayStartDate: 'display_start_date', imageUrl: 'image_url', entranceFee: 'entrance_fee',
+      contactDetails: 'contact_details', eventLink: 'event_link',
+      startTime: 'start_time', endTime: 'end_time',
+    };
+    const sets = [];
+    const values = [];
+    for (const [bodyKey, column] of Object.entries(map)) {
+      if (req.body[bodyKey] === undefined) continue;
+      let v = req.body[bodyKey];
+      if (typeof v === 'string') { v = v.trim(); if (v === '') v = null; }
+      // name and event_date can't be cleared — they're required to render.
+      if ((column === 'name' || column === 'event_date') && !v) {
+        return res.status(400).json({ error: 'Name and date can\'t be blank.' });
+      }
+      values.push(v);
+      sets.push(`${column} = $${values.length}`);
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'No fields to update.' });
+
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE events SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Event not found.' });
+    res.json({ event: result.rows[0] });
   } catch (err) {
     next(err);
   }
