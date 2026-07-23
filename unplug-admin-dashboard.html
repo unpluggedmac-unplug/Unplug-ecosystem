@@ -72,6 +72,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .admin-section{ display:none; }
 .admin-section.active{ display:block; }
 .toast{ position:fixed; bottom:20px; right:20px; background:var(--ink); color:#fff; padding:12px 18px; font-size:13px; z-index:999; display:none; }
+.undo-bar{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:11px 16px; font-size:13.5px; z-index:1200; display:flex; align-items:center; gap:16px; box-shadow:0 8px 28px rgba(0,0,0,0.32); }
+.undo-bar[hidden]{ display:none; }
+.undo-bar button{ background:var(--red); color:#fff; border:none; padding:6px 14px; font-weight:700; cursor:pointer; text-transform:uppercase; letter-spacing:0.04em; font-size:12px; }
 .toast.show{ display:block; }
 .toast.error{ background:var(--maroon); }
 /* ---- responsive ---- */
@@ -470,6 +473,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field" style="margin-top:12px;"><label>Career</label><textarea id="dpCareer" rows="3"></textarea></div>
           <div class="field" style="margin-top:12px;"><label>Quote</label><input id="dpQuote"></div>
           <button class="btn btn-solid" style="width:auto; margin-top:14px;" id="dpSaveBtn">Save profile</button>
+          <button class="btn btn-line" style="width:auto; margin-top:14px;" id="dpDiscardBtn">Discard changes</button>
           <span id="dpNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
         </div>
       </div>
@@ -701,6 +705,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <button class="btn btn-solid" style="width:auto;" id="artSaveBtn">Publish Live</button>
             <button class="btn btn-line" style="width:auto;" id="artDraftBtn">Save as Draft</button>
+            <button class="btn btn-line" style="width:auto; display:none;" id="artDiscardBtn">Discard changes</button>
             <button class="btn btn-line" style="width:auto; display:none;" id="artDeleteBtn">Delete article</button>
             <button class="btn btn-line" style="width:auto;" id="artResetBtn">Start a new article</button>
             <span id="artNote" style="font-size:12px; color:var(--slate);"></span>
@@ -830,6 +835,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="undo-bar" id="undoBar" hidden><span id="undoMsg"></span><button id="undoBtn" type="button">Undo</button></div>
 
 <script src="image-upload.js"></script>
 <script>
@@ -883,6 +889,31 @@ function showToast(message, isError = false) {
   toast.textContent = message;
   toast.className = 'toast show' + (isError ? ' error' : '');
   setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+
+// Reusable "undo last saved change" bar. After any editor saves, it calls
+// showUndoBar with a function that reverses what just happened — re-saving the
+// previous values for an edit, or deleting the thing for an add. The bar stays
+// ~12s, long enough to catch a mistake, then fades. One shared bar so the
+// behaviour is identical on every editor.
+let _undoTimer = null;
+function showUndoBar(message, undoFn) {
+  const bar = document.getElementById('undoBar');
+  document.getElementById('undoMsg').textContent = message;
+  bar.hidden = false;
+  clearTimeout(_undoTimer);
+  // Replace the button to drop any previous handler cleanly.
+  const oldBtn = document.getElementById('undoBtn');
+  const btn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(btn, oldBtn);
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    clearTimeout(_undoTimer);
+    try { await undoFn(); showToast('Change undone.'); }
+    catch (err) { showToast('Could not undo: ' + err.message, true); }
+    bar.hidden = true;
+  });
+  _undoTimer = setTimeout(() => { bar.hidden = true; }, 12000);
 }
 
 // ---------------------------------------------------------------------------
@@ -1380,6 +1411,7 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
 // gallery). Any edit uses the same PATCH /profiles/:id that owners use; admin
 // is allowed on it via requireOwnerOrAdmin.
 let DP_CURRENT = null; // { id, slug }
+let DP_ORIGINAL = null; // the profile's values as loaded, for undo/discard
 
 async function loadDirProfiles() {
   const picker = document.getElementById('dpPicker');
@@ -1429,6 +1461,16 @@ async function dpLoadProfile(id, slug) {
     document.getElementById('dpGalleryUpload').innerHTML = UnplugUpload.fieldHtml('dpGalleryImage', '');
     document.getElementById('dpEditorPanel').style.display = 'block';
     document.getElementById('dpGalleryPanel').style.display = 'block';
+    // Snapshot the values as loaded, so a save can be undone and the form can
+    // be reset to exactly this.
+    DP_ORIGINAL = {
+      displayName: p.display_name || '', bio: p.bio || '',
+      contactEmail: p.contact_email || '', contactPhone: p.contact_phone || '',
+      contactWebsite: p.contact_website || '', achievements: p.achievements || '',
+      career: p.career || '', quote: p.quote || '',
+      featureImageUrl: p.feature_image_url || null,
+      categoryId: p.category_id || null,
+    };
     note.textContent = '';
     dpLoadGallery();
   } catch (err) {
@@ -1480,18 +1522,32 @@ document.getElementById('dpSaveBtn').addEventListener('click', async () => {
   if (catVal) payload.categoryId = Number(catVal);
 
   const btn = document.getElementById('dpSaveBtn');
+  const before = DP_ORIGINAL;
+  const profileId = DP_CURRENT.id;
   btn.disabled = true;
   note.textContent = 'Saving…';
   try {
-    await api(`/profiles/${DP_CURRENT.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    await api(`/profiles/${profileId}`, { method: 'PATCH', body: JSON.stringify(payload) });
     showToast('Profile saved.');
     note.textContent = 'Saved — live on the site now.';
+    // Undo re-saves exactly the values that were loaded before this edit.
+    if (before) {
+      showUndoBar('Profile saved.', async () => {
+        await api(`/profiles/${profileId}`, { method: 'PATCH', body: JSON.stringify({ ...before, categoryId: before.categoryId || undefined }) });
+        if (DP_CURRENT && DP_CURRENT.id === profileId) dpLoadProfile(profileId, DP_CURRENT.slug);
+      });
+    }
   } catch (err) {
     note.textContent = '';
     showToast(err.message, true);
   } finally {
     btn.disabled = false;
   }
+});
+
+// Discard unsaved edits — reload the profile's saved values into the form.
+document.getElementById('dpDiscardBtn').addEventListener('click', () => {
+  if (DP_CURRENT) dpLoadProfile(DP_CURRENT.id, DP_CURRENT.slug);
 });
 
 document.getElementById('dpAddGalleryBtn').addEventListener('click', async () => {
@@ -1569,6 +1625,15 @@ async function loadAdBanners() {
           body: JSON.stringify({ imageUrl, linkUrl }),
         });
         showToast(res.message || 'Saved.');
+        // Undo restores whatever this slot held before (an image + link, or
+        // empty to clear it back to the placeholder).
+        showUndoBar('Banner saved.', async () => {
+          await api(`/page-cms/admin/ad-slots/${encodeURIComponent(slot.key)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ imageUrl: cfg.image_url || '', linkUrl: cfg.link_url || '' }),
+          });
+          loadAdBanners();
+        });
         loadAdBanners();
       } catch (err) {
         note.textContent = '';
@@ -1661,11 +1726,24 @@ document.getElementById('cmsSaveContentBtn').addEventListener('click', async () 
   const pageKey = full.slice(0, dot);
   const contentKey = full.slice(dot + 1);
   try {
+    // Grab the current override (if any) first, so undo can restore it — an
+    // empty old value means "no override", which undo re-applies by clearing.
+    let oldValue = '';
+    try {
+      const cur = await api('/page-cms/admin/content');
+      const row = (cur.content || []).find((r) => r.page_key === pageKey && r.content_key === contentKey);
+      if (row) oldValue = row.value;
+    } catch (e) { /* best-effort */ }
+
     const res = await api('/page-cms/admin/content', {
       method: 'PUT',
       body: JSON.stringify({ pageKey, contentKey, value: document.getElementById('cmsContentValue').value }),
     });
     showToast(res.message || 'Saved.');
+    showUndoBar('Wording saved.', async () => {
+      await api('/page-cms/admin/content', { method: 'PUT', body: JSON.stringify({ pageKey, contentKey, value: oldValue }) });
+      loadPageCms();
+    });
     document.getElementById('cmsContentValue').value = '';
     loadPageCms();
   } catch (err) {
@@ -1965,6 +2043,7 @@ function artReset() {
   document.getElementById("artPlainText").checked = false;
   document.getElementById('artDerived').style.display = 'none';
   document.getElementById('artDeleteBtn').style.display = 'none';
+  document.getElementById('artDiscardBtn').style.display = 'none';
   document.getElementById('artPick').value = '';
   document.getElementById('artEditorHeading').textContent = 'Write an article';
   artApplyStatusUi(null); // new article: Publish Live + Save as Draft both shown
@@ -1973,6 +2052,15 @@ function artReset() {
 }
 
 document.getElementById('artResetBtn').addEventListener('click', artReset);
+
+// Discard changes — reload the article being edited, throwing away unsaved
+// edits. Articles carry sections and galleries, so a full reload is the safe
+// reset (rather than a partial field-by-field undo).
+document.getElementById('artDiscardBtn').addEventListener('click', () => {
+  if (!ART_EDITING_ID) return;
+  document.getElementById('artPick').value = String(ART_EDITING_ID);
+  document.getElementById('artLoadBtn').click();
+});
 
 async function artLoadPickList() {
   const sel = document.getElementById('artPick');
@@ -2021,6 +2109,7 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     document.getElementById("artPlainText").checked = a.body_format === "text";
     artShowDerived(a);
     document.getElementById('artDeleteBtn').style.display = '';
+    document.getElementById('artDiscardBtn').style.display = '';
     document.getElementById('artEditorHeading').textContent = 'Edit article';
     // Button labels are set by artApplyStatusUi(a.status) above.
     document.getElementById('artMeta').dispatchEvent(new Event('input'));
@@ -2093,6 +2182,7 @@ async function artSave(asDraft) {
     document.getElementById('artEditorHeading').textContent = 'Edit article';
     artApplyStatusUi(a.status);
     document.getElementById('artDeleteBtn').style.display = '';
+    document.getElementById('artDiscardBtn').style.display = '';
     document.getElementById('artSlug').value = a.slug || '';
     artShowDerived(a);
     note.innerHTML = a.status === 'approved'
@@ -2563,6 +2653,13 @@ function openManageEditor(resource, item) {
     try {
       await api(`/admin/content/${resource}/${item.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       showToast('Saved.');
+      // Undo re-saves the field values this item had before the edit.
+      const before = {};
+      manageEditable.forEach((f) => { before[f] = item[f] == null ? '' : String(item[f]); });
+      showUndoBar('Saved.', async () => {
+        await api(`/admin/content/${resource}/${item.id}`, { method: 'PATCH', body: JSON.stringify(before) });
+        loadManageContent();
+      });
       panel.style.display = 'none';
       loadManageContent();
     } catch (err) {
@@ -2572,6 +2669,14 @@ function openManageEditor(resource, item) {
     }
   });
   body.appendChild(save);
+
+  // Discard — reopen the editor from the original item, throwing away edits.
+  const discard = document.createElement('button');
+  discard.className = 'btn btn-line';
+  discard.style.marginLeft = '10px';
+  discard.textContent = 'Discard changes';
+  discard.addEventListener('click', () => openManageEditor(resource, item));
+  body.appendChild(discard);
 }
 
 document.getElementById('manageLoadBtn').addEventListener('click', loadManageContent);
@@ -2705,6 +2810,7 @@ async function loadAllShoutouts() {
 // Null when adding a new date, an id when the form was loaded from an existing
 // one to edit it. The one form does both jobs.
 let EDCAL_EDITING_ID = null;
+let EDCAL_ORIGINAL = null; // the marked date's values as loaded, for undo
 
 function edcalResetForm() {
   EDCAL_EDITING_ID = null;
@@ -2725,11 +2831,19 @@ document.getElementById('addEdcalBtn').addEventListener('click', async () => {
   if (!eventDate || !title) { showToast('Date and title are required.', true); return; }
   try {
     if (EDCAL_EDITING_ID) {
-      await api(`/editions/calendar/${EDCAL_EDITING_ID}`, {
+      const dateId = EDCAL_EDITING_ID;
+      const before = EDCAL_ORIGINAL;
+      await api(`/editions/calendar/${dateId}`, {
         method: 'PATCH',
         body: JSON.stringify({ eventDate, title, description }),
       });
       showToast('Date updated.');
+      if (before) {
+        showUndoBar('Date updated.', async () => {
+          await api(`/editions/calendar/${dateId}`, { method: 'PATCH', body: JSON.stringify(before) });
+          loadEdcalDates();
+        });
+      }
     } else {
       await api('/editions/calendar', {
         method: 'POST',
@@ -2764,6 +2878,8 @@ async function loadEdcalDates() {
         + `<td><div class="row-actions"><button class="approve">Edit</button><button class="reject">Remove</button></div></td>`;
       tr.querySelector('.approve').addEventListener('click', () => {
         EDCAL_EDITING_ID = d.id;
+        // Snapshot the saved values so a save can be undone.
+        EDCAL_ORIGINAL = { eventDate: String(d.event_date).slice(0, 10), title: d.title || '', description: d.description || '' };
         document.getElementById('edcalDate').value = String(d.event_date).slice(0, 10);
         document.getElementById('edcalTitle').value = d.title || '';
         document.getElementById('edcalDesc').value = d.description || '';
