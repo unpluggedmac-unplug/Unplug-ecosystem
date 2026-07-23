@@ -87,7 +87,9 @@ async function getArticleOwnerId(req) {
 router.get('/', async (req, res, next) => {
   try {
     const { category } = req.query;
-    const conditions = [`a.status = 'approved'`];
+    // A future scheduled_for keeps an approved article hidden until its day —
+    // then this same condition lets it through with no publish job involved.
+    const conditions = [`a.status = 'approved'`, `(a.scheduled_for IS NULL OR a.scheduled_for <= CURRENT_DATE)`];
     const values = [];
     if (category) {
       values.push(category);
@@ -164,11 +166,15 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const isAdmin = req.user && req.user.role === 'admin';
+    // Public sees an article only once approved AND past its scheduled date; an
+    // admin can open it any time (to preview a draft or a future-dated piece).
     const result = await pool.query(
       `SELECT a.*, c.name AS category
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
-       WHERE a.id = $1 AND ($2::boolean OR a.status = 'approved')`,
+       WHERE a.id = $1
+         AND ($2::boolean OR (a.status = 'approved'
+              AND (a.scheduled_for IS NULL OR a.scheduled_for <= CURRENT_DATE)))`,
       [req.params.id, isAdmin]
     );
     if (result.rows.length === 0) {
@@ -213,7 +219,12 @@ router.post('/', requireAuth, async (req, res, next) => {
     let status;
     let profileId = null;
 
-    if (publishesFree(req.user)) {
+    // An admin can choose to save a piece as a draft rather than publish it.
+    // Only meaningful for those who publish free — a paying member's article
+    // follows the payment/approval flow and has no draft state to sit in.
+    if (req.body.saveAsDraft && publishesFree(req.user)) {
+      status = 'draft';
+    } else if (publishesFree(req.user)) {
       // Admin publishes live; a consultant still goes through approval but
       // never through payment. No credit is spent either way.
       status = statusForNewSubmission(req.user, false);
@@ -344,6 +355,27 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
     if (slug !== undefined && String(slug).trim()) {
       values.push(await uniqueSlug(slugify(slug), Number(req.params.id)));
       setClauses.push(`slug = $${values.length}`);
+    }
+
+    // Status and scheduling are editorial powers, so only an admin may change
+    // them. Without this guard a member editing their own article could set it
+    // to 'approved' and self-publish, bypassing review entirely.
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (isAdmin && req.body.status !== undefined) {
+      const allowed = ['draft', 'pending', 'approved', 'rejected'];
+      if (!allowed.includes(req.body.status)) {
+        return res.status(400).json({ error: 'status must be one of: ' + allowed.join(', ') + '.' });
+      }
+      values.push(req.body.status); setClauses.push(`status = $${values.length}`);
+      // Stamp published_at the first time it goes live so the feed can order by
+      // it; COALESCE keeps the original date if it's re-approved later.
+      if (req.body.status === 'approved') {
+        setClauses.push(`published_at = COALESCE(published_at, now())`);
+      }
+    }
+    if (isAdmin && req.body.scheduledFor !== undefined) {
+      values.push(req.body.scheduledFor || null);
+      setClauses.push(`scheduled_for = $${values.length}`);
     }
 
     if (setClauses.length === 0 && !Array.isArray(sections)) {

@@ -639,6 +639,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
           <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <button class="btn btn-solid" style="width:auto;" id="artSaveBtn">Publish Live</button>
+            <button class="btn btn-line" style="width:auto;" id="artDraftBtn">Save as Draft</button>
             <button class="btn btn-line" style="width:auto; display:none;" id="artDeleteBtn">Delete article</button>
             <button class="btn btn-line" style="width:auto;" id="artResetBtn">Start a new article</button>
             <span id="artNote" style="font-size:12px; color:var(--slate);"></span>
@@ -1215,7 +1216,21 @@ async function addDeclineWithCreditButton(container, resource, itemId, onDone) {
 
 async function actOnQueueItem(cfg, id, action) {
   try {
-    await api(`/admin/${cfg.resource}/${id}/${action}`, { method: 'PATCH' });
+    let body;
+    // Approving an article can carry a go-live date. Ask for one (optional) so
+    // an editor can line a story up for a future day instead of it appearing
+    // the instant it's approved. Blank = live now.
+    if (action === 'approve' && cfg.resource === 'articles') {
+      const when = prompt('Publish date for this article (YYYY-MM-DD).\nLeave blank to publish immediately.', '');
+      if (when === null) return; // admin cancelled
+      const trimmed = when.trim();
+      if (trimmed && !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        showToast('Enter the date as YYYY-MM-DD, or leave it blank.', true);
+        return;
+      }
+      if (trimmed) body = JSON.stringify({ scheduledFor: trimmed });
+    }
+    await api(`/admin/${cfg.resource}/${id}/${action}`, body ? { method: 'PATCH', body } : { method: 'PATCH' });
     showToast(`${cfg.label} item ${action}d.`);
     const activeTabBtn = Array.from(queueTabsEl.children).find((b) => b.classList.contains('active'));
     const activeKey = Object.keys(QUEUE_TABS).find((k) => QUEUE_TABS[k].label === activeTabBtn.textContent);
@@ -1518,6 +1533,9 @@ async function loadPublishSection() {
 // no second near-identical form to keep in step.
 // ---------------------------------------------------------------------------
 let ART_EDITING_ID = null;
+// The loaded article's status, so the buttons know whether a save should
+// publish a draft or just amend a live piece.
+let ART_EDITING_STATUS = null;
 
 function artSectionHtml(index, data) {
   const d = data || {};
@@ -1653,6 +1671,7 @@ function artShowDerived(a) {
 
 function artReset() {
   ART_EDITING_ID = null;
+  ART_EDITING_STATUS = null;
   ['artTitle', 'artSubtitle', 'artSeoTitle', 'artSlug', 'artMeta', 'artKicker', 'artBody', 'artConclusion', 'artCtaLabel', 'artCtaUrl'].forEach((id) => { document.getElementById(id).value = ''; });
   document.getElementById('artCategory').value = '';
   document.getElementById('artEmotion').value = '';
@@ -1665,7 +1684,7 @@ function artReset() {
   document.getElementById('artDeleteBtn').style.display = 'none';
   document.getElementById('artPick').value = '';
   document.getElementById('artEditorHeading').textContent = 'Write an article';
-  document.getElementById('artSaveBtn').textContent = 'Publish Live';
+  artApplyStatusUi(null); // new article: Publish Live + Save as Draft both shown
   document.getElementById('artNote').textContent = '';
   document.getElementById('artMetaCount').textContent = '';
 }
@@ -1696,6 +1715,8 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     const data = await api('/articles/' + id);
     const a = data.article;
     ART_EDITING_ID = a.id;
+    ART_EDITING_STATUS = a.status;
+    artApplyStatusUi(a.status);
     document.getElementById('artTitle').value = a.title || '';
     document.getElementById('artSubtitle').value = a.subtitle || '';
     document.getElementById('artSeoTitle').value = a.seo_title || '';
@@ -1718,7 +1739,7 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     artShowDerived(a);
     document.getElementById('artDeleteBtn').style.display = '';
     document.getElementById('artEditorHeading').textContent = 'Edit article';
-    document.getElementById('artSaveBtn').textContent = 'Save Changes';
+    // Button labels are set by artApplyStatusUi(a.status) above.
     document.getElementById('artMeta').dispatchEvent(new Event('input'));
     note.textContent = '';
   } catch (err) {
@@ -1727,7 +1748,11 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('artSaveBtn').addEventListener('click', async () => {
+// Both the "Publish Live" and "Save as Draft" buttons run this; asDraft is the
+// only difference. A new draft is created with saveAsDraft; publishing an
+// existing draft sends status:'approved'; a plain edit of an already-published
+// article leaves its status untouched.
+async function artSave(asDraft) {
   const title = document.getElementById('artTitle').value.trim();
   const body = document.getElementById('artBody').value.trim();
   const note = document.getElementById('artNote');
@@ -1760,7 +1785,19 @@ document.getElementById('artSaveBtn').addEventListener('click', async () => {
     payload.tags = document.getElementById('artTags').value.split(',').map((s) => s.trim()).filter(Boolean);
   }
 
-  const btn = document.getElementById('artSaveBtn');
+  // Draft vs publish. On a NEW article the flag tells the server to hold it as
+  // a draft. When EDITING, an explicit status is sent: draft to unpublish/keep
+  // as draft, approved to publish a draft. A plain "Save Changes" on something
+  // already live sends no status, so it stays exactly as published.
+  if (!ART_EDITING_ID) {
+    if (asDraft) payload.saveAsDraft = true;
+  } else if (asDraft) {
+    payload.status = 'draft';
+  } else if (ART_EDITING_STATUS === 'draft') {
+    payload.status = 'approved';
+  }
+
+  const btn = asDraft ? document.getElementById('artDraftBtn') : document.getElementById('artSaveBtn');
   btn.disabled = true;
   note.textContent = 'Saving…';
   try {
@@ -1769,12 +1806,15 @@ document.getElementById('artSaveBtn').addEventListener('click', async () => {
       : await api('/articles', { method: 'POST', body: JSON.stringify(payload) });
     const a = res.article;
     ART_EDITING_ID = a.id;
+    ART_EDITING_STATUS = a.status;
     document.getElementById('artEditorHeading').textContent = 'Edit article';
-    document.getElementById('artSaveBtn').textContent = 'Save Changes';
+    artApplyStatusUi(a.status);
     document.getElementById('artDeleteBtn').style.display = '';
     document.getElementById('artSlug').value = a.slug || '';
     artShowDerived(a);
-    note.innerHTML = `Live — <a href="unplug-magazine.html?p=article&id=${a.id}" target="_blank" rel="noopener">view it on the site</a>.`;
+    note.innerHTML = a.status === 'approved'
+      ? `Live — <a href="unplug-magazine.html?p=article&id=${a.id}" target="_blank" rel="noopener">view it on the site</a>.`
+      : `Saved as ${a.status} — not visible on the public site yet.`;
     showToast(res.message || 'Saved.');
     artLoadPickList();
     loadQueueTab('news');
@@ -1784,7 +1824,25 @@ document.getElementById('artSaveBtn').addEventListener('click', async () => {
   } finally {
     btn.disabled = false;
   }
-});
+}
+
+// Primary button reads "Publish Live" when the piece isn't live yet (new or
+// draft), "Save Changes" once it is. The draft button hides on an already-live
+// article — you publish or edit it, you don't re-draft it.
+function artApplyStatusUi(status) {
+  const primary = document.getElementById('artSaveBtn');
+  const draftBtn = document.getElementById('artDraftBtn');
+  if (status === 'approved') {
+    primary.textContent = 'Save Changes';
+    draftBtn.style.display = 'none';
+  } else {
+    primary.textContent = 'Publish Live';
+    draftBtn.style.display = '';
+  }
+}
+
+document.getElementById('artSaveBtn').addEventListener('click', () => artSave(false));
+document.getElementById('artDraftBtn').addEventListener('click', () => artSave(true));
 
 document.getElementById('artDeleteBtn').addEventListener('click', async () => {
   if (!ART_EDITING_ID) return;

@@ -409,18 +409,27 @@ router.get('/articles/pending', requireRole('admin'), async (req, res, next) => 
   }
 });
 
-// PATCH /admin/articles/:id/approve — sets published_at so it appears
-// immediately in the public /articles feed.
+// PATCH /admin/articles/:id/approve — sets published_at so it appears in the
+// public /articles feed. An optional scheduledFor date holds it back until
+// that day: the feed only shows approved articles whose scheduled_for is null
+// or already past, so a future date publishes on its own with no cron.
 router.patch('/articles/:id/approve', requireRole('admin'), async (req, res, next) => {
   try {
+    const scheduledFor = req.body.scheduledFor || null;
     const result = await pool.query(
-      `UPDATE articles SET status = 'approved', published_at = now() WHERE id = $1 RETURNING *`,
-      [req.params.id]
+      `UPDATE articles
+          SET status = 'approved',
+              published_at = COALESCE(published_at, now()),
+              scheduled_for = $2
+        WHERE id = $1
+        RETURNING *`,
+      [req.params.id, scheduledFor]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Article not found.' });
     }
-    await logActivity(req.user.id, 'article_approved', `Article #${req.params.id} — ${result.rows[0].title}`);
+    await logActivity(req.user.id, 'article_approved',
+      `Article #${req.params.id} — ${result.rows[0].title}${scheduledFor ? ` (scheduled ${scheduledFor})` : ''}`);
     res.json({ article: result.rows[0] });
   } catch (err) {
     next(err);
