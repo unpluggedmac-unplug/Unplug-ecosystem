@@ -48,19 +48,43 @@ Four real, verified fixes shipped from the rest of that document:
    doesn't have) plus a live post-deploy check that the new routes are
    correctly registered and auth-gated.
 
-**Still open from that PDF, needs a decision before coding:** Pierre's own
-document contradicts itself on Directory Profile image size — page 1 says
-`1200×1200 (1:1)`, page 3 says `1920×1080 (16:9)` for the same field.
-Don't guess — ask Pierre which one is actually correct before touching the
-profile image spec/upload hints.
+**Dimension hints — DONE (2026-07-24):** added the required-size hint to
+every submission field the PDF asked for that had none: article cover image
+(member + admin), Top 10 manual-entry photo, Marketplace poster, Directory
+profile gallery images. Ad banners already had this from the rotation work.
 
-**Not yet checked against that PDF:** image-dimension hints on the
-Directory/Gallery/Top-10/Editions submission forms themselves (the PDF
-wants the required size shown right on the upload field — ad banners now
-do this, others not yet checked); Gallery submission fields (title,
-description, category, credit, tags, publish date, status, featured
-yes/no) against what's actually in the gallery submission form; Events
-Calendar's exact "3 most recent + See All/Submit Event buttons" wording.
+**Still open, needs a decision before coding — three items now, not one:**
+
+1. **Directory Profile Feature/Cover image size** — Pierre's own document
+   contradicts itself: page 1 says `1200×1200 (1:1)`, page 3 says
+   `1920×1080 (16:9)` for the same field. Don't guess.
+2. **Event feature image size** — the PDF wants `1920×1080 (16:9)` for
+   Events, but the live site (member submission form AND the admin Calendar
+   Events editor, consistently) has always used `800×1200 (2:3 portrait)`.
+   Since it's consistent in two places already, this might be a deliberate
+   choice (event posters are commonly portrait-oriented flyers) rather than
+   an oversight — worth asking Pierre before flipping a working convention.
+3. **Gallery is a fundamentally different system than what the PDF
+   describes — this is bigger than a missing-fields fix.** The PDF wants an
+   album model: title, description, category, photographer credit, tags,
+   publish date, status (draft/pending/published/archived), a featured
+   toggle. What's actually built (`gallery_images` + `gallery_bundles`,
+   `unplug-backend/src/routes/gallery.js`) is a flat **per-photo bundle**
+   system — pay once for 1-3 individual photos (R100 total), each with only
+   an image URL, a caption, and who supplied it. There is no album/gallery
+   entity at all — no title, description, category, tags, or featured
+   concept anywhere in the schema. Building what the PDF asks for would
+   mean a genuine new table + admin workflow + Gallery-page redesign (album
+   grid instead of a photo grid), not a quick addition — and the PDF's own
+   instruction ("Modify Existing Feature Only — do not redesign") directly
+   conflicts with what it's asking for here. Needs Pierre and Darius to
+   decide whether this is actually wanted (and worth the size of the
+   change) before any code gets written.
+
+**Not yet checked against that PDF:** Events Calendar's exact "3 most
+recent + See All/Submit Event buttons" wording (calendar events already
+wired to live data per HANDOVER §11 — just haven't confirmed the copy/
+button set matches word-for-word).
 
 ## ✅ DOMAIN CUTOVER — www live (2026-07-19)
 
