@@ -33,15 +33,22 @@ router.get('/competitions/:slug', async (req, res, next) => {
     }
     const competition = compResult.rows[0];
 
+    // LEFT JOIN, not JOIN: a manual entry has no profile, so its identity
+    // comes from ce.manual_name / ce.manual_image_url instead. display_name and
+    // image are COALESCEd so the frontend renders both kinds the same way; a
+    // manual entry returns a null profile_slug (no profile page to link to).
     const entries = await pool.query(
-      `SELECT ce.id, ce.profile_id, ce.created_at, p.display_name, p.slug AS profile_slug,
+      `SELECT ce.id, ce.profile_id, ce.created_at,
+              COALESCE(p.display_name, ce.manual_name) AS display_name,
+              p.slug AS profile_slug,
+              ce.manual_image_url,
               c.name AS category, COALESCE(SUM(v.bundle_size), 0) AS vote_count
        FROM competition_entries ce
-       JOIN profiles p ON p.id = ce.profile_id
+       LEFT JOIN profiles p ON p.id = ce.profile_id
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN votes v ON v.entry_id = ce.id
        WHERE ce.competition_id = $1 AND ce.status = 'approved'
-       GROUP BY ce.id, p.display_name, p.slug, c.name
+       GROUP BY ce.id, p.display_name, p.slug, ce.manual_name, ce.manual_image_url, c.name
        ORDER BY vote_count DESC`,
       [competition.id]
     );
@@ -127,20 +134,47 @@ router.post('/competitions/:id/entries', requireAuth, async (req, res, next) => 
   }
 });
 
-// POST /competitions/:id/admin-entries — admin adds any profile to a
-// competition (including the Top 10 list) directly: approved on the spot,
-// zero fee, no payment step. The member-facing route above can only enter
-// the caller's own profile, which is why editorial needs its own door.
+// POST /competitions/:id/admin-entries — admin adds an entry to a competition
+// (including the Top 10 list) directly: approved on the spot, zero fee, no
+// payment step. The member-facing route above can only enter the caller's own
+// profile, which is why editorial needs its own door.
+//
+// Two shapes: pass profileId to feature an existing Directory profile, OR pass
+// manualName (+ optional manualImageUrl) to feature someone who has no profile
+// — just a name and a photo.
 router.post('/competitions/:id/admin-entries', requireRole('admin'), async (req, res, next) => {
   try {
     const competitionId = Number(req.params.id);
-    const profileId = Number(req.body.profileId);
-    if (!Number.isInteger(competitionId) || !Number.isInteger(profileId)) {
-      return res.status(400).json({ error: 'A valid competition and profile are required.' });
+    if (!Number.isInteger(competitionId)) {
+      return res.status(400).json({ error: 'A valid competition is required.' });
     }
     const competition = await pool.query('SELECT id FROM competitions WHERE id = $1', [competitionId]);
     if (competition.rows.length === 0) {
       return res.status(404).json({ error: 'Competition not found.' });
+    }
+
+    const manualName = (req.body.manualName || '').trim();
+
+    // Manual entry: a name (and optionally an image), no profile.
+    if (manualName) {
+      if (manualName.length > 160) return res.status(400).json({ error: 'That name is too long.' });
+      const manualImageUrl = (req.body.manualImageUrl || '').trim() || null;
+      const result = await pool.query(
+        `INSERT INTO competition_entries (competition_id, profile_id, manual_name, manual_image_url, entry_fee, status)
+         VALUES ($1, NULL, $2, $3, 0, 'approved')
+         RETURNING *`,
+        [competitionId, manualName, manualImageUrl]
+      );
+      return res.status(201).json({
+        entry: result.rows[0],
+        message: 'Entry added and approved — it is live on the list now.',
+      });
+    }
+
+    // Profile entry (the original path).
+    const profileId = Number(req.body.profileId);
+    if (!Number.isInteger(profileId)) {
+      return res.status(400).json({ error: 'Provide either a profile to feature, or a name for a manual entry.' });
     }
     const profile = await pool.query('SELECT id FROM profiles WHERE id = $1', [profileId]);
     if (profile.rows.length === 0) {

@@ -19,6 +19,7 @@ router.get('/', async (req, res, next) => {
         WHERE is_visible = true
         ORDER BY page_key, position, id`
     );
+    const ads = await pool.query('SELECT slot_key, image_url, link_url FROM ad_slots');
     // Shape content as { "home.hero.title": "…" } so the frontend can look up
     // a data-cms attribute directly without walking nested objects.
     const contentMap = {};
@@ -28,7 +29,10 @@ router.get('/', async (req, res, next) => {
       if (!blocksByPage[b.page_key]) blocksByPage[b.page_key] = [];
       blocksByPage[b.page_key].push(b);
     });
-    res.json({ content: contentMap, blocks: blocksByPage });
+    // Keyed by slot so the page can look up a data-ad-slot directly.
+    const adSlots = {};
+    ads.rows.forEach((a) => { adSlots[a.slot_key] = { image_url: a.image_url, link_url: a.link_url }; });
+    res.json({ content: contentMap, blocks: blocksByPage, adSlots });
   } catch (err) {
     next(err);
   }
@@ -159,6 +163,51 @@ router.delete('/admin/blocks/:id', requireRole('admin'), async (req, res, next) 
     await pool.query('DELETE FROM page_blocks WHERE id = $1', [id]);
     logActivity(req.user.id, 'cms_block_deleted', `block ${id}`);
     res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /page-cms/admin/ad-slots — admin, every configured ad banner.
+router.get('/admin/ad-slots', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT slot_key, image_url, link_url, updated_at FROM ad_slots');
+    const slots = {};
+    result.rows.forEach((r) => { slots[r.slot_key] = { image_url: r.image_url, link_url: r.link_url }; });
+    res.json({ adSlots: slots });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /page-cms/admin/ad-slots/:slotKey — admin sets (or clears) a banner.
+// An empty image clears the slot, so it falls back to the "reserve this space"
+// placeholder — the same revert pattern as the wording CMS.
+router.put('/admin/ad-slots/:slotKey', requireRole('admin'), async (req, res, next) => {
+  try {
+    const slotKey = (req.params.slotKey || '').trim();
+    if (!slotKey || slotKey.length > 60) return res.status(400).json({ error: 'A valid slot key is required.' });
+    const imageUrl = (req.body.imageUrl || '').trim();
+    const linkUrl = (req.body.linkUrl || '').trim() || null;
+    // A link is a URL a reader clicks — only http(s), never javascript:.
+    if (linkUrl && !/^https?:\/\//i.test(linkUrl)) {
+      return res.status(400).json({ error: 'The link must start with http:// or https://' });
+    }
+
+    if (!imageUrl) {
+      await pool.query('DELETE FROM ad_slots WHERE slot_key = $1', [slotKey]);
+      logActivity(req.user.id, 'ad_slot_cleared', slotKey);
+      return res.json({ cleared: true, message: 'Banner cleared — the slot shows the reserve-this-space placeholder again.' });
+    }
+    await pool.query(
+      `INSERT INTO ad_slots (slot_key, image_url, link_url)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (slot_key)
+       DO UPDATE SET image_url = EXCLUDED.image_url, link_url = EXCLUDED.link_url, updated_at = now()`,
+      [slotKey, imageUrl, linkUrl]
+    );
+    logActivity(req.user.id, 'ad_slot_set', slotKey);
+    res.json({ saved: true, message: 'Banner saved — it is live on the site now.' });
   } catch (err) {
     next(err);
   }

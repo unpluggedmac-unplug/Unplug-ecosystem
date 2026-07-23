@@ -181,6 +181,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="analytics">Analytics</a>
     <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="pagecms">Page Content</a>
+    <a data-section="adbanners">Ad Banners</a>
     <a data-section="publish">Publish</a>
     <a data-section="polls">Polls</a>
     <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
@@ -439,6 +440,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- INQUIRIES -->
     <!-- PAGE CONTENT (CMS) -->
+    <!-- AD BANNERS -->
+    <div class="admin-section" id="section-adbanners">
+      <div class="main-head"><div><h1>Ad Banners</h1><p>Each advertising slot on the site starts as a "Reserve this space" placeholder. Upload a banner and (optionally) a click-through link to fill one. Clear the image to put the placeholder back. Leaderboards are wide (about 728×90); sponsor blocks are square-ish (about 300×250).</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="adBannersBody">Loading…</div>
+      </div>
+    </div>
+
     <div class="admin-section" id="section-pagecms">
       <div class="main-head"><div><h1>Page Content</h1><p>Change wording on the site, and add image blocks to any page. Changes go live immediately.</p></div></div>
 
@@ -656,14 +665,27 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h3>Add a Top 10 entry</h3></div>
+        <div class="panel-head"><h3>Add a Top 10 entry — from a Directory profile</h3></div>
         <div class="panel-body">
-          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Adds a directory profile straight onto the Top 10 list, approved and free of charge.</p>
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Adds an existing directory profile straight onto the Top 10 list, approved and free of charge.</p>
           <div class="form-row">
             <div style="grid-column:1/-2;"><label>Profile</label><select id="top10Profile"><option value="">— choose a profile —</option></select></div>
             <div><label>&nbsp;</label><button class="btn btn-solid" style="width:100%;" id="addTop10Btn">Add to Top 10</button></div>
           </div>
           <span id="top10Note" style="font-size:12px; color:var(--slate);"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Add a Top 10 entry — manually</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">For someone who has no Directory profile — just a name and a photo. Goes onto the Top 10 list approved, free of charge.</p>
+          <div class="form-row">
+            <div><label>Name and surname</label><input id="top10ManualName" placeholder="e.g. Naledi Mokoena"></div>
+            <div style="grid-column:span 1;"><label>Photo</label><div id="top10ManualImgUpload"></div></div>
+          </div>
+          <button class="btn btn-solid" style="width:auto; margin-top:10px;" id="addTop10ManualBtn">Add to Top 10</button>
+          <span id="top10ManualNote" style="font-size:12px; color:var(--slate); display:block; margin-top:8px;"></span>
         </div>
       </div>
     </div>
@@ -1002,6 +1024,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'analytics') loadAnalytics(7);
     if (section === 'comments') loadPendingComments();
     if (section === 'pagecms') loadPageCms();
+    if (section === 'adbanners') loadAdBanners();
     if (section === 'publish') { loadPublishSection(); loadEmailStatus(); }
     if (section === 'polls') loadPolls();
     if (section === 'reviews') loadPendingReviews();
@@ -1308,6 +1331,77 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
   }
 });
 
+// Ad Banners — the catalog of slots must match the data-ad-slot keys on the
+// public page (unplug-magazine.html). Each row is an image upload + a link +
+// a Save. Saving an empty image clears the slot back to its placeholder.
+const AD_SLOT_CATALOG = [
+  { key: 'home-sponsor-1', label: 'Home — Featured Sponsor 1 (300×250)' },
+  { key: 'home-sponsor-2', label: 'Home — Featured Sponsor 2 (300×250)' },
+  { key: 'home-sponsor-3', label: 'Home — Featured Sponsor 3 (300×250)' },
+  { key: 'news-leaderboard', label: 'Latest News — Leaderboard (728×90)' },
+  { key: 'directory-sponsor', label: 'Directory — Sponsor (300×250)' },
+  { key: 'gallery-sponsor', label: 'Gallery — Sponsor (300×250)' },
+  { key: 'editions-leaderboard', label: 'Editions — Leaderboard (728×90)' },
+  { key: 'editions-sponsor', label: 'Editions — Sponsor (300×250)' },
+  { key: 'top10-sponsor', label: 'Top 10 — Presented by (banner)' },
+  { key: 'competitions-leaderboard', label: 'Competitions — Leaderboard (728×90)' },
+  { key: 'investors-leaderboard', label: 'Investors — Leaderboard (728×90)' },
+  { key: 'about-leaderboard', label: 'About — Leaderboard (728×90)' },
+  { key: 'contact-leaderboard', label: 'Contact — Leaderboard (728×90)' },
+];
+
+async function loadAdBanners() {
+  const body = document.getElementById('adBannersBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  let current = {};
+  try {
+    const data = await api('/page-cms/admin/ad-slots');
+    current = data.adSlots || {};
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+    return;
+  }
+  body.innerHTML = '';
+  AD_SLOT_CATALOG.forEach((slot) => {
+    const cfg = current[slot.key] || {};
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:16px 0; border-bottom:1px solid var(--paper-line);';
+    wrap.innerHTML = `
+      <div style="font-weight:600; font-size:14px; margin-bottom:8px;">${escapeHtmlAdmin(slot.label)}
+        ${cfg.image_url ? '<span style="color:var(--red); font-size:11px; margin-left:6px;">● live</span>' : '<span style="color:var(--slate); font-size:11px; margin-left:6px;">placeholder</span>'}</div>
+      <div class="form-row">
+        <div style="grid-column:1/-2;"><label>Banner image</label><div class="ad-img-upload"></div></div>
+        <div><label>Click-through link (optional)</label><input class="ad-link" placeholder="https://…" value="${escapeHtmlAdmin(cfg.link_url || '')}"></div>
+      </div>
+      <button class="btn btn-solid ad-save" style="width:auto; margin-top:8px;">Save banner</button>
+      <span class="ad-note" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>`;
+    body.appendChild(wrap);
+
+    const uploadHost = wrap.querySelector('.ad-img-upload');
+    uploadHost.innerHTML = UnplugUpload.fieldHtml('adImage_' + slot.key, cfg.image_url || '');
+
+    wrap.querySelector('.ad-save').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const note = wrap.querySelector('.ad-note');
+      const imageUrl = UnplugUpload.valueOf(uploadHost) || '';
+      const linkUrl = wrap.querySelector('.ad-link').value.trim();
+      btn.disabled = true;
+      try {
+        const res = await api(`/page-cms/admin/ad-slots/${encodeURIComponent(slot.key)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ imageUrl, linkUrl }),
+        });
+        showToast(res.message || 'Saved.');
+        loadAdBanners();
+      } catch (err) {
+        note.textContent = '';
+        showToast(err.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
 // Page Content (CMS) — image blocks and wording overrides.
 async function loadPageCms() {
   if (!document.querySelector("#cmsBlockImgUpload .img-upload")) document.getElementById("cmsBlockImgUpload").innerHTML = UnplugUpload.fieldHtml("blockImage", "");
@@ -1531,6 +1625,10 @@ async function loadPublishSection() {
   // Seed the editor: an empty banner upload field and the article picker.
   if (!document.querySelector('#artBannerUpload .img-upload')) {
     document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '');
+  }
+  // Photo upload for the manual Top 10 entry form.
+  if (!document.querySelector('#top10ManualImgUpload .img-upload')) {
+    document.getElementById('top10ManualImgUpload').innerHTML = UnplugUpload.fieldHtml('top10ManualImage', '');
   }
   artLoadPickList();
 }
@@ -1889,6 +1987,32 @@ document.getElementById('addTop10Btn').addEventListener('click', async () => {
   }
 });
 
+// Manual Top 10 entry — a name and a photo, no Directory profile required.
+document.getElementById('addTop10ManualBtn').addEventListener('click', async () => {
+  const manualName = document.getElementById('top10ManualName').value.trim();
+  const note = document.getElementById('top10ManualNote');
+  if (!manualName) { showToast('Enter a name and surname.', true); return; }
+  if (!TOP10_COMPETITION_ID) { showToast('Could not find the Top 10 list.', true); return; }
+  const manualImageUrl = UnplugUpload.valueOf(document.getElementById('top10ManualImgUpload')) || '';
+  const btn = document.getElementById('addTop10ManualBtn');
+  btn.disabled = true;
+  try {
+    const res = await api(`/competitions/${TOP10_COMPETITION_ID}/admin-entries`, {
+      method: 'POST',
+      body: JSON.stringify({ manualName, manualImageUrl }),
+    });
+    showToast(res.message || 'Added to the Top 10.');
+    note.textContent = 'Added — it appears on the Top 10 list straight away.';
+    document.getElementById('top10ManualName').value = '';
+    document.getElementById('top10ManualImgUpload').innerHTML = UnplugUpload.fieldHtml('top10ManualImage', '');
+  } catch (err) {
+    note.textContent = '';
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // Directory review moderation.
 async function loadPendingReviews() {
   const body = document.getElementById('reviewsBody');
@@ -2238,7 +2362,7 @@ function openManageEditor(resource, item) {
     label.textContent = field.replace(/_/g, ' ');
     // Long-form fields get a textarea; a one-line input for a body of text is
     // unusable for the person who has to fix a typo in the middle of it.
-    const isLong = ['body', 'bio', 'description', 'achievements', 'career', 'quote'].includes(field);
+    const isLong = ['body', 'bio', 'description', 'achievements', 'career', 'quote', 'conclusion', 'meta_description'].includes(field);
     const input = document.createElement(isLong ? 'textarea' : 'input');
     if (isLong) input.rows = 6;
     if (/_date$|^event_date$|_from$|_to$/.test(field)) input.type = 'date';

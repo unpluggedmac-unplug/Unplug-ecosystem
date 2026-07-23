@@ -387,6 +387,9 @@ section.home-section:last-of-type{ margin-bottom:0; }
   font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--gold); font-weight:700;
 }
 .ad-slot span.label{ color:var(--slate); font-weight:600; letter-spacing:0.04em; }
+/* Once an admin sets a real banner, drop the dashed placeholder chrome so only
+   the banner image shows. */
+.ad-slot-filled{ border:none; background:none; padding:0; }
 
 /* ---- top 10 ---- */
 .rank-list{ display:flex; flex-direction:column; }
@@ -1419,9 +1422,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </div>
     </div>
     <div class="grid-3">
-      <div class="ad-slot ad-card"><span class="label">Featured Sponsor</span><span>300×250 · Reserve this space</span></div>
-      <div class="ad-slot ad-card"><span class="label">Featured Sponsor</span><span>300×250 · Reserve this space</span></div>
-      <div class="ad-slot ad-card"><span class="label">Featured Sponsor</span><span>300×250 · Reserve this space</span></div>
+      <div data-ad-slot="home-sponsor-1" class="ad-slot ad-card"><span class="label">Featured Sponsor</span><span>300×250 · Reserve this space</span></div>
+      <div data-ad-slot="home-sponsor-2" class="ad-slot ad-card"><span class="label">Featured Sponsor</span><span>300×250 · Reserve this space</span></div>
+      <div data-ad-slot="home-sponsor-3" class="ad-slot ad-card"><span class="label">Featured Sponsor</span><span>300×250 · Reserve this space</span></div>
     </div>
   </section>
 
@@ -1651,7 +1654,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   <div class="divider wrap"><div class="line"></div><span class="print-mark"></span><div class="line"></div></div>
 
   <section class="wrap" style="padding-top:0;">
-    <div class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
+    <div data-ad-slot="news-leaderboard" class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
   </section>
 
   <section class="wrap" style="padding-top:0;">
@@ -1855,7 +1858,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
   <section class="on-paper">
     <div class="wrap">
-      <div class="ad-slot"><span class="label">Advertisement — 300×250 Directory Sponsor</span><span>Reserve this space</span></div>
+      <div data-ad-slot="directory-sponsor" class="ad-slot"><span class="label">Advertisement — 300×250 Directory Sponsor</span><span>Reserve this space</span></div>
     </div>
   </section>
   <!-- FEATURED ADVERTISERS POSTER SLIDESHOW -->
@@ -1956,7 +1959,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </section>
 
   <section class="wrap">
-    <div class="ad-slot"><span class="label">Advertisement — 300×250 Gallery Sponsor</span><span>Reserve this space</span></div>
+    <div data-ad-slot="gallery-sponsor" class="ad-slot"><span class="label">Advertisement — 300×250 Gallery Sponsor</span><span>Reserve this space</span></div>
   </section>
   <!-- FEATURED ADVERTISERS POSTER SLIDESHOW -->
   <section class="wrap poster-section" style="padding-top:0;">
@@ -2024,7 +2027,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   <div class="divider wrap"><div class="line"></div><span class="print-mark"></span><div class="line"></div></div>
 
   <section class="wrap" style="padding-top:0;">
-    <div class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
+    <div data-ad-slot="editions-leaderboard" class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
   </section>
 
   <section class="wrap" style="padding-top:0;">
@@ -2073,7 +2076,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </section>
 
   <section class="wrap">
-    <div class="ad-slot"><span class="label">Advertisement — 300×250 Editions Sponsor</span><span>Reserve this space</span></div>
+    <div data-ad-slot="editions-sponsor" class="ad-slot"><span class="label">Advertisement — 300×250 Editions Sponsor</span><span>Reserve this space</span></div>
   </section>
 </main>
 
@@ -2087,7 +2090,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
 
   <section class="wrap" style="padding-top:0;">
-    <div class="ad-slot" style="margin-bottom:56px;"><span class="label">Sponsored — Top 10 presented by</span><span>Reserve this space</span></div>
+    <div data-ad-slot="top10-sponsor" class="ad-slot" style="margin-bottom:56px;"><span class="label">Sponsored — Top 10 presented by</span><span>Reserve this space</span></div>
     <div class="rank-list" id="top10List"><div class="dir-empty-state">Loading…</div></div>
     <div style="text-align:center; margin-top:28px;">
       <button class="btn btn-line" id="seeFullListBtn" onclick="toggleFullList()">See The Full List</button>
@@ -2181,7 +2184,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
 
   <section class="wrap winners">
-    <div class="ad-slot" style="margin-bottom:40px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
+    <div data-ad-slot="competitions-leaderboard" class="ad-slot" style="margin-bottom:40px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
     <div class="section-head">
       <div><span class="eyebrow">Live entries</span><h2>Current Arena Entries</h2></div>
     </div>
@@ -2264,7 +2267,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
 
   <section class="wrap" style="padding-top:56px;">
-    <div class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
+    <div data-ad-slot="investors-leaderboard" class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
   </section>
 
   <section class="wrap">
@@ -2373,7 +2376,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
 
   <section class="wrap">
-    <div class="ad-slot" style="margin-bottom:40px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
+    <div data-ad-slot="about-leaderboard" class="ad-slot" style="margin-bottom:40px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
     <div class="section-head"><div><span class="eyebrow">What we offer</span><h2>Our Services</h2></div></div>
     <div class="services-grid">
       <div class="service-card"><span class="service-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="32" height="32"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span><h3>Editorial Coverage</h3><p>Professional story writing and feature articles for individuals, brands, and organisations making an impact.</p></div>
@@ -2603,7 +2606,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   <div class="divider wrap"><div class="line"></div><span class="print-mark"></span><div class="line"></div></div>
 
   <section class="wrap" style="padding-top:0;">
-    <div class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
+    <div data-ad-slot="contact-leaderboard" class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
     <div class="contact-block">
       <div>
         <h3>Get in touch</h3>
@@ -3734,6 +3737,20 @@ async function applyPageCms() {
     const list = blocks[wrap.getAttribute('data-cms-blocks')] || [];
     wrap.innerHTML = list.map(cmsBlockHtml).join('');
   });
+
+  // Ad banners. Any slot an admin has filled in gets its placeholder swapped
+  // for the real banner (a click-through link if one was set). Slots with no
+  // config keep the "reserve this space" placeholder untouched.
+  const adSlots = cms.adSlots || {};
+  document.querySelectorAll('[data-ad-slot]').forEach((slot) => {
+    const cfg = adSlots[slot.getAttribute('data-ad-slot')];
+    if (!cfg || !cfg.image_url) return;
+    const img = `<img src="${escapeHtml(cfg.image_url)}" alt="Advertisement" loading="lazy" decoding="async" style="display:block;width:100%;height:100%;object-fit:contain;">`;
+    slot.innerHTML = cfg.link_url
+      ? `<a href="${escapeHtml(cfg.link_url)}" target="_blank" rel="noopener sponsored" style="display:block;width:100%;height:100%;">${img}</a>`
+      : img;
+    slot.classList.add('ad-slot-filled');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -4464,6 +4481,13 @@ function avatarUrl(name){
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=272626&color=fff&size=128&font-size=0.38&bold=true`;
 }
 
+// A Top 10 entry's photo. A manual entry (admin-added, no profile) carries its
+// own uploaded image; a profile-based entry has none here, so it falls back to
+// the generated initials avatar as before.
+function entryPhotoUrl(p){
+  return (p && p.manual_image_url) ? p.manual_image_url : avatarUrl(p.display_name);
+}
+
 function isEntryNew(entry) {
   const ageMs = Date.now() - new Date(entry.created_at).getTime();
   return ageMs < NEW_ENTRY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
@@ -4493,7 +4517,7 @@ function renderTop10(sorted){
   el.innerHTML = top10.map((p, i) => `
     <div class="rank-row" style="${i===9?'border-bottom:none;':''}">
       <span class="rank-num">${String(i+1).padStart(2,'0')}</span>
-      <div class="rank-photo"><img src="${avatarUrl(p.display_name)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+      <div class="rank-photo"><img src="${entryPhotoUrl(p)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
       <div><div class="rank-name">${escapeHtml(p.display_name)}</div><div class="rank-cause">${escapeHtml(p.category || '')}</div>${shareRow(absUrl(p.slug ? '?p=profile&slug=' + encodeURIComponent(p.slug) : '?p=top10'), p.display_name + ' on the Unplug Top 10')}</div>
       <span class="rank-badge">${isEntryNew(p) ? 'New Entry' : 'Verified'}</span>
     </div>`).join('');
@@ -4514,7 +4538,7 @@ function renderNewEntries(sorted){
     const inTop10 = rank <= 10;
     return `
     <div class="new-entry-card">
-      <div class="rank-photo" style="width:56px;height:56px;"><img src="${avatarUrl(p.display_name)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+      <div class="rank-photo" style="width:56px;height:56px;"><img src="${entryPhotoUrl(p)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
       <div>
         <div class="rank-name" style="font-size:16px;">${escapeHtml(p.display_name)}</div>
         <div class="rank-cause">${escapeHtml(p.category || '')}</div>
@@ -4559,7 +4583,7 @@ function renderFullList(sorted){
     return `
     <div class="rank-row" style="${i===listToShow.length-1?'border-bottom:none;':''}">
       <span class="rank-num">${String(rank).padStart(2,'0')}</span>
-      <div class="rank-photo"><img src="${avatarUrl(p.display_name)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+      <div class="rank-photo"><img src="${entryPhotoUrl(p)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
       <div><div class="rank-name">${escapeHtml(p.display_name)}</div><div class="rank-cause">${escapeHtml(p.category || '')}</div>${shareRow(absUrl(p.slug ? '?p=profile&slug=' + encodeURIComponent(p.slug) : '?p=top10'), p.display_name + ' on the Unplug Top 10')}</div>
       <span class="rank-badge">${isEntryNew(p) ? 'New Entry' : 'Verified'}</span>
     </div>`;
@@ -4581,7 +4605,7 @@ function renderPoll(sorted){
     const voted = String(votedEntryId) === String(p.id);
     return `
     <div class="poll-row">
-      <div class="poll-photo"><img src="${avatarUrl(p.display_name)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+      <div class="poll-photo"><img src="${entryPhotoUrl(p)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
       <span class="poll-name">${escapeHtml(p.display_name)}${isEntryNew(p) ? ' <span style=\"color:var(--red); font-size:10px; font-weight:700; text-transform:uppercase;\">New</span>' : ''}</span>
       <div class="poll-bar-wrap" title="${escapeHtml(p.category || '')}">
         <div class="poll-bar" style="width:${pct}%"></div>

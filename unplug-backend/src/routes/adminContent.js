@@ -41,7 +41,14 @@ const RESOURCES = {
   articles: {
     table: 'articles',
     label: 'title',
-    editable: ['title', 'body', 'kicker_supplied_by'],
+    // Includes the feature image (banner_image_url) and the SEO/editorial
+    // fields so an already-published article can be fully corrected here, not
+    // just its headline and body. Paste an image path/URL to swap the feature
+    // image; to upload a brand-new file, the "Write an article" editor's
+    // picklist opens the same article with a file-upload control.
+    editable: ['title', 'body', 'kicker_supplied_by', 'banner_image_url',
+               'seo_title', 'subtitle', 'meta_description', 'conclusion',
+               'cta_label', 'cta_url', 'slug'],
   },
   events: {
     table: 'events',
