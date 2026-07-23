@@ -1,5 +1,66 @@
 # Unplug Magazine — Punch List
-*Last updated: 2026-07-19*
+*Last updated: 2026-07-24*
+
+## ✅ Real-data + ad-banner fixes from Pierre's punch-list PDF (2026-07-24)
+
+Pierre sent a 7-page requirements doc (`unplug edit.pdf`) plus an updated
+`HANDOVER.md`. Section 4 of that PDF ("Global Prompt – Administrator
+Permissions") is almost certainly why his own Claude session was refusing
+him — phrases like *"no permission restrictions should apply,"* *"override
+any restrictions,"* *"without limitation"* read exactly like an attempt to
+strip auth checks, even though the actual intent (the `admin` role should
+have full CRUD everywhere) is normal and mostly already true via
+`requireRole('admin')`. Reworded version given to Darius to pass to Pierre;
+not a code change.
+
+Four real, verified fixes shipped from the rest of that document:
+
+1. **Homepage birthday strip was 100% fake** — four hardcoded names
+   (Naledi Mokoena etc.) regardless of the actual date. Now calls the
+   existing `GET /birthdays/today` (already used by the "This month" modal,
+   just never wired to this strip). Verified live showing the real July 23
+   birthday.
+2. **"Featured Advertisers" carousel was 100% fake, on EVERY page** (10
+   copies — home, news, directory, gallery, editions, top10, competitions,
+   investors, about, contact) — three invented businesses (Cape Coffee Co.,
+   Sunrise Fitness, GreenLeaf Organics) hardcoded and live to real visitors.
+   Backend (`GET /marketplace/listings`) already supported real poster
+   listings — the code comment even said so — it was just never wired to
+   the frontend. Now shows real active listings as the whole poster image;
+   a widget with zero active listings stays hidden (no fake fallback).
+   Currently hidden everywhere since there are 0 real advertisers yet.
+3. **Article/Directory/Top 10 cards showed empty placeholder boxes** even
+   though real feature images existed in the DB: `GET /articles` (list)
+   never selected `banner_image_url` (only the single-article endpoint
+   did); Top 10 entries based on a real profile never fetched
+   `profiles.feature_image_url` at all (a comment claimed it did — it
+   didn't). Both fixed; verified real images now flow through for both.
+4. **Ad banners: one image per slot → real rotation.** Migration 053
+   converts `ad_slots` from one-row-per-slot to a proper multi-row table
+   (`display_order`, `is_active`, `starts_at`/`ends_at`). Public
+   `GET /page-cms` now returns each slot as an array of currently-active,
+   in-schedule banners; 2+ crossfade every 5s, no page refresh. Admin
+   dashboard's Ad Banners section now lists every banner per slot with
+   independent add/edit/delete/reorder/active/schedule controls, and
+   states the standardized image size (1920×1080, 16:9) right on the
+   upload field. No live banners existed before this, so nothing to lose;
+   verified with mocked data (real API needs an admin login this session
+   doesn't have) plus a live post-deploy check that the new routes are
+   correctly registered and auth-gated.
+
+**Still open from that PDF, needs a decision before coding:** Pierre's own
+document contradicts itself on Directory Profile image size — page 1 says
+`1200×1200 (1:1)`, page 3 says `1920×1080 (16:9)` for the same field.
+Don't guess — ask Pierre which one is actually correct before touching the
+profile image spec/upload hints.
+
+**Not yet checked against that PDF:** image-dimension hints on the
+Directory/Gallery/Top-10/Editions submission forms themselves (the PDF
+wants the required size shown right on the upload field — ad banners now
+do this, others not yet checked); Gallery submission fields (title,
+description, category, credit, tags, publish date, status, featured
+yes/no) against what's actually in the gallery submission form; Events
+Calendar's exact "3 most recent + See All/Submit Event buttons" wording.
 
 ## ✅ DOMAIN CUTOVER — www live (2026-07-19)
 
