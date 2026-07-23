@@ -180,6 +180,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="analytics">Analytics</a>
     <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+    <a data-section="dirprofiles">Directory Profiles</a>
     <a data-section="pagecms">Page Content</a>
     <a data-section="adbanners">Ad Banners</a>
     <a data-section="publish">Publish</a>
@@ -440,6 +441,49 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- INQUIRIES -->
     <!-- PAGE CONTENT (CMS) -->
+    <!-- DIRECTORY PROFILES -->
+    <div class="admin-section" id="section-dirprofiles">
+      <div class="main-head"><div><h1>Directory Profiles</h1><p>Edit any listing individually — its details, category, feature image (the banner/headshot shown on the card and profile page) and gallery images. Changes go live immediately.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Choose a profile</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div style="grid-column:1/-1;"><label>Profile</label><select id="dpPicker"><option value="">— choose a profile —</option></select></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="dpEditorPanel" style="display:none;">
+        <div class="panel-head"><h3 id="dpEditorTitle">Edit profile</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Display name</label><input id="dpName"></div>
+            <div><label>Category</label><select id="dpCategory"><option value="">— unchanged —</option></select></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>Feature image <span style="font-weight:400; color:var(--slate);">— the banner / headshot on the card and profile page</span></label><div id="dpFeatureUpload"></div></div>
+          <div class="field" style="margin-top:12px;"><label>Bio</label><textarea id="dpBio" rows="4"></textarea></div>
+          <div class="form-row">
+            <div><label>Contact email</label><input id="dpEmail"></div>
+            <div><label>Contact phone</label><input id="dpPhone"></div>
+            <div><label>Website</label><input id="dpWebsite"></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>Achievements</label><textarea id="dpAchievements" rows="3"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label>Career</label><textarea id="dpCareer" rows="3"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label>Quote</label><input id="dpQuote"></div>
+          <button class="btn btn-solid" style="width:auto; margin-top:14px;" id="dpSaveBtn">Save profile</button>
+          <span id="dpNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
+        </div>
+      </div>
+      <div class="panel" id="dpGalleryPanel" style="display:none;">
+        <div class="panel-head"><h3>Gallery images</h3></div>
+        <div class="panel-body">
+          <div id="dpGalleryList" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;"></div>
+          <label style="font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Add an image</label>
+          <div id="dpGalleryUpload" style="margin-top:6px;"></div>
+          <button class="btn btn-line" style="width:auto; margin-top:10px;" id="dpAddGalleryBtn">Add to gallery</button>
+        </div>
+      </div>
+    </div>
+
     <!-- AD BANNERS -->
     <div class="admin-section" id="section-adbanners">
       <div class="main-head"><div><h1>Ad Banners</h1><p>Each advertising slot on the site starts as a "Reserve this space" placeholder. Upload a banner and (optionally) a click-through link to fill one. Clear the image to put the placeholder back. Leaderboards are wide (about 728×90); sponsor blocks are square-ish (about 300×250).</p></div></div>
@@ -1023,6 +1067,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'notifications') loadNotifications();
     if (section === 'analytics') loadAnalytics(7);
     if (section === 'comments') loadPendingComments();
+    if (section === 'dirprofiles') loadDirProfiles();
     if (section === 'pagecms') loadPageCms();
     if (section === 'adbanners') loadAdBanners();
     if (section === 'publish') { loadPublishSection(); loadEmailStatus(); }
@@ -1326,6 +1371,138 @@ document.getElementById('addBirthdayBtn').addEventListener('click', async () => 
     document.getElementById('bdayDay').value = '';
     document.getElementById('bdayMessage').value = '';
     loadBirthdays();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+// Directory Profiles — per-profile editor (details, category, feature image,
+// gallery). Any edit uses the same PATCH /profiles/:id that owners use; admin
+// is allowed on it via requireOwnerOrAdmin.
+let DP_CURRENT = null; // { id, slug }
+
+async function loadDirProfiles() {
+  const picker = document.getElementById('dpPicker');
+  document.getElementById('dpEditorPanel').style.display = 'none';
+  document.getElementById('dpGalleryPanel').style.display = 'none';
+  try {
+    const data = await api('/admin/profiles/all');
+    picker.innerHTML = '<option value="">— choose a profile —</option>'
+      + (data.profiles || []).map((p) =>
+          `<option value="${p.id}" data-slug="${escapeHtmlAdmin(p.slug)}">${escapeHtmlAdmin(p.display_name)}${p.status !== 'approved' ? ' [' + p.status + ']' : ''}</option>`).join('');
+  } catch (err) {
+    picker.innerHTML = '<option value="">Could not load profiles</option>';
+  }
+  // Category options (shared with the article editor's directory categories).
+  try {
+    const cats = await api('/directory/categories');
+    document.getElementById('dpCategory').innerHTML = '<option value="">— unchanged —</option>'
+      + (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
+  } catch (err) { /* leave the unchanged option */ }
+}
+
+document.getElementById('dpPicker').addEventListener('change', (e) => {
+  const opt = e.target.selectedOptions[0];
+  const id = e.target.value;
+  if (!id) { document.getElementById('dpEditorPanel').style.display = 'none'; document.getElementById('dpGalleryPanel').style.display = 'none'; return; }
+  dpLoadProfile(Number(id), opt.getAttribute('data-slug'));
+});
+
+async function dpLoadProfile(id, slug) {
+  DP_CURRENT = { id, slug };
+  const note = document.getElementById('dpNote');
+  note.textContent = 'Loading…';
+  try {
+    const data = await api('/profiles/' + encodeURIComponent(slug));
+    const p = data.profile;
+    document.getElementById('dpEditorTitle').textContent = 'Edit — ' + p.display_name;
+    document.getElementById('dpName').value = p.display_name || '';
+    document.getElementById('dpCategory').value = p.category_id || '';
+    document.getElementById('dpBio').value = p.bio || '';
+    document.getElementById('dpEmail').value = p.contact_email || '';
+    document.getElementById('dpPhone').value = p.contact_phone || '';
+    document.getElementById('dpWebsite').value = p.contact_website || '';
+    document.getElementById('dpAchievements').value = p.achievements || '';
+    document.getElementById('dpCareer').value = p.career || '';
+    document.getElementById('dpQuote').value = p.quote || '';
+    document.getElementById('dpFeatureUpload').innerHTML = UnplugUpload.fieldHtml('dpFeature', p.feature_image_url || '');
+    document.getElementById('dpGalleryUpload').innerHTML = UnplugUpload.fieldHtml('dpGalleryImage', '');
+    document.getElementById('dpEditorPanel').style.display = 'block';
+    document.getElementById('dpGalleryPanel').style.display = 'block';
+    note.textContent = '';
+    dpLoadGallery();
+  } catch (err) {
+    note.textContent = 'Could not load: ' + err.message;
+  }
+}
+
+async function dpLoadGallery() {
+  const list = document.getElementById('dpGalleryList');
+  list.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api(`/admin/profiles/${DP_CURRENT.id}/gallery`);
+    const imgs = data.gallery || [];
+    if (imgs.length === 0) { list.innerHTML = '<span style="font-size:13px; color:var(--slate);">No gallery images yet.</span>'; return; }
+    list.innerHTML = '';
+    imgs.forEach((g) => {
+      const cell = document.createElement('div');
+      cell.style.cssText = 'position:relative; width:96px; height:96px;';
+      cell.innerHTML = `<img src="${escapeHtmlAdmin(g.image_url)}" alt="" style="width:100%;height:100%;object-fit:cover; border:1px solid var(--paper-line);">
+        <button class="reject" style="position:absolute; top:2px; right:2px; padding:2px 6px; font-size:11px;">✕</button>`;
+      cell.querySelector('button').addEventListener('click', async () => {
+        if (!confirm('Remove this image?')) return;
+        try { await api(`/admin/profiles/gallery/${g.id}`, { method: 'DELETE' }); showToast('Image removed.'); dpLoadGallery(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      list.appendChild(cell);
+    });
+  } catch (err) {
+    list.innerHTML = `<span style="font-size:13px; color:var(--red);">Could not load: ${err.message}</span>`;
+  }
+}
+
+document.getElementById('dpSaveBtn').addEventListener('click', async () => {
+  if (!DP_CURRENT) return;
+  const note = document.getElementById('dpNote');
+  const payload = {
+    displayName: document.getElementById('dpName').value.trim(),
+    bio: document.getElementById('dpBio').value.trim(),
+    contactEmail: document.getElementById('dpEmail').value.trim(),
+    contactPhone: document.getElementById('dpPhone').value.trim(),
+    contactWebsite: document.getElementById('dpWebsite').value.trim(),
+    achievements: document.getElementById('dpAchievements').value.trim(),
+    career: document.getElementById('dpCareer').value.trim(),
+    quote: document.getElementById('dpQuote').value.trim(),
+    featureImageUrl: UnplugUpload.valueOf(document.getElementById('dpFeatureUpload')) || null,
+  };
+  // Only send category when one is chosen — the empty option means "leave as is".
+  const catVal = document.getElementById('dpCategory').value;
+  if (catVal) payload.categoryId = Number(catVal);
+
+  const btn = document.getElementById('dpSaveBtn');
+  btn.disabled = true;
+  note.textContent = 'Saving…';
+  try {
+    await api(`/profiles/${DP_CURRENT.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    showToast('Profile saved.');
+    note.textContent = 'Saved — live on the site now.';
+  } catch (err) {
+    note.textContent = '';
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('dpAddGalleryBtn').addEventListener('click', async () => {
+  if (!DP_CURRENT) return;
+  const imageUrl = UnplugUpload.valueOf(document.getElementById('dpGalleryUpload')) || '';
+  if (!imageUrl) { showToast('Upload an image first.', true); return; }
+  try {
+    await api(`/admin/profiles/${DP_CURRENT.id}/gallery`, { method: 'POST', body: JSON.stringify({ imageUrl }) });
+    showToast('Image added to gallery.');
+    document.getElementById('dpGalleryUpload').innerHTML = UnplugUpload.fieldHtml('dpGalleryImage', '');
+    dpLoadGallery();
   } catch (err) {
     showToast(err.message, true);
   }

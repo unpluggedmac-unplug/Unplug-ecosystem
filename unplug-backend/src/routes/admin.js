@@ -301,6 +301,83 @@ router.patch('/profiles/:id/deaf-owned', requireRole('admin'), async (req, res, 
   }
 });
 
+// GET /admin/profiles/all — every Directory profile, for the per-profile
+// editor's picker. All statuses, newest first.
+router.get('/profiles/all', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.display_name, p.slug, p.status, p.package_tier,
+              c.name AS category
+         FROM profiles p
+         LEFT JOIN categories c ON c.id = p.category_id
+        ORDER BY p.display_name ASC
+        LIMIT 500`
+    );
+    res.json({ profiles: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/profiles/:id/gallery — a profile's gallery images, any status.
+router.get('/profiles/:id/gallery', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid profile id is required.' });
+    const result = await pool.query(
+      `SELECT id, image_url, caption, status
+         FROM gallery_images
+        WHERE owner_type = 'profile' AND owner_id = $1
+        ORDER BY created_at DESC`,
+      [id]
+    );
+    res.json({ gallery: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/profiles/:id/gallery — admin adds a gallery image to any
+// profile, approved on the spot (no member-facing credit/payment path).
+router.post('/profiles/:id/gallery', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid profile id is required.' });
+    const imageUrl = (req.body.imageUrl || '').trim();
+    if (!imageUrl) return res.status(400).json({ error: 'An image is required.' });
+    const profile = await pool.query('SELECT id FROM profiles WHERE id = $1', [id]);
+    if (profile.rowCount === 0) return res.status(404).json({ error: 'That profile no longer exists.' });
+
+    const result = await pool.query(
+      `INSERT INTO gallery_images (owner_type, owner_id, image_url, caption, status)
+       VALUES ('profile', $1, $2, $3, 'approved')
+       RETURNING id, image_url, caption, status`,
+      [id, imageUrl, (req.body.caption || '').trim() || null]
+    );
+    logActivity(req.user.id, 'profile_gallery_added', `Profile #${id}`);
+    res.status(201).json({ image: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /admin/profiles/gallery/:imageId — remove one gallery image.
+router.delete('/profiles/gallery/:imageId', requireRole('admin'), async (req, res, next) => {
+  try {
+    const imageId = Number(req.params.imageId);
+    if (!Number.isInteger(imageId)) return res.status(400).json({ error: 'A valid image id is required.' });
+    const result = await pool.query(
+      `DELETE FROM gallery_images WHERE id = $1 AND owner_type = 'profile' RETURNING id`,
+      [imageId]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'That image no longer exists.' });
+    logActivity(req.user.id, 'profile_gallery_removed', `image #${imageId}`);
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PATCH /admin/profiles/:id/renew — call this once a year (manually, for
 // now) to refresh a profile's included credits and push its renewal date
 // out another year. No downgrade path exists, so this always re-grants

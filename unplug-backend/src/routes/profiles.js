@@ -68,7 +68,7 @@ router.get('/directory', async (req, res, next) => {
     );
 
     const result = await pool.query(
-      `SELECT p.id, p.slug, p.display_name, p.package_tier, p.bio, p.type, p.deaf_owned_verified, c.name AS category, c2.name AS secondary_category
+      `SELECT p.id, p.slug, p.display_name, p.package_tier, p.bio, p.type, p.deaf_owned_verified, p.feature_image_url, c.name AS category, c2.name AS secondary_category
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN categories c2 ON c2.id = p.secondary_category_id
@@ -234,6 +234,11 @@ router.patch('/profiles/:id', requireOwnerOrAdmin(getProfileOwnerId), async (req
       bio: 'bio', achievements: 'achievements', career: 'career', quote: 'quote',
       contactEmail: 'contact_email', contactPhone: 'contact_phone', contactWebsite: 'contact_website',
       displayName: 'display_name',
+      // The feature/banner image and category. An owner can set these too, but
+      // in practice it's editorial (admin) that curates a listing's headline
+      // photo and its category placement.
+      featureImageUrl: 'feature_image_url',
+      categoryId: 'category_id', secondaryCategoryId: 'secondary_category_id',
       // Location powers the directory map and "near me" search. Town alone is
       // enough — the API derives coordinates from it — so most listings never
       // need latitude/longitude filled in by hand.

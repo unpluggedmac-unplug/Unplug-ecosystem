@@ -3214,7 +3214,12 @@ function dirCardHtml(profile) {
   const slug = escapeHtml(profile.slug);
   const secondCategory = escapeHtml(profile.secondary_category || '');
   const deafBadge = profile.deaf_owned_verified ? '<span class="deaf-owned-badge">🤟 Deaf-Owned Verified</span>' : '';
-  return `<div class="card-shell"><a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}${secondCategory ? ' + ' + secondCategory : ''}</p>${deafBadge}</a>${shareRow(absUrl('?p=profile&slug=' + encodeURIComponent(profile.slug || '')), profile.display_name)}</div>`;
+  // A feature image, when the profile has one, fills the card thumbnail;
+  // otherwise the print-mark placeholder shows as before.
+  const photo = profile.feature_image_url
+    ? `<div class="dir-photo" style="background-image:url('${escapeHtml(profile.feature_image_url)}'); background-size:cover; background-position:center;"></div>`
+    : `<div class="dir-photo"><span class="print-mark tiny"></span></div>`;
+  return `<div class="card-shell"><a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}">${photo}<h4>${name}</h4><p>${category}${secondCategory ? ' + ' + secondCategory : ''}</p>${deafBadge}</a>${shareRow(absUrl('?p=profile&slug=' + encodeURIComponent(profile.slug || '')), profile.display_name)}</div>`;
 }
 
 async function loadDirectory(reset) {
@@ -3278,9 +3283,12 @@ function profileDetailHtml(profile, socials, gallery) {
   const showExtras = tier === 'pro' || tier === 'premium';
   const showGallery = tier === 'premium' && gallery.length > 0;
 
+  const heroPhotoStyle = profile.feature_image_url
+    ? ` style="background-image:url('${escapeHtml(profile.feature_image_url)}'); background-size:cover; background-position:center;"`
+    : '';
   let html = `
     <div class="profile-header">
-      <div class="profile-photo-lg"></div>
+      <div class="profile-photo-lg"${heroPhotoStyle}></div>
       <div class="profile-header-copy">
         <span class="tier-pill">${escapeHtml(TIER_LABELS[tier] || tier)}</span>
         ${profile.verified ? '<span class="tier-pill" style="background:var(--red); color:#fff; margin-left:6px;">✓ Verified</span>' : ''}
