@@ -1161,7 +1161,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button data-page="deafcommunity" data-i18n="nav.deafcommunity">Deaf Community</button>
       <button data-page="about" data-i18n="nav.about">About</button>
       <button data-page="contact" data-i18n="nav.contact">Contact</button>
-      <button data-page="refunds" data-i18n="nav.refunds">Refunds</button>
+      <button data-page="refunds" data-i18n="nav.refunds">Terms &amp; Policies</button>
     </nav>
     <label class="lang-picker-wrap">
       <span class="sr-only" data-i18n="ui.language">Language</span>
@@ -2830,10 +2830,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
      change — policy wording is exactly the sort of thing that gets revised. -->
 <main class="page" id="page-refunds">
   <div class="wrap legal-page" style="padding-top:56px;">
-    <span class="eyebrow">Payments</span>
-    <h1 style="font-size:clamp(30px,4vw,46px); margin:14px 0 6px;" data-cms="refunds.heading">Refund &amp; Cancellation Policy</h1>
-    <p style="color:var(--slate); font-size:13px; margin-bottom:8px;" data-cms="refunds.updated">Last updated: 22 July 2026</p>
-    <p class="lede" data-cms="refunds.lede">This policy explains what happens to your money if a service you paid for doesn't go ahead. In short: we work on account credit rather than cash refunds, and credit never expires.</p>
+    <span class="eyebrow">Terms &amp; Policies</span>
+    <h1 style="font-size:clamp(30px,4vw,46px); margin:14px 0 6px;" data-cms="refunds.heading">Terms &amp; Policies</h1>
+    <p style="color:var(--slate); font-size:13px; margin-bottom:8px;" data-cms="refunds.updated">Last updated: 23 July 2026</p>
+    <p class="lede" data-cms="refunds.lede">These are the terms that govern paying for and using our services — what you are buying, and what happens to your money if a service doesn't go ahead. In short: we work on account credit rather than cash refunds, and credit never expires.</p>
+    <p data-cms="refunds.intro">This page covers our payment, refund and cancellation terms. For how we look after your personal information, see our <a href="?p=privacy">Privacy Policy</a>. For the general rules of using the website, see our <a href="?p=terms">Terms of Use</a>. Together these three documents make up your agreement with Unplug Magazine.</p>
 
     <h3 data-cms="refunds.s1.title">1. What you are paying for</h3>
     <p data-cms="refunds.s1.body">Unplug Magazine sells listing and publishing services — Directory packages, article publishing, event listings, Top 10 entries, competition entries, marketplace listings, highlights and edition downloads. Prices are shown before you pay. Payments are processed by PayFast and Ozow, or by manual EFT where offered.</p>
@@ -2865,10 +2866,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <h3 data-cms="refunds.s10.title">10. Your rights under South African law</h3>
     <p data-cms="refunds.s10.body">Nothing in this policy limits any right you have under the Consumer Protection Act 68 of 2008 or the Electronic Communications and Transactions Act 25 of 2002, including any cooling-off right that applies to goods or services bought online. Where the law gives you a stronger right than this policy does, the law applies.</p>
 
-    <h3 data-cms="refunds.s11.title">11. Contact</h3>
-    <p data-cms="refunds.s11.body">Unplug Magazine — info@unplugnews.com. This policy is governed by the laws of the Republic of South Africa.</p>
+    <h3 data-cms="refunds.s11.title">11. Changes to these terms</h3>
+    <p data-cms="refunds.s11.body">We may update these terms from time to time — for example if our services or payment providers change. The "last updated" date at the top always reflects the current version, and the latest version on this page is the one that applies.</p>
 
-    <p style="font-size:12.5px; color:var(--slate); margin-top:28px; font-style:italic;">This policy is a starting template and should be reviewed by a qualified professional before you rely on it commercially.</p>
+    <h3 data-cms="refunds.s12.title">12. Contact</h3>
+    <p data-cms="refunds.s12.body">Unplug Magazine — info@unplugnews.com. These terms are governed by the laws of the Republic of South Africa.</p>
+
+    <p style="font-size:12.5px; color:var(--slate); margin-top:28px; font-style:italic;">These terms are a starting template and should be reviewed by a qualified professional before you rely on them commercially.</p>
   </div>
 </main>
 
@@ -2920,7 +2924,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
     <div class="footer-bottom">
       <span>© 2026 Unplug Magazine. All rights reserved.</span>
-      <span><a href="#" data-page="privacy" style="color:inherit;">Privacy Policy</a> · <a href="#" data-page="terms" style="color:inherit;">Terms of Use</a> · <a href="#" data-page="refunds" style="color:inherit;">Refunds &amp; Cancellations</a></span>
+      <span><a href="#" data-page="privacy" style="color:inherit;">Privacy Policy</a> · <a href="#" data-page="terms" style="color:inherit;">Terms of Use</a> · <a href="#" data-page="refunds" style="color:inherit;">Terms &amp; Policies</a></span>
     </div>
   </div>
 </footer>
@@ -5220,7 +5224,7 @@ function goToPage(pageId){
     contact: 'Contact Us — Unplug Magazine',
     privacy: 'Privacy Policy — Unplug Magazine',
     terms: 'Terms of Use — Unplug Magazine',
-    refunds: 'Refund & Cancellation Policy — Unplug Magazine',
+    refunds: 'Terms & Policies — Unplug Magazine',
   };
   document.title = PAGE_TITLES[pageId] || 'Unplug Magazine';
 
