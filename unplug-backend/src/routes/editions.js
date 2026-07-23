@@ -65,6 +65,37 @@ router.post('/calendar', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// PATCH /editions/calendar/:id — admin edits a marked day. Only the fields
+// sent are changed, so editing just the description doesn't wipe the date.
+router.patch('/calendar/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const sets = [];
+    const values = [];
+    if (req.body.eventDate !== undefined) {
+      if (!req.body.eventDate) return res.status(400).json({ error: 'A date cannot be blank.' });
+      values.push(req.body.eventDate); sets.push(`event_date = $${values.length}`);
+    }
+    if (req.body.title !== undefined) {
+      if (!String(req.body.title).trim()) return res.status(400).json({ error: 'A title cannot be blank.' });
+      values.push(String(req.body.title).trim()); sets.push(`title = $${values.length}`);
+    }
+    if (req.body.description !== undefined) {
+      values.push(String(req.body.description || '').trim() || null); sets.push(`description = $${values.length}`);
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+
+    values.push(req.params.id);
+    const result = await pool.query(
+      `UPDATE edition_calendar SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Marked date not found.' });
+    res.json({ date: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /editions/calendar/:id — admin removes a marked day.
 router.delete('/calendar/:id', requireRole('admin'), async (req, res, next) => {
   try {

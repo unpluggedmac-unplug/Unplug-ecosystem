@@ -139,15 +139,37 @@ router.get('/mine', requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /articles/:id — public, published only.
+// GET /articles/admin/all — admin, every article at every status. Powers the
+// editor's picklist so an admin can open a published, pending, draft or
+// rejected article to edit it, not only the published ones the public list
+// returns.
+router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT a.id, a.title, a.status, a.created_at, a.published_at, c.name AS category
+         FROM articles a
+         LEFT JOIN categories c ON c.id = a.category_id
+        ORDER BY a.created_at DESC
+        LIMIT 300`
+    );
+    res.json({ articles: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /articles/:id — public sees published only; an admin (identified by the
+// global attachUser middleware when a token is sent) may load any status so
+// the editor can open drafts and pending pieces.
 router.get('/:id', async (req, res, next) => {
   try {
+    const isAdmin = req.user && req.user.role === 'admin';
     const result = await pool.query(
       `SELECT a.*, c.name AS category
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
-       WHERE a.id = $1 AND a.status = 'approved'`,
-      [req.params.id]
+       WHERE a.id = $1 AND ($2::boolean OR a.status = 'approved')`,
+      [req.params.id, isAdmin]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Article not found.' });

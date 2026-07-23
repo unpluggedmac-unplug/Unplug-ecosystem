@@ -311,6 +311,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
           <div class="field" style="margin-top:12px;"><label>Description (shown when a visitor clicks the day)</label><textarea id="edcalDesc" rows="3" placeholder="Full details of what's happening on this day."></textarea></div>
           <button class="btn btn-solid" style="width:auto;" id="addEdcalBtn">Save the Date</button>
+          <button class="btn btn-line" style="width:auto; display:none;" id="edcalCancelEdit">Cancel edit</button>
         </div>
       </div>
       <div class="panel">
@@ -1674,9 +1675,15 @@ document.getElementById('artResetBtn').addEventListener('click', artReset);
 async function artLoadPickList() {
   const sel = document.getElementById('artPick');
   try {
-    const data = await api('/articles?limit=100');
+    // Admin endpoint: every article at every status, so published, pending,
+    // draft and rejected pieces can all be opened for editing — not only the
+    // published ones the public list returns.
+    const data = await api('/articles/admin/all');
     sel.innerHTML = '<option value="">— new article —</option>'
-      + (data.articles || []).map((a) => `<option value="${a.id}">${escapeHtmlAdmin(a.title)}</option>`).join('');
+      + (data.articles || []).map((a) => {
+          const tag = a.status && a.status !== 'approved' ? ` [${a.status}]` : '';
+          return `<option value="${a.id}">${escapeHtmlAdmin(a.title)}${tag}</option>`;
+        }).join('');
   } catch (err) { /* leave the "new article" option in place */ }
 }
 
@@ -2328,20 +2335,42 @@ async function loadAllShoutouts() {
 // ---------------------------------------------------------------------------
 // Editions calendar — admin marks upcoming "Save the Date" days
 // ---------------------------------------------------------------------------
+// Null when adding a new date, an id when the form was loaded from an existing
+// one to edit it. The one form does both jobs.
+let EDCAL_EDITING_ID = null;
+
+function edcalResetForm() {
+  EDCAL_EDITING_ID = null;
+  document.getElementById('edcalDate').value = '';
+  document.getElementById('edcalTitle').value = '';
+  document.getElementById('edcalDesc').value = '';
+  document.getElementById('addEdcalBtn').textContent = 'Save the Date';
+  const cancel = document.getElementById('edcalCancelEdit');
+  if (cancel) cancel.style.display = 'none';
+}
+
+document.getElementById('edcalCancelEdit').addEventListener('click', edcalResetForm);
+
 document.getElementById('addEdcalBtn').addEventListener('click', async () => {
   const eventDate = document.getElementById('edcalDate').value;
   const title = document.getElementById('edcalTitle').value.trim();
   const description = document.getElementById('edcalDesc').value.trim();
   if (!eventDate || !title) { showToast('Date and title are required.', true); return; }
   try {
-    await api('/editions/calendar', {
-      method: 'POST',
-      body: JSON.stringify({ eventDate, title, description: description || undefined }),
-    });
-    showToast('Date marked.');
-    document.getElementById('edcalDate').value = '';
-    document.getElementById('edcalTitle').value = '';
-    document.getElementById('edcalDesc').value = '';
+    if (EDCAL_EDITING_ID) {
+      await api(`/editions/calendar/${EDCAL_EDITING_ID}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ eventDate, title, description }),
+      });
+      showToast('Date updated.');
+    } else {
+      await api('/editions/calendar', {
+        method: 'POST',
+        body: JSON.stringify({ eventDate, title, description: description || undefined }),
+      });
+      showToast('Date marked.');
+    }
+    edcalResetForm();
     loadEdcalDates();
   } catch (err) {
     showToast(err.message, true);
@@ -2365,9 +2394,19 @@ async function loadEdcalDates() {
         .toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${dateStr}</td><td>${escapeHtmlAdmin(d.title)}</td><td>${escapeHtmlAdmin(d.description || '—')}</td>`
-        + `<td><div class="row-actions"><button class="reject">Remove</button></div></td>`;
+        + `<td><div class="row-actions"><button class="approve">Edit</button><button class="reject">Remove</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', () => {
+        EDCAL_EDITING_ID = d.id;
+        document.getElementById('edcalDate').value = String(d.event_date).slice(0, 10);
+        document.getElementById('edcalTitle').value = d.title || '';
+        document.getElementById('edcalDesc').value = d.description || '';
+        document.getElementById('addEdcalBtn').textContent = 'Update this date';
+        const cancel = document.getElementById('edcalCancelEdit');
+        if (cancel) cancel.style.display = 'inline-block';
+        document.getElementById('edcalDate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
       tr.querySelector('.reject').addEventListener('click', async () => {
-        try { await api(`/editions/calendar/${d.id}`, { method: 'DELETE' }); showToast('Removed.'); loadEdcalDates(); }
+        try { await api(`/editions/calendar/${d.id}`, { method: 'DELETE' }); showToast('Removed.'); if (EDCAL_EDITING_ID === d.id) edcalResetForm(); loadEdcalDates(); }
         catch (err) { showToast(err.message, true); }
       });
       table.appendChild(tr);
