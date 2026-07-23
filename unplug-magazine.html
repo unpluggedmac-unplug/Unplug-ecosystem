@@ -388,8 +388,17 @@ section.home-section:last-of-type{ margin-bottom:0; }
 }
 .ad-slot span.label{ color:var(--slate); font-weight:600; letter-spacing:0.04em; }
 /* Once an admin sets a real banner, drop the dashed placeholder chrome so only
-   the banner image shows. */
-.ad-slot-filled{ border:none; background:none; padding:0; }
+   the banner image shows. Fixed 16:9 box (the standardized ad-banner size)
+   so multiple rotating banners can stack without the page jumping around as
+   they change, and so a single banner behaves identically either way. */
+.ad-slot-filled{
+  border:none; padding:0; position:relative; overflow:hidden;
+  aspect-ratio:16/9; background:var(--paper);
+}
+.ad-slot-filled .ad-slide{
+  position:absolute; inset:0; opacity:0; transition:opacity 0.6s ease;
+}
+.ad-slot-filled .ad-slide.is-active{ opacity:1; }
 
 /* ---- top 10 ---- */
 .rank-list{ display:flex; flex-direction:column; }
@@ -3493,18 +3502,32 @@ async function applyPageCms() {
     wrap.innerHTML = list.map(cmsBlockHtml).join('');
   });
 
-  // Ad banners. Any slot an admin has filled in gets its placeholder swapped
-  // for the real banner (a click-through link if one was set). Slots with no
-  // config keep the "reserve this space" placeholder untouched.
+  // Ad banners. A slot with one or more active, in-schedule banners gets its
+  // placeholder swapped for a real rotating carousel; a slot with none keeps
+  // the "reserve this space" placeholder untouched. Each banner is its own
+  // absolutely-positioned slide crossfading over the last — see .ad-slide in
+  // the stylesheet — so 1 banner just renders statically and 2+ rotate.
   const adSlots = cms.adSlots || {};
   document.querySelectorAll('[data-ad-slot]').forEach((slot) => {
-    const cfg = adSlots[slot.getAttribute('data-ad-slot')];
-    if (!cfg || !cfg.image_url) return;
-    const img = `<img src="${escapeHtml(cfg.image_url)}" alt="Advertisement" loading="lazy" decoding="async" style="display:block;width:100%;height:100%;object-fit:contain;">`;
-    slot.innerHTML = cfg.link_url
-      ? `<a href="${escapeHtml(cfg.link_url)}" target="_blank" rel="noopener sponsored" style="display:block;width:100%;height:100%;">${img}</a>`
-      : img;
+    const banners = adSlots[slot.getAttribute('data-ad-slot')];
+    if (!banners || !banners.length) return;
+    slot.innerHTML = banners.map((b, i) => {
+      const img = `<img src="${escapeHtml(b.image_url)}" alt="Advertisement" loading="lazy" decoding="async" style="display:block;width:100%;height:100%;object-fit:contain;">`;
+      const inner = b.link_url
+        ? `<a href="${escapeHtml(b.link_url)}" target="_blank" rel="noopener sponsored" style="display:block;width:100%;height:100%;">${img}</a>`
+        : img;
+      return `<div class="ad-slide${i === 0 ? ' is-active' : ''}">${inner}</div>`;
+    }).join('');
     slot.classList.add('ad-slot-filled');
+    if (banners.length > 1) {
+      let i = 0;
+      const slides = slot.querySelectorAll('.ad-slide');
+      setInterval(() => {
+        slides[i].classList.remove('is-active');
+        i = (i + 1) % slides.length;
+        slides[i].classList.add('is-active');
+      }, 5000);
+    }
   });
 }
 

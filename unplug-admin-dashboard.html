@@ -525,7 +525,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- AD BANNERS -->
     <div class="admin-section" id="section-adbanners">
-      <div class="main-head"><div><h1>Ad Banners</h1><p>Each advertising slot on the site starts as a "Reserve this space" placeholder. Upload a banner and (optionally) a click-through link to fill one. Clear the image to put the placeholder back. Leaderboards are wide (about 728×90); sponsor blocks are square-ish (about 300×250).</p></div></div>
+      <div class="main-head"><div><h1>Ad Banners</h1><p>Each advertising slot on the site starts as a "Reserve this space" placeholder. Add one or more banners to a slot — with more than one, they rotate automatically on the live site every few seconds. All banner images should be <strong>1920 × 1080px (16:9)</strong>. Untick "Active" or set a schedule window to hold a banner back without deleting it.</p></div></div>
       <div class="panel">
         <div class="panel-body" id="adBannersBody">Loading…</div>
       </div>
@@ -1601,23 +1601,94 @@ document.getElementById('dpAddGalleryBtn').addEventListener('click', async () =>
 });
 
 // Ad Banners — the catalog of slots must match the data-ad-slot keys on the
-// public page (unplug-magazine.html). Each row is an image upload + a link +
-// a Save. Saving an empty image clears the slot back to its placeholder.
+// public page (unplug-magazine.html). A slot can hold several banners now;
+// with more than one, the public site rotates through them automatically.
+// Each banner row is its own image upload + link + order + active + optional
+// schedule window, saved independently.
 const AD_SLOT_CATALOG = [
-  { key: 'home-sponsor-1', label: 'Home — Featured Sponsor 1 (300×250)' },
-  { key: 'home-sponsor-2', label: 'Home — Featured Sponsor 2 (300×250)' },
-  { key: 'home-sponsor-3', label: 'Home — Featured Sponsor 3 (300×250)' },
-  { key: 'news-leaderboard', label: 'Latest News — Leaderboard (728×90)' },
-  { key: 'directory-sponsor', label: 'Directory — Sponsor (300×250)' },
-  { key: 'gallery-sponsor', label: 'Gallery — Sponsor (300×250)' },
-  { key: 'editions-leaderboard', label: 'Editions — Leaderboard (728×90)' },
-  { key: 'editions-sponsor', label: 'Editions — Sponsor (300×250)' },
-  { key: 'top10-sponsor', label: 'Top 10 — Presented by (banner)' },
-  { key: 'competitions-leaderboard', label: 'Competitions — Leaderboard (728×90)' },
-  { key: 'investors-leaderboard', label: 'Investors — Leaderboard (728×90)' },
-  { key: 'about-leaderboard', label: 'About — Leaderboard (728×90)' },
-  { key: 'contact-leaderboard', label: 'Contact — Leaderboard (728×90)' },
+  { key: 'home-sponsor-1', label: 'Home — Featured Sponsor 1' },
+  { key: 'home-sponsor-2', label: 'Home — Featured Sponsor 2' },
+  { key: 'home-sponsor-3', label: 'Home — Featured Sponsor 3' },
+  { key: 'news-leaderboard', label: 'Latest News — Leaderboard' },
+  { key: 'directory-sponsor', label: 'Directory — Sponsor' },
+  { key: 'gallery-sponsor', label: 'Gallery — Sponsor' },
+  { key: 'editions-leaderboard', label: 'Editions — Leaderboard' },
+  { key: 'editions-sponsor', label: 'Editions — Sponsor' },
+  { key: 'top10-sponsor', label: 'Top 10 — Presented by' },
+  { key: 'competitions-leaderboard', label: 'Competitions — Leaderboard' },
+  { key: 'investors-leaderboard', label: 'Investors — Leaderboard' },
+  { key: 'about-leaderboard', label: 'About — Leaderboard' },
+  { key: 'contact-leaderboard', label: 'Contact — Leaderboard' },
 ];
+
+function adBannerRowHtml(uid) {
+  return `
+    <div class="form-row">
+      <div style="grid-column:1/-2;"><label>Banner image (1920×1080, 16:9)</label><div class="ad-img-upload"></div></div>
+      <div><label>Click-through link (optional)</label><input class="ad-link" placeholder="https://…"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Display order</label><input class="ad-order" type="number" value="0" style="width:100%;"></div>
+      <div><label>Active</label><div style="padding-top:8px;"><input class="ad-active" type="checkbox" checked> <span style="font-size:12.5px; color:var(--slate);">Shows on the live site</span></div></div>
+      <div><label>Starts (optional)</label><input class="ad-starts" type="date"></div>
+      <div><label>Ends (optional)</label><input class="ad-ends" type="date"></div>
+    </div>
+    <button class="btn btn-solid ad-save" style="width:auto; margin-top:8px;">Save banner</button>
+    <button class="btn btn-line ad-delete" style="width:auto; margin-top:8px;">Delete</button>
+    <span class="ad-note" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>`;
+}
+
+function fillAdBannerRow(row, banner) {
+  const uploadHost = row.querySelector('.ad-img-upload');
+  uploadHost.innerHTML = UnplugUpload.fieldHtml('adImage_' + Math.random().toString(36).slice(2), banner.image_url || '');
+  row.querySelector('.ad-link').value = banner.link_url || '';
+  row.querySelector('.ad-order').value = banner.display_order || 0;
+  row.querySelector('.ad-active').checked = banner.is_active !== false;
+  row.querySelector('.ad-starts').value = banner.starts_at ? String(banner.starts_at).slice(0, 10) : '';
+  row.querySelector('.ad-ends').value = banner.ends_at ? String(banner.ends_at).slice(0, 10) : '';
+}
+
+function wireAdBannerRow(row, slotKey, bannerId) {
+  const uploadHost = row.querySelector('.ad-img-upload');
+  const note = row.querySelector('.ad-note');
+
+  row.querySelector('.ad-save').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const payload = {
+      slotKey,
+      imageUrl: UnplugUpload.valueOf(uploadHost) || '',
+      linkUrl: row.querySelector('.ad-link').value.trim(),
+      displayOrder: Number(row.querySelector('.ad-order').value) || 0,
+      isActive: row.querySelector('.ad-active').checked,
+      startsAt: row.querySelector('.ad-starts').value || null,
+      endsAt: row.querySelector('.ad-ends').value || null,
+    };
+    btn.disabled = true;
+    try {
+      const res = bannerId
+        ? await api(`/page-cms/admin/ad-slots/${bannerId}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : await api('/page-cms/admin/ad-slots', { method: 'POST', body: JSON.stringify(payload) });
+      showToast(res.message || 'Saved.');
+      loadAdBanners();
+    } catch (err) {
+      note.textContent = '';
+      showToast(err.message, true);
+      btn.disabled = false;
+    }
+  });
+
+  row.querySelector('.ad-delete').addEventListener('click', async () => {
+    if (!bannerId) { row.remove(); return; } // never-saved row — just discard it
+    if (!confirm('Delete this banner? This cannot be undone.')) return;
+    try {
+      await api(`/page-cms/admin/ad-slots/${bannerId}`, { method: 'DELETE' });
+      showToast('Banner deleted.');
+      loadAdBanners();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+}
 
 async function loadAdBanners() {
   const body = document.getElementById('adBannersBody');
@@ -1632,50 +1703,36 @@ async function loadAdBanners() {
   }
   body.innerHTML = '';
   AD_SLOT_CATALOG.forEach((slot) => {
-    const cfg = current[slot.key] || {};
+    const banners = current[slot.key] || [];
+    const activeCount = banners.filter((b) => b.is_active).length;
     const wrap = document.createElement('div');
     wrap.style.cssText = 'padding:16px 0; border-bottom:1px solid var(--paper-line);';
     wrap.innerHTML = `
-      <div style="font-weight:600; font-size:14px; margin-bottom:8px;">${escapeHtmlAdmin(slot.label)}
-        ${cfg.image_url ? '<span style="color:var(--red); font-size:11px; margin-left:6px;">● live</span>' : '<span style="color:var(--slate); font-size:11px; margin-left:6px;">placeholder</span>'}</div>
-      <div class="form-row">
-        <div style="grid-column:1/-2;"><label>Banner image</label><div class="ad-img-upload"></div></div>
-        <div><label>Click-through link (optional)</label><input class="ad-link" placeholder="https://…" value="${escapeHtmlAdmin(cfg.link_url || '')}"></div>
-      </div>
-      <button class="btn btn-solid ad-save" style="width:auto; margin-top:8px;">Save banner</button>
-      <span class="ad-note" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>`;
+      <div style="font-weight:600; font-size:14px; margin-bottom:10px;">${escapeHtmlAdmin(slot.label)}
+        ${activeCount > 1 ? `<span style="color:var(--red); font-size:11px; margin-left:6px;">● ${activeCount} rotating</span>`
+          : activeCount === 1 ? '<span style="color:var(--red); font-size:11px; margin-left:6px;">● live</span>'
+          : '<span style="color:var(--slate); font-size:11px; margin-left:6px;">placeholder</span>'}</div>
+      <div class="ad-rows"></div>
+      <button class="btn btn-line ad-add-row" style="width:auto; margin-top:6px;">+ Add another banner</button>`;
     body.appendChild(wrap);
 
-    const uploadHost = wrap.querySelector('.ad-img-upload');
-    uploadHost.innerHTML = UnplugUpload.fieldHtml('adImage_' + slot.key, cfg.image_url || '');
+    const rowsWrap = wrap.querySelector('.ad-rows');
+    banners.forEach((banner) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:12px; margin-bottom:10px; border:1px solid var(--paper-line); border-radius:8px;';
+      row.innerHTML = adBannerRowHtml();
+      rowsWrap.appendChild(row);
+      fillAdBannerRow(row, banner);
+      wireAdBannerRow(row, slot.key, banner.id);
+    });
 
-    wrap.querySelector('.ad-save').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      const note = wrap.querySelector('.ad-note');
-      const imageUrl = UnplugUpload.valueOf(uploadHost) || '';
-      const linkUrl = wrap.querySelector('.ad-link').value.trim();
-      btn.disabled = true;
-      try {
-        const res = await api(`/page-cms/admin/ad-slots/${encodeURIComponent(slot.key)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ imageUrl, linkUrl }),
-        });
-        showToast(res.message || 'Saved.');
-        // Undo restores whatever this slot held before (an image + link, or
-        // empty to clear it back to the placeholder).
-        showUndoBar('Banner saved.', async () => {
-          await api(`/page-cms/admin/ad-slots/${encodeURIComponent(slot.key)}`, {
-            method: 'PUT',
-            body: JSON.stringify({ imageUrl: cfg.image_url || '', linkUrl: cfg.link_url || '' }),
-          });
-          loadAdBanners();
-        });
-        loadAdBanners();
-      } catch (err) {
-        note.textContent = '';
-        showToast(err.message, true);
-        btn.disabled = false;
-      }
+    wrap.querySelector('.ad-add-row').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:12px; margin-bottom:10px; border:1px solid var(--paper-line); border-radius:8px;';
+      row.innerHTML = adBannerRowHtml();
+      rowsWrap.appendChild(row);
+      fillAdBannerRow(row, {});
+      wireAdBannerRow(row, slot.key, null);
     });
   });
 }
