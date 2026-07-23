@@ -4237,10 +4237,11 @@ function avatarUrl(name){
 }
 
 // A Top 10 entry's photo. A manual entry (admin-added, no profile) carries its
-// own uploaded image; a profile-based entry has none here, so it falls back to
-// the generated initials avatar as before.
+// own uploaded image; a profile-based entry now shows that profile's real
+// feature image (the backend COALESCEs the two into image_url) — only when
+// neither exists does it fall back to the generated initials avatar.
 function entryPhotoUrl(p){
-  return (p && p.manual_image_url) ? p.manual_image_url : avatarUrl(p.display_name);
+  return (p && p.image_url) ? p.image_url : avatarUrl(p.display_name);
 }
 
 function isEntryNew(entry) {
@@ -4495,8 +4496,11 @@ function homeStoryCardHtml(article) {
   const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `<span class="story-kicker">Supplied by <strong>${escapeHtml(article.kicker_supplied_by)}</strong></span>` : '';
+  const thumbImg = article.banner_image_url
+    ? `<img src="${escapeHtml(article.banner_image_url)}" alt="" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">`
+    : '';
   return `<article class="story-card">
-        <div class="story-thumb"></div>
+        <div class="story-thumb">${thumbImg}</div>
         <span class="story-tag">${category}</span>
         <h3>${title}</h3>
         <p>${excerpt}</p>
@@ -4541,8 +4545,11 @@ function homeDirCardHtml(profile) {
   const name = escapeHtml(profile.display_name);
   const category = escapeHtml(profile.category || '');
   const shareUrl = absUrl('?p=profile&slug=' + encodeURIComponent(profile.slug || ''));
+  const photo = profile.feature_image_url
+    ? `<img src="${escapeHtml(profile.feature_image_url)}" alt="" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">`
+    : '<span class="print-mark tiny"></span>';
   return `<div class="dir-card-wrap">
-        <div class="dir-card"><div class="dir-photo"><span class="print-mark tiny"></span></div><h4>${name}</h4><p>${category}</p></div>
+        <div class="dir-card"><div class="dir-photo">${photo}</div><h4>${name}</h4><p>${category}</p></div>
         ${shareRow(shareUrl, profile.display_name)}
       </div>`;
 }

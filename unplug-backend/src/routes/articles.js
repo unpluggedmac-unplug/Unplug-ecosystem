@@ -106,7 +106,7 @@ router.get('/', async (req, res, next) => {
     );
 
     const result = await pool.query(
-      `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at, c.name AS category
+      `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at, a.banner_image_url, c.name AS category
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
        WHERE ${conditions.join(' AND ')}

@@ -42,13 +42,14 @@ router.get('/competitions/:slug', async (req, res, next) => {
               COALESCE(p.display_name, ce.manual_name) AS display_name,
               p.slug AS profile_slug,
               ce.manual_image_url,
+              COALESCE(ce.manual_image_url, p.feature_image_url) AS image_url,
               c.name AS category, COALESCE(SUM(v.bundle_size), 0) AS vote_count
        FROM competition_entries ce
        LEFT JOIN profiles p ON p.id = ce.profile_id
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN votes v ON v.entry_id = ce.id
        WHERE ce.competition_id = $1 AND ce.status = 'approved'
-       GROUP BY ce.id, p.display_name, p.slug, ce.manual_name, ce.manual_image_url, c.name
+       GROUP BY ce.id, p.display_name, p.slug, p.feature_image_url, ce.manual_name, ce.manual_image_url, c.name
        ORDER BY vote_count DESC`,
       [competition.id]
     );
