@@ -68,6 +68,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .gate-option:hover{ border-color:var(--red); }
 .gate-option h3{ font-family:'Playfair Display',serif; font-size:16px; font-weight:700; margin-bottom:4px; color:var(--ink); }
 .gate-option p{ font-size:12.5px; color:var(--slate); margin:0; }
+.pw-wrap{ position:relative; }
+.pw-wrap input{ padding-right:42px; }
+.pw-toggle{ position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:15px; padding:6px 8px; line-height:1; opacity:0.6; }
+.pw-toggle:hover{ opacity:1; }
+.tc-row{ display:flex; align-items:flex-start; gap:9px; font-size:12.5px; color:var(--slate); margin:4px 0 16px; cursor:pointer; }
+.tc-row input{ width:auto; margin-top:2px; flex-shrink:0; }
+.tc-row a{ color:var(--red); }
 </style>
 </head>
 <body>
@@ -99,17 +106,44 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
   </div>
 
-  <!-- BECOME A MEMBER (free registration — no payment involved) -->
-  <div class="card section-hidden" id="registerCard">
+  <!-- STEP 1 of registration — choose membership type -->
+  <div class="card section-hidden" id="typeCard">
     <h2>Become a Member</h2>
-    <p class="sub">Completely free. This just creates your account — nothing here costs anything. You'll only pay later, and only if you choose to use a paid service like publishing an article.</p>
+    <p class="sub">First, tell us who you are. It's free to join — you only pay later if you use a paid service like publishing an article.</p>
+    <div class="gate-options">
+      <button class="gate-option" data-member-type="individual">
+        <h3>👤 Individual</h3>
+        <p>Join as a person — save articles, submit stories, enter competitions and more.</p>
+      </button>
+      <button class="gate-option" data-member-type="business">
+        <h3>🏢 Business</h3>
+        <p>Join as a business — list in the Directory, advertise, and reach the community.</p>
+      </button>
+    </div>
+    <button class="btn btn-line" id="backFromTypeBtn" style="margin-top:14px;">← Back</button>
+  </div>
+
+  <!-- STEP 2 of registration — the details form -->
+  <div class="card section-hidden" id="registerCard">
+    <h2 id="registerTitle">Create your account</h2>
+    <p class="sub" id="registerSub">Completely free. This just creates your account — you'll only pay later, and only if you choose a paid service.</p>
     <div class="error-banner" id="registerError"></div>
     <div class="field" style="display:none;"><label>API Base URL</label><input id="registerApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
+    <div class="field"><label id="registerNameLabel">Full Name</label><input id="registerName" autocomplete="name"></div>
     <div class="field-row">
-      <div class="field"><label>Email</label><input id="registerEmail" type="email"></div>
-      <div class="field"><label>Password (8+ characters)</label><input id="registerPassword" type="password"></div>
+      <div class="field"><label>Email Address</label><input id="registerEmail" type="email" autocomplete="email"></div>
+      <div class="field"><label>Mobile Number</label><input id="registerPhone" type="tel" autocomplete="tel" placeholder="e.g. 082 000 0000"></div>
     </div>
-    <button class="btn btn-solid" id="registerBtn">Create Free Account</button>
+    <div class="field-row">
+      <div class="field"><label>Password (8+ characters)</label>
+        <div class="pw-wrap"><input id="registerPassword" type="password" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="registerPassword" aria-label="Show password">👁</button></div>
+      </div>
+      <div class="field"><label>Confirm Password</label>
+        <div class="pw-wrap"><input id="registerPassword2" type="password" autocomplete="new-password"><button type="button" class="pw-toggle" data-target="registerPassword2" aria-label="Show password">👁</button></div>
+      </div>
+    </div>
+    <label class="tc-row"><input type="checkbox" id="registerTerms"> <span>I accept the <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener">Terms &amp; Policies</a> and <a href="unplug-magazine.html?p=privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+    <button class="btn btn-solid" id="registerBtn">Register</button>
     <button class="btn btn-line" id="backFromRegisterBtn" style="margin-top:10px;">← Back</button>
   </div>
 
@@ -156,6 +190,22 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
 
     <button class="btn btn-line" id="backFromForgotBtn" style="margin-top:10px;">← Back to Sign In</button>
+  </div>
+
+  <!-- WELCOME (after a successful login, before the dashboard) -->
+  <div class="card section-hidden" id="welcomeCard">
+    <h2 id="welcomeHeading">Welcome back!</h2>
+    <p class="sub">You're signed in. Where would you like to go?</p>
+    <div class="gate-options">
+      <button class="gate-option" id="goDashboardBtn">
+        <h3>📋 View Dashboard</h3>
+        <p>Manage your profile, submissions, saved articles and services.</p>
+      </button>
+      <a class="gate-option" id="goSiteBtn" href="unplug-magazine.html">
+        <h3>🌐 View Site</h3>
+        <p>Browse Unplug Magazine — you'll stay signed in.</p>
+      </a>
+    </div>
   </div>
 
   <!-- MAIN DASHBOARD (hidden until logged in) -->
@@ -353,16 +403,44 @@ function showToast(message, isError = false) {
 // ---------------------------------------------------------------------------
 // Entry Gate — Visit Site / Become Member / Sign In
 // ---------------------------------------------------------------------------
+const AUTH_CARDS = ['gateCard', 'typeCard', 'registerCard', 'verifyCard', 'loginCard', 'forgotCard', 'welcomeCard'];
 function showCard(cardId){
-  ['gateCard', 'registerCard', 'verifyCard', 'loginCard', 'forgotCard'].forEach((id) => {
-    document.getElementById(id).classList.toggle('section-hidden', id !== cardId);
+  AUTH_CARDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('section-hidden', id !== cardId);
   });
 }
 
-document.getElementById('showRegisterBtn').addEventListener('click', () => showCard('registerCard'));
+// Registration is now two steps: pick a membership type, then fill the form.
+let SELECTED_MEMBER_TYPE = 'individual';
+document.getElementById('showRegisterBtn').addEventListener('click', () => showCard('typeCard'));
+document.getElementById('backFromTypeBtn').addEventListener('click', () => showCard('gateCard'));
+document.querySelectorAll('#typeCard [data-member-type]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    SELECTED_MEMBER_TYPE = btn.getAttribute('data-member-type');
+    const isBiz = SELECTED_MEMBER_TYPE === 'business';
+    document.getElementById('registerNameLabel').textContent = isBiz ? 'Business Name' : 'Full Name';
+    document.getElementById('registerName').setAttribute('autocomplete', isBiz ? 'organization' : 'name');
+    document.getElementById('registerTitle').textContent = isBiz ? 'Create your business account' : 'Create your account';
+    showCard('registerCard');
+  });
+});
+
 document.getElementById('showLoginBtn').addEventListener('click', () => showCard('loginCard'));
-document.getElementById('backFromRegisterBtn').addEventListener('click', () => showCard('gateCard'));
+document.getElementById('backFromRegisterBtn').addEventListener('click', () => showCard('typeCard'));
 document.getElementById('backFromLoginBtn').addEventListener('click', () => showCard('gateCard'));
+
+// Show/hide password eye — works for every .pw-toggle on the page.
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('.pw-toggle');
+  if (!t) return;
+  const input = document.getElementById(t.getAttribute('data-target'));
+  if (!input) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  t.textContent = show ? '🙈' : '👁';
+  t.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+});
 document.getElementById('showForgotBtn').addEventListener('click', () => {
   document.getElementById('forgotApiBaseInput').value = document.getElementById('apiBaseInput').value;
   showCard('forgotCard');
@@ -445,25 +523,28 @@ document.getElementById('registerBtn').addEventListener('click', async () => {
   const errorBanner = document.getElementById('registerError');
   errorBanner.classList.remove('show');
   API_BASE = document.getElementById('registerApiBaseInput').value.trim().replace(/\/$/, '');
+  const fullName = document.getElementById('registerName').value.trim();
   const email = document.getElementById('registerEmail').value.trim();
+  const phone = document.getElementById('registerPhone').value.trim();
   const password = document.getElementById('registerPassword').value;
+  const password2 = document.getElementById('registerPassword2').value;
+  const accepted = document.getElementById('registerTerms').checked;
+  const isBiz = SELECTED_MEMBER_TYPE === 'business';
 
-  if (!email || !password) {
-    errorBanner.textContent = 'Email and password are required.';
-    errorBanner.classList.add('show');
-    return;
-  }
-  if (password.length < 8) {
-    errorBanner.textContent = 'Password must be at least 8 characters.';
-    errorBanner.classList.add('show');
-    return;
-  }
+  function fail(msg) { errorBanner.textContent = msg; errorBanner.classList.add('show'); }
+
+  if (!fullName) return fail(isBiz ? 'Please enter your business name.' : 'Please enter your full name.');
+  if (!email) return fail('Please enter your email address.');
+  if (!phone) return fail('Please enter your mobile number.');
+  if (password.length < 8) return fail('Password must be at least 8 characters.');
+  if (password !== password2) return fail('The two passwords do not match.');
+  if (!accepted) return fail('Please accept the Terms & Policies to continue.');
 
   const btn = document.getElementById('registerBtn');
   btn.disabled = true; btn.textContent = 'Creating account...';
 
   try {
-    await api('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) });
+    await api('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, phone, fullName, memberType: SELECTED_MEMBER_TYPE }) });
     localStorage.setItem('unplug_api_base', API_BASE);
     PENDING_VERIFY_EMAIL = email;
     document.getElementById('verifySub').textContent = `We sent a 6-digit code to ${email}. Enter it below to activate your free account.`;
@@ -537,7 +618,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     AUTH_TOKEN = data.token;
     localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
     localStorage.setItem('unplug_api_base', API_BASE);
-    enterMemberDashboard(data.user);
+    showWelcome(data.user);
   } catch (err) {
     errorBanner.textContent = err.message + ' (Is the API running at that URL?)';
     errorBanner.classList.add('show');
@@ -589,7 +670,7 @@ async function consumeMagicLinkIfPresent() {
     });
     AUTH_TOKEN = data.token;
     localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
-    enterMemberDashboard(data.user);
+    showWelcome(data.user);
     showToast('Signed in.');
     return true;
   } catch (err) {
@@ -602,14 +683,31 @@ async function consumeMagicLinkIfPresent() {
   }
 }
 
+// After signing in, land on a welcome choice — Dashboard or the public site —
+// rather than dropping straight into the dashboard.
+let CURRENT_USER = null;
+function showWelcome(user){
+  CURRENT_USER = user || CURRENT_USER;
+  const name = (CURRENT_USER && (CURRENT_USER.full_name || CURRENT_USER.email)) || '';
+  document.getElementById('welcomeHeading').textContent = name ? `Welcome, ${name.split('@')[0]}!` : 'Welcome back!';
+  document.getElementById('topRight').innerHTML = `Signed in &nbsp;·&nbsp; <button id="logoutBtnTop">Log out</button>`;
+  const lo = document.getElementById('logoutBtnTop');
+  if (lo) lo.addEventListener('click', () => { localStorage.removeItem('unplug_auth_token'); location.reload(); });
+  showCard('welcomeCard');
+  document.getElementById('dashboard').classList.add('section-hidden');
+}
+document.getElementById('goDashboardBtn').addEventListener('click', () => enterMemberDashboard(CURRENT_USER));
+// goSiteBtn is a plain link to the magazine — the session token stays in
+// localStorage for the origin, so the member stays signed in over there.
+
 function enterMemberDashboard(user){
-  document.getElementById('topRight').innerHTML = `Signed in as ${user.email} &nbsp;·&nbsp; <button id="logoutBtn">Log out</button>`;
+  CURRENT_USER = user || CURRENT_USER;
+  showCard(null); // hide all auth cards including the welcome screen
+  const who = (CURRENT_USER && CURRENT_USER.email) || '';
+  document.getElementById('topRight').innerHTML = `Signed in as ${who} &nbsp;·&nbsp; <button id="logoutBtn">Log out</button>`;
   document.getElementById('logoutBtn').addEventListener('click', () => {
     localStorage.removeItem('unplug_auth_token');
     location.reload();
-  });
-  ['gateCard', 'registerCard', 'verifyCard', 'loginCard', 'forgotCard'].forEach((id) => {
-    document.getElementById(id).classList.add('section-hidden');
   });
   document.getElementById('dashboard').classList.remove('section-hidden');
   loadProfile();
@@ -631,7 +729,7 @@ function enterMemberDashboard(user){
   AUTH_TOKEN = savedToken;
   try {
     const data = await api('/auth/me');
-    enterMemberDashboard(data.user);
+    showWelcome(data.user);
   } catch (err) {
     AUTH_TOKEN = null;
     localStorage.removeItem('unplug_auth_token');

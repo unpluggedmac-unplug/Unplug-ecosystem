@@ -26,7 +26,7 @@ function generateCode() {
 // POST /auth/verify-email must confirm it before login works.
 router.post('/register', registerLimiter, async (req, res, next) => {
   try {
-    const { email, password, phone, altEmail, role } = req.body;
+    const { email, password, phone, altEmail, role, fullName, memberType } = req.body;
 
     if (!isValidEmail(email)) {
       return res.status(400).json({ error: 'A valid email is required.' });
@@ -35,6 +35,10 @@ router.post('/register', registerLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     }
     const finalRole = VALID_ROLES.includes(role) ? role : 'member';
+    // Individual / business is optional (older clients don't send it) but must
+    // be one of the two when present.
+    const finalMemberType = ['individual', 'business'].includes(memberType) ? memberType : null;
+    const finalName = (fullName || '').trim().slice(0, 160) || null;
 
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) {
@@ -43,10 +47,10 @@ router.post('/register', registerLimiter, async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      `INSERT INTO users (email, phone, alt_email, password_hash, role)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (email, phone, alt_email, password_hash, role, full_name, member_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, email, role, created_at`,
-      [email, phone || null, altEmail || null, passwordHash, finalRole]
+      [email, phone || null, altEmail || null, passwordHash, finalRole, finalName, finalMemberType]
     );
     const user = result.rows[0];
 
@@ -165,7 +169,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     }
 
     const result = await pool.query(
-      'SELECT id, email, role, password_hash, email_verified FROM users WHERE email = $1',
+      'SELECT id, email, role, password_hash, email_verified, full_name, member_type FROM users WHERE email = $1',
       [email]
     );
     const user = result.rows[0];
@@ -188,7 +192,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     });
 
     res.json({
-      user: { id: user.id, email: user.email, role: user.role },
+      user: { id: user.id, email: user.email, role: user.role, full_name: user.full_name, member_type: user.member_type },
       token,
     });
   } catch (err) {
@@ -380,7 +384,7 @@ router.post('/logout', (req, res) => {
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, phone, role, created_at FROM users WHERE id = $1',
+      'SELECT id, email, phone, role, created_at, full_name, member_type FROM users WHERE id = $1',
       [req.user.id]
     );
     if (result.rows.length === 0) {
