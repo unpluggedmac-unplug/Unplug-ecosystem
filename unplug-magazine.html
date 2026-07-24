@@ -3341,23 +3341,73 @@ function initArticleReader(a, id, shareUrl) {
   window.__updateArtProgress = updateProgress;
   updateProgress();
 
-  // Text-to-speech with adjustable speed.
+  // Text-to-speech with adjustable speed — written to work on mobile too.
+  // Android Chrome quietly fails on two things the old code did: a single very
+  // long utterance (it cuts out after ~15s) and an unsupported lang like
+  // 'en-ZA' (that voice usually isn't installed, so speak() does nothing). So
+  // we speak short sentence-sized chunks in sequence and let the device pick an
+  // English voice rather than forcing a locale.
   const synth = window.speechSynthesis;
   const listenBtn = document.getElementById('rdListen');
   const rateSel = document.getElementById('rdRate');
-  let utter = null;
-  function stopSpeak() { if (synth) synth.cancel(); if (listenBtn) { listenBtn.classList.remove('on'); listenBtn.innerHTML = '▶ Listen'; } }
+  let ttsChunks = [];
+  let ttsIndex = 0;
+  let ttsActive = false;
+
+  function ttsPickVoice() {
+    const voices = (synth && synth.getVoices()) || [];
+    return voices.find((v) => /en[-_]ZA/i.test(v.lang))
+        || voices.find((v) => /en[-_]GB/i.test(v.lang))
+        || voices.find((v) => /^en/i.test(v.lang))
+        || null;
+  }
+
+  function stopSpeak() {
+    ttsActive = false;
+    if (synth) synth.cancel();
+    if (listenBtn) { listenBtn.classList.remove('on'); listenBtn.innerHTML = '▶ Listen'; }
+  }
+
+  function ttsSpeakNext() {
+    if (!ttsActive || ttsIndex >= ttsChunks.length) { stopSpeak(); return; }
+    const u = new SpeechSynthesisUtterance(ttsChunks[ttsIndex]);
+    u.rate = parseFloat(rateSel && rateSel.value) || 1;
+    const v = ttsPickVoice();
+    if (v) u.voice = v; else u.lang = 'en-US'; // en-US is broadly available; never force en-ZA
+    u.onend = () => { ttsIndex += 1; ttsSpeakNext(); };
+    u.onerror = () => { ttsIndex += 1; ttsSpeakNext(); }; // skip a bad chunk, keep reading
+    synth.speak(u);
+  }
+
+  function ttsBuildChunks(text) {
+    // Sentence-split without regex lookbehind (older iOS Safari throws on it),
+    // then cap each piece so no single utterance is long enough to hit
+    // Android's silent cut-off.
+    const marked = (text || '').replace(/\s+/g, ' ').trim().replace(/([.!?])\s+/g, '$1|SPLIT|');
+    const out = [];
+    marked.split('|SPLIT|').forEach((sentence) => {
+      for (let i = 0; i < sentence.length; i += 200) out.push(sentence.slice(i, i + 200));
+    });
+    return out.filter((s) => s && s.trim());
+  }
+
   if (listenBtn && synth) {
+    // Voices can load asynchronously on mobile; warm the cache when they arrive.
+    try { synth.getVoices(); synth.onvoiceschanged = () => { synth.getVoices(); }; } catch (e) { /* ignore */ }
+
     listenBtn.addEventListener('click', () => {
-      if (synth.speaking) { stopSpeak(); return; }
-      utter = new SpeechSynthesisUtterance((body.innerText || '').slice(0, 9000));
-      utter.lang = 'en-ZA';
-      utter.rate = parseFloat(rateSel && rateSel.value) || 1;
-      utter.onend = utter.onerror = stopSpeak;
-      synth.cancel(); synth.speak(utter);
+      if (ttsActive) { stopSpeak(); return; }
+      ttsChunks = ttsBuildChunks((body.innerText || '').slice(0, 12000));
+      if (ttsChunks.length === 0) return;
+      ttsIndex = 0;
+      ttsActive = true;
+      // First utterance must be spoken synchronously inside this click so the
+      // mobile browser treats it as user-initiated audio. No cancel() first —
+      // on Android, cancel() immediately before speak() can drop the audio.
+      ttsSpeakNext();
       listenBtn.classList.add('on'); listenBtn.innerHTML = '⏸ Stop';
     });
-    if (rateSel) rateSel.addEventListener('change', () => { if (synth.speaking) { stopSpeak(); listenBtn.click(); } });
+    if (rateSel) rateSel.addEventListener('change', () => { if (ttsActive) { stopSpeak(); listenBtn.click(); } });
   } else if (listenBtn) {
     listenBtn.style.display = 'none';
   }
