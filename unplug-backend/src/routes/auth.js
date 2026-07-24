@@ -381,6 +381,26 @@ router.post('/logout', (req, res) => {
 
 // GET /auth/me
 // Returns the currently authenticated user, based on the bearer token.
+// POST /auth/change-password — a signed-in member changes their own password
+// by confirming the current one first. Distinct from the emailed reset flow.
+router.post('/change-password', requireAuth, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    }
+    const u = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (u.rows.length === 0) return res.status(404).json({ error: 'Account not found.' });
+    const ok = await bcrypt.compare(currentPassword || '', u.rows[0].password_hash);
+    if (!ok) return res.status(400).json({ error: 'Your current password is incorrect.' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
+    res.json({ message: 'Password changed.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(

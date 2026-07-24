@@ -14,7 +14,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const result = await pool.query(
       // Category lives on the categories table, not on articles — articles
       // only carries category_id.
-      `SELECT a.id, a.title, c.name AS category, a.body, a.created_at, s.saved_at
+      `SELECT a.id, a.title, c.name AS category, a.body, a.banner_image_url, a.created_at, s.saved_at
          FROM saved_articles s
          JOIN articles a ON a.id = s.article_id
          LEFT JOIN categories c ON c.id = a.category_id
