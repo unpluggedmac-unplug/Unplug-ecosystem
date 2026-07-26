@@ -65,7 +65,11 @@ router.post('/', requireAuth, (req, res) => {
       }
     }
 
-    const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    // Render terminates TLS at its proxy and forwards plain http to the app, so
+    // req.protocol is 'http' here. Trust the proxy's x-forwarded-proto instead —
+    // otherwise we'd save an http:// URL that the https site blocks as mixed content.
+    const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+    const url = `${proto}://${req.get('host')}/uploads/${req.file.filename}`;
     res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'local' });
   });
 });

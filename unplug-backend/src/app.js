@@ -43,6 +43,10 @@ const sitemapRoutes = require('./routes/sitemap');
 
 const app = express();
 
+// Behind Render's TLS proxy. Lets req.protocol / req.secure reflect the real
+// https scheme (via x-forwarded-proto) so generated URLs aren't http://.
+app.set('trust proxy', true);
+
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 app.use(express.json());

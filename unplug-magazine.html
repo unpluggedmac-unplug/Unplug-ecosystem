@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Unplug Magazine — Real People. Real Impact.</title>
 <meta name="description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them — Directory profiles, uplifting news, and community spotlights.">
@@ -3296,9 +3297,12 @@ function newsCardHtml(article) {
   const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `Supplied by ${escapeHtml(article.kicker_supplied_by)}` : '';
+  const thumbImg = article.banner_image_url
+    ? `<img src="${escapeHtml(article.banner_image_url)}" alt="" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">`
+    : '';
   // The share row sits OUTSIDE the card anchor — nesting links inside an <a>
   // is invalid and would also trigger the card's navigation handler.
-  return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb"></div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}</div>`;
+  return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb">${thumbImg}</div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}</div>`;
 }
 
 // Share buttons (WhatsApp / Facebook / X / native / copy) used on the article
@@ -4151,12 +4155,28 @@ async function loadArticleDetail(id) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load this story right now.</div>';
   }
 }
-document.getElementById('newsGrid').addEventListener('click', (e) => {
+// Delegated on the whole document so it works for every story-card grid — the
+// News page, the homepage feed, Highlighted Articles and the "For you" feed —
+// not just #newsGrid. Share icons inside a card stopPropagation (see above), so
+// tapping a share button never triggers navigation.
+function openStoryCard(card) {
+  if (!card || !card.dataset.id) return;
+  goToPage('articledetail');
+  loadArticleDetail(card.dataset.id);
+}
+document.addEventListener('click', (e) => {
   const card = e.target.closest('.story-card[data-id]');
   if (!card) return;
   e.preventDefault();
-  goToPage('articledetail');
-  loadArticleDetail(card.dataset.id);
+  openStoryCard(card);
+});
+// Keyboard access for the homepage cards (role="link" tabindex="0").
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest && e.target.closest('.story-card[data-id]');
+  if (!card || card.tagName === 'A') return; // real anchors handle Enter themselves
+  e.preventDefault();
+  openStoryCard(card);
 });
 
 async function loadNews(reset) {
@@ -4572,7 +4592,7 @@ function homeStoryCardHtml(article) {
   const thumbImg = article.banner_image_url
     ? `<img src="${escapeHtml(article.banner_image_url)}" alt="" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">`
     : '';
-  return `<article class="story-card">
+  return `<article class="story-card" data-id="${article.id}" role="link" tabindex="0" style="cursor:pointer;">
         <div class="story-thumb">${thumbImg}</div>
         <span class="story-tag">${category}</span>
         <h3>${title}</h3>
