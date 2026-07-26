@@ -60,17 +60,27 @@ router.post('/', requireAuth, (req, res) => {
         const url = await uploadToSupabase(req.file);
         return res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'supabase' });
       } catch (e) {
-        // Don't fail the upload — fall back to serving from local disk.
-        console.error('Supabase Storage upload failed, using local disk:', e.message);
+        // Do NOT silently fall back to local disk in production: Render's disk is
+        // ephemeral, so a locally-stored image looks fine now but vanishes on the
+        // next redeploy. Failing loudly means the admin retries / fixes the config
+        // instead of shipping an image that will 404 later.
+        console.error('Supabase Storage upload failed:', e.message);
+        return res.status(502).json({
+          error: 'Image storage is misconfigured, so the upload was not saved. Please try again — if it keeps failing, check the Supabase Storage settings.',
+        });
       }
     }
 
+    // No object storage configured (e.g. local dev): serve from local disk.
     // Render terminates TLS at its proxy and forwards plain http to the app, so
     // req.protocol is 'http' here. Trust the proxy's x-forwarded-proto instead —
     // otherwise we'd save an http:// URL that the https site blocks as mixed content.
     const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
     const url = `${proto}://${req.get('host')}/uploads/${req.file.filename}`;
-    res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'local' });
+    res.status(201).json({
+      url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'local',
+      warning: 'Saved to temporary local storage — this file will be lost on the next server restart. Configure Supabase Storage for permanent uploads.',
+    });
   });
 });
 
