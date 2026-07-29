@@ -23,7 +23,7 @@ router.get('/', async (req, res, next) => {
     // unset start/end means "no restriction" on that side). Ordered so the
     // frontend can just render them in sequence for the rotation.
     const ads = await pool.query(
-      `SELECT id, slot_key, image_url, link_url
+      `SELECT id, slot_key, image_url, link_url, name, cta_text, mobile_image_url
          FROM ad_slots
         WHERE is_active = true
           AND (starts_at IS NULL OR starts_at <= CURRENT_DATE)
@@ -44,7 +44,10 @@ router.get('/', async (req, res, next) => {
     const adSlots = {};
     ads.rows.forEach((a) => {
       if (!adSlots[a.slot_key]) adSlots[a.slot_key] = [];
-      adSlots[a.slot_key].push({ image_url: a.image_url, link_url: a.link_url });
+      adSlots[a.slot_key].push({
+        image_url: a.image_url, link_url: a.link_url,
+        name: a.name, cta_text: a.cta_text, mobile_image_url: a.mobile_image_url,
+      });
     });
     res.json({ content: contentMap, blocks: blocksByPage, adSlots });
   } catch (err) {
@@ -188,8 +191,8 @@ router.delete('/admin/blocks/:id', requireRole('admin'), async (req, res, next) 
 router.get('/admin/ad-slots', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, slot_key, image_url, link_url, display_order, is_active,
-              starts_at, ends_at, updated_at
+      `SELECT id, slot_key, image_url, link_url, name, cta_text, mobile_image_url,
+              display_order, is_active, starts_at, ends_at, updated_at
          FROM ad_slots
         ORDER BY slot_key, display_order, id`
     );
@@ -216,7 +219,10 @@ function validateAdSlotInput(body) {
   const isActive = body.isActive === false ? false : true;
   const startsAt = body.startsAt || null;
   const endsAt = body.endsAt || null;
-  return { imageUrl, linkUrl, displayOrder, isActive, startsAt, endsAt };
+  const name = (body.name || '').trim().slice(0, 160) || null;
+  const ctaText = (body.ctaText || '').trim().slice(0, 40) || null;
+  const mobileImageUrl = (body.mobileImageUrl || '').trim() || null;
+  return { imageUrl, linkUrl, displayOrder, isActive, startsAt, endsAt, name, ctaText, mobileImageUrl };
 }
 
 // POST /page-cms/admin/ad-slots — admin adds a NEW banner to a slot. A slot
@@ -230,9 +236,9 @@ router.post('/admin/ad-slots', requireRole('admin'), async (req, res, next) => {
     if (v.error) return res.status(400).json({ error: v.error });
 
     const result = await pool.query(
-      `INSERT INTO ad_slots (slot_key, image_url, link_url, display_order, is_active, starts_at, ends_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [slotKey, v.imageUrl, v.linkUrl, v.displayOrder, v.isActive, v.startsAt, v.endsAt]
+      `INSERT INTO ad_slots (slot_key, image_url, link_url, display_order, is_active, starts_at, ends_at, name, cta_text, mobile_image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [slotKey, v.imageUrl, v.linkUrl, v.displayOrder, v.isActive, v.startsAt, v.endsAt, v.name, v.ctaText, v.mobileImageUrl]
     );
     logActivity(req.user.id, 'ad_slot_added', slotKey);
     res.status(201).json({ banner: result.rows[0], message: 'Banner added — it rotates in live if active and in-schedule.' });
@@ -253,9 +259,10 @@ router.patch('/admin/ad-slots/:id', requireRole('admin'), async (req, res, next)
     const result = await pool.query(
       `UPDATE ad_slots
           SET image_url = $1, link_url = $2, display_order = $3, is_active = $4,
-              starts_at = $5, ends_at = $6, updated_at = now()
-        WHERE id = $7 RETURNING *`,
-      [v.imageUrl, v.linkUrl, v.displayOrder, v.isActive, v.startsAt, v.endsAt, id]
+              starts_at = $5, ends_at = $6, name = $7, cta_text = $8, mobile_image_url = $9,
+              updated_at = now()
+        WHERE id = $10 RETURNING *`,
+      [v.imageUrl, v.linkUrl, v.displayOrder, v.isActive, v.startsAt, v.endsAt, v.name, v.ctaText, v.mobileImageUrl, id]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'That banner no longer exists.' });
     logActivity(req.user.id, 'ad_slot_edited', result.rows[0].slot_key);

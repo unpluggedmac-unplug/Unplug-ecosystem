@@ -400,6 +400,19 @@ section.home-section:last-of-type{ margin-bottom:0; }
   position:absolute; inset:0; opacity:0; transition:opacity 0.6s ease;
 }
 .ad-slot-filled .ad-slide.is-active{ opacity:1; }
+.ad-slot-filled .ad-nav{
+  position:absolute; top:50%; transform:translateY(-50%); z-index:3;
+  width:34px; height:34px; border:none; border-radius:50%; cursor:pointer;
+  background:rgba(0,0,0,0.4); color:#fff; font-size:20px; line-height:1;
+  display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .2s;
+}
+.ad-slot-filled:hover .ad-nav{ opacity:1; }
+.ad-slot-filled .ad-prev{ left:8px; } .ad-slot-filled .ad-next{ right:8px; }
+.ad-slot-filled .ad-dots{ position:absolute; bottom:8px; left:0; right:0; z-index:3; display:flex; gap:6px; justify-content:center; }
+.ad-slot-filled .ad-dot{ width:8px; height:8px; border-radius:50%; border:none; padding:0; cursor:pointer; background:rgba(255,255,255,0.55); box-shadow:0 0 0 1px rgba(0,0,0,0.25); }
+.ad-slot-filled .ad-dot.is-active{ background:var(--red); }
+.ad-slot-filled .ad-cta{ position:absolute; right:14px; bottom:14px; z-index:2; background:var(--red); color:#fff; font-size:12px; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; padding:7px 14px; border-radius:4px; }
+@media(max-width:640px){ .ad-slot-filled .ad-nav{ opacity:1; width:28px; height:28px; font-size:17px; } }
 
 /* ---- top 10 ---- */
 .rank-list{ display:flex; flex-direction:column; }
@@ -3628,23 +3641,40 @@ async function applyPageCms() {
   const adSlots = cms.adSlots || {};
   document.querySelectorAll('[data-ad-slot]').forEach((slot) => {
     const banners = adSlots[slot.getAttribute('data-ad-slot')];
-    if (!banners || !banners.length) return;
-    slot.innerHTML = banners.map((b, i) => {
-      const img = `<img src="${escapeHtml(b.image_url)}" alt="Advertisement" loading="lazy" decoding="async" style="display:block;width:100%;height:100%;object-fit:contain;">`;
+    if (!banners || !banners.length) return; // empty state: keep the placeholder, never a blank/broken box
+    const slidesHtml = banners.map((b, i) => {
+      // Optional narrower mobile crop via <picture>; falls back to the desktop image.
+      const picture = b.mobile_image_url
+        ? `<picture><source media="(max-width:640px)" srcset="${escapeHtml(b.mobile_image_url)}"><img src="${escapeHtml(b.image_url)}" alt="${escapeHtml(b.name || 'Advertisement')}" loading="lazy" decoding="async" style="display:block;width:100%;height:100%;object-fit:contain;"></picture>`
+        : `<img src="${escapeHtml(b.image_url)}" alt="${escapeHtml(b.name || 'Advertisement')}" loading="lazy" decoding="async" style="display:block;width:100%;height:100%;object-fit:contain;">`;
+      const cta = b.cta_text ? `<span class="ad-cta">${escapeHtml(b.cta_text)}</span>` : '';
       const inner = b.link_url
-        ? `<a href="${escapeHtml(b.link_url)}" target="_blank" rel="noopener sponsored" style="display:block;width:100%;height:100%;">${img}</a>`
-        : img;
+        ? `<a href="${escapeHtml(b.link_url)}" target="_blank" rel="noopener sponsored" style="display:block;width:100%;height:100%;position:relative;">${picture}${cta}</a>`
+        : picture;
       return `<div class="ad-slide${i === 0 ? ' is-active' : ''}">${inner}</div>`;
     }).join('');
+    const controls = banners.length > 1
+      ? `<button class="ad-nav ad-prev" type="button" aria-label="Previous advert">‹</button>
+         <button class="ad-nav ad-next" type="button" aria-label="Next advert">›</button>
+         <div class="ad-dots">${banners.map((_, i) => `<button class="ad-dot${i === 0 ? ' is-active' : ''}" type="button" aria-label="Advert ${i + 1}"></button>`).join('')}</div>`
+      : '';
+    slot.innerHTML = slidesHtml + controls;
     slot.classList.add('ad-slot-filled');
     if (banners.length > 1) {
-      let i = 0;
       const slides = slot.querySelectorAll('.ad-slide');
-      setInterval(() => {
-        slides[i].classList.remove('is-active');
-        i = (i + 1) % slides.length;
-        slides[i].classList.add('is-active');
-      }, 5000);
+      const dots = slot.querySelectorAll('.ad-dot');
+      let i = 0, timer = null;
+      const show = (n) => {
+        slides[i].classList.remove('is-active'); if (dots[i]) dots[i].classList.remove('is-active');
+        i = (n + slides.length) % slides.length;
+        slides[i].classList.add('is-active'); if (dots[i]) dots[i].classList.add('is-active');
+      };
+      const start = () => { timer = setInterval(() => show(i + 1), 5000); };
+      const reset = () => { clearInterval(timer); start(); };
+      slot.querySelector('.ad-next').addEventListener('click', (e) => { e.preventDefault(); show(i + 1); reset(); });
+      slot.querySelector('.ad-prev').addEventListener('click', (e) => { e.preventDefault(); show(i - 1); reset(); });
+      dots.forEach((d, n) => d.addEventListener('click', (e) => { e.preventDefault(); show(n); reset(); }));
+      start();
     }
   });
 }

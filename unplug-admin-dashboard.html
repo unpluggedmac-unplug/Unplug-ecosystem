@@ -529,7 +529,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- AD BANNERS -->
     <div class="admin-section" id="section-adbanners">
-      <div class="main-head"><div><h1>Ad Banners</h1><p>Each advertising slot on the site starts as a "Reserve this space" placeholder. Add one or more banners to a slot — with more than one, they rotate automatically on the live site every few seconds. All banner images should be <strong>1920 × 1080px (16:9)</strong>. Untick "Active" or set a schedule window to hold a banner back without deleting it.</p></div></div>
+      <div class="main-head"><div><h1>Ad Banners</h1><p>Each advertising slot on the site starts as a "Reserve this space" placeholder. Add one or more banners to a slot — with more than one, they rotate automatically on the live site (fade, with prev/next and dots). <strong>Recommended banner size: 1920 × 600px — landscape, 16:5.</strong> Accepted: JPG, PNG, WEBP; max 5 MB. Keep important text/logos away from the extreme edges (banners are responsive and may crop on small screens). Optionally add a narrower <strong>mobile image</strong> for phones. Untick "Active" or set a schedule window (start/end dates) to hold a banner back without deleting it — expired banners drop out of rotation automatically.</p></div></div>
       <div class="panel">
         <div class="panel-body" id="adBannersBody">Loading…</div>
       </div>
@@ -1787,8 +1787,15 @@ const AD_SLOT_CATALOG = [
 function adBannerRowHtml(uid) {
   return `
     <div class="form-row">
-      <div style="grid-column:1/-2;"><label>Banner image (1920×1080, 16:9)</label><div class="ad-img-upload"></div></div>
+      <div><label>Banner name / advertiser (optional)</label><input class="ad-name" placeholder="e.g. ABC Investments"></div>
+      <div><label>CTA button text (optional)</label><input class="ad-cta" placeholder="e.g. Learn More" maxlength="40"></div>
+    </div>
+    <div class="form-row">
+      <div style="grid-column:1/-2;"><label>Banner image (1920×600, 16:5)</label><div class="ad-img-upload"></div></div>
       <div><label>Click-through link (optional)</label><input class="ad-link" placeholder="https://…"></div>
+    </div>
+    <div class="form-row">
+      <div style="grid-column:1/-2;"><label>Mobile banner (optional — narrower crop for phones)</label><div class="ad-mimg-upload"></div></div>
     </div>
     <div class="form-row">
       <div><label>Display order</label><input class="ad-order" type="number" value="0" style="width:100%;"></div>
@@ -1804,6 +1811,9 @@ function adBannerRowHtml(uid) {
 function fillAdBannerRow(row, banner) {
   const uploadHost = row.querySelector('.ad-img-upload');
   uploadHost.innerHTML = UnplugUpload.fieldHtml('adImage_' + Math.random().toString(36).slice(2), banner.image_url || '');
+  row.querySelector('.ad-mimg-upload').innerHTML = UnplugUpload.fieldHtml('adMImage_' + Math.random().toString(36).slice(2), banner.mobile_image_url || '');
+  row.querySelector('.ad-name').value = banner.name || '';
+  row.querySelector('.ad-cta').value = banner.cta_text || '';
   row.querySelector('.ad-link').value = banner.link_url || '';
   row.querySelector('.ad-order').value = banner.display_order || 0;
   row.querySelector('.ad-active').checked = banner.is_active !== false;
@@ -1820,6 +1830,9 @@ function wireAdBannerRow(row, slotKey, bannerId) {
     const payload = {
       slotKey,
       imageUrl: UnplugUpload.valueOf(uploadHost) || '',
+      mobileImageUrl: UnplugUpload.valueOf(row.querySelector('.ad-mimg-upload')) || '',
+      name: row.querySelector('.ad-name').value.trim(),
+      ctaText: row.querySelector('.ad-cta').value.trim(),
       linkUrl: row.querySelector('.ad-link').value.trim(),
       displayOrder: Number(row.querySelector('.ad-order').value) || 0,
       isActive: row.querySelector('.ad-active').checked,
