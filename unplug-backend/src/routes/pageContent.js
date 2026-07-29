@@ -26,6 +26,7 @@ router.get('/', async (req, res, next) => {
       `SELECT id, slot_key, image_url, link_url, name, cta_text, mobile_image_url
          FROM ad_slots
         WHERE is_active = true
+          AND (moderation_status IS NULL OR moderation_status = 'approved')
           AND (starts_at IS NULL OR starts_at <= CURRENT_DATE)
           AND (ends_at IS NULL OR ends_at >= CURRENT_DATE)
         ORDER BY slot_key, display_order, id`
@@ -191,10 +192,13 @@ router.delete('/admin/blocks/:id', requireRole('admin'), async (req, res, next) 
 router.get('/admin/ad-slots', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, slot_key, image_url, link_url, name, cta_text, mobile_image_url,
-              display_order, is_active, starts_at, ends_at, updated_at
-         FROM ad_slots
-        ORDER BY slot_key, display_order, id`
+      `SELECT a.id, a.slot_key, a.image_url, a.link_url, a.name, a.cta_text, a.mobile_image_url,
+              a.display_order, a.is_active, a.starts_at, a.ends_at, a.updated_at,
+              a.owner_user_id, a.moderation_status, a.duration_days, a.payment_id,
+              u.email AS owner_email
+         FROM ad_slots a
+         LEFT JOIN users u ON u.id = a.owner_user_id
+        ORDER BY a.slot_key, a.display_order, a.id`
     );
     const slots = {};
     result.rows.forEach((r) => {
@@ -281,6 +285,51 @@ router.delete('/admin/ad-slots/:id', requireRole('admin'), async (req, res, next
     if (result.rowCount === 0) return res.status(404).json({ error: 'That banner no longer exists.' });
     logActivity(req.user.id, 'ad_slot_removed', result.rows[0].slot_key);
     res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /page-cms/admin/ad-slots/:id/moderate — admin approves or rejects a
+// member-submitted (paid) banner. Approve -> goes live within its dates.
+// Reject -> hidden, and the amount paid is refunded to the member's account
+// credit (their money isn't kept for a banner that never ran).
+router.patch('/admin/ad-slots/:id/moderate', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const action = req.body.action;
+    if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'action must be "approve" or "reject".' });
+    const row = await pool.query('SELECT owner_user_id, payment_id, moderation_status FROM ad_slots WHERE id = $1', [id]);
+    if (row.rowCount === 0) return res.status(404).json({ error: 'That banner no longer exists.' });
+    const b = row.rows[0];
+
+    if (action === 'approve') {
+      await pool.query(`UPDATE ad_slots SET moderation_status = 'approved', is_active = true, updated_at = now() WHERE id = $1`, [id]);
+      logActivity(req.user.id, 'ad_banner_approved', `banner ${id}`);
+      return res.json({ moderated: 'approved', message: 'Approved — it runs on its scheduled dates.' });
+    }
+
+    // Reject: hide it, and refund what was paid (if anything) to account credit.
+    await pool.query(`UPDATE ad_slots SET moderation_status = 'rejected', is_active = false, updated_at = now() WHERE id = $1`, [id]);
+    let refunded = 0;
+    // Only refund on the FIRST rejection of a paid banner (the unique index on
+    // account_credits.payment_id also stops any double credit).
+    if (b.moderation_status === 'pending_approval' && b.payment_id && b.owner_user_id) {
+      const pay = await pool.query(`SELECT amount, credit_used FROM payments WHERE id = $1 AND status = 'confirmed'`, [b.payment_id]);
+      if (pay.rowCount > 0) {
+        // Refund the full order value (cash paid + any credit that was spent).
+        refunded = Number(pay.rows[0].amount) + Number(pay.rows[0].credit_used || 0);
+        if (refunded > 0) {
+          await pool.query(
+            `INSERT INTO account_credits (user_id, amount, reason, note, payment_id, created_by)
+             VALUES ($1, $2, 'declined_submission', $3, $4, $5)`,
+            [b.owner_user_id, refunded, `Banner #${id} was not approved — full refund to account credit.`, b.payment_id, req.user.id]
+          );
+        }
+      }
+    }
+    logActivity(req.user.id, 'ad_banner_rejected', `banner ${id}`);
+    res.json({ moderated: 'rejected', refunded, message: refunded > 0 ? `Rejected — R${refunded.toFixed(2)} refunded to the member's account credit.` : 'Rejected.' });
   } catch (err) {
     next(err);
   }

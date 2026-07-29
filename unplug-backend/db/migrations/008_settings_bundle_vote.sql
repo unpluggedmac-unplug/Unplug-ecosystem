@@ -23,7 +23,7 @@ ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_linked_type_check;
 -- existing payment row could hold — otherwise a redeploy fails validation once
 -- a newer type is in the data.
 ALTER TABLE payments ADD CONSTRAINT payments_linked_type_check
-  CHECK (linked_type IN ('profile_package', 'profile_upgrade', 'competition_entry', 'highlight', 'marketplace_listing', 'vote_bundle', 'article_publish', 'event_listing', 'gallery_bundle', 'top10_entry', 'edition_download'));
+  CHECK (linked_type IN ('profile_package', 'profile_upgrade', 'competition_entry', 'highlight', 'marketplace_listing', 'vote_bundle', 'article_publish', 'event_listing', 'gallery_bundle', 'top10_entry', 'edition_download', 'ad_banner'));
 
 -- A pending bundle vote purchase — how many extra votes, for which entry,
 -- awaiting payment. On confirmation, this becomes real rows in `votes`

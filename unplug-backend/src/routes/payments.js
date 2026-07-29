@@ -86,6 +86,8 @@ const HIGHLIGHT_PRICES = {
 // Marketplace: flat R500 for a fixed 30-day duration (replaces the old
 // tiered 7/14/21/28-day Business Banner pricing).
 const MARKETPLACE_LISTING_PRICE = 500.00;
+// Self-serve advertising banners, priced by campaign length.
+const AD_BANNER_PRICES = { 7: 300.00, 14: 550.00, 28: 1000.00 };
 const MARKETPLACE_LISTING_DAYS = 30;
 
 // New fees added in this pricing round.
@@ -167,6 +169,14 @@ async function resolveAmount(linkedType, linkedId) {
     const result = await pool.query('SELECT entry_fee FROM top10_entries WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Top 10 entry not found.');
     return Number(result.rows[0].entry_fee);
+  }
+  if (linkedType === 'ad_banner') {
+    // Price is derived from the banner's stored duration — never the client.
+    const result = await pool.query('SELECT duration_days FROM ad_slots WHERE id = $1', [linkedId]);
+    if (result.rows.length === 0) throw new Error('Banner not found.');
+    const price = AD_BANNER_PRICES[result.rows[0].duration_days];
+    if (!price) throw new Error('Invalid banner duration.');
+    return price;
   }
   if (linkedType === 'edition_download') {
     const result = await pool.query('SELECT download_price FROM editions WHERE id = $1', [linkedId]);
@@ -284,6 +294,14 @@ async function applyPaymentEffect(payment) {
     await pool.query(
       `UPDATE top10_entries SET status = 'pending' WHERE id = $1 AND status = 'awaiting_payment'`,
       [payment.linked_id]
+    );
+  } else if (payment.linked_type === 'ad_banner') {
+    // Payment done → the banner moves into the admin approval queue. It only
+    // goes live (is_active=true) once an admin approves it.
+    await pool.query(
+      `UPDATE ad_slots SET moderation_status = 'pending_approval', payment_id = $2
+       WHERE id = $1 AND moderation_status = 'pending_payment'`,
+      [payment.linked_id, payment.id]
     );
   } else if (payment.linked_type === 'edition_download') {
     // Unlike everything else, there's no "awaiting_payment" row to flip —
@@ -408,6 +426,15 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       if (consultantCheck.rows.length === 0) {
         return res.status(400).json({ error: 'salesConsultantId does not match an active consultant.' });
       }
+    }
+
+    // A self-serve banner can only be paid for by the member who submitted it,
+    // and only while it's still awaiting payment.
+    if (linkedType === 'ad_banner') {
+      const own = await pool.query('SELECT owner_user_id, moderation_status FROM ad_slots WHERE id = $1', [linkedId]);
+      if (own.rows.length === 0) return res.status(404).json({ error: 'Banner not found.' });
+      if (own.rows[0].owner_user_id !== req.user.id) return res.status(403).json({ error: 'That banner is not yours.' });
+      if (own.rows[0].moderation_status !== 'pending_payment') return res.status(400).json({ error: 'This banner has already been paid for.' });
     }
 
     const amount = await resolveAmount(linkedType, linkedId);

@@ -26,4 +26,4 @@ CREATE TABLE IF NOT EXISTS edition_purchases (
 
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_linked_type_check;
 ALTER TABLE payments ADD CONSTRAINT payments_linked_type_check
-  CHECK (linked_type IN ('profile_package', 'profile_upgrade', 'competition_entry', 'highlight', 'marketplace_listing', 'vote_bundle', 'article_publish', 'event_listing', 'gallery_bundle', 'top10_entry', 'edition_download'));
+  CHECK (linked_type IN ('profile_package', 'profile_upgrade', 'competition_entry', 'highlight', 'marketplace_listing', 'vote_bundle', 'article_publish', 'event_listing', 'gallery_bundle', 'top10_entry', 'edition_download', 'ad_banner'));
