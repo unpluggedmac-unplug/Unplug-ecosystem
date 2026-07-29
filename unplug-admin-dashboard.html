@@ -171,6 +171,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <div class="brand">Unplug Admin</div>
     <a class="active" data-section="queue">Approval Queue</a>
     <a data-section="manage">Manage Content</a>
+    <a data-section="highlights">Highlighted Articles</a>
     <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="calevents">Calendar Events</a>
     <a data-section="edcal">Editions Calendar</a>
@@ -867,6 +868,32 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="activityLogBody" style="padding:0;"></div>
       </div>
     </div>
+
+    <!-- HIGHLIGHTED ARTICLES -->
+    <div class="admin-section" id="section-highlights">
+      <div class="main-head"><div><h1>Highlighted Articles</h1><p>Editorially feature articles in the homepage "Highlighted Articles" strip. Pick the article, the dates it should run, the display order, and an optional cover image that overrides the article's own for this spot.</p></div></div>
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-head"><h3 id="hlFormTitle">Add a highlight</h3></div>
+        <div class="panel-body">
+          <input type="hidden" id="hlEditId">
+          <div class="field"><label>Article</label><select id="hlArticle" style="padding:8px; width:100%;"></select></div>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="field"><label>Start date</label><input id="hlStart" type="date" style="padding:8px;"></div>
+            <div class="field"><label>End date</label><input id="hlEnd" type="date" style="padding:8px;"></div>
+            <div class="field"><label style="white-space:nowrap;"><input id="hlNoEnd" type="checkbox"> No end date</label></div>
+            <div class="field"><label>Order</label><input id="hlPriority" type="number" value="0" style="padding:8px; width:80px;"></div>
+          </div>
+          <div class="field"><label>Cover image override (optional)</label><div id="hlImageUpload"></div></div>
+          <div id="hlFormError" style="color:var(--red); margin-bottom:10px; display:none;"></div>
+          <button class="approve" id="hlSaveBtn" style="padding:9px 16px;">Save Highlight</button>
+          <button class="btn btn-line" id="hlCancelBtn" type="button" style="width:auto; display:none; margin-left:8px;">Cancel edit</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Current highlights</h3></div>
+        <div class="panel-body" id="hlList" style="padding:0;"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1121,6 +1148,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     const section = link.dataset.section;
     document.getElementById('section-' + section).classList.add('active');
     if (section === 'manage') loadManageContent();
+    if (section === 'highlights') loadHighlightsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
     if (section === 'edcal') loadEdcalDates();
@@ -2786,6 +2814,128 @@ function escapeHtmlAdmin(str) {
   const div = document.createElement('div');
   div.textContent = str == null ? '' : String(str);
   return div.innerHTML;
+}
+
+// ---------------------------------------------------------------------------
+// Highlighted Articles — admin editorial control of the homepage strip.
+// ---------------------------------------------------------------------------
+let _hlImageReady = false;
+async function loadHighlightsAdmin() {
+  if (!_hlImageReady) {
+    document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', '');
+    _hlImageReady = true;
+    document.getElementById('hlSaveBtn').addEventListener('click', saveHighlight);
+    document.getElementById('hlCancelBtn').addEventListener('click', resetHighlightForm);
+    document.getElementById('hlNoEnd').addEventListener('change', (e) => {
+      document.getElementById('hlEnd').disabled = e.target.checked;
+    });
+  }
+  const list = document.getElementById('hlList');
+  list.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  try {
+    const [arts, hls] = await Promise.all([api('/articles/admin/all'), api('/highlights/admin/all')]);
+    const sel = document.getElementById('hlArticle');
+    sel.innerHTML = (arts.articles || [])
+      .map((a) => `<option value="${a.id}">#${a.id} — ${escapeHtmlAdmin(a.title)} (${a.status})</option>`)
+      .join('');
+    renderHighlightsList(hls.highlights || []);
+  } catch (e) {
+    list.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load highlights.')}</div>`;
+  }
+}
+
+function renderHighlightsList(items) {
+  const el = document.getElementById('hlList');
+  if (!items.length) { el.innerHTML = '<div style="padding:16px; color:#666;">No highlights yet — add one above.</div>'; return; }
+  const fmt = (d) => d ? new Date(d).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+  el.innerHTML = items.map((h) => {
+    const img = h.admin_image_url || h.target_image || '';
+    const active = h.status === 'approved';
+    const dateWindow = `${fmt(h.start_date) || 'now'} → ${fmt(h.end_date) || 'no end'}`;
+    return `<div style="display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--paper-line);">
+      <img src="${escapeHtmlAdmin(img)}" alt="" onerror="this.style.visibility='hidden'" style="width:66px; height:48px; object-fit:cover; background:#eee; border-radius:4px; flex:none;">
+      <div style="flex:1; min-width:0;">
+        <strong>${escapeHtmlAdmin(h.target_title || ('#' + h.target_id))}</strong>
+        <div style="font-size:12px; color:#666;">${escapeHtmlAdmin(h.target_type)} · order ${h.priority} · ${window} · <span style="color:${active ? 'green' : 'var(--red)'};">${active ? 'active' : h.status}</span></div>
+      </div>
+      <button class="btn btn-line" style="width:auto;" onclick="editHighlight(${h.id})">Edit</button>
+      <button class="btn btn-line" style="width:auto;" onclick="toggleHighlight(${h.id}, ${active})">${active ? 'Deactivate' : 'Activate'}</button>
+      <button class="btn btn-line" style="width:auto; color:var(--red);" onclick="removeHighlight(${h.id})">Remove</button>
+    </div>`;
+  }).join('');
+  window._hlItems = items;
+}
+
+async function saveHighlight() {
+  const err = document.getElementById('hlFormError');
+  err.style.display = 'none';
+  const id = document.getElementById('hlEditId').value;
+  const noEnd = document.getElementById('hlNoEnd').checked;
+  const body = {
+    targetType: 'article',
+    targetId: Number(document.getElementById('hlArticle').value),
+    startDate: document.getElementById('hlStart').value || null,
+    endDate: noEnd ? null : (document.getElementById('hlEnd').value || null),
+    priority: Number(document.getElementById('hlPriority').value) || 0,
+    imageUrl: UnplugUpload.valueOf(document.getElementById('hlImageUpload')) || '',
+  };
+  if (!body.targetId) { err.textContent = 'Choose an article.'; err.style.display = 'block'; return; }
+  try {
+    if (id) await api('/highlights/admin/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+    else await api('/highlights/admin', { method: 'POST', body: JSON.stringify(body) });
+    resetHighlightForm();
+    showToast('Highlight saved — live within its dates.');
+    loadHighlightsAdmin();
+  } catch (e) {
+    err.textContent = e.message || 'Could not save.';
+    err.style.display = 'block';
+  }
+}
+
+function editHighlight(id) {
+  const h = (window._hlItems || []).find((x) => x.id === id);
+  if (!h) return;
+  document.getElementById('hlEditId').value = h.id;
+  document.getElementById('hlArticle').value = h.target_id;
+  document.getElementById('hlStart').value = h.start_date ? h.start_date.slice(0, 10) : '';
+  document.getElementById('hlNoEnd').checked = !h.end_date;
+  document.getElementById('hlEnd').disabled = !h.end_date;
+  document.getElementById('hlEnd').value = h.end_date ? h.end_date.slice(0, 10) : '';
+  document.getElementById('hlPriority').value = h.priority || 0;
+  document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', h.admin_image_url || '');
+  document.getElementById('hlFormTitle').textContent = 'Edit highlight';
+  document.getElementById('hlCancelBtn').style.display = 'inline-block';
+  document.getElementById('section-highlights').scrollIntoView({ behavior: 'smooth' });
+}
+
+function resetHighlightForm() {
+  document.getElementById('hlEditId').value = '';
+  document.getElementById('hlStart').value = '';
+  document.getElementById('hlEnd').value = '';
+  document.getElementById('hlEnd').disabled = false;
+  document.getElementById('hlNoEnd').checked = false;
+  document.getElementById('hlPriority').value = 0;
+  document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', '');
+  document.getElementById('hlFormTitle').textContent = 'Add a highlight';
+  document.getElementById('hlCancelBtn').style.display = 'none';
+  document.getElementById('hlFormError').style.display = 'none';
+}
+
+async function toggleHighlight(id, isActive) {
+  try {
+    await api('/highlights/admin/' + id, { method: 'PATCH', body: JSON.stringify({ status: isActive ? 'rejected' : 'approved' }) });
+    showToast(isActive ? 'Highlight deactivated.' : 'Highlight activated.');
+    loadHighlightsAdmin();
+  } catch (e) { showToast(e.message || 'Could not update.', true); }
+}
+
+async function removeHighlight(id) {
+  if (!confirm('Remove this highlight? The article stays published — it just stops being featured.')) return;
+  try {
+    await api('/highlights/admin/' + id, { method: 'DELETE' });
+    showToast('Highlight removed.');
+    loadHighlightsAdmin();
+  } catch (e) { showToast(e.message || 'Could not remove.', true); }
 }
 
 async function loadShoutoutNominations() {
