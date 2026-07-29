@@ -180,9 +180,11 @@ router.get('/mine', requireAuth, async (req, res, next) => {
 router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT a.id, a.title, a.status, a.created_at, a.published_at, c.name AS category
+      `SELECT a.id, a.title, a.status, a.created_at, a.published_at,
+              a.banner_image_url, c.name AS category, u.email AS author_email
          FROM articles a
          LEFT JOIN categories c ON c.id = a.category_id
+         LEFT JOIN users u ON u.id = a.author_user_id
         ORDER BY a.created_at DESC
         LIMIT 300`
     );

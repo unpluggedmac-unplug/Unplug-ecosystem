@@ -221,7 +221,7 @@ router.get('/profiles/renewals-due', requireRole('admin'), async (req, res, next
 router.get('/profiles/approved', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT p.id, p.display_name, p.type, p.package_tier, p.verified, p.deaf_owned_verified, p.renews_at, c.name AS category, u.email AS submitted_by
+      `SELECT p.id, p.display_name, p.type, p.package_tier, p.verified, p.deaf_owned_verified, p.renews_at, p.feature_image_url, c.name AS category, u.email AS submitted_by
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
        JOIN users u ON u.id = p.user_id

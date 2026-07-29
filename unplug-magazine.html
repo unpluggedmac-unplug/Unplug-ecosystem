@@ -4111,7 +4111,7 @@ async function loadArticleDetail(id) {
     const dateStr = a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
     const shareUrl = location.origin + '/?p=article&id=' + id;
     el.innerHTML = `
-      ${a.banner_image_url ? `<div style="position:relative; margin-bottom:24px;"><img src="${escapeHtml(a.banner_image_url)}" alt="${escapeHtml(a.title)}" style="width:100%; max-height:420px; object-fit:cover; display:block;"><div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>` : ''}
+      <div style="position:relative; margin-bottom:24px;"><img src="${a.banner_image_url ? escapeHtml(a.banner_image_url) : PLACEHOLDER_COVER}" alt="${escapeHtml(a.title)}" style="width:100%; max-height:420px; object-fit:cover; display:block;" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';"><div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>
       <span class="eyebrow">${escapeHtml(a.category || '')}</span>
       ${emotionBadge(a.emotion) ? `<div style="margin:10px 0 0;">${emotionBadge(a.emotion)}</div>` : ''}
       <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 10px;">${escapeHtml(a.title)}</h1>
@@ -4343,7 +4343,11 @@ function avatarUrl(name){
 // feature image (the backend COALESCEs the two into image_url) — only when
 // neither exists does it fall back to the generated initials avatar.
 function entryPhotoUrl(p){
-  return (p && p.image_url) ? p.image_url : avatarUrl(p.display_name);
+  // Prefer an explicit cover image (Top 10 per-entry override or profile feature
+  // image, resolved server-side into cover_image_url), then any entry image, then
+  // a generated initials avatar so a card is never blank.
+  const img = p && (p.cover_image_url || p.image_url);
+  return img ? img : avatarUrl(p.display_name);
 }
 
 function isEntryNew(entry) {
