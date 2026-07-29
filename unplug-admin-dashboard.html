@@ -1866,6 +1866,15 @@ function wireAdBannerRow(row, slotKey, bannerId) {
   });
 }
 
+async function moderateBanner(id, action) {
+  if (action === 'reject' && !confirm('Reject this banner? The member is fully refunded to their account credit.')) return;
+  try {
+    const res = await api(`/page-cms/admin/ad-slots/${id}/moderate`, { method: 'PATCH', body: JSON.stringify({ action }) });
+    showToast(res.message || 'Done.');
+    loadAdBanners();
+  } catch (err) { showToast(err.message, true); }
+}
+
 async function loadAdBanners() {
   const body = document.getElementById('adBannersBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
@@ -1878,6 +1887,30 @@ async function loadAdBanners() {
     return;
   }
   body.innerHTML = '';
+
+  // Member-submitted banners awaiting approval (paid, not yet live).
+  const pending = [];
+  Object.values(current).forEach((arr) => arr.forEach((b) => { if (b.moderation_status === 'pending_approval') pending.push(b); }));
+  if (pending.length) {
+    const pw = document.createElement('div');
+    pw.style.cssText = 'padding:16px; margin-bottom:14px; border:2px solid var(--red); border-radius:8px; background:#fff8f6;';
+    pw.innerHTML = `<div style="font-weight:700; margin-bottom:10px;">⏳ Member banners awaiting approval (${pending.length})</div>` +
+      pending.map((b) => {
+        const slotLabel = (AD_SLOT_CATALOG.find((s) => s.key === b.slot_key) || {}).label || b.slot_key;
+        const dates = `${b.starts_at ? String(b.starts_at).slice(0, 10) : '—'} → ${b.ends_at ? String(b.ends_at).slice(0, 10) : '—'}`;
+        return `<div style="display:flex; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--paper-line);">
+          <img src="${escapeHtmlAdmin(b.image_url || '')}" onerror="this.style.visibility='hidden'" style="width:96px; height:36px; object-fit:cover; background:#eee; border-radius:4px; flex:none;">
+          <div style="flex:1; min-width:0; font-size:12.5px;">
+            <strong>${escapeHtmlAdmin(b.name || 'Banner')}</strong> · ${escapeHtmlAdmin(slotLabel)}<br>
+            <span style="color:#666;">${b.duration_days || '?'} days · ${dates} · ${escapeHtmlAdmin(b.owner_email || 'member')}</span>
+          </div>
+          <button class="approve" style="padding:6px 12px;" onclick="moderateBanner(${b.id},'approve')">Approve</button>
+          <button class="btn btn-line" style="width:auto; color:var(--red);" onclick="moderateBanner(${b.id},'reject')">Reject + refund</button>
+        </div>`;
+      }).join('');
+    body.appendChild(pw);
+  }
+
   AD_SLOT_CATALOG.forEach((slot) => {
     const banners = current[slot.key] || [];
     const activeCount = banners.filter((b) => b.is_active).length;

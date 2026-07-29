@@ -305,6 +305,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <option value="gallery">Gallery Bundle — R100 for up to 3 photos</option>
           <option value="top10">Top 10 Entry — R100</option>
           <option value="marketplace">Marketplace Poster — R500 for 30 days</option>
+          <option value="ad_banner">Advertising Banner — R300 / R550 / R1000 (7 / 14 / 28 days)</option>
         </select>
       </div>
 
@@ -380,6 +381,19 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field"><label>Poster Image URL <span style="font-weight:400; opacity:0.7;">— 1080 × 1350px (4:5)</span></label><input id="mkt-poster"></div>
         <div class="field"><label>Headline</label><input id="mkt-headline"></div>
         <div class="field"><label>Requested Start Date (optional — defaults to today)</label><input id="mkt-start" type="date"></div>
+      </div>
+
+      <!-- Advertising banner fields -->
+      <div id="fields-ad_banner" class="section-hidden">
+        <div class="field"><label>Where should it appear?</label><select id="ab-placement"><option value="">Loading placements…</option></select></div>
+        <div class="field"><label>Campaign length</label><select id="ab-duration"><option value="">Loading…</option></select></div>
+        <div class="field"><label>Start date (optional — defaults to today)</label><input id="ab-start" type="date"></div>
+        <div class="field"><label>Banner image <span style="font-weight:400; opacity:0.7;">— 1920 × 600px, landscape 16:5, JPG/PNG/WEBP, max 5 MB. Keep text/logos away from the edges.</span></label><div id="ab-image-upload"></div></div>
+        <div class="field"><label>Mobile image (optional — narrower crop for phones)</label><div id="ab-mimage-upload"></div></div>
+        <div class="field"><label>Click-through link (optional)</label><input id="ab-link" placeholder="https://…"></div>
+        <div class="field"><label>Advertiser / banner name (optional)</label><input id="ab-name" placeholder="e.g. ABC Investments"></div>
+        <div class="field"><label>CTA button text (optional)</label><input id="ab-cta" maxlength="40" placeholder="e.g. Learn More"></div>
+        <p style="font-size:12px; color:var(--slate);">After payment your banner goes to our team for approval, then runs on your chosen page for the selected dates.</p>
       </div>
 
       <div class="field">
@@ -1029,7 +1043,7 @@ async function loadReadingList() {
 // ---------------------------------------------------------------------------
 // Submit & Pay — one form covering Article, Event, Gallery, Top 10, Marketplace
 // ---------------------------------------------------------------------------
-const SUBMIT_FIELD_IDS = ['article', 'event', 'gallery', 'top10', 'marketplace'];
+const SUBMIT_FIELD_IDS = ['article', 'event', 'gallery', 'top10', 'marketplace', 'ad_banner'];
   document.getElementById('art-body').addEventListener('input', () => {
   const words = document.getElementById('art-body').value.trim().split(/\s+/).filter(Boolean).length;
   const minutes = Math.max(1, Math.round(words / 200));
@@ -1199,6 +1213,27 @@ async function createSubmission(type) {
     return { linkedType: 'marketplace_listing', linkedId: data.listing.id, label: 'Marketplace Poster' };
   }
 
+  if (type === 'ad_banner') {
+    const slotKey = document.getElementById('ab-placement').value;
+    if (!slotKey) throw new Error('Choose where the banner should appear.');
+    const durationDays = Number(document.getElementById('ab-duration').value);
+    if (!durationDays) throw new Error('Choose a campaign length.');
+    const imageUrl = UnplugUpload.valueOf(document.getElementById('ab-image-upload')) || '';
+    if (!imageUrl) throw new Error('Upload a banner image first.');
+    const data = await api('/ad-banners', {
+      method: 'POST',
+      body: JSON.stringify({
+        slotKey, durationDays, imageUrl,
+        mobileImageUrl: UnplugUpload.valueOf(document.getElementById('ab-mimage-upload')) || undefined,
+        linkUrl: document.getElementById('ab-link').value.trim() || undefined,
+        name: document.getElementById('ab-name').value.trim() || undefined,
+        ctaText: document.getElementById('ab-cta').value.trim() || undefined,
+        startsAt: document.getElementById('ab-start').value || undefined,
+      }),
+    });
+    return { linkedType: 'ad_banner', linkedId: data.id, label: 'Advertising Banner' };
+  }
+
   throw new Error('Unknown submission type.');
 }
 
@@ -1226,6 +1261,24 @@ async function setupSubmitGate(){
       document.getElementById('submitCreditSection').classList.remove('section-hidden');
     }
   } catch (e) {}
+  setupBannerFields();
+}
+
+let _bannerFieldsReady = false;
+async function setupBannerFields() {
+  if (_bannerFieldsReady) return;
+  _bannerFieldsReady = true;
+  document.getElementById('ab-image-upload').innerHTML = UnplugUpload.fieldHtml('abImage', '');
+  document.getElementById('ab-mimage-upload').innerHTML = UnplugUpload.fieldHtml('abMImage', '');
+  try {
+    const o = await api('/ad-banners/options');
+    document.getElementById('ab-placement').innerHTML = '<option value="">Select a placement…</option>' +
+      (o.placements || []).map((p) => `<option value="${p.key}">${p.label}</option>`).join('');
+    document.getElementById('ab-duration').innerHTML =
+      (o.durations || []).map((d) => `<option value="${d}">${d} days — R${Number(o.prices[d]).toFixed(0)}</option>`).join('');
+  } catch (e) {
+    document.getElementById('ab-placement').innerHTML = '<option value="">Could not load placements</option>';
+  }
 }
 
 document.getElementById('submitAndPayBtn').addEventListener('click', async () => {
