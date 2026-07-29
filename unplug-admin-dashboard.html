@@ -173,6 +173,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="manage">Manage Content</a>
     <a data-section="highlights">Highlighted Articles</a>
     <a data-section="covers">Cover Images</a>
+    <a data-section="projects">Investor Projects</a>
     <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="calevents">Calendar Events</a>
     <a data-section="edcal">Editions Calendar</a>
@@ -927,6 +928,83 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="coverList" style="padding:0;"></div>
       </div>
     </div>
+
+    <!-- INVESTOR PROJECTS -->
+    <div class="admin-section" id="section-projects">
+      <div class="main-head"><div><h1>Investor Projects</h1><p>Create and manage project showcases for the Investors page — title, description, unlimited sponsors, a YouTube/Instagram video, and up to 20 gallery images.</p></div>
+        <button class="approve" id="projAddBtn" style="padding:9px 16px;">+ Add Project</button></div>
+      <div class="panel"><div class="panel-body" id="projList" style="padding:0;">Loading…</div></div>
+
+      <!-- EDITOR (hidden until Add/Edit) -->
+      <div id="projEditor" style="display:none; margin-top:8px;">
+        <div class="panel" style="margin-bottom:16px;">
+          <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center;"><h3 id="projEditorTitle">Edit project</h3><button class="btn btn-line" id="projCloseBtn" type="button" style="width:auto;">Close editor</button></div>
+          <div class="panel-body">
+            <input type="hidden" id="projId">
+            <h4 style="margin:0 0 10px;">Project information</h4>
+            <div class="field"><label>Title *</label><input id="projTitle" style="padding:8px; width:100%;" maxlength="200"></div>
+            <div class="field"><label>Description <span style="color:#888; font-weight:400;">(max ~3 min / <span id="projWordMax">450</span> words)</span></label>
+              <textarea id="projDesc" rows="7" style="padding:8px; width:100%;"></textarea>
+              <div id="projWordCount" style="font-size:12px; color:#666; margin-top:4px;">0 / 450 words</div>
+            </div>
+            <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+              <div class="field"><label>Status</label><select id="projStatus" style="padding:8px;"><option value="draft">Draft</option><option value="published">Published</option><option value="unpublished">Unpublished</option><option value="archived">Archived</option></select></div>
+              <div class="field"><label>Display order</label><input id="projOrder" type="number" value="0" style="padding:8px; width:90px;"></div>
+              <div class="field"><label style="white-space:nowrap;"><input id="projFeatured" type="checkbox"> Featured</label></div>
+            </div>
+            <div class="field"><label>SEO title (optional)</label><input id="projSeoTitle" style="padding:8px; width:100%;" maxlength="200"></div>
+            <div class="field"><label>Meta description (optional)</label><input id="projMetaDesc" style="padding:8px; width:100%;" maxlength="400"></div>
+            <div id="projInfoError" style="color:var(--red); margin:8px 0; display:none;"></div>
+            <button class="approve" id="projSaveInfoBtn" style="padding:9px 16px;">Save project info</button>
+            <span id="projSaveHint" style="font-size:12px; color:#888; margin-left:8px;"></span>
+          </div>
+        </div>
+
+        <!-- The remaining sections need a saved project first -->
+        <div id="projSubSections" style="display:none;">
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>Sponsors <span style="font-size:12px; color:#888; font-weight:400;">(unlimited)</span></h3></div>
+            <div class="panel-body">
+              <div id="projSponsorList" style="margin-bottom:14px;"></div>
+              <div style="border-top:1px solid var(--paper-line); padding-top:12px;">
+                <strong style="display:block; margin-bottom:8px;">+ Add sponsor</strong>
+                <div class="field"><label>Sponsor name *</label><input id="spName" style="padding:8px; width:100%;"></div>
+                <div class="field"><label>Sponsor logo <span style="color:#888; font-weight:400;">(PNG/WEBP, transparent preferred, ≤5MB — shown with object-fit:contain)</span></label><div id="spLogoUpload"></div></div>
+                <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+                  <div class="field"><label>Link type</label><select id="spLinkType" style="padding:8px;"><option value="website">Website</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option></select></div>
+                  <div class="field" style="flex:1; min-width:220px;"><label>Link (https://…)</label><input id="spLink" style="padding:8px; width:100%;"></div>
+                  <div class="field"><label>Order</label><input id="spOrder" type="number" value="0" style="padding:8px; width:80px;"></div>
+                </div>
+                <div id="spError" style="color:var(--red); margin:6px 0; display:none;"></div>
+                <button class="approve" id="spAddBtn" style="padding:8px 14px;">Add sponsor</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>Video</h3></div>
+            <div class="panel-body">
+              <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+                <div class="field"><label>Platform</label><select id="vidPlatform" style="padding:8px;"><option value="none">None</option><option value="youtube">YouTube</option><option value="instagram">Instagram</option></select></div>
+                <div class="field" style="flex:1; min-width:260px;"><label>Video URL</label><input id="vidUrl" style="padding:8px; width:100%;" placeholder="https://www.youtube.com/watch?v=… or https://www.instagram.com/reel/…"></div>
+              </div>
+              <div id="vidError" style="color:var(--red); margin:6px 0; display:none;"></div>
+              <button class="approve" id="vidSaveBtn" style="padding:8px 14px;">Save video</button>
+              <div id="vidPreview" style="margin-top:12px;"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h3>Project images <span id="projImgCount" style="font-size:12px; color:#888; font-weight:400;">0 / 20</span></h3></div>
+            <div class="panel-body">
+              <div class="field"><label>Add image (uploads immediately, max 20)</label><div id="projImgUpload"></div></div>
+              <div id="projImgAddError" style="color:var(--red); margin:6px 0; display:none;"></div>
+              <div id="projImgGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-top:8px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1183,6 +1261,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'manage') loadManageContent();
     if (section === 'highlights') loadHighlightsAdmin();
     if (section === 'covers') loadCoverManager();
+    if (section === 'projects') loadProjectsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
     if (section === 'edcal') loadEdcalDates();
@@ -3069,6 +3148,322 @@ async function saveCover(remove) {
     err.textContent = e.message || 'Could not save.';
     err.style.display = 'block';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Investor Projects — showcase management (projects, sponsors, video, images).
+// ---------------------------------------------------------------------------
+let _projWired = false;
+let _projMaxWords = 450;
+let _projMaxImages = 20;
+let _projCurrent = null;   // full bundle of the project being edited
+let _spEditId = null;      // sponsor being edited, if any
+let _projUploadsReady = false;
+
+async function loadProjectsAdmin() {
+  if (!_projWired) {
+    _projWired = true;
+    document.getElementById('projAddBtn').addEventListener('click', () => openProjectEditor(null));
+    document.getElementById('projCloseBtn').addEventListener('click', () => { document.getElementById('projEditor').style.display = 'none'; });
+    document.getElementById('projSaveInfoBtn').addEventListener('click', saveProjectInfo);
+    document.getElementById('projDesc').addEventListener('input', updateWordCount);
+    document.getElementById('spAddBtn').addEventListener('click', saveSponsor);
+    document.getElementById('vidSaveBtn').addEventListener('click', saveVideo);
+  }
+  const list = document.getElementById('projList');
+  list.innerHTML = 'Loading…';
+  try {
+    const d = await api('/projects/admin/all');
+    _projMaxWords = d.maxDescriptionWords || 450;
+    _projMaxImages = d.maxImages || 20;
+    document.getElementById('projWordMax').textContent = _projMaxWords;
+    renderProjectsTable(d.projects || []);
+  } catch (e) {
+    list.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load projects.')}</div>`;
+  }
+}
+
+function renderProjectsTable(items) {
+  const el = document.getElementById('projList');
+  if (!items.length) { el.innerHTML = '<div style="padding:16px; color:#666;">No projects yet — click “+ Add Project”.</div>'; return; }
+  el.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
+    <thead><tr style="text-align:left; border-bottom:2px solid var(--paper-line);">
+      <th style="padding:8px;">Project</th><th style="padding:8px;">Sponsors</th><th style="padding:8px;">Images</th><th style="padding:8px;">Video</th><th style="padding:8px;">Status</th><th style="padding:8px;">Updated</th><th style="padding:8px;">Actions</th>
+    </tr></thead><tbody>${items.map(projectRow).join('')}</tbody></table></div>`;
+}
+
+function projectRow(p) {
+  const st = p.status;
+  const badge = { draft: '#888', published: 'green', unpublished: '#c77', archived: '#999' }[st] || '#888';
+  const pubBtn = st === 'published'
+    ? `<button class="btn btn-line" style="width:auto;" onclick="projectStatus(${p.id},'unpublished')">Unpublish</button>`
+    : `<button class="btn btn-line" style="width:auto;" onclick="projectStatus(${p.id},'published')">Publish</button>`;
+  return `<tr style="border-bottom:1px solid var(--paper-line);">
+    <td style="padding:8px;"><strong>${escapeHtmlAdmin(p.title)}</strong>${p.featured ? ' <span style="color:var(--red); font-size:11px;">★ featured</span>' : ''}</td>
+    <td style="padding:8px;">${p.sponsor_count}</td>
+    <td style="padding:8px;">${p.image_count}/${_projMaxImages}</td>
+    <td style="padding:8px;">${p.video_platform || '—'}</td>
+    <td style="padding:8px;"><span style="color:${badge};">${st}</span></td>
+    <td style="padding:8px;">${p.updated_at ? new Date(p.updated_at).toLocaleDateString() : ''}</td>
+    <td style="padding:8px; white-space:nowrap;">
+      <button class="btn btn-line" style="width:auto;" onclick="editProject(${p.id})">Edit</button>
+      <button class="btn btn-line" style="width:auto;" onclick="previewProject(${p.id})">Preview</button>
+      ${pubBtn}
+      <button class="btn btn-line" style="width:auto;" onclick="projectStatus(${p.id},'archived')">Archive</button>
+      <button class="btn btn-line" style="width:auto; color:var(--red);" onclick="deleteProject(${p.id})">Delete</button>
+    </td></tr>`;
+}
+
+function countWords(t) { return (String(t || '').trim().match(/\S+/g) || []).length; }
+function updateWordCount() {
+  const n = countWords(document.getElementById('projDesc').value);
+  const el = document.getElementById('projWordCount');
+  el.textContent = `${n} / ${_projMaxWords} words`;
+  el.style.color = n > _projMaxWords ? 'var(--red)' : '#666';
+}
+
+function openProjectEditor(id) {
+  _projCurrent = null; _spEditId = null;
+  document.getElementById('projEditor').style.display = 'block';
+  document.getElementById('projSubSections').style.display = id ? 'block' : 'none';
+  document.getElementById('projEditorTitle').textContent = id ? 'Edit project' : 'New project';
+  document.getElementById('projId').value = id || '';
+  ['projTitle', 'projDesc', 'projSeoTitle', 'projMetaDesc'].forEach((x) => { document.getElementById(x).value = ''; });
+  document.getElementById('projStatus').value = 'draft';
+  document.getElementById('projOrder').value = 0;
+  document.getElementById('projFeatured').checked = false;
+  document.getElementById('projInfoError').style.display = 'none';
+  document.getElementById('projSaveHint').textContent = id ? '' : 'Save the info first, then add sponsors, video and images.';
+  updateWordCount();
+  if (!_projUploadsReady) {
+    document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', '');
+    document.getElementById('projImgUpload').innerHTML = UnplugUpload.fieldHtml('projImg', '') +
+      '<button class="approve" id="projImgAddBtn" type="button" style="padding:7px 12px; margin-top:6px;">Add uploaded image</button>';
+    document.getElementById('projImgAddBtn').addEventListener('click', addProjectImage);
+    _projUploadsReady = true;
+  }
+  document.getElementById('projEditor').scrollIntoView({ behavior: 'smooth' });
+  if (id) editProject(id);
+}
+
+async function editProject(id) {
+  try {
+    const d = await api('/projects/admin/' + id);
+    _projCurrent = d;
+    const p = d.project;
+    document.getElementById('projEditor').style.display = 'block';
+    document.getElementById('projSubSections').style.display = 'block';
+    document.getElementById('projEditorTitle').textContent = 'Edit: ' + p.title;
+    document.getElementById('projId').value = p.id;
+    document.getElementById('projTitle').value = p.title || '';
+    document.getElementById('projDesc').value = p.description || '';
+    document.getElementById('projStatus').value = p.status;
+    document.getElementById('projOrder').value = p.display_order || 0;
+    document.getElementById('projFeatured').checked = !!p.featured;
+    document.getElementById('projSeoTitle').value = p.seo_title || '';
+    document.getElementById('projMetaDesc').value = p.meta_description || '';
+    document.getElementById('vidPlatform').value = p.video_platform || 'none';
+    document.getElementById('vidUrl').value = p.video_url || '';
+    updateWordCount();
+    renderSponsors(d.sponsors || []);
+    renderProjectImages(d.images || []);
+    renderVideoPreview(p);
+    document.getElementById('projEditor').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { showToast(e.message || 'Could not open project.', true); }
+}
+
+async function saveProjectInfo() {
+  const err = document.getElementById('projInfoError');
+  err.style.display = 'none';
+  const id = document.getElementById('projId').value;
+  const title = document.getElementById('projTitle').value.trim();
+  const description = document.getElementById('projDesc').value;
+  if (!title) { err.textContent = 'A title is required.'; err.style.display = 'block'; return; }
+  const status = document.getElementById('projStatus').value;
+  if (countWords(description) > _projMaxWords) {
+    err.textContent = `Description is too long (${countWords(description)}/${_projMaxWords} words). Shorten it before saving${status === 'published' ? '/publishing' : ''}.`;
+    err.style.display = 'block'; return;
+  }
+  const body = {
+    title, description, status,
+    displayOrder: Number(document.getElementById('projOrder').value) || 0,
+    featured: document.getElementById('projFeatured').checked,
+    seoTitle: document.getElementById('projSeoTitle').value,
+    metaDescription: document.getElementById('projMetaDesc').value,
+  };
+  try {
+    if (id) {
+      await api('/projects/admin/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+      showToast('Project saved.');
+      loadProjectsAdmin();
+    } else {
+      const r = await api('/projects/admin', { method: 'POST', body: JSON.stringify({ title, description, displayOrder: body.displayOrder }) });
+      const newId = r.project.id;
+      await api('/projects/admin/' + newId, { method: 'PATCH', body: JSON.stringify(body) });
+      showToast('Project created — now add sponsors, video and images.');
+      openProjectEditor(newId);
+      loadProjectsAdmin();
+    }
+  } catch (e) { err.textContent = e.message || 'Could not save.'; err.style.display = 'block'; }
+}
+
+async function projectStatus(id, status) {
+  if (status === 'archived' && !confirm('Archive this project? It will be hidden from the public but kept for your records.')) return;
+  try {
+    await api('/projects/admin/' + id, { method: 'PATCH', body: JSON.stringify({ status }) });
+    showToast('Status changed to ' + status + '.');
+    loadProjectsAdmin();
+  } catch (e) { showToast(e.message || 'Could not change status.', true); }
+}
+
+async function deleteProject(id) {
+  if (!confirm('Are you sure you want to permanently delete this project? Consider Archive instead — it keeps the record. This cannot be undone.')) return;
+  try {
+    await api('/projects/admin/' + id, { method: 'DELETE' });
+    showToast('Project deleted.');
+    document.getElementById('projEditor').style.display = 'none';
+    loadProjectsAdmin();
+  } catch (e) { showToast(e.message || 'Could not delete.', true); }
+}
+
+function previewProject(id) {
+  window.open(location.origin + '/?p=project&id=' + id, '_blank', 'noopener');
+}
+
+// ----- Sponsors -----
+function renderSponsors(list) {
+  const el = document.getElementById('projSponsorList');
+  if (!list.length) { el.innerHTML = '<div style="color:#666; font-size:13px;">No sponsors yet.</div>'; return; }
+  el.innerHTML = list.map((s) => `<div style="display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--paper-line);">
+    <div style="width:60px; height:40px; display:flex; align-items:center; justify-content:center; background:#f6f6f6; border-radius:4px;">${s.logo_url ? `<img src="${escapeHtmlAdmin(s.logo_url)}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="this.style.display='none'">` : ''}</div>
+    <div style="flex:1;"><strong>${escapeHtmlAdmin(s.name)}</strong><div style="font-size:12px; color:#666;">${s.link_type}${s.link_url ? ' · ' + escapeHtmlAdmin(s.link_url) : ''} · order ${s.display_order} · ${s.is_active ? 'active' : 'inactive'}</div></div>
+    <button class="btn btn-line" style="width:auto;" onclick="editSponsor(${s.id})">Edit</button>
+    <button class="btn btn-line" style="width:auto;" onclick="toggleSponsor(${s.id}, ${s.is_active})">${s.is_active ? 'Disable' : 'Enable'}</button>
+    <button class="btn btn-line" style="width:auto; color:var(--red);" onclick="removeSponsor(${s.id})">Remove</button>
+  </div>`).join('');
+}
+
+async function saveSponsor() {
+  const err = document.getElementById('spError');
+  err.style.display = 'none';
+  const projectId = document.getElementById('projId').value;
+  if (!projectId) return;
+  const name = document.getElementById('spName').value.trim();
+  if (!name) { err.textContent = 'Sponsor name is required.'; err.style.display = 'block'; return; }
+  const body = {
+    name,
+    logoUrl: UnplugUpload.valueOf(document.getElementById('spLogoUpload')) || '',
+    linkType: document.getElementById('spLinkType').value,
+    linkUrl: document.getElementById('spLink').value.trim(),
+    displayOrder: Number(document.getElementById('spOrder').value) || 0,
+  };
+  try {
+    if (_spEditId) {
+      await api('/projects/admin/sponsors/' + _spEditId, { method: 'PATCH', body: JSON.stringify(body) });
+    } else {
+      await api('/projects/admin/' + projectId + '/sponsors', { method: 'POST', body: JSON.stringify(body) });
+    }
+    _spEditId = null;
+    document.getElementById('spName').value = '';
+    document.getElementById('spLink').value = '';
+    document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', '');
+    document.getElementById('spAddBtn').textContent = 'Add sponsor';
+    editProject(projectId);
+  } catch (e) { err.textContent = e.message || 'Could not save sponsor.'; err.style.display = 'block'; }
+}
+
+function editSponsor(id) {
+  const s = ((_projCurrent && _projCurrent.sponsors) || []).find((x) => x.id === id);
+  if (!s) return;
+  _spEditId = id;
+  document.getElementById('spName').value = s.name;
+  document.getElementById('spLink').value = s.link_url || '';
+  document.getElementById('spLinkType').value = s.link_type;
+  document.getElementById('spOrder').value = s.display_order;
+  document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', s.logo_url || '');
+  document.getElementById('spAddBtn').textContent = 'Update sponsor';
+  document.getElementById('spName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function toggleSponsor(id, active) {
+  try { await api('/projects/admin/sponsors/' + id, { method: 'PATCH', body: JSON.stringify({ isActive: !active }) }); editProject(document.getElementById('projId').value); }
+  catch (e) { showToast(e.message, true); }
+}
+async function removeSponsor(id) {
+  if (!confirm('Remove this sponsor?')) return;
+  try { await api('/projects/admin/sponsors/' + id, { method: 'DELETE' }); editProject(document.getElementById('projId').value); }
+  catch (e) { showToast(e.message, true); }
+}
+
+// ----- Video -----
+async function saveVideo() {
+  const err = document.getElementById('vidError');
+  err.style.display = 'none';
+  const id = document.getElementById('projId').value;
+  if (!id) return;
+  const platform = document.getElementById('vidPlatform').value;
+  const body = { videoPlatform: platform === 'none' ? 'none' : platform, videoUrl: document.getElementById('vidUrl').value.trim() };
+  try {
+    const r = await api('/projects/admin/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+    renderVideoPreview(r.project);
+    showToast('Video saved.');
+  } catch (e) { err.textContent = e.message || 'Could not save video.'; err.style.display = 'block'; }
+}
+function renderVideoPreview(p) {
+  const el = document.getElementById('vidPreview');
+  if (p.video_platform === 'youtube' && p.video_embed_url) {
+    el.innerHTML = `<div style="position:relative; padding-bottom:56.25%; height:0; max-width:480px;"><iframe src="${escapeHtmlAdmin(p.video_embed_url)}" style="position:absolute; inset:0; width:100%; height:100%; border:0;" allowfullscreen></iframe></div>`;
+  } else if (p.video_platform === 'instagram' && p.video_url) {
+    el.innerHTML = `<a href="${escapeHtmlAdmin(p.video_url)}" target="_blank" rel="noopener noreferrer">${escapeHtmlAdmin(p.video_url)}</a> <span style="color:#888;">(embeds on the public page)</span>`;
+  } else { el.innerHTML = '<span style="color:#888; font-size:13px;">No video set.</span>'; }
+}
+
+// ----- Images -----
+function renderProjectImages(images) {
+  document.getElementById('projImgCount').textContent = `${images.length} / ${_projMaxImages}`;
+  const grid = document.getElementById('projImgGrid');
+  if (!images.length) { grid.innerHTML = '<div style="color:#666; font-size:13px;">No images yet.</div>'; return; }
+  grid.innerHTML = images.map((im, i) => `<div style="border:1px solid var(--paper-line); border-radius:6px; overflow:hidden;">
+    <img src="${escapeHtmlAdmin(im.image_url)}" style="width:100%; height:110px; object-fit:cover; display:block;" onerror="this.style.opacity=0.3">
+    <div style="padding:6px; font-size:11px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+      ${im.is_cover ? '<span style="color:var(--red); font-weight:700;">★ Cover</span>' : `<button class="btn btn-line" style="width:auto; padding:2px 6px;" onclick="setProjectCover(${im.id})">Set cover</button>`}
+      <button class="btn btn-line" style="width:auto; padding:2px 6px;" onclick="moveProjectImage(${i},-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button class="btn btn-line" style="width:auto; padding:2px 6px;" onclick="moveProjectImage(${i},1)" ${i === images.length - 1 ? 'disabled' : ''}>↓</button>
+      <button class="btn btn-line" style="width:auto; padding:2px 6px; color:var(--red);" onclick="deleteProjectImage(${im.id})">✕</button>
+    </div></div>`).join('');
+}
+
+async function addProjectImage() {
+  const err = document.getElementById('projImgAddError');
+  err.style.display = 'none';
+  const id = document.getElementById('projId').value;
+  const url = UnplugUpload.valueOf(document.getElementById('projImgUpload'));
+  if (!url) { err.textContent = 'Upload an image first.'; err.style.display = 'block'; return; }
+  try {
+    await api('/projects/admin/' + id + '/images', { method: 'POST', body: JSON.stringify({ imageUrl: url }) });
+    document.getElementById('projImgUpload').innerHTML = UnplugUpload.fieldHtml('projImg', '') +
+      '<button class="approve" id="projImgAddBtn" type="button" style="padding:7px 12px; margin-top:6px;">Add uploaded image</button>';
+    document.getElementById('projImgAddBtn').addEventListener('click', addProjectImage);
+    editProject(id);
+  } catch (e) { err.textContent = e.message || 'Could not add image.'; err.style.display = 'block'; }
+}
+async function setProjectCover(iid) {
+  try { await api('/projects/admin/images/' + iid, { method: 'PATCH', body: JSON.stringify({ isCover: true }) }); editProject(document.getElementById('projId').value); }
+  catch (e) { showToast(e.message, true); }
+}
+async function deleteProjectImage(iid) {
+  if (!confirm('Delete this image?')) return;
+  try { await api('/projects/admin/images/' + iid, { method: 'DELETE' }); editProject(document.getElementById('projId').value); }
+  catch (e) { showToast(e.message, true); }
+}
+async function moveProjectImage(index, dir) {
+  const images = (_projCurrent && _projCurrent.images) || [];
+  const target = index + dir;
+  if (target < 0 || target >= images.length) return;
+  const order = images.map((im) => im.id);
+  [order[index], order[target]] = [order[target], order[index]];
+  try { await api('/projects/admin/' + document.getElementById('projId').value + '/reorder-images', { method: 'POST', body: JSON.stringify({ order }) }); editProject(document.getElementById('projId').value); }
+  catch (e) { showToast(e.message, true); }
 }
 
 async function loadShoutoutNominations() {
