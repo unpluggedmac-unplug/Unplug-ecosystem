@@ -94,8 +94,20 @@ const EVENT_LISTING_FEE = 300.00;
 const GALLERY_BUNDLE_PRICE = 100.00; // up to 3 images per bundle
 const TOP10_ENTRY_FEE = 100.00;
 
-function generateReference() {
-  return 'UNPLUG-' + crypto.randomBytes(8).toString('hex').toUpperCase();
+// The current Terms & Conditions version. Bump this when the Ts&Cs change;
+// historical orders keep the version they accepted. Exposed to the frontend via
+// GET /payments/terms-version so both sides agree on one value.
+const TERMS_VERSION = '2026.07.29';
+
+// A unique 10-digit numeric order reference (no leading zero), checked against
+// the payments table so it can never collide.
+async function generateReference() {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const ref = String(Math.floor(1000000000 + Math.random() * 9000000000)); // 10 digits
+    const exists = await pool.query('SELECT 1 FROM payments WHERE gateway_reference = $1', [ref]);
+    if (exists.rowCount === 0) return ref;
+  }
+  throw new Error('Could not generate a unique payment reference — please try again.');
 }
 
 // Works out the correct amount for a given linked_type/linked_id, from the
@@ -340,13 +352,50 @@ router.get('/credit', requireAuth, async (req, res, next) => {
   }
 });
 
+// GET /payments/terms-version — public. The current Ts&Cs version the checkout
+// must record; keeps the frontend and backend on one value.
+router.get('/terms-version', (req, res) => {
+  res.json({ version: TERMS_VERSION });
+});
+
+// GET /payments/admin/all — admin order view: who, what, credit used, amount
+// paid, method, reference, terms version + acceptance time, and a derived status
+// label (Credit Paid / Partially Paid / Paid / Pending / Failed).
+router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
+  try {
+    const rows = await pool.query(
+      `SELECT p.id, p.gateway_reference, p.linked_type, p.linked_id, p.amount, p.credit_used,
+              p.order_total, p.method, p.status, p.terms_version, p.terms_accepted_at,
+              p.created_at, p.confirmed_at, u.email, u.full_name
+         FROM payments p JOIN users u ON u.id = p.user_id
+        ORDER BY p.created_at DESC LIMIT 500`
+    );
+    const orders = rows.rows.map((p) => {
+      let label;
+      if (p.status === 'failed') label = 'Failed';
+      else if (p.status === 'pending') label = 'Pending';
+      else if (Number(p.amount) === 0 && Number(p.credit_used) > 0) label = 'Credit Paid';
+      else if (Number(p.credit_used) > 0) label = 'Partially Paid';
+      else label = 'Paid';
+      return { ...p, statusLabel: label };
+    });
+    res.json({ orders });
+  } catch (err) { next(err); }
+});
+
 const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok', 'sales_consultant', 'other'];
 
 router.post('/initiate', requireAuth, async (req, res, next) => {
   try {
-    const { linkedType, linkedId, method, referralSource, salesConsultantId, voucherCode } = req.body;
+    const { linkedType, linkedId, method, referralSource, salesConsultantId, voucherCode, useCredit, termsAccepted } = req.body;
     if (!['payfast', 'ozow', 'eft'].includes(method)) {
       return res.status(400).json({ error: 'method must be one of: payfast, ozow, eft' });
+    }
+    // MANDATORY Terms & Conditions gate — enforced server-side, per order. Every
+    // new paid order must actively accept the current Ts&Cs; there is no bypass
+    // and no "already accepted before" exemption.
+    if (termsAccepted !== true) {
+      return res.status(400).json({ error: 'You must read and accept the current Unplug Terms & Conditions and Cancellation, Refund & Account Credit Policy before checkout.' });
     }
     if (referralSource && !REFERRAL_SOURCES.includes(referralSource)) {
       return res.status(400).json({ error: `referralSource must be one of: ${REFERRAL_SOURCES.join(', ')}` });
@@ -371,31 +420,37 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       appliedVoucher = voucherResult.voucher;
     }
 
-    const reference = generateReference();
+    const reference = await generateReference();
 
-    // Account credit (from a declined or cancelled submission) comes off what
-    // is still owed, after any voucher. The deduction and the payment row are
-    // written in ONE transaction: spending someone's credit and then failing
-    // to create the payment would take their money and give them nothing.
+    // Account credit is applied ONLY when the user opts in (useCredit === true),
+    // and never more than the order total: MIN(available, total). Server-side
+    // math — the client can't dictate how much credit is spent. The deduction
+    // and the payment row are written in ONE transaction: spending someone's
+    // credit and then failing to create the payment would take their money and
+    // give them nothing.
     let payment;
     let creditUsed = 0;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      creditUsed = await spendCredit(
-        client,
-        req.user.id,
-        finalAmount,
-        `Applied to ${linkedType} #${linkedId} (${reference})`
-      );
+      if (useCredit === true) {
+        creditUsed = await spendCredit(
+          client,
+          req.user.id,
+          finalAmount,
+          `Applied to ${linkedType} #${linkedId} (${reference})`
+        );
+      }
       const payable = Number((finalAmount - creditUsed).toFixed(2));
 
       const result = await client.query(
-        `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, referral_source, sales_consultant_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, referral_source, sales_consultant_id,
+                               terms_version, terms_accepted_at, terms_ip, terms_user_agent, credit_used, order_total)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10, $11, $12, $13)
          RETURNING *`,
-        [req.user.id, payable, method, reference, linkedType, linkedId, referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null]
+        [req.user.id, payable, method, reference, linkedType, linkedId, referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null,
+          TERMS_VERSION, req.ip, req.get('user-agent') || null, creditUsed, finalAmount]
       );
       payment = result.rows[0];
 
