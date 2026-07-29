@@ -6,8 +6,10 @@
 -- everything else that costs money.
 -- ---------------------------------------------------------------------------
 ALTER TABLE articles DROP CONSTRAINT IF EXISTS articles_status_check;
+-- 'draft' is added later (049) but this re-runs every deploy, so include it here
+-- too — otherwise a redeploy fails validation once a draft article exists.
 ALTER TABLE articles ADD CONSTRAINT articles_status_check
-  CHECK (status IN ('awaiting_payment', 'pending', 'approved', 'rejected'));
+  CHECK (status IN ('draft', 'awaiting_payment', 'pending', 'approved', 'rejected'));
 
 -- ---------------------------------------------------------------------------
 -- Events now cost R300 (once-off) to list on the calendar.
@@ -103,4 +105,4 @@ CREATE TABLE IF NOT EXISTS bulk_email_campaigns (
 -- payments.linked_type gains the three new payable items.
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_linked_type_check;
 ALTER TABLE payments ADD CONSTRAINT payments_linked_type_check
-  CHECK (linked_type IN ('profile_package', 'profile_upgrade', 'competition_entry', 'highlight', 'marketplace_listing', 'vote_bundle', 'article_publish', 'event_listing', 'gallery_bundle', 'top10_entry'));
+  CHECK (linked_type IN ('profile_package', 'profile_upgrade', 'competition_entry', 'highlight', 'marketplace_listing', 'vote_bundle', 'article_publish', 'event_listing', 'gallery_bundle', 'top10_entry', 'edition_download'));

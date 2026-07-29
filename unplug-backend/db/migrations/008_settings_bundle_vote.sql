@@ -18,8 +18,12 @@ ON CONFLICT (key) DO NOTHING;
 
 -- Now that bundle voting has a price, it's a real payments.linked_type.
 ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_linked_type_check;
+-- Full linked_type list (kept in sync with 010/011 and resolveAmount). This
+-- constraint is re-added on every deploy, so it must allow every type any
+-- existing payment row could hold — otherwise a redeploy fails validation once
+-- a newer type is in the data.
 ALTER TABLE payments ADD CONSTRAINT payments_linked_type_check
-  CHECK (linked_type IN ('profile_package', 'profile_upgrade', 'competition_entry', 'highlight', 'marketplace_listing', 'vote_bundle'));
+  CHECK (linked_type IN ('profile_package', 'profile_upgrade', 'competition_entry', 'highlight', 'marketplace_listing', 'vote_bundle', 'article_publish', 'event_listing', 'gallery_bundle', 'top10_entry', 'edition_download'));
 
 -- A pending bundle vote purchase — how many extra votes, for which entry,
 -- awaiting payment. On confirmation, this becomes real rows in `votes`
