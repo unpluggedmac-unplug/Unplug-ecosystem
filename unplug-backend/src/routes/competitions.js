@@ -350,7 +350,8 @@ router.post('/top10/enter', requireAuth, async (req, res, next) => {
 router.get('/top10', async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT t.rank, t.cause_text, p.display_name, p.slug
+      `SELECT t.rank, t.cause_text, p.display_name, p.slug,
+              COALESCE(t.cover_image_url, p.feature_image_url) AS cover_image_url
        FROM top10_rankings t
        JOIN profiles p ON p.id = t.profile_id
        ORDER BY t.rank ASC`

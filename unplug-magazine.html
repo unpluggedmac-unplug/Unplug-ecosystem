@@ -3297,9 +3297,7 @@ function newsCardHtml(article) {
   const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `Supplied by ${escapeHtml(article.kicker_supplied_by)}` : '';
-  const thumbImg = article.banner_image_url
-    ? `<img src="${escapeHtml(article.banner_image_url)}" alt="" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">`
-    : '';
+  const thumbImg = coverImgTag(article.banner_image_url, article.title);
   // The share row sits OUTSIDE the card anchor — nesting links inside an <a>
   // is invalid and would also trigger the card's navigation handler.
   return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb">${thumbImg}</div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}</div>`;
@@ -3729,16 +3727,27 @@ async function renderDirMap() {
 // readers never see this section at all.
 async function loadForYou() {
   const section = document.getElementById('forYouSection');
-  if (!section || !UnplugAPI.getToken()) return;
+  if (!section) return;
   const grid = document.getElementById('forYouGrid');
   const heading = document.getElementById('forYouHeading');
   try {
-    const data = await api('/feed/for-you');
-    const articles = data.articles || [];
-    if (articles.length === 0) return; // nothing to show — leave it hidden
+    // Latest Stories = the top 6 MOST-VIEWED articles published in the last 30
+    // days (calculated server-side from real page views — updates automatically
+    // as views change, nothing hardcoded). Public: shown to everyone, not just
+    // logged-in members. If there aren't enough recent+viewed articles yet, fall
+    // back to the newest so the section is never awkwardly empty.
+    let articles = [];
+    try {
+      const data = await api('/articles/most-viewed?days=30&limit=6');
+      articles = data.articles || [];
+    } catch (e) { articles = []; }
+    if (articles.length === 0) {
+      const nd = await api('/articles?page=1&limit=6');
+      articles = nd.articles || [];
+    }
+    if (articles.length === 0) { section.hidden = true; return; }
     section.hidden = false;
-    // Don't call it "For you" unless it actually reflects their interests.
-    heading.textContent = data.personalised ? 'For you' : 'Latest stories';
+    heading.textContent = 'Latest stories';
     grid.innerHTML = articles.map(homeStoryCardHtml).join('');
   } catch (err) {
     section.hidden = true;
@@ -4584,14 +4593,31 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.share-row a')) e.stopPropagation();
 }, true);
 
+// Branded default cover shown whenever a content item has no cover image, so a
+// card never renders empty or with a broken-image icon. Inline SVG data URI —
+// no network request, always available, responsive via object-fit on the <img>.
+const PLACEHOLDER_COVER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">' +
+  '<rect width="800" height="600" fill="#f3efe9"/>' +
+  '<g fill="none" stroke="#c0392b" stroke-width="13" opacity="0.5" stroke-linecap="round">' +
+  '<circle cx="400" cy="270" r="40"/><path d="M336 270a64 64 0 0 1 128 0"/><path d="M306 270a94 94 0 0 1 188 0"/></g>' +
+  '<text x="400" y="410" font-family="Georgia,serif" font-size="44" fill="#1a1a1a" text-anchor="middle" letter-spacing="4">UNPLUG</text>' +
+  '<text x="400" y="450" font-family="Arial,sans-serif" font-size="19" fill="#6b6b6b" text-anchor="middle" letter-spacing="6">MAGAZINE</text></svg>'
+);
+// One authoritative <img> builder for every cover: uses the stored image, falls
+// back to the branded placeholder, and if the stored image 404s (e.g. an old
+// wiped upload) onerror swaps in the placeholder instead of a broken icon.
+function coverImgTag(url, alt) {
+  const src = url ? escapeHtml(url) : PLACEHOLDER_COVER;
+  return `<img src="${src}" alt="${escapeHtml(alt || '')}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';">`;
+}
+
 function homeStoryCardHtml(article) {
   const title = escapeHtml(article.title);
   const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
   const kicker = article.kicker_supplied_by ? `<span class="story-kicker">Supplied by <strong>${escapeHtml(article.kicker_supplied_by)}</strong></span>` : '';
-  const thumbImg = article.banner_image_url
-    ? `<img src="${escapeHtml(article.banner_image_url)}" alt="" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">`
-    : '';
+  const thumbImg = coverImgTag(article.banner_image_url, article.title);
   return `<article class="story-card" data-id="${article.id}" role="link" tabindex="0" style="cursor:pointer;">
         <div class="story-thumb">${thumbImg}</div>
         <span class="story-tag">${category}</span>
@@ -4606,6 +4632,8 @@ ${shareRow(absUrl('?p=article&id=' + article.id), article.title)}
 async function loadHighlightedArticles() {
   const el = document.getElementById('highlightedArticlesGrid');
   try {
+    // /highlights/active is already ordered by the admin's priority and filtered
+    // to the current date window (start/end, or no-end).
     const active = await api('/highlights/active');
     const articleHighlights = active.highlights.filter((h) => h.target_type === 'article').slice(0, 3);
     if (articleHighlights.length === 0) {
@@ -4613,7 +4641,12 @@ async function loadHighlightedArticles() {
       return;
     }
     const articles = await Promise.all(
-      articleHighlights.map((h) => api('/articles/' + h.target_id).then((d) => d.article).catch(() => null))
+      articleHighlights.map((h) => api('/articles/' + h.target_id).then((d) => {
+        const art = d.article;
+        // Admin-selected cover image for this placement overrides the article's own.
+        if (art && h.admin_image_url) art.banner_image_url = h.admin_image_url;
+        return art;
+      }).catch(() => null))
     );
     const valid = articles.filter(Boolean);
     el.innerHTML = valid.length ? valid.map(homeStoryCardHtml).join('') : '<div class="dir-empty-state">No highlighted stories right now.</div>';
@@ -4625,7 +4658,10 @@ async function loadHighlightedArticles() {
 async function loadNewStories() {
   const el = document.getElementById('newStoriesGrid');
   try {
-    const data = await api('/articles?page=1&limit=3');
+    // New Stories = the 6 newest published articles (published_at DESC). The
+    // /articles feed only ever returns approved+published items, so drafts /
+    // pending / rejected can't appear here.
+    const data = await api('/articles?page=1&limit=6');
     el.innerHTML = data.articles.length
       ? data.articles.map(homeStoryCardHtml).join('')
       : '<div class="dir-empty-state">No stories yet — check back soon.</div>';

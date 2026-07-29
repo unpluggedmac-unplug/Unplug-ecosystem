@@ -123,6 +123,38 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// GET /articles/most-viewed — public. The homepage "Latest Stories" section:
+// the top articles by legitimate recorded views, but ONLY among those published
+// within the window (default 30 days). Reuses the existing page_views tracking
+// (each article detail view is recorded as page_path 'article-<id>'), so this
+// updates automatically as views change — nothing is hardcoded. MUST stay above
+// the '/:id' route below, or Express would treat 'most-viewed' as an id.
+router.get('/most-viewed', async (req, res, next) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 6, 1), 12);
+    const result = await pool.query(
+      `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at,
+              a.banner_image_url, c.name AS category, COUNT(pv.id) AS views
+         FROM articles a
+         LEFT JOIN categories c ON c.id = a.category_id
+         LEFT JOIN page_views pv
+                ON pv.page_path = 'article-' || a.id
+               AND pv.viewed_at >= now() - ($1::text || ' days')::interval
+        WHERE a.status = 'approved'
+          AND a.published_at IS NOT NULL
+          AND a.published_at >= now() - ($1::text || ' days')::interval
+        GROUP BY a.id, c.name
+        ORDER BY views DESC, a.published_at DESC
+        LIMIT $2`,
+      [String(days), limit]
+    );
+    res.json({ articles: result.rows, windowDays: days });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /articles/mine — the authenticated member's own articles, at any
 // status (draft/pending/approved/rejected) — not just published ones.
 router.get('/mine', requireAuth, async (req, res, next) => {
