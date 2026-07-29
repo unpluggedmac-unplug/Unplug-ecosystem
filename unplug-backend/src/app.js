@@ -16,6 +16,7 @@ const eventRoutes = require('./routes/events');
 const birthdayRoutes = require('./routes/birthdays');
 const competitionRoutes = require('./routes/competitions');
 const investorRoutes = require('./routes/investors');
+const projectRoutes = require('./routes/projects');
 const marketplaceRoutes = require('./routes/marketplace');
 const highlightRoutes = require('./routes/highlights');
 const salesConsultantRoutes = require('./routes/salesConsultants');
@@ -69,6 +70,7 @@ app.use('/events', eventRoutes);
 app.use('/birthdays', birthdayRoutes);
 app.use('/', competitionRoutes); // exposes /competitions, /entries/:id/vote, /top10
 app.use('/investors', investorRoutes);
+app.use('/projects', projectRoutes);
 app.use('/marketplace', marketplaceRoutes);
 app.use('/highlights', highlightRoutes);
 app.use('/sales-consultants', salesConsultantRoutes);
