@@ -121,7 +121,35 @@ body{ min-height:100vh; }
       <label>Voucher Code (optional)</label>
       <input id="voucherCode" placeholder="e.g. UNPLUG2026">
     </div>
-    <button class="btn btn-solid" id="payBtn">Pay Now</button>
+
+    <!-- YOUR UNPLUG CREDIT (only shown if the member has any) -->
+    <div class="field section-hidden" id="creditSection" style="background:#faf7f2; border:1px solid var(--paper-line); padding:12px; border-radius:6px;">
+      <label style="margin-bottom:4px;">Your Unplug Credit</label>
+      <div style="font-size:14px;">Available Credit: <b id="creditAvailable">R0.00</b></div>
+      <label class="tc-row" style="margin-top:8px;"><input type="checkbox" id="useCreditChk"> <span>Use my Unplug Credit</span></label>
+      <p style="font-size:12px; color:var(--slate); margin:4px 0 0;">Your credit never expires — you can keep it for later instead.</p>
+    </div>
+
+    <!-- ORDER SUMMARY -->
+    <div class="field" id="orderSummaryBox" style="border-top:1px solid var(--paper-line); padding-top:12px; font-size:14px;">
+      <div style="display:flex; justify-content:space-between;"><span>Order total</span><b id="sumTotal">—</b></div>
+      <div style="display:flex; justify-content:space-between; color:var(--red);" class="section-hidden" id="sumCreditLine"><span>Unplug Credit applied</span><b id="sumCredit">-R0.00</b></div>
+      <div style="display:flex; justify-content:space-between; font-size:16px; margin-top:6px; padding-top:6px; border-top:1px dashed var(--paper-line);"><span><b>Total to pay</b></span><b id="sumPay">—</b></div>
+    </div>
+
+    <!-- MANDATORY TERMS & CONDITIONS GATE -->
+    <div class="field" id="termsGate" style="border-top:1px solid var(--paper-line); padding-top:12px;">
+      <p style="font-size:13px; margin-bottom:8px;">Before continuing, please review the Unplug Magazine Terms &amp; Conditions and Cancellation, Refund &amp; Account Credit Policy.</p>
+      <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" class="btn btn-line viewTermsLink" style="display:inline-block; margin:0 6px 6px 0;">VIEW TERMS &amp; CONDITIONS</a>
+      <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" class="btn btn-line viewTermsLink" style="display:inline-block; margin:0 6px 6px 0;">VIEW CANCELLATION, REFUND &amp; ACCOUNT CREDIT POLICY</a>
+      <label class="tc-row" id="termsAcceptRow" style="margin-top:8px; opacity:0.5;">
+        <input type="checkbox" id="termsAcceptChk" disabled>
+        <span>I have read and agree to the Unplug Magazine Terms &amp; Conditions and Cancellation, Refund &amp; Account Credit Policy.</span>
+      </label>
+      <p id="termsHint" style="font-size:12px; color:var(--slate); margin:4px 0 0;">Open the Terms &amp; Conditions above to enable this checkbox.</p>
+    </div>
+
+    <button class="btn btn-solid" id="payBtn" disabled>Complete Order</button>
   </div>
 
   <!-- STEP 3: result -->
@@ -266,6 +294,7 @@ async function enterEditionCheckout(){
     document.getElementById('paymentSummary').textContent =
       `Edition download — Issue No. ${data.edition.issue_number}: ${data.edition.title}, R${Number(data.edition.download_price).toFixed(0)}`;
     document.getElementById('paymentCard').classList.remove('section-hidden');
+    initCheckoutGate(Number(data.edition.download_price));
     loadConsultants();
   } catch (err) {
     document.getElementById('paymentCard').classList.remove('section-hidden');
@@ -320,6 +349,7 @@ body: JSON.stringify({ displayName, packageTier: SELECTED_TIER, type: SELECTED_T
       `${displayName} — ${SELECTED_TYPE} ${SELECTED_TIER.charAt(0).toUpperCase() + SELECTED_TIER.slice(1)} package, R${TIER_PRICES[SELECTED_TYPE][SELECTED_TIER]}`;
     document.getElementById('packageCard').classList.add('section-hidden');
     document.getElementById('paymentCard').classList.remove('section-hidden');
+    initCheckoutGate(Number(TIER_PRICES[SELECTED_TYPE][SELECTED_TIER]));
     loadConsultants();
   } catch (err) {
     showError('packageError', err.message);
@@ -351,8 +381,54 @@ async function loadConsultants() {
   }
 }
 
+// ---- Checkout gate: order total, opt-in credit, mandatory Terms ----
+let CURRENT_ORDER_TOTAL = 0;
+let CHECKOUT_CREDIT = 0;
+let TERMS_VERSION_CLIENT = '';
+async function initCheckoutGate(total){
+  CURRENT_ORDER_TOTAL = Number(total) || 0;
+  const acc = document.getElementById('termsAcceptChk');
+  acc.checked = false; acc.disabled = true;
+  document.getElementById('termsAcceptRow').style.opacity = '0.5';
+  document.getElementById('termsHint').textContent = 'Open the Terms & Conditions above to enable this checkbox.';
+  document.getElementById('useCreditChk').checked = false;
+  try { const tv = await api('/payments/terms-version'); TERMS_VERSION_CLIENT = tv.version; } catch (e) {}
+  try { const c = await api('/payments/credit'); CHECKOUT_CREDIT = Number(c.balance) || 0; } catch (e) { CHECKOUT_CREDIT = 0; }
+  const creditSec = document.getElementById('creditSection');
+  if (CHECKOUT_CREDIT > 0){
+    document.getElementById('creditAvailable').textContent = 'R' + CHECKOUT_CREDIT.toFixed(2);
+    creditSec.classList.remove('section-hidden');
+  } else { creditSec.classList.add('section-hidden'); }
+  recalcCheckout();
+}
+function recalcCheckout(){
+  const useCredit = document.getElementById('useCreditChk').checked && CHECKOUT_CREDIT > 0;
+  const creditUsed = useCredit ? Math.min(CHECKOUT_CREDIT, CURRENT_ORDER_TOTAL) : 0;
+  const pay = Math.max(0, Number((CURRENT_ORDER_TOTAL - creditUsed).toFixed(2)));
+  document.getElementById('sumTotal').textContent = 'R' + CURRENT_ORDER_TOTAL.toFixed(2);
+  const creditLine = document.getElementById('sumCreditLine');
+  if (creditUsed > 0){ creditLine.classList.remove('section-hidden'); document.getElementById('sumCredit').textContent = '-R' + creditUsed.toFixed(2); }
+  else creditLine.classList.add('section-hidden');
+  document.getElementById('sumPay').textContent = 'R' + pay.toFixed(2);
+  const btn = document.getElementById('payBtn');
+  btn.disabled = !document.getElementById('termsAcceptChk').checked;
+  btn.textContent = pay === 0 ? 'Complete Order (Paid by Credit)' : 'Complete Order';
+}
+document.querySelectorAll('.viewTermsLink').forEach((a) => a.addEventListener('click', () => {
+  const acc = document.getElementById('termsAcceptChk');
+  acc.disabled = false;
+  document.getElementById('termsAcceptRow').style.opacity = '1';
+  document.getElementById('termsHint').textContent = 'You can now tick the box to confirm you have read and agree.';
+}));
+document.getElementById('termsAcceptChk').addEventListener('change', recalcCheckout);
+document.getElementById('useCreditChk').addEventListener('change', recalcCheckout);
+
 document.getElementById('payBtn').addEventListener('click', async () => {
   hideError('paymentError');
+  if (!document.getElementById('termsAcceptChk').checked) {
+    showError('paymentError', 'Please read and accept the Terms & Conditions to continue.');
+    return;
+  }
   const referralSource = document.getElementById('referralSource').value;
   const consultantId = document.getElementById('consultantSelect').value;
   const method = document.getElementById('paymentMethod').value;
@@ -375,6 +451,9 @@ document.getElementById('payBtn').addEventListener('click', async () => {
       linkedId: CURRENT_PROFILE_ID,
       method,
       referralSource,
+      termsAccepted: true,
+      termsVersion: TERMS_VERSION_CLIENT,
+      useCredit: document.getElementById('useCreditChk').checked,
     };
     if (referralSource === 'sales_consultant') payload.salesConsultantId = parseInt(consultantId, 10);
     const voucherCode = document.getElementById('voucherCode').value.trim();
@@ -385,7 +464,13 @@ document.getElementById('payBtn').addEventListener('click', async () => {
     document.getElementById('paymentCard').classList.add('section-hidden');
     document.getElementById('resultCard').classList.remove('section-hidden');
 
-    if (method === 'eft') {
+    if (data.paidInFull) {
+      // Covered fully by account credit — no gateway/EFT needed.
+      document.getElementById('resultSuccess').classList.add('show');
+      document.getElementById('resultSuccess').textContent = 'Order complete — paid in full by your Unplug Credit.';
+      document.getElementById('resultInstructions').innerHTML =
+        `${data.message || ''}<br><br><b>Reference:</b> <span class="ref">${data.payment.gateway_reference}</span>`;
+    } else if (method === 'eft') {
       document.getElementById('resultSuccess').classList.add('show');
       document.getElementById('resultSuccess').textContent = 'Payment request created — pay via EFT using the details below.';
       const i = data.instructions;

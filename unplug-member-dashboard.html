@@ -392,7 +392,23 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT.</p>
       </div>
 
-      <button class="btn btn-solid" id="submitAndPayBtn">Create &amp; Pay</button>
+      <!-- Your Unplug Credit (only shown if the member has any) -->
+      <div class="field section-hidden" id="submitCreditSection" style="background:#faf7f2; border:1px solid var(--paper-line); padding:10px; border-radius:6px;">
+        <label style="margin-bottom:4px;">Your Unplug Credit</label>
+        <div style="font-size:13.5px;">Available: <b id="submitCreditAvailable">R0.00</b></div>
+        <label class="tc-row" style="margin-top:6px;"><input type="checkbox" id="submitUseCredit"> <span>Use my Unplug Credit toward this order</span></label>
+        <p style="font-size:11.5px; color:var(--slate); margin:2px 0 0;">The amount applied (up to your balance) is worked out at checkout. Credit never expires.</p>
+      </div>
+
+      <!-- MANDATORY Terms & Conditions gate -->
+      <div class="field" id="submitTermsGate" style="border-top:1px solid var(--paper-line); padding-top:10px;">
+        <p style="font-size:12.5px; margin-bottom:6px;">Before continuing, please review the Terms &amp; Conditions and Cancellation, Refund &amp; Account Credit Policy.</p>
+        <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" class="submitViewTerms" style="font-weight:600; text-decoration:underline;">VIEW TERMS &amp; CONDITIONS</a>
+        <label class="tc-row" id="submitTermsRow" style="margin-top:8px; opacity:0.5;"><input type="checkbox" id="submitTermsChk" disabled> <span>I have read and agree to the Unplug Magazine Terms &amp; Conditions and Cancellation, Refund &amp; Account Credit Policy.</span></label>
+        <p id="submitTermsHint" style="font-size:11.5px; color:var(--slate); margin:2px 0 0;">Open the Terms &amp; Conditions above to enable this checkbox.</p>
+      </div>
+
+      <button class="btn btn-solid" id="submitAndPayBtn" disabled>Create &amp; Pay</button>
 
       <div class="instructions-box section-hidden" id="submitResultBox" style="margin-top:16px;"></div>
     </div>
@@ -783,6 +799,7 @@ function enterMemberDashboard(user){
   loadMemberContent();
   loadReadingList();
   loadCredits();
+  setupSubmitGate();
 }
 
 // On page load, restore a saved session rather than forcing a fresh
@@ -1185,8 +1202,38 @@ async function createSubmission(type) {
   throw new Error('Unknown submission type.');
 }
 
+// Mandatory Terms gate + opt-in credit for the Submit & Pay flow.
+let SUBMIT_TERMS_VERSION = '';
+let _submitGateWired = false;
+async function setupSubmitGate(){
+  if (!_submitGateWired) {
+    _submitGateWired = true;
+    document.querySelectorAll('.submitViewTerms').forEach((a) => a.addEventListener('click', () => {
+      document.getElementById('submitTermsChk').disabled = false;
+      document.getElementById('submitTermsRow').style.opacity = '1';
+      document.getElementById('submitTermsHint').textContent = 'You can now tick the box to confirm you have read and agree.';
+    }));
+    document.getElementById('submitTermsChk').addEventListener('change', (e) => {
+      document.getElementById('submitAndPayBtn').disabled = !e.target.checked;
+    });
+  }
+  try { const tv = await api('/payments/terms-version'); SUBMIT_TERMS_VERSION = tv.version; } catch (e) {}
+  try {
+    const c = await api('/payments/credit');
+    const bal = Number(c.balance) || 0;
+    if (bal > 0) {
+      document.getElementById('submitCreditAvailable').textContent = 'R' + bal.toFixed(2);
+      document.getElementById('submitCreditSection').classList.remove('section-hidden');
+    }
+  } catch (e) {}
+}
+
 document.getElementById('submitAndPayBtn').addEventListener('click', async () => {
   hideSubmitError();
+  if (!document.getElementById('submitTermsChk').checked) {
+    showSubmitError('Please read and accept the Terms & Conditions to continue.');
+    return;
+  }
   const type = document.getElementById('submitType').value;
   const method = document.getElementById('submitPaymentMethod').value;
   const btn = document.getElementById('submitAndPayBtn');
@@ -1196,13 +1243,20 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
     const { linkedType, linkedId, label } = await createSubmission(type);
     const payment = await api('/payments/initiate', {
       method: 'POST',
-      body: JSON.stringify({ linkedType, linkedId, method }),
+      body: JSON.stringify({
+        linkedType, linkedId, method,
+        termsAccepted: true,
+        termsVersion: SUBMIT_TERMS_VERSION,
+        useCredit: document.getElementById('submitUseCredit').checked,
+      }),
     });
 
     const resultBox = document.getElementById('submitResultBox');
     resultBox.classList.remove('section-hidden');
 
-    if (method === 'eft') {
+    if (payment.paidInFull) {
+      resultBox.innerHTML = `<strong>${label} created — paid in full by your Unplug Credit.</strong><br><br>${payment.message || ''}<br><b>Reference:</b> <span class="ref">${payment.payment.gateway_reference}</span>`;
+    } else if (method === 'eft') {
       const i = payment.instructions;
       resultBox.innerHTML = `<strong>${label} created.</strong> Pay via EFT using the details below.<br><br>
         <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
