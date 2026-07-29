@@ -740,6 +740,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .inv-title{ font-size: 13px; color: #a39d92; text-transform: uppercase; letter-spacing: 0.04em; }
 .inv-quote{ font-family: 'Playfair Display', serif; font-style: italic; font-size: 17px; line-height: 1.55; color: #e8e4df; border-left: 2px solid var(--red); padding-left: 16px; margin-top: 8px; }
 @media(max-width:860px){ .investor-spotlight{ grid-template-columns:1fr; padding:40px 24px; } }
+.investor-spotlight .spotlight-cover{ aspect-ratio:16/10; overflow:hidden; margin-bottom:14px; border-radius:5px; background:rgba(255,255,255,0.06); }
+.investor-spotlight .spotlight-cover img{ width:100%; height:100%; object-fit:cover; display:block; }
+.investor-spotlight .spotlight-proj:hover{ transform:translateY(-2px); transition:transform .2s; }
 
 /* ---- feature-in-edition section (readable card, same style as the
    Ivorymuse card: label, title, image, button, stacked) ---- */
@@ -1562,7 +1565,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <div><span class="inv-stat-num" id="statArticles">—</span><span class="inv-stat-label">Articles Published</span></div>
         </div>
       </div>
-      <div class="inv-card">
+      <!-- Project-driven spotlight — populated live from the selected project,
+           shown only when an active spotlight points at a published project. -->
+      <a class="inv-card spotlight-proj" id="spotlightProjectCard" href="#" style="display:none; text-decoration:none; color:inherit; cursor:pointer;" onclick="event.preventDefault(); if(window._spotlightPid) openProject(window._spotlightPid);">
+        <div class="spotlight-cover"><img id="spotlightCover" src="" alt="" loading="lazy"></div>
+        <div class="inv-name" id="spotlightTitle"></div>
+        <div class="inv-title" id="spotlightPresenter" style="display:none;"></div>
+        <p class="inv-quote" id="spotlightNote"></p>
+        <span class="btn btn-line" style="border-color:rgba(255,255,255,0.3); color:var(--cream); margin-top:8px; display:inline-block;">View Project →</span>
+      </a>
+      <!-- Fallback when no project spotlight is active -->
+      <div class="inv-card" id="spotlightFallbackCard">
         <div class="inv-avatar"></div>
         <div>
           <div class="inv-name">David Khumalo</div>
@@ -4765,6 +4778,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadHighlightedArticles();
   loadNewStories();
   loadHighlightedProfiles();
+  loadSpotlight();
 });
 
 // ---------------------------------------------------------------------------
@@ -5255,6 +5269,28 @@ function routeFromUrl(){
   } finally { window.__seoSuppress = false; }
 }
 window.addEventListener('popstate', routeFromUrl);
+
+// ---- Homepage Investor Spotlight (references a live project by ID) ----
+async function loadSpotlight(){
+  const card = document.getElementById('spotlightProjectCard');
+  const fallback = document.getElementById('spotlightFallbackCard');
+  if (!card) return;
+  try {
+    const d = await api('/projects/spotlight');
+    if (!d.active || !d.project) { card.style.display = 'none'; if (fallback) fallback.style.display = ''; return; }
+    const p = d.project;
+    window._spotlightPid = p.id;
+    const cover = document.getElementById('spotlightCover');
+    cover.onerror = function(){ this.onerror = null; this.src = PLACEHOLDER_COVER; };
+    cover.src = p.cover_image_url || PLACEHOLDER_COVER;
+    document.getElementById('spotlightTitle').textContent = p.title;
+    // The homepage-only Spotlight Note is the primary copy; fall back to a short
+    // excerpt of the project's own description only if no note was written.
+    document.getElementById('spotlightNote').textContent = d.note || projectIntro(p.description);
+    card.style.display = '';
+    if (fallback) fallback.style.display = 'none';
+  } catch (e) { card.style.display = 'none'; if (fallback) fallback.style.display = ''; }
+}
 
 // ---- Project showcases (Investors → Projects) ----
 async function loadProjects(){

@@ -933,6 +933,27 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <div class="admin-section" id="section-projects">
       <div class="main-head"><div><h1>Investor Projects</h1><p>Create and manage project showcases for the Investors page — title, description, unlimited sponsors, a YouTube/Instagram video, and up to 20 gallery images.</p></div>
         <button class="approve" id="projAddBtn" style="padding:9px 16px;">+ Add Project</button></div>
+
+      <!-- HOMEPAGE INVESTOR SPOTLIGHT -->
+      <div class="panel" style="margin-bottom:18px; border:2px solid var(--red);">
+        <div class="panel-head"><h3>★ Homepage Investor Spotlight</h3></div>
+        <div class="panel-body">
+          <div id="spotCurrent" style="margin-bottom:12px; font-size:13px;">Loading…</div>
+          <div class="field"><label>Search & select a published project</label>
+            <input id="spotSearch" placeholder="Search by project title…" style="padding:8px; width:100%; margin-bottom:6px;">
+            <div id="spotResults" style="max-height:200px; overflow:auto; border:1px solid var(--paper-line); border-radius:4px;"></div>
+          </div>
+          <div class="field"><label>Spotlight note <span style="color:#888; font-weight:400;">(homepage-only promo copy — does NOT change the project's description)</span></label>
+            <textarea id="spotNote" rows="3" maxlength="400" style="padding:8px; width:100%;"></textarea></div>
+          <div class="field"><label style="white-space:nowrap;"><input id="spotActive" type="checkbox"> Active — show on the homepage</label></div>
+          <div id="spotError" style="color:var(--red); margin:6px 0; display:none;"></div>
+          <button class="approve" id="spotSaveBtn" style="padding:9px 16px;">Save spotlight</button>
+          <button class="btn btn-line" id="spotPreviewBtn" type="button" style="width:auto; margin-left:8px;">Preview</button>
+          <button class="btn btn-line" id="spotRemoveBtn" type="button" style="width:auto; color:var(--red); margin-left:8px;">Remove spotlight</button>
+          <div id="spotPreview" style="margin-top:14px;"></div>
+        </div>
+      </div>
+
       <div class="panel"><div class="panel-body" id="projList" style="padding:0;">Loading…</div></div>
 
       <!-- EDITOR (hidden until Add/Edit) -->
@@ -3159,6 +3180,9 @@ let _projMaxImages = 20;
 let _projCurrent = null;   // full bundle of the project being edited
 let _spEditId = null;      // sponsor being edited, if any
 let _projUploadsReady = false;
+let _projAll = [];         // all projects (for the spotlight search)
+let _spotSelectedId = null; // project currently chosen in the spotlight form
+let _spotState = null;      // saved spotlight config from the server
 
 async function loadProjectsAdmin() {
   if (!_projWired) {
@@ -3169,6 +3193,10 @@ async function loadProjectsAdmin() {
     document.getElementById('projDesc').addEventListener('input', updateWordCount);
     document.getElementById('spAddBtn').addEventListener('click', saveSponsor);
     document.getElementById('vidSaveBtn').addEventListener('click', saveVideo);
+    document.getElementById('spotSearch').addEventListener('input', () => renderSpotResults());
+    document.getElementById('spotSaveBtn').addEventListener('click', saveSpotlight);
+    document.getElementById('spotPreviewBtn').addEventListener('click', previewSpotlight);
+    document.getElementById('spotRemoveBtn').addEventListener('click', removeSpotlight);
   }
   const list = document.getElementById('projList');
   list.innerHTML = 'Loading…';
@@ -3177,7 +3205,9 @@ async function loadProjectsAdmin() {
     _projMaxWords = d.maxDescriptionWords || 450;
     _projMaxImages = d.maxImages || 20;
     document.getElementById('projWordMax').textContent = _projMaxWords;
-    renderProjectsTable(d.projects || []);
+    _projAll = d.projects || [];
+    renderProjectsTable(_projAll);
+    loadSpotlightAdmin();
   } catch (e) {
     list.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load projects.')}</div>`;
   }
@@ -3317,7 +3347,11 @@ async function projectStatus(id, status) {
 }
 
 async function deleteProject(id) {
-  if (!confirm('Are you sure you want to permanently delete this project? Consider Archive instead — it keeps the record. This cannot be undone.')) return;
+  const isSpotlight = _spotState && _spotState.projectId === id;
+  const msg = isSpotlight
+    ? 'This project is currently being displayed in the Homepage Investor Spotlight. Deleting it will remove it from the Spotlight. Continue? (Consider Archive instead — it keeps the record.)'
+    : 'Are you sure you want to permanently delete this project? Consider Archive instead — it keeps the record. This cannot be undone.';
+  if (!confirm(msg)) return;
   try {
     await api('/projects/admin/' + id, { method: 'DELETE' });
     showToast('Project deleted.');
@@ -3464,6 +3498,85 @@ async function moveProjectImage(index, dir) {
   [order[index], order[target]] = [order[target], order[index]];
   try { await api('/projects/admin/' + document.getElementById('projId').value + '/reorder-images', { method: 'POST', body: JSON.stringify({ order }) }); editProject(document.getElementById('projId').value); }
   catch (e) { showToast(e.message, true); }
+}
+
+// ----- Homepage Investor Spotlight (references a project by ID) -----
+async function loadSpotlightAdmin() {
+  try {
+    const d = await api('/projects/admin/spotlight');
+    _spotState = d;
+    _spotSelectedId = d.projectId || null;
+    document.getElementById('spotNote').value = d.note || '';
+    document.getElementById('spotActive').checked = !!d.active;
+    renderSpotCurrent(d);
+    renderSpotResults();
+  } catch (e) {
+    document.getElementById('spotCurrent').innerHTML = `<span style="color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load spotlight.')}</span>`;
+  }
+}
+function renderSpotCurrent(d) {
+  const el = document.getElementById('spotCurrent');
+  if (!d.project) { el.innerHTML = '<em style="color:#888;">No project is set as the homepage spotlight.</em>'; return; }
+  const p = d.project;
+  const live = d.active && p.status === 'published';
+  el.innerHTML = `Current: <strong>${escapeHtmlAdmin(p.title)}</strong> · status ${p.status} · ${p.image_count} images · ${p.sponsor_count} sponsors · <span style="color:${live ? 'green' : 'var(--red)'};">${live ? 'LIVE on homepage' : (d.active ? 'active but project not published — hidden' : 'inactive')}</span>`;
+}
+function renderSpotResults() {
+  const q = (document.getElementById('spotSearch').value || '').toLowerCase();
+  // Only published projects are normally selectable (spec 16).
+  const items = _projAll.filter((p) => p.status === 'published' && (!q || (p.title || '').toLowerCase().includes(q)));
+  const el = document.getElementById('spotResults');
+  if (!items.length) { el.innerHTML = '<div style="padding:10px; color:#888; font-size:13px;">No published projects match.</div>'; return; }
+  el.innerHTML = items.map((p) => `<div style="display:flex; gap:10px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--paper-line); ${p.id === _spotSelectedId ? 'background:#fff5f5;' : ''}">
+    <img src="${escapeHtmlAdmin(p.cover_image_url || '')}" onerror="this.style.visibility='hidden'" style="width:48px; height:34px; object-fit:cover; background:#eee; border-radius:3px; flex:none;">
+    <div style="flex:1; min-width:0;"><strong>${escapeHtmlAdmin(p.title)}</strong><div style="font-size:11px; color:#666;">#${p.id} · ${p.image_count} images · ${p.sponsor_count} sponsors · ${p.video_platform || 'no video'}</div></div>
+    <button class="btn btn-line" style="width:auto;" onclick="selectSpotProject(${p.id})">${p.id === _spotSelectedId ? '✓ Selected' : 'Select'}</button>
+  </div>`).join('');
+}
+function selectSpotProject(id) {
+  _spotSelectedId = id;
+  renderSpotResults();
+  const p = _projAll.find((x) => x.id === id);
+  if (p) document.getElementById('spotCurrent').innerHTML = `Selected (not saved yet): <strong>${escapeHtmlAdmin(p.title)}</strong>`;
+}
+async function saveSpotlight() {
+  const err = document.getElementById('spotError');
+  err.style.display = 'none';
+  if (!_spotSelectedId) { err.textContent = 'Select a project first.'; err.style.display = 'block'; return; }
+  try {
+    await api('/projects/admin/spotlight', { method: 'PUT', body: JSON.stringify({
+      projectId: _spotSelectedId,
+      note: document.getElementById('spotNote').value,
+      active: document.getElementById('spotActive').checked,
+    }) });
+    showToast('Spotlight saved.');
+    loadSpotlightAdmin();
+  } catch (e) { err.textContent = e.message || 'Could not save.'; err.style.display = 'block'; }
+}
+async function removeSpotlight() {
+  if (!confirm('Remove the homepage spotlight? The project itself is not affected.')) return;
+  try {
+    await api('/projects/admin/spotlight', { method: 'PUT', body: JSON.stringify({ projectId: null, note: '', active: false }) });
+    _spotSelectedId = null;
+    document.getElementById('spotNote').value = '';
+    document.getElementById('spotActive').checked = false;
+    document.getElementById('spotPreview').innerHTML = '';
+    showToast('Spotlight removed.');
+    loadSpotlightAdmin();
+  } catch (e) { showToast(e.message || 'Could not remove.', true); }
+}
+function previewSpotlight() {
+  const p = _projAll.find((x) => x.id === _spotSelectedId);
+  const el = document.getElementById('spotPreview');
+  if (!p) { el.innerHTML = '<em style="color:#888;">Select a project to preview.</em>'; return; }
+  const note = document.getElementById('spotNote').value || (p.title);
+  el.innerHTML = `<div style="max-width:320px; background:#1a1a1a; color:#eee; padding:18px; border-radius:6px;">
+    <div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:#c0392b;">Investor Spotlight</div>
+    <img src="${escapeHtmlAdmin(p.cover_image_url || '')}" onerror="this.style.display='none'" style="width:100%; aspect-ratio:16/10; object-fit:cover; border-radius:4px; margin:10px 0;">
+    <div style="font-weight:700; font-size:18px;">${escapeHtmlAdmin(p.title)}</div>
+    <p style="color:#c7c4c1; font-size:13px; margin:8px 0;">${escapeHtmlAdmin(note)}</p>
+    <span style="display:inline-block; border:1px solid rgba(255,255,255,0.3); padding:6px 12px; font-size:12px; border-radius:3px;">View Project →</span>
+  </div>`;
 }
 
 async function loadShoutoutNominations() {

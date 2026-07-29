@@ -80,6 +80,45 @@ router.get('/limits', (req, res) => {
   res.json({ maxDescriptionWords: MAX_DESCRIPTION_WORDS, maxImages: MAX_PROJECT_IMAGES });
 });
 
+// The homepage "Investor Spotlight" just references an existing project by ID,
+// plus a homepage-only note + active flag. Stored in the existing page_content
+// key-value store (home.investor_spotlight = JSON) — no duplicate project data,
+// no new table. Editing the project updates the spotlight automatically because
+// everything but the note is read live from the project.
+const SPOTLIGHT_KEY = { page: 'home', key: 'investor_spotlight' };
+async function readSpotlightConfig() {
+  const r = await pool.query('SELECT value FROM page_content WHERE page_key = $1 AND content_key = $2', [SPOTLIGHT_KEY.page, SPOTLIGHT_KEY.key]);
+  if (r.rowCount === 0) return { projectId: null, note: '', active: false };
+  try { const v = JSON.parse(r.rows[0].value); return { projectId: v.projectId || null, note: v.note || '', active: !!v.active }; }
+  catch (e) { return { projectId: null, note: '', active: false }; }
+}
+async function writeSpotlightConfig(cfg) {
+  await pool.query(
+    `INSERT INTO page_content (page_key, content_key, value) VALUES ($1, $2, $3)
+     ON CONFLICT (page_key, content_key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [SPOTLIGHT_KEY.page, SPOTLIGHT_KEY.key, JSON.stringify(cfg)]
+  );
+}
+
+// GET /projects/spotlight — public. Returns the live project only if the
+// spotlight is active AND the referenced project still exists and is published;
+// otherwise { active:false } so the homepage cleanly hides the section (never a
+// broken card / dead link).
+router.get('/spotlight', async (req, res, next) => {
+  try {
+    const cfg = await readSpotlightConfig();
+    if (!cfg.active || !cfg.projectId) return res.json({ active: false });
+    const p = await pool.query(
+      `SELECT id, title, description, status,
+              (SELECT image_url FROM project_images pi WHERE pi.project_id = projects.id ORDER BY pi.is_cover DESC, pi.display_order, pi.id LIMIT 1) AS cover_image_url
+         FROM projects WHERE id = $1`,
+      [cfg.projectId]
+    );
+    if (p.rowCount === 0 || p.rows[0].status !== 'published') return res.json({ active: false });
+    res.json({ active: true, note: cfg.note, project: p.rows[0] });
+  } catch (err) { next(err); }
+});
+
 // GET /projects — published projects for the Investors listing.
 router.get('/', async (req, res, next) => {
   try {
@@ -124,6 +163,46 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
         ORDER BY p.status = 'archived', p.featured DESC, p.display_order, p.id DESC`
     );
     res.json({ projects: rows.rows, maxDescriptionWords: MAX_DESCRIPTION_WORDS, maxImages: MAX_PROJECT_IMAGES });
+  } catch (err) { next(err); }
+});
+
+// GET /projects/admin/spotlight — current spotlight config + the resolved
+// project (any status, so the admin sees what's selected even if unpublished).
+// MUST stay above '/admin/:id' or Express treats 'spotlight' as an id.
+router.get('/admin/spotlight', requireRole('admin'), async (req, res, next) => {
+  try {
+    const cfg = await readSpotlightConfig();
+    let project = null;
+    if (cfg.projectId) {
+      const p = await pool.query(
+        `SELECT id, title, status,
+                (SELECT image_url FROM project_images pi WHERE pi.project_id = projects.id ORDER BY pi.is_cover DESC, pi.display_order, pi.id LIMIT 1) AS cover_image_url,
+                (SELECT COUNT(*) FROM project_images i WHERE i.project_id = projects.id) AS image_count,
+                (SELECT COUNT(*) FROM project_sponsors s WHERE s.project_id = projects.id) AS sponsor_count
+           FROM projects WHERE id = $1`, [cfg.projectId]);
+      project = p.rows[0] || null;
+    }
+    res.json({ ...cfg, project });
+  } catch (err) { next(err); }
+});
+
+// PUT /projects/admin/spotlight — set/replace the spotlight (single slot:
+// selecting a new project id automatically replaces the previous one).
+router.put('/admin/spotlight', requireRole('admin'), async (req, res, next) => {
+  try {
+    const projectId = req.body.projectId ? Number(req.body.projectId) : null;
+    const note = String(req.body.note || '').slice(0, 400);
+    const active = !!req.body.active;
+    if (projectId) {
+      const exists = await pool.query('SELECT title, status FROM projects WHERE id = $1', [projectId]);
+      if (exists.rowCount === 0) return res.status(404).json({ error: 'That project does not exist.' });
+      if (active && exists.rows[0].status !== 'published') {
+        return res.status(400).json({ error: 'Only a published project can be shown live. Publish it first, or save as inactive.' });
+      }
+    }
+    await writeSpotlightConfig({ projectId, note, active: projectId ? active : false });
+    logActivity(req.user.id, 'investor_spotlight_updated', projectId ? `project ${projectId}` : 'cleared');
+    res.json({ saved: true, projectId, note, active: projectId ? active : false });
   } catch (err) { next(err); }
 });
 
@@ -221,12 +300,16 @@ router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// DELETE /projects/admin/:id — permanent delete (sponsors/images cascade).
+// DELETE /projects/admin/:id — permanent delete (sponsors/images cascade). Also
+// clears the homepage Investor Spotlight if it was pointing at this project, so
+// no dangling reference remains.
 router.delete('/admin/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const result = await pool.query('DELETE FROM projects WHERE id = $1 RETURNING title', [id]);
     if (result.rowCount === 0) return res.status(404).json({ error: 'Project not found.' });
+    const cfg = await readSpotlightConfig();
+    if (cfg.projectId === id) await writeSpotlightConfig({ projectId: null, note: cfg.note, active: false });
     logActivity(req.user.id, 'project_deleted', result.rows[0].title);
     res.json({ deleted: true });
   } catch (err) { next(err); }
