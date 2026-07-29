@@ -1105,6 +1105,47 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   html{ scroll-behavior:auto; }
   .page.active{ animation:none; }
 }
+
+/* ---- Project showcases ---- */
+.proj-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
+@media(max-width:900px){ .proj-grid{ grid-template-columns:repeat(2,1fr); } }
+@media(max-width:560px){ .proj-grid{ grid-template-columns:1fr; } }
+.proj-card{ border:1px solid var(--paper-line); background:var(--cream); cursor:pointer; display:flex; flex-direction:column; transition:border-color .2s, transform .2s; text-align:left; }
+.proj-card:hover{ border-color:var(--red); transform:translateY(-2px); }
+.proj-card .proj-thumb{ aspect-ratio:16/10; background:var(--paper); overflow:hidden; }
+.proj-card .proj-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.proj-card .proj-body{ padding:18px; display:flex; flex-direction:column; gap:8px; flex:1; }
+.proj-card h3{ font-size:20px; line-height:1.25; }
+.proj-card .proj-intro{ font-size:13.5px; color:var(--slate); line-height:1.55; }
+.proj-card .proj-cta{ margin-top:auto; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--red); }
+.proj-featured-tag{ display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#fff; background:var(--red); padding:3px 8px; border-radius:3px; align-self:flex-start; }
+
+/* detail page */
+.proj-detail-title{ font-size:clamp(30px,4.5vw,48px); line-height:1.1; margin:6px 0 18px; }
+.proj-detail-desc{ font-size:17px; line-height:1.8; color:var(--ink); white-space:pre-wrap; max-width:70ch; }
+.proj-block-head{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; color:var(--slate); text-align:center; margin:56px 0 24px; position:relative; }
+.proj-block-head::before, .proj-block-head::after{ content:""; position:absolute; top:50%; width:24%; height:1px; background:var(--paper-line); }
+.proj-block-head::before{ left:0; } .proj-block-head::after{ right:0; }
+.proj-sponsors{ display:flex; flex-wrap:wrap; gap:32px 40px; justify-content:center; align-items:flex-start; }
+.proj-sponsor{ display:flex; flex-direction:column; align-items:center; gap:10px; width:150px; }
+.proj-sponsor .logo-wrap{ width:150px; height:90px; display:flex; align-items:center; justify-content:center; }
+.proj-sponsor .logo-wrap img{ max-width:100%; max-height:100%; object-fit:contain; }
+.proj-sponsor .sp-name{ font-size:13px; font-weight:600; text-align:center; color:var(--ink); }
+.proj-video{ position:relative; padding-bottom:56.25%; height:0; overflow:hidden; background:var(--black); }
+.proj-video iframe{ position:absolute; top:0; left:0; width:100%; height:100%; border:none; }
+.proj-ig-fallback{ text-align:center; padding:28px; border:1px solid var(--paper-line); background:var(--paper); }
+.proj-gallery{ display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+@media(max-width:820px){ .proj-gallery{ grid-template-columns:repeat(2,1fr); } }
+@media(max-width:480px){ .proj-gallery{ grid-template-columns:1fr; } }
+.proj-gallery figure{ margin:0; cursor:pointer; }
+.proj-gallery img{ width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:var(--paper); transition:opacity .2s; }
+.proj-gallery figure:hover img{ opacity:.9; }
+.proj-lightbox{ position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:9999; display:flex; align-items:center; justify-content:center; }
+.proj-lightbox img{ max-width:92vw; max-height:86vh; object-fit:contain; }
+.proj-lb-btn{ position:absolute; background:rgba(255,255,255,0.14); color:#fff; border:none; font-size:34px; width:56px; height:56px; cursor:pointer; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+.proj-lb-btn:hover{ background:rgba(255,255,255,0.28); }
+.proj-lb-prev{ left:18px; } .proj-lb-next{ right:18px; } .proj-lb-close{ top:18px; right:18px; width:46px; height:46px; font-size:24px; }
+.proj-lb-cap{ position:absolute; bottom:20px; left:0; right:0; text-align:center; color:#fff; font-size:13px; padding:0 16px; }
 </style>
 </head>
 <body>
@@ -2114,6 +2155,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 </main>
 
 <!-- ============ INVESTORS ============ -->
+<main class="page" id="page-project">
+  <article class="wrap" id="projectDetail" style="padding-top:40px; max-width:980px; margin:0 auto;">
+    <div class="dir-empty-state">Loading…</div>
+  </article>
+</main>
+
 <main class="page" id="page-investors">
   <div class="wrap cms-blocks" data-cms-blocks="investors"></div>
   <div class="wrap" style="padding-top:56px;">
@@ -2131,6 +2178,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="inv-profile-grid" id="investorsGrid">
       <div class="dir-empty-state">Loading...</div>
     </div>
+  </section>
+
+  <!-- PROJECT SHOWCASES — hidden until there is at least one published project -->
+  <section class="wrap" id="projectsSection" style="padding-top:64px;" hidden>
+    <div class="section-head"><div><span class="eyebrow">Showcase</span><h2>Projects</h2></div></div>
+    <div class="proj-grid" id="projectsGrid"></div>
   </section>
 
   <section class="on-paper">
@@ -5195,12 +5248,130 @@ function routeFromUrl(){
     const params = new URLSearchParams(location.search);
     const p = params.get('p');
     if (p === 'article' && params.get('id')) { goToPage('articledetail'); loadArticleDetail(params.get('id')); }
+    else if (p === 'project' && params.get('id')) { goToPage('project'); loadProject(params.get('id')); }
     else if (p === 'profile' && params.get('slug')) { goToPage('directoryprofile'); loadProfileDetail(params.get('slug')); }
     else if (p && document.getElementById('page-' + p)) { goToPage(p); }
     else { goToPage('home'); }
   } finally { window.__seoSuppress = false; }
 }
 window.addEventListener('popstate', routeFromUrl);
+
+// ---- Project showcases (Investors → Projects) ----
+async function loadProjects(){
+  const section = document.getElementById('projectsSection');
+  const grid = document.getElementById('projectsGrid');
+  if (!section || !grid) return;
+  try {
+    const data = await api('/projects');
+    const list = data.projects || [];
+    if (!list.length) { section.hidden = true; return; }
+    section.hidden = false;
+    grid.innerHTML = list.map(projectCardHtml).join('');
+  } catch (e) { section.hidden = true; }
+}
+function projectIntro(desc){
+  const t = String(desc || '').replace(/\s+/g, ' ').trim();
+  return t.length > 140 ? t.slice(0, 140) + '…' : t;
+}
+function projectCardHtml(p){
+  const cover = p.cover_image_url ? escapeHtml(p.cover_image_url) : PLACEHOLDER_COVER;
+  return `<div class="proj-card" role="link" tabindex="0" onclick="openProject(${p.id})" onkeydown="if(event.key==='Enter')openProject(${p.id})">
+    <div class="proj-thumb"><img src="${cover}" alt="${escapeHtml(p.title)}" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';"></div>
+    <div class="proj-body">
+      ${p.featured ? '<span class="proj-featured-tag">Featured</span>' : ''}
+      <h3>${escapeHtml(p.title)}</h3>
+      <p class="proj-intro">${escapeHtml(projectIntro(p.description))}</p>
+      <span class="proj-cta">View Project →</span>
+    </div>
+  </div>`;
+}
+function openProject(id){
+  goToPage('project');
+  loadProject(id);
+  history.pushState({}, '', '?p=project&id=' + id);
+}
+async function loadProject(id){
+  const el = document.getElementById('projectDetail');
+  el.innerHTML = '<div class="dir-empty-state">Loading…</div>';
+  try {
+    const d = await api('/projects/' + id);
+    renderProjectDetail(d);
+  } catch (e) {
+    el.innerHTML = '<div class="dir-empty-state">This project isn\'t available.</div>';
+  }
+}
+function projectSponsorHtml(s){
+  const logo = s.logo_url ? `<img src="${escapeHtml(s.logo_url)}" alt="${escapeHtml(s.name)}" loading="lazy" onerror="this.style.display='none'">` : '';
+  const inner = `<div class="logo-wrap">${logo}</div><span class="sp-name">${escapeHtml(s.name)}</span>`;
+  // Only follow safe https links; the backend already validates, this is defence in depth.
+  const link = (s.link_url && /^https:\/\//i.test(s.link_url)) ? s.link_url : '';
+  return link
+    ? `<a class="proj-sponsor" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+    : `<div class="proj-sponsor">${inner}</div>`;
+}
+function projectVideoHtml(p){
+  if (p.video_platform === 'youtube' && p.video_embed_url){
+    return `<div class="proj-video"><iframe src="${escapeHtml(p.video_embed_url)}" title="Project video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
+  }
+  if (p.video_platform === 'instagram' && (p.video_url || p.video_embed_url)){
+    const url = p.video_embed_url || p.video_url;
+    // Official Instagram embed. If embed.js can't hydrate it (IG restrictions),
+    // the blockquote's own link is the "View on Instagram" fallback — never breaks.
+    return `<div class="ig-embed-wrap"><blockquote class="instagram-media" data-instgrm-permalink="${escapeHtml(url)}" data-instgrm-version="14" style="max-width:540px; margin:0 auto; width:100%; border:1px solid var(--paper-line);"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:block; padding:16px; text-align:center;">View on Instagram</a></blockquote></div>`;
+  }
+  return '';
+}
+let _igScriptAdded = false;
+function ensureInstagramScript(){
+  if (_igScriptAdded){ if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process(); return; }
+  _igScriptAdded = true;
+  const s = document.createElement('script');
+  s.async = true; s.src = 'https://www.instagram.com/embed.js';
+  s.onload = () => { if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process(); };
+  document.body.appendChild(s);
+}
+let _projGallery = [];
+let _lbIndex = 0;
+function renderProjectDetail(d){
+  const p = d.project; const sponsors = d.sponsors || []; const images = d.images || [];
+  _projGallery = images;
+  const el = document.getElementById('projectDetail');
+  const sponsorsBlock = sponsors.length
+    ? `<div class="proj-block-head">Proudly supported by</div><div class="proj-sponsors">${sponsors.map(projectSponsorHtml).join('')}</div>` : '';
+  const video = projectVideoHtml(p);
+  const videoBlock = video ? `<div class="proj-block-head">Project video</div>${video}` : '';
+  const galleryBlock = images.length
+    ? `<div class="proj-block-head">Project gallery</div><div class="proj-gallery">${images.map((im, i) => `<figure onclick="openProjectLightbox(${i})"><img src="${escapeHtml(im.image_url)}" alt="${escapeHtml(im.alt_text || p.title)}" loading="lazy">${im.caption ? `<figcaption style="font-size:12px;color:var(--slate);margin-top:4px;">${escapeHtml(im.caption)}</figcaption>` : ''}</figure>`).join('')}</div>` : '';
+  el.innerHTML = `<button class="btn btn-line" style="width:auto; margin-bottom:20px;" onclick="goToPage('investors')">← Back to Investors</button>
+    <h1 class="proj-detail-title">${escapeHtml(p.title)}</h1>
+    <div class="proj-detail-desc">${escapeHtml(p.description || '')}</div>
+    ${sponsorsBlock}${videoBlock}${galleryBlock}`;
+  try { document.title = (p.seo_title || p.title) + ' — Unplug Magazine'; } catch (e) {}
+  if (p.video_platform === 'instagram') ensureInstagramScript();
+}
+function openProjectLightbox(i){
+  closeProjectLightbox();
+  const box = document.createElement('div');
+  box.className = 'proj-lightbox'; box.id = 'projLightbox';
+  box.innerHTML = `<button class="proj-lb-btn proj-lb-close" onclick="closeProjectLightbox()" aria-label="Close">✕</button>
+    <button class="proj-lb-btn proj-lb-prev" onclick="projectLightboxNav(-1)" aria-label="Previous">‹</button>
+    <img id="projLbImg" src="" alt="">
+    <button class="proj-lb-btn proj-lb-next" onclick="projectLightboxNav(1)" aria-label="Next">›</button>
+    <div class="proj-lb-cap" id="projLbCap"></div>`;
+  box.addEventListener('click', (e) => { if (e.target === box) closeProjectLightbox(); });
+  document.body.appendChild(box);
+  document.body.style.overflow = 'hidden';
+  _lbIndex = i; showProjectLightbox();
+  document.addEventListener('keydown', projectLightboxKey);
+}
+function showProjectLightbox(){
+  const im = _projGallery[_lbIndex]; if (!im) return;
+  document.getElementById('projLbImg').src = im.image_url;
+  document.getElementById('projLbCap').textContent = (im.caption ? im.caption + ' · ' : '') + (_lbIndex + 1) + ' / ' + _projGallery.length;
+}
+function projectLightboxNav(dir){ if (!_projGallery.length) return; _lbIndex = (_lbIndex + dir + _projGallery.length) % _projGallery.length; showProjectLightbox(); }
+function projectLightboxKey(e){ if (e.key === 'Escape') closeProjectLightbox(); else if (e.key === 'ArrowLeft') projectLightboxNav(-1); else if (e.key === 'ArrowRight') projectLightboxNav(1); }
+function closeProjectLightbox(){ const b = document.getElementById('projLightbox'); if (b) b.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', projectLightboxKey); }
 
 function goToPage(pageId){
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -5256,6 +5427,7 @@ function goToPage(pageId){
   if (pageId === 'investors' && !investorsLoaded) {
     investorsLoaded = true;
     loadInvestors();
+    loadProjects();
   }
   if (pageId === 'brandplacement' && !marketplaceLoaded) {
     marketplaceLoaded = true;
