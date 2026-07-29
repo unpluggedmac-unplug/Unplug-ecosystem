@@ -36,7 +36,11 @@ const RESOURCES = {
   gallery: {
     table: 'gallery_images',
     label: 'caption',
-    editable: ['caption', 'supplied_by', 'image_url'],
+    // title/alt_text/link_url/link_type/display_order/visibility are the admin
+    // Gallery Management fields (migration 061) — editable regardless of who
+    // originally submitted the image, per spec §27.
+    editable: ['caption', 'supplied_by', 'image_url', 'title', 'alt_text',
+               'link_url', 'link_type', 'display_order', 'visibility'],
   },
   articles: {
     table: 'articles',
@@ -141,6 +145,43 @@ router.get('/:resource', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// POST /admin/content/gallery — admin adds a brand-new Gallery image directly
+// (owner_type 'general', no owner_id, no payment/bundle). Skips the member
+// submission/payment queue entirely, per spec §13.
+router.post('/gallery', requireRole('admin'), async (req, res, next) => {
+  try {
+    const imageUrl = (req.body.imageUrl || '').trim();
+    if (!imageUrl) return res.status(400).json({ error: 'An image is required.' });
+    const visibility = ['draft', 'published', 'unpublished', 'archived'].includes(req.body.visibility)
+      ? req.body.visibility : 'published';
+    const linkType = ['external', 'article', 'profile', 'event', 'investor', 'none'].includes(req.body.linkType)
+      ? req.body.linkType : null;
+    const displayOrder = Number.isInteger(Number(req.body.displayOrder)) ? Number(req.body.displayOrder) : 0;
+
+    const result = await pool.query(
+      `INSERT INTO gallery_images
+         (owner_type, image_url, title, caption, alt_text, link_url, link_type,
+          display_order, visibility, status, updated_at, updated_by)
+       VALUES ('general', $1, $2, $3, $4, $5, $6, $7, $8, 'approved', now(), $9)
+       RETURNING *`,
+      [
+        imageUrl,
+        (req.body.title || '').trim() || null,
+        (req.body.description || req.body.caption || '').trim() || null,
+        (req.body.altText || '').trim() || null,
+        (req.body.linkUrl || '').trim() || null,
+        linkType,
+        displayOrder,
+        visibility,
+        req.user.id,
+      ]
+    );
+    res.status(201).json({ item: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PATCH /admin/content/:resource/:id — fix the content of an existing item.
 //
 // Only the columns in the resource's editable list are touched, and only ones
@@ -157,6 +198,24 @@ router.patch('/:resource/:id', requireRole('admin'), async (req, res, next) => {
       return res.status(400).json({ error: 'This content type has nothing that can be edited directly.' });
     }
 
+    // Gallery-specific field validation (visibility / link_type / display_order)
+    // — not a DB CHECK constraint, so an invalid value is a clean 400 here
+    // rather than either silently accepted or a constraint error.
+    if (req.params.resource === 'gallery') {
+      if (req.body.visibility !== undefined && req.body.visibility !== '' && req.body.visibility !== null
+          && !['draft', 'published', 'unpublished', 'archived'].includes(req.body.visibility)) {
+        return res.status(400).json({ error: 'visibility must be draft, published, unpublished or archived.' });
+      }
+      if (req.body.link_type !== undefined && req.body.link_type !== '' && req.body.link_type !== null
+          && !['external', 'article', 'profile', 'event', 'investor', 'none'].includes(req.body.link_type)) {
+        return res.status(400).json({ error: 'link_type must be external, article, profile, event, investor or none.' });
+      }
+      if (req.body.display_order !== undefined && req.body.display_order !== '' && req.body.display_order !== null
+          && !Number.isInteger(Number(req.body.display_order))) {
+        return res.status(400).json({ error: 'display_order must be a whole number.' });
+      }
+    }
+
     const sets = [];
     const values = [];
     spec.editable.forEach((col) => {
@@ -166,12 +225,22 @@ router.patch('/:resource/:id', requireRole('admin'), async (req, res, next) => {
         value = value.trim();
         if (value === '') value = null;
       }
+      if (col === 'display_order' && value !== null) value = Number(value);
       values.push(value);
       sets.push(`${col} = $${values.length}`);
     });
 
     if (sets.length === 0) {
       return res.status(400).json({ error: 'No editable fields were supplied.' });
+    }
+
+    // Stamp who changed a gallery item and when — the table has no updated_at
+    // trigger, and this is the only write path that touches gallery content.
+    if (req.params.resource === 'gallery') {
+      values.push(new Date());
+      sets.push(`updated_at = $${values.length}`);
+      values.push(req.user.id);
+      sets.push(`updated_by = $${values.length}`);
     }
 
     values.push(id);

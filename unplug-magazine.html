@@ -542,12 +542,13 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .deaf-owned-badge{ display:inline-block; margin-top:8px; font-size:10.5px; font-weight:700; letter-spacing:0.02em;
   background:rgba(31,111,235,0.12); color:#1f6feb; border:1px solid #1f6feb; padding:3px 8px; border-radius:20px; text-transform:none; }
 
-/* ---- gallery ---- */
-.gallery-grid{ column-count:4; column-gap:16px; }
-@media(max-width:1000px){ .gallery-grid{ column-count:3; } }
-@media(max-width:700px){ .gallery-grid{ column-count:2; } }
-.gallery-item{ break-inside:avoid; margin-bottom:16px; background:linear-gradient(160deg,var(--paper),#e3d8c2); position:relative; }
-.gallery-item .h1{ height:190px; } .gallery-item .h2{ height:260px; } .gallery-item .h3{ height:150px; } .gallery-item .h4{ height:220px; }
+/* ---- gallery ----
+   Consistent 4:5 portrait grid (standard 1080x1350 gallery image) — every card
+   the same ratio, never a random-height masonry crop. */
+.gallery-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; }
+@media(max-width:1000px){ .gallery-grid{ grid-template-columns:repeat(3, 1fr); } }
+@media(max-width:700px){ .gallery-grid{ grid-template-columns:repeat(2, 1fr); gap:10px; } }
+.gallery-item{ aspect-ratio:4/5; background:linear-gradient(160deg,var(--paper),#e3d8c2); position:relative; display:block; }
 .gallery-cap{ position:absolute; left:10px; bottom:10px; font-size:11px; color:#fff; background:rgba(39,38,38,0.55); padding:4px 8px; text-transform:uppercase; letter-spacing:0.03em; }
 
 /* ---- competitions ---- */
@@ -1033,10 +1034,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tier-btn{ font-size:11px; padding:10px 16px; margin-top:6px; }
 
 /* ---- gallery overlay ---- */
-.gallery-item{ break-inside:avoid; margin-bottom:16px; background:linear-gradient(160deg,var(--paper),#e3d8c2); position:relative; overflow:hidden; }
+.gallery-item{ overflow:hidden; }
+.gallery-item img{ width:100%; height:100%; object-fit:cover; display:block; }
 .gallery-overlay{ position:absolute; inset:0; background:linear-gradient(to top, rgba(15,14,14,0.88) 0%, transparent 55%); display:flex; flex-direction:column; justify-content:flex-end; padding:14px; gap:4px; opacity:0; transition:opacity .25s ease; }
-.gallery-item:hover .gallery-overlay{ opacity:1; }
-.gallery-cap{ font-size:13px; font-weight:700; color:var(--cream); }
+.gallery-item:hover .gallery-overlay, .gallery-item:focus-within .gallery-overlay{ opacity:1; }
+.gallery-title{ font-size:14px; font-weight:700; color:var(--cream); }
+.gallery-cap{ font-size:12.5px; color:rgba(255,255,255,0.85); line-height:1.4; }
 .gallery-supplied{ font-size:11px; color:rgba(255,255,255,0.7); font-style:italic; }
 .follow-btn{ font-size:10px; padding:7px 12px; background:var(--red); border-color:var(--red); color:var(--cream); margin-top:4px; align-self:flex-start; }
 
@@ -4331,20 +4334,36 @@ let newsLoadedOnce = false;
 // gallery_images has no social-link column, so that button is dropped rather
 // than invented; caption + supplied_by (real columns) are kept.
 // ---------------------------------------------------------------------------
-const GALLERY_HEIGHT_CLASSES = ['h1', 'h2', 'h3', 'h4'];
 let galleryPage = 1;
 let galleryLoading = false;
 
+// Where a gallery item's link_type points, when it's an internal Unplug page
+// rather than a raw external URL (kept in sync with routes/gallery.js).
+function galleryLinkHref(image) {
+  if (!image.link_url) return null;
+  if (!image.link_type || image.link_type === 'external' || image.link_type === 'none') {
+    return image.link_type === 'none' ? null : image.link_url;
+  }
+  return image.link_url; // internal types already store the resolved site URL
+}
+
 function galleryItemHtml(image, index) {
-  const heightClass = GALLERY_HEIGHT_CLASSES[index % GALLERY_HEIGHT_CLASSES.length];
+  const title = escapeHtml(image.title || '');
   const caption = escapeHtml(image.caption || '');
+  const altText = escapeHtml(image.alt_text || image.title || 'Gallery photo');
   const supplied = image.supplied_by ? `<span class="gallery-supplied">Supplied by ${escapeHtml(image.supplied_by)}</span>` : '';
-  return `<div class="gallery-item ${heightClass}" style="background-image:url('${escapeHtml(image.image_url)}'); background-size:cover; background-position:center;">
+  const img = `<img src="${escapeHtml(image.image_url)}" alt="${altText}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';">`;
+  const href = galleryLinkHref(image);
+  const tag = href ? 'a' : 'div';
+  const linkAttrs = href ? ` href="${escapeHtml(href)}"${/^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener"' : ''}` : '';
+  return `<${tag} class="gallery-item"${linkAttrs}>
+    ${img}
     <div class="gallery-overlay">
+      ${title ? `<span class="gallery-title">${title}</span>` : ''}
       ${caption ? `<span class="gallery-cap">${caption}</span>` : ''}
       ${supplied}
     </div>
-  </div>`;
+  </${tag}>`;
 }
 
 async function loadGallery(reset) {

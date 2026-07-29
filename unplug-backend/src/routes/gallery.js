@@ -11,13 +11,20 @@ router.get('/', async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
 
-    const countResult = await pool.query(`SELECT COUNT(*) FROM gallery_images WHERE status = 'approved'`);
+    // visibility is the admin Gallery Management publish control (migration
+    // 061), separate from the member-submission `status` moderation queue.
+    // NULL visibility (every pre-existing / member-submitted row) still shows,
+    // so this is fully backward compatible — only an explicit non-published
+    // value (draft/unpublished/archived) hides an item.
+    const visibleClause = `status = 'approved' AND (visibility IS NULL OR visibility = 'published')`;
+    const countResult = await pool.query(`SELECT COUNT(*) FROM gallery_images WHERE ${visibleClause}`);
 
     const result = await pool.query(
-      `SELECT id, image_url, caption, supplied_by, created_at
+      `SELECT id, image_url, title, caption, alt_text, link_url, link_type,
+              supplied_by, display_order, created_at
        FROM gallery_images
-       WHERE status = 'approved'
-       ORDER BY created_at DESC
+       WHERE ${visibleClause}
+       ORDER BY COALESCE(display_order, 0) ASC, created_at DESC
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
