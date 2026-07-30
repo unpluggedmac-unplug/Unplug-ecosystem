@@ -4684,9 +4684,12 @@ async function loadGalleryAdmin() {
   const list = document.getElementById('galList');
   list.innerHTML = 'Loading…';
   try {
-    // No status filter -> every image regardless of who submitted it (§27).
+    // No status filter -> every gallery-page image regardless of who
+    // submitted it (§27). owner_type='general' only — Directory business
+    // photos and Investor photos are a different pool, managed on their own
+    // profile pages, not here.
     const d = await api('/admin/content/gallery');
-    _galAll = d.items || [];
+    _galAll = (d.items || []).filter((img) => img.owner_type === 'general');
     renderGalleryList();
   } catch (e) {
     list.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load gallery.')}</div>`;

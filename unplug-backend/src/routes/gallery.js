@@ -11,12 +11,19 @@ router.get('/', async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
 
+    // The Gallery page is its own pool of content, separate from images that
+    // live elsewhere on the site — a Directory business's listing photos
+    // (owner_type='profile') and an investor's photos (owner_type='investor')
+    // belong to THEIR pages, not the public Community Gallery. Only
+    // owner_type='general' — a photo a member submitted specifically to the
+    // Gallery, or one Admin added directly — ever shows here.
+    //
     // visibility is the admin Gallery Management publish control (migration
     // 061), separate from the member-submission `status` moderation queue.
     // NULL visibility (every pre-existing / member-submitted row) still shows,
     // so this is fully backward compatible — only an explicit non-published
     // value (draft/unpublished/archived) hides an item.
-    const visibleClause = `status = 'approved' AND (visibility IS NULL OR visibility = 'published')`;
+    const visibleClause = `owner_type = 'general' AND status = 'approved' AND (visibility IS NULL OR visibility = 'published')`;
     const countResult = await pool.query(`SELECT COUNT(*) FROM gallery_images WHERE ${visibleClause}`);
 
     const result = await pool.query(
