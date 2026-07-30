@@ -3,6 +3,8 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor, historyFor } = require('../utils/accountCredit');
+const { priceFor, packagesFor, highlightServiceKey } = require('../utils/servicePackages');
+const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
@@ -138,7 +140,11 @@ async function resolveAmount(linkedType, linkedId) {
     const result = await pool.query('SELECT target_type, duration_days FROM highlights WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Highlight not found.');
     const { target_type, duration_days } = result.rows[0];
-    return HIGHLIGHT_PRICES[target_type][duration_days];
+    // Admin-managed price (service_packages), falling back to the built-in
+    // table if that row is missing — never the client's word for it.
+    const price = await priceFor(highlightServiceKey(target_type), duration_days);
+    if (price === null) throw new Error('That highlight package is no longer available.');
+    return price;
   }
   if (linkedType === 'marketplace_listing') {
     const result = await pool.query('SELECT id FROM marketplace_listings WHERE id = $1', [linkedId]);
@@ -174,8 +180,8 @@ async function resolveAmount(linkedType, linkedId) {
     // Price is derived from the banner's stored duration — never the client.
     const result = await pool.query('SELECT duration_days FROM ad_slots WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Banner not found.');
-    const price = AD_BANNER_PRICES[result.rows[0].duration_days];
-    if (!price) throw new Error('Invalid banner duration.');
+    const price = await priceFor('ad_banner', result.rows[0].duration_days);
+    if (price === null) throw new Error('Invalid banner duration.');
     return price;
   }
   if (linkedType === 'edition_download') {
@@ -192,7 +198,7 @@ async function resolveAmount(linkedType, linkedId) {
 // still never supplies a price. Types whose cost is stored per-row (edition
 // downloads, competition entries, profile packages) aren't quotable this way and
 // say so rather than guessing.
-function priceForNewOrder(linkedType, { durationDays, targetType } = {}) {
+async function priceForNewOrder(linkedType, { durationDays, targetType } = {}) {
   const FIXED = {
     article_publish: ARTICLE_PUBLISH_FEE,
     event_listing: EVENT_LISTING_FEE,
@@ -203,15 +209,16 @@ function priceForNewOrder(linkedType, { durationDays, targetType } = {}) {
   if (FIXED[linkedType] !== undefined) return FIXED[linkedType];
 
   if (linkedType === 'ad_banner') {
-    const price = AD_BANNER_PRICES[Number(durationDays)];
-    if (!price) throw new Error('Choose a valid banner duration (7, 14 or 28 days).');
+    const price = await priceFor('ad_banner', durationDays);
+    if (price === null) throw new Error('Choose a valid banner duration (7, 14 or 28 days).');
     return price;
   }
   if (linkedType === 'highlight') {
-    const table = HIGHLIGHT_PRICES[targetType];
-    if (!table) throw new Error('Highlight targetType must be "article" or "directory".');
-    const price = table[Number(durationDays)];
-    if (!price) throw new Error('Choose a valid highlight duration (7, 14, 21 or 28 days).');
+    if (!['article', 'directory'].includes(targetType)) {
+      throw new Error('Highlight targetType must be "article" or "directory".');
+    }
+    const price = await priceFor(highlightServiceKey(targetType), durationDays);
+    if (price === null) throw new Error('Choose a valid highlight duration (7, 14, 21 or 28 days).');
     return price;
   }
   throw new Error(`Cannot quote "${linkedType}" before it is created — create it first, then quote by id.`);
@@ -447,6 +454,77 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /payments/packages?service=highlight_article — public. The packages a
+// member can buy, with admin-managed prices. Used by the dashboard pickers so
+// prices are never hardcoded in the frontend.
+router.get('/packages', async (req, res, next) => {
+  try {
+    const service = (req.query.service || '').trim();
+    const ALLOWED = ['highlight_article', 'highlight_directory', 'ad_banner'];
+    if (!ALLOWED.includes(service)) {
+      return res.status(400).json({ error: `service must be one of: ${ALLOWED.join(', ')}` });
+    }
+    res.json({ service, packages: await packagesFor(service) });
+  } catch (err) { next(err); }
+});
+
+// GET /payments/admin/packages — admin, every package including inactive ones.
+router.get('/admin/packages', requireRole('admin'), async (req, res, next) => {
+  try {
+    const r = await pool.query(
+      `SELECT p.id, p.service_key, p.duration_days, p.name, p.description, p.price,
+              p.active, p.display_order, p.updated_at, u.email AS updated_by_email
+         FROM service_packages p
+         LEFT JOIN users u ON u.id = p.updated_by
+        ORDER BY p.service_key, p.display_order, p.duration_days`
+    );
+    res.json({ packages: r.rows });
+  } catch (err) { next(err); }
+});
+
+// PATCH /payments/admin/packages/:id — admin edits price / name / description /
+// availability. The duration and service are NOT editable: they're the identity
+// of the package, and changing them would silently repoint existing links.
+router.patch('/admin/packages/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid package id is required.' });
+
+    const sets = [];
+    const values = [];
+    const push = (col, val) => { values.push(val); sets.push(`${col} = $${values.length}`); };
+
+    if (req.body.price !== undefined) {
+      const price = Number(req.body.price);
+      if (!Number.isFinite(price) || price < 0) {
+        return res.status(400).json({ error: 'Price must be a number of 0 or more.' });
+      }
+      push('price', price);
+    }
+    if (req.body.name !== undefined) {
+      const name = String(req.body.name).trim();
+      if (!name) return res.status(400).json({ error: 'Name cannot be empty.' });
+      push('name', name.slice(0, 120));
+    }
+    if (req.body.description !== undefined) push('description', String(req.body.description || '').trim() || null);
+    if (req.body.active !== undefined) push('active', !!req.body.active);
+    if (req.body.displayOrder !== undefined) push('display_order', Number(req.body.displayOrder) || 0);
+    if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+
+    push('updated_at', new Date());
+    push('updated_by', req.user.id);
+    values.push(id);
+
+    const r = await pool.query(
+      `UPDATE service_packages SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING *`,
+      values
+    );
+    if (r.rowCount === 0) return res.status(404).json({ error: 'That package no longer exists.' });
+    logActivity(req.user.id, 'service_package_updated', `${r.rows[0].service_key} ${r.rows[0].duration_days}d → R${Number(r.rows[0].price).toFixed(2)}`);
+    res.json({ package: r.rows[0], message: 'Saved — the new price applies to new orders immediately.' });
+  } catch (err) { next(err); }
+});
+
 // GET /payments/mine — the member's own payment history with the full
 // breakdown per transaction, so the dashboard can show what was bought, what it
 // cost, how it was paid (voucher / credit / EFT) and the reference to quote.
@@ -513,7 +591,7 @@ router.post('/quote', requireAuth, async (req, res, next) => {
     if (linkedId) {
       orderTotal = await resolveAmount(linkedType, linkedId);
     } else {
-      orderTotal = priceForNewOrder(linkedType, { durationDays, targetType });
+      orderTotal = await priceForNewOrder(linkedType, { durationDays, targetType });
     }
 
     let voucherDiscount = 0;
