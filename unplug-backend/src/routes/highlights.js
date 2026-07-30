@@ -130,16 +130,100 @@ router.delete('/admin/:id', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// Homepage highlight packages. Mirrors HIGHLIGHT_PRICES in routes/payments.js,
+// which is what actually gets charged — served from here so the dashboard shows
+// the real prices instead of hardcoding its own copy.
+const HIGHLIGHT_PACKAGES = {
+  directory: [
+    { durationDays: 7,  price: 100.00, name: '7-Day Homepage Highlight' },
+    { durationDays: 14, price: 150.00, name: '14-Day Homepage Highlight' },
+    { durationDays: 21, price: 200.00, name: '21-Day Homepage Highlight' },
+    { durationDays: 28, price: 250.00, name: '28-Day Homepage Highlight' },
+  ],
+  article: [
+    { durationDays: 7,  price: 150.00, name: '7-Day Article Highlight' },
+    { durationDays: 14, price: 250.00, name: '14-Day Article Highlight' },
+    { durationDays: 21, price: 300.00, name: '21-Day Article Highlight' },
+    { durationDays: 28, price: 450.00, name: '28-Day Article Highlight' },
+  ],
+};
+
+// GET /highlights/packages — public. The packages + prices for the buy form.
+router.get('/packages', (req, res) => {
+  res.json({ packages: HIGHLIGHT_PACKAGES });
+});
+
+// GET /highlights/mine — the member's own highlight promotions, at any status,
+// so their dashboard can show what's pending payment / scheduled / live / done.
+router.get('/mine', requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT h.id, h.target_type, h.target_id, h.duration_days, h.status,
+              h.start_date, h.end_date, h.requested_start_date, h.is_admin,
+              h.created_at,
+              CASE WHEN h.target_type = 'article' THEN a.title ELSE p.display_name END AS target_title,
+              CASE WHEN h.target_type = 'article' THEN a.banner_image_url ELSE p.feature_image_url END AS target_image,
+              pay.amount AS amount_paid, pay.status AS payment_status,
+              pay.gateway_reference AS payment_reference
+         FROM highlights h
+         LEFT JOIN articles a ON h.target_type = 'article'   AND a.id = h.target_id
+         LEFT JOIN profiles p ON h.target_type = 'directory' AND p.id = h.target_id
+         -- payments.linked_id has no FK, so this is matched on type + id.
+         LEFT JOIN payments pay ON pay.linked_type = 'highlight' AND pay.linked_id = h.id
+        WHERE (h.target_type = 'article'   AND a.author_user_id = $1)
+           OR (h.target_type = 'directory' AND p.user_id = $1)
+        ORDER BY h.created_at DESC`,
+      [req.user.id]
+    );
+    // Derive the display status the dashboard shows, so the same rules live in
+    // one place rather than being re-guessed in the browser.
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    const highlights = result.rows.map((h) => {
+      const start = h.start_date ? new Date(h.start_date) : null;
+      const end = h.end_date ? new Date(h.end_date) : null;
+      let label;
+      if (h.status === 'rejected') label = 'Cancelled';
+      else if (h.status === 'awaiting_payment') label = 'Pending payment';
+      else if (h.status === 'pending') label = 'Awaiting approval';
+      else if (start && start > today) label = 'Scheduled';
+      else if (end && end < today) label = 'Completed';
+      else label = 'Active';
+      const daysLeft = (label === 'Active' && end)
+        ? Math.max(0, Math.ceil((end - today) / 86400000)) : null;
+      return { ...h, statusLabel: label, daysLeft };
+    });
+    res.json({ highlights });
+  } catch (err) { next(err); }
+});
+
 // POST /highlights — member requests a highlight on their own article or
 // Directory profile. Ownership of the target is checked inline below.
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { targetType, targetId, durationDays } = req.body;
+    const { targetType, targetId, durationDays, requestedStartDate } = req.body;
     if (!['article', 'directory'].includes(targetType)) {
       return res.status(400).json({ error: 'targetType must be "article" or "directory".' });
     }
     if (![7, 14, 21, 28].includes(durationDays)) {
       return res.status(400).json({ error: 'durationDays must be one of: 7, 14, 21, 28.' });
+    }
+    // Optional future start date. The END date is always derived from the paid
+    // duration (see applyPaymentEffect), so a member can pick when the run
+    // begins but can never buy 7 days and get 30.
+    let startDate = null;
+    if (requestedStartDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedStartDate)) {
+        return res.status(400).json({ error: 'requestedStartDate must be a date in YYYY-MM-DD format.' });
+      }
+      const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+      const wanted = new Date(requestedStartDate + 'T00:00:00Z');
+      if (Number.isNaN(wanted.getTime())) {
+        return res.status(400).json({ error: 'That start date is not a valid date.' });
+      }
+      if (wanted < today) {
+        return res.status(400).json({ error: 'The start date cannot be in the past.' });
+      }
+      startDate = requestedStartDate;
     }
 
     const ownerTable = targetType === 'article' ? 'articles' : 'profiles';
@@ -153,10 +237,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO highlights (target_type, target_id, duration_days)
-       VALUES ($1, $2, $3)
+      `INSERT INTO highlights (target_type, target_id, duration_days, requested_start_date)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [targetType, targetId, durationDays]
+      [targetType, targetId, durationDays, startDate]
     );
 
     res.status(201).json({

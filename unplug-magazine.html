@@ -4915,15 +4915,30 @@ function homeDirCardHtml(profile) {
 async function loadHighlightedProfiles() {
   const el = document.getElementById('highlightedProfilesGrid');
   try {
+    // /highlights/active is already filtered to today's date window and ordered
+    // by the admin's priority, and only returns approved highlights (paid or
+    // admin-created) — so scheduling, expiry and eligibility are all handled
+    // server-side with no admin action needed.
     const active = await api('/highlights/active');
-    const profileIds = active.highlights.filter((h) => h.target_type === 'directory').map((h) => h.target_id).slice(0, 4);
-    if (profileIds.length === 0) {
+    const dirHighlights = active.highlights.filter((h) => h.target_type === 'directory').slice(0, 4);
+    if (dirHighlights.length === 0) {
       el.innerHTML = '<div class="dir-empty-state">No highlighted profiles right now.</div>';
       return;
     }
-    const data = await api('/directory?ids=' + profileIds.join(','));
-    el.innerHTML = data.profiles.length
-      ? data.profiles.map(homeDirCardHtml).join('')
+    const data = await api('/directory?ids=' + dirHighlights.map((h) => h.target_id).join(','));
+    // Keep the ranking the API gave us (priority order), and let an
+    // admin-selected cover image override the profile's own for this placement
+    // — same hierarchy the Highlighted Articles strip uses.
+    const imageOverride = new Map(dirHighlights.map((h) => [h.target_id, h.admin_image_url]));
+    const ordered = dirHighlights
+      .map((h) => data.profiles.find((p) => p.id === h.target_id))
+      .filter(Boolean)
+      .map((p) => {
+        const override = imageOverride.get(p.id);
+        return override ? { ...p, feature_image_url: override } : p;
+      });
+    el.innerHTML = ordered.length
+      ? ordered.map(homeDirCardHtml).join('')
       : '<div class="dir-empty-state">No highlighted profiles right now.</div>';
   } catch (err) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';

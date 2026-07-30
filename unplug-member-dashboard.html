@@ -863,6 +863,41 @@ function escapeAttrM(str) {
     .replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// The member's homepage-highlight promotions and their live status. The status
+// label and days-remaining are computed server-side (GET /highlights/mine) so
+// the dashboard and the homepage agree on what "Active" means.
+async function loadMyHighlights() {
+  const el = document.getElementById('myHighlights');
+  if (!el) return;
+  try {
+    const d = await api('/highlights/mine');
+    const rows = (d.highlights || []).filter((h) => h.target_type === 'directory');
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty-state" style="font-size:12.5px;">No homepage highlights yet.</div>';
+      return;
+    }
+    const fmt = (x) => x ? new Date(x).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    const colour = { Active: 'green', Scheduled: '#a15c00', 'Pending payment': 'var(--red)',
+      'Awaiting approval': '#a15c00', Completed: '#666', Cancelled: 'var(--red)' };
+    el.innerHTML = rows.map((h) => `
+      <div style="display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--paper-line); font-size:12.5px;">
+        <div style="flex:1;">
+          <strong>${h.duration_days}-day homepage highlight</strong>
+          ${h.is_admin ? ' <span style="color:var(--red);">(complimentary)</span>' : ''}
+          <div style="color:var(--slate);">
+            ${fmt(h.start_date || h.requested_start_date)} → ${fmt(h.end_date)}
+            ${h.amount_paid != null ? ` · R${Number(h.amount_paid).toFixed(2)}` : ''}
+            ${h.payment_reference ? ` · ref ${escapeAttrM(h.payment_reference)}` : ''}
+            ${h.daysLeft != null ? ` · ${h.daysLeft} day${h.daysLeft === 1 ? '' : 's'} left` : ''}
+          </div>
+        </div>
+        <span style="font-weight:700; color:${colour[h.statusLabel] || '#666'};">${escapeAttrM(h.statusLabel)}</span>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state" style="font-size:12.5px;">Could not load: ${escapeAttrM(e.message)}</div>`;
+  }
+}
+
 async function loadProfile() {
   const content = document.getElementById('profileContent');
   try {
@@ -913,6 +948,27 @@ async function loadProfile() {
           ${higherTiers.map((t) => `<button class="btn btn-solid upgrade-btn" data-tier="${t}" style="width:auto;">${t.charAt(0).toUpperCase() + t.slice(1)} (R250 fee)</button>`).join('')}
         </div>` : ''}
       ${p.status === 'awaiting_payment' ? `<p style="font-size:12.5px; color:var(--red); margin-top:12px;">Your profile is awaiting payment — use the Unplug checkout to complete it before it can be reviewed.</p>` : ''}
+
+      <div style="border-top:1px solid var(--paper-line); margin-top:18px; padding-top:14px;">
+        <div style="font-weight:700; font-size:14px;">${p.type === 'business' ? 'Highlight My Business on the Homepage' : 'Highlight My Profile on the Homepage'}</div>
+        <p style="font-size:12.5px; color:var(--slate); margin:4px 0 10px; line-height:1.5;">
+          Feature ${p.type === 'business' ? 'your business' : 'your profile'} in the Highlighted Directory Profiles section on the Unplug homepage. Pick a package and a start date — it goes live for the paid period once payment clears and our team approves it. Your existing cover image is used, so there's nothing extra to upload.
+        </p>
+        ${p.status !== 'approved' ? `<p style="font-size:12.5px; color:var(--red);">Your listing needs to be approved before it can be highlighted on the homepage.</p>` : `
+          <div class="field-row">
+            <div class="field"><label>Package</label><select id="hlPackage"><option value="">Loading…</option></select></div>
+            <div class="field"><label>Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="hlStartDate" type="date"></div>
+          </div>
+          <div class="field"><label>Payment Method</label><select id="hlPayMethod"><option value="eft" selected>Manual EFT</option></select></div>
+          <div id="hlBuyError" class="error-banner" style="display:none;"></div>
+          <button class="btn btn-solid" id="hlBuyBtn" style="width:auto;">Continue to Payment</button>
+          <div class="instructions-box section-hidden" id="hlBuyResult" style="margin-top:14px;"></div>
+        `}
+        <div style="margin-top:16px;">
+          <div style="font-weight:700; font-size:13.5px; margin-bottom:6px;">My Homepage Highlights</div>
+          <div id="myHighlights"><div class="loading-state">Loading…</div></div>
+        </div>
+      </div>
     `;
 
     // Province options come from the API so they match what it validates.
@@ -922,7 +978,7 @@ async function loadProfile() {
       try {
         const d = await api('/directory/provinces');
         sel.innerHTML = '<option value="">Select province</option>' +
-          (d.provinces || []).map((pr) => `<option value="${escapeAttrM(pr)}"${pr === p.province ? ' selected' : ''}>${escapeHtmlM(pr)}</option>`).join('');
+          (d.provinces || []).map((pr) => `<option value="${escapeAttrM(pr)}"${pr === p.province ? ' selected' : ''}>${escapeAttrM(pr)}</option>`).join('');
       } catch (e) { /* leave the placeholder — location is optional anyway */ }
     })();
 
@@ -974,6 +1030,70 @@ async function loadProfile() {
         showToast('Location removed.');
       } catch (err) { showToast(err.message, true); }
     });
+
+    // ---- Homepage highlight: packages, purchase, and my-promotions list ----
+    loadMyHighlights();
+    const pkgSel = document.getElementById('hlPackage');
+    if (pkgSel) {
+      // Prices come from the API (same constants the server charges), never
+      // hardcoded here — and the amount is re-resolved server-side at payment.
+      (async () => {
+        try {
+          const d = await api('/highlights/packages');
+          const list = (d.packages && d.packages.directory) || [];
+          pkgSel.innerHTML = list.map((pk) =>
+            `<option value="${pk.durationDays}">${escapeAttrM(pk.name)} — R${Number(pk.price).toFixed(0)}</option>`).join('');
+        } catch (e) { pkgSel.innerHTML = '<option value="">Could not load packages</option>'; }
+      })();
+      // Default the start date to today and stop past dates being picked.
+      const startEl = document.getElementById('hlStartDate');
+      const todayStr = new Date().toISOString().slice(0, 10);
+      startEl.min = todayStr;
+      startEl.value = todayStr;
+
+      document.getElementById('hlBuyBtn').addEventListener('click', async () => {
+        const err = document.getElementById('hlBuyError');
+        const box = document.getElementById('hlBuyResult');
+        err.style.display = 'none';
+        const durationDays = Number(pkgSel.value);
+        if (!durationDays) { err.textContent = 'Choose a highlight package.'; err.style.display = 'block'; return; }
+        const btn = document.getElementById('hlBuyBtn');
+        btn.disabled = true; btn.textContent = 'Processing…';
+        try {
+          // Two existing endpoints, reused: create the highlight request, then
+          // pay for it through the normal checkout (terms + credit + reference).
+          const created = await api('/highlights', { method: 'POST', body: JSON.stringify({
+            targetType: 'directory', targetId: p.id, durationDays,
+            requestedStartDate: startEl.value || undefined,
+          }) });
+          const pay = await api('/payments/initiate', { method: 'POST', body: JSON.stringify({
+            linkedType: 'highlight', linkedId: created.highlight.id,
+            method: document.getElementById('hlPayMethod').value,
+            termsAccepted: true, termsVersion: SUBMIT_TERMS_VERSION, useCredit: false,
+          }) });
+          box.classList.remove('section-hidden');
+          if (pay.paidInFull) {
+            box.innerHTML = `<strong>Highlight booked — paid in full by your Unplug Credit.</strong><br><br>${pay.message || ''}<br><b>Reference:</b> <span class="ref">${pay.payment.gateway_reference}</span>`;
+          } else if (pay.instructions) {
+            const i = pay.instructions;
+            box.innerHTML = `<strong>Highlight reserved.</strong> Pay via EFT using the details below — it goes live on your start date once payment clears and our team approves it.<br><br>
+              <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
+              ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
+              <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br>
+              <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>${i.note}`;
+          } else {
+            box.innerHTML = `<strong>Highlight reserved.</strong> ${pay.note || ''}`;
+          }
+          showToast('Highlight reserved — complete payment to schedule it.');
+          loadMyHighlights();
+        } catch (e2) {
+          err.textContent = e2.message || 'Could not start that purchase.';
+          err.style.display = 'block';
+        } finally {
+          btn.disabled = false; btn.textContent = 'Continue to Payment';
+        }
+      });
+    }
 
     document.querySelectorAll('.upgrade-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {

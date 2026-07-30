@@ -253,10 +253,16 @@ async function applyPaymentEffect(payment) {
     // The admin approval step (which flips status to 'approved') is still
     // required before it actually renders with the "Highlighted" badge —
     // payment alone only gets it into the queue.
+    // Honours a future start date the member chose at purchase, falling back to
+    // today when they didn't pick one. The end date is always derived from the
+    // PAID duration, so the window can never be longer than what was bought.
     await pool.query(
       `UPDATE highlights
-       SET status = 'pending', start_date = CURRENT_DATE, end_date = CURRENT_DATE + (duration_days || ' days')::interval
-       WHERE id = $1 AND status = 'awaiting_payment'`,
+          SET status = 'pending',
+              start_date = GREATEST(COALESCE(requested_start_date, CURRENT_DATE), CURRENT_DATE),
+              end_date = GREATEST(COALESCE(requested_start_date, CURRENT_DATE), CURRENT_DATE)
+                         + ((duration_days - 1) || ' days')::interval
+        WHERE id = $1 AND status = 'awaiting_payment'`,
       [payment.linked_id]
     );
   } else if (payment.linked_type === 'marketplace_listing') {
