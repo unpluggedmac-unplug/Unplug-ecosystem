@@ -177,6 +177,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="covers">Cover Images</a>
     <a data-section="projects">Investor Projects</a>
     <a data-section="gallerymgmt">Gallery</a>
+    <a data-section="pricing">Service Pricing</a>
     <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="calevents">Calendar Events</a>
     <a data-section="edcal">Editions Calendar</a>
@@ -1091,6 +1092,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
       <div class="panel"><div class="panel-body" id="galList" style="padding:0;">Loading…</div></div>
     </div>
+
+    <!-- SERVICE PRICING -->
+    <div class="admin-section" id="section-pricing">
+      <div class="main-head"><div><h1>Service Pricing</h1><p>Set the price of each paid package. Changes apply to <strong>new</strong> orders immediately — orders already placed keep the price they were charged. Turn a package off to stop offering it without deleting it.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="pricingBody" style="padding:0;">Loading…</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1349,6 +1358,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'covers') loadCoverManager();
     if (section === 'projects') loadProjectsAdmin();
     if (section === 'gallerymgmt') loadGalleryAdmin();
+    if (section === 'pricing') loadServicePricing();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
     if (section === 'edcal') loadEdcalDates();
@@ -4914,6 +4924,73 @@ async function saveGalleryImage() {
     document.getElementById('galEditor').style.display = 'none';
     loadGalleryAdmin();
   } catch (e) { err.textContent = e.message || 'Could not save.'; err.style.display = 'block'; }
+}
+
+// ---------------------------------------------------------------------------
+// Service Pricing — edit what each paid package costs, without a deploy.
+// Prices live in service_packages; the server still decides what to charge, so
+// nothing here can change a price on its own.
+// ---------------------------------------------------------------------------
+const PRICING_GROUPS = {
+  highlight_article: 'Article Highlight',
+  highlight_directory: 'Profile / Directory Highlight',
+  ad_banner: 'Advertising Banner',
+};
+
+async function loadServicePricing() {
+  const body = document.getElementById('pricingBody');
+  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  try {
+    const d = await api('/payments/admin/packages');
+    const rows = d.packages || [];
+    if (!rows.length) { body.innerHTML = '<div style="padding:16px; color:#666;">No packages configured.</div>'; return; }
+    const byService = {};
+    rows.forEach((p) => { (byService[p.service_key] = byService[p.service_key] || []).push(p); });
+
+    body.innerHTML = Object.keys(byService).map((key) => `
+      <div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);">
+        <div style="font-weight:700; margin-bottom:10px;">${escapeHtmlAdmin(PRICING_GROUPS[key] || key)}</div>
+        <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead><tr style="text-align:left; border-bottom:1px solid var(--paper-line);">
+            <th style="padding:6px;">Duration</th><th style="padding:6px;">Name</th>
+            <th style="padding:6px;">Price (R)</th><th style="padding:6px;">Offered</th>
+            <th style="padding:6px;">Last changed</th><th style="padding:6px;"></th>
+          </tr></thead>
+          <tbody>${byService[key].map(pricingRowHtml).join('')}</tbody>
+        </table></div>
+      </div>`).join('');
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load pricing.')}</div>`;
+  }
+}
+
+function pricingRowHtml(p) {
+  const changed = p.updated_at ? new Date(p.updated_at).toLocaleDateString() : '—';
+  const who = p.updated_by_email ? ` by ${escapeHtmlAdmin(p.updated_by_email)}` : '';
+  return `<tr style="border-bottom:1px solid var(--paper-line);" data-pkg="${p.id}">
+    <td style="padding:6px;">${p.duration_days} days</td>
+    <td style="padding:6px;"><input class="pkg-name" value="${escapeHtmlAdmin(p.name)}" style="padding:6px; width:100%; min-width:170px;"></td>
+    <td style="padding:6px;"><input class="pkg-price" type="number" min="0" step="0.01" value="${Number(p.price).toFixed(2)}" style="padding:6px; width:110px;"></td>
+    <td style="padding:6px;"><input class="pkg-active" type="checkbox" ${p.active ? 'checked' : ''}></td>
+    <td style="padding:6px; color:#666; font-size:12px;">${changed}${who}</td>
+    <td style="padding:6px;"><button class="approve" style="padding:5px 12px;" onclick="saveServicePackage(${p.id})">Save</button></td>
+  </tr>`;
+}
+
+async function saveServicePackage(id) {
+  const row = document.querySelector(`tr[data-pkg="${id}"]`);
+  if (!row) return;
+  const price = Number(row.querySelector('.pkg-price').value);
+  if (!Number.isFinite(price) || price < 0) { showToast('Enter a price of 0 or more.', true); return; }
+  try {
+    const res = await api(`/payments/admin/packages/${id}`, { method: 'PATCH', body: JSON.stringify({
+      price,
+      name: row.querySelector('.pkg-name').value,
+      active: row.querySelector('.pkg-active').checked,
+    }) });
+    showToast(res.message || 'Saved.');
+    loadServicePricing();
+  } catch (e) { showToast(e.message || 'Could not save.', true); }
 }
 </script>
 <script src="accessibility.js" defer></script>
