@@ -1545,9 +1545,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="section-head">
         <div>
           <span class="eyebrow">The Best Of The Best</span>
-          <h2 data-cms="home.top10.title" data-i18n="home.top10.title">This Month's Top 10</h2>
+          <h2 data-cms="home.top10.title" data-i18n="home.top10.title">The Current Top 3</h2>
+          <p style="font-size:13px; color:var(--slate); margin-top:6px;">Ranked live by reader votes on the Top 10 page.</p>
         </div>
-        <button class="view-all" data-page="top10">See full list →</button>
+        <button class="view-all" data-page="top10">View full Top 10 →</button>
       </div>
       <div class="grid-3" id="homeTop10Grid">
         <div class="dir-empty-state">Loading...</div>
@@ -4574,8 +4575,10 @@ function isEntryNew(entry) {
   return ageMs < NEW_ENTRY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 }
 
+// Uses the one shared ranking rule (see rankedEntries) so the Top 10 page and
+// the homepage Top 3 can never order the same entries differently.
 function sortedEntries(){
-  return [...top10Entries].sort((a,b) => b.vote_count - a.vote_count);
+  return rankedEntries(top10Entries);
 }
 
 function renderAll(){
@@ -4708,7 +4711,10 @@ async function castVote(entryId){
       body: JSON.stringify({ sessionId: guestSessionId() }),
     });
     localStorage.setItem(votedEntryKey(), String(entryId));
+    // Refresh the full list AND the homepage Top 3 from the same endpoint, so
+    // a vote is reflected in both places immediately without an admin step.
     await loadTop10(false);
+    loadHomeTop10Mini();
   } catch (err) {
     if (err.message && err.message.includes('already voted')) {
       localStorage.setItem(votedEntryKey(), String(entryId));
@@ -5235,24 +5241,49 @@ function openEdcalModal(key) {
 // Homepage "This Month's Top 10" mini-list — top 3 from the same real
 // top-10 competition the full Top 10 page uses.
 // ---------------------------------------------------------------------------
+// Ranks entries exactly the way the Top 10 page does. The API already returns
+// them in rank order (votes DESC, then earliest entry, then id) — this re-sorts
+// with the SAME deterministic rule so the two pages can never disagree, even if
+// a caller reorders the array.
+function rankedEntries(entries) {
+  return [...entries].sort((a, b) =>
+    Number(b.vote_count) - Number(a.vote_count)
+    || new Date(a.created_at) - new Date(b.created_at)
+    || a.id - b.id);
+}
+
+const TOP3_MEDALS = ['🥇', '🥈', '🥉'];
+
 async function loadHomeTop10Mini() {
   const el = document.getElementById('homeTop10Grid');
   try {
     const data = await api('/competitions/' + TOP10_SLUG);
-    const top3 = [...data.entries].sort((a, b) => b.vote_count - a.vote_count).slice(0, 3);
+    // Only approved/eligible entries ever reach here — the API filters on
+    // status='approved', so a removed or rejected entry drops out of the
+    // homepage Top 3 automatically with no admin action.
+    const top3 = rankedEntries(data.entries).slice(0, 3);
     if (top3.length === 0) {
       el.innerHTML = '<div class="dir-empty-state">No entries yet.</div>';
       return;
     }
-    el.innerHTML = top3.map((p, i) => `
-      <div class="rank-row" style="border:none; padding:0;">
-        <span class="rank-num">${String(i + 1).padStart(2, '0')}</span>
-        <div class="rank-photo"><span class="print-mark small"></span></div>
+    el.innerHTML = top3.map((p, i) => {
+      const votes = Number(p.vote_count) || 0;
+      // Same cover-image hierarchy as the Top 10 page (entry image → profile
+      // feature image, both resolved server-side into image_url), falling back
+      // to a generated avatar so a card is never blank.
+      const img = entryPhotoUrl(p);
+      const link = p.profile_slug ? `?p=profile&slug=${encodeURIComponent(p.profile_slug)}` : '?p=top10';
+      return `
+      <a class="rank-row" href="${link}" style="border:none; padding:0; text-decoration:none; color:inherit;">
+        <span class="rank-num" title="Rank ${i + 1}">${TOP3_MEDALS[i] || String(i + 1)}</span>
+        <div class="rank-photo"><img src="${escapeHtml(img)}" alt="${escapeHtml(p.display_name)}" loading="lazy" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
         <div>
           <div class="rank-name">${escapeHtml(p.display_name)}</div>
           <div class="rank-cause">${escapeHtml(p.category || '')}</div>
+          <div class="rank-votes" style="font-size:12.5px; font-weight:700; color:var(--red); margin-top:2px;">${votes.toLocaleString('en-ZA')} ${votes === 1 ? 'vote' : 'votes'}</div>
         </div>
-      </div>`).join('');
+      </a>`;
+    }).join('');
   } catch (err) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
   }
@@ -5613,6 +5644,9 @@ function goToPage(pageId){
     top10Loaded = true;
     loadTop10(true);
   }
+  // Returning to the homepage re-reads the live ranking, so a vote cast on the
+  // Top 10 page is reflected in the Top 3 without needing a full page reload.
+  if (pageId === 'home') loadHomeTop10Mini();
   if (pageId === 'investors' && !investorsLoaded) {
     investorsLoaded = true;
     loadInvestors();

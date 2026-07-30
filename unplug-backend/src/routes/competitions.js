@@ -50,11 +50,20 @@ router.get('/competitions/:slug', async (req, res, next) => {
        LEFT JOIN votes v ON v.entry_id = ce.id
        WHERE ce.competition_id = $1 AND ce.status = 'approved'
        GROUP BY ce.id, p.display_name, p.slug, p.feature_image_url, ce.manual_name, ce.manual_image_url, c.name
-       ORDER BY vote_count DESC`,
+       -- Deterministic ranking, so every consumer (Top 10 page, homepage Top 3)
+       -- gets the SAME order for the same data. Ties break on who reached the
+       -- competition first, then on id — never arbitrarily, so positions don't
+       -- shuffle between page loads when two entries are level.
+       ORDER BY vote_count DESC, ce.created_at ASC, ce.id ASC`,
       [competition.id]
     );
 
-    res.json({ competition, entries: entries.rows });
+    // SUM() comes back from pg as a NUMERIC string ("12"), which sorts and
+    // compares as text in JS. Cast once here so every caller gets a real
+    // number and can't accidentally rank "9" above "10".
+    const rows = entries.rows.map((r) => ({ ...r, vote_count: Number(r.vote_count) }));
+
+    res.json({ competition, entries: rows });
   } catch (err) {
     next(err);
   }
