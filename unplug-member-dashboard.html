@@ -396,6 +396,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <p style="font-size:12px; color:var(--slate);">After payment your banner goes to our team for approval, then runs on your chosen page for the selected dates.</p>
       </div>
 
+      <!-- What's being bought — type, what it includes, price — shown right
+           before the customer picks how to pay. -->
+      <div id="submitOrderDetails" style="background:var(--paper); border:1px solid var(--paper-line); border-radius:6px; padding:14px 16px; margin-bottom:16px;">
+        <div id="submitOrderType" style="font-weight:700; font-size:14.5px;"></div>
+        <div id="submitOrderDesc" style="font-size:13px; color:var(--slate); margin-top:4px; line-height:1.5;"></div>
+        <div id="submitOrderPrice" style="font-family:'Playfair Display',serif; color:var(--red); font-size:19px; font-weight:700; margin-top:8px;"></div>
+      </div>
+
       <div class="field">
         <label>Payment Method</label>
         <select id="submitPaymentMethod">
@@ -1056,7 +1064,39 @@ document.getElementById('submitType').addEventListener('change', (e) => {
   SUBMIT_FIELD_IDS.forEach((type) => {
     document.getElementById('fields-' + type).classList.toggle('section-hidden', type !== e.target.value);
   });
+  updateSubmitOrderDetails();
 });
+
+// What each service actually IS and costs — shown at the payment point so the
+// member knows exactly what they're buying before they pay, not just a price.
+const SUBMIT_SERVICE_INFO = {
+  article: { label: 'Article Submission', desc: 'Your story, reviewed by our editorial team and published on Unplug Magazine once approved. One-time fee, no recurring cost.', price: 95 },
+  event: { label: 'Event Listing', desc: 'Your event added to the community Events calendar for visitors to discover. One-time fee for the listing.', price: 300 },
+  gallery: { label: 'Gallery Bundle', desc: 'Up to 3 photos submitted to the Community Gallery, reviewed before they go live. One flat fee for the whole bundle.', price: 100 },
+  top10: { label: 'Top 10 Entry', desc: 'Your Directory profile entered into consideration for the current Top 10 — the admin-curated ranking shown on the homepage and Top 10 page.', price: 100 },
+  marketplace: { label: 'Marketplace Poster', desc: 'Your promotional poster listed in the Marketplace for 30 days.', price: 500 },
+};
+let _abPrices = null; // set once /ad-banners/options loads (setupBannerFields)
+function updateSubmitOrderDetails() {
+  const type = document.getElementById('submitType').value;
+  const typeEl = document.getElementById('submitOrderType');
+  const descEl = document.getElementById('submitOrderDesc');
+  const priceEl = document.getElementById('submitOrderPrice');
+  if (type === 'ad_banner') {
+    const duration = Number(document.getElementById('ab-duration').value) || 7;
+    const price = _abPrices ? _abPrices[duration] : null;
+    typeEl.textContent = 'Advertising Banner';
+    descEl.textContent = `Your banner rotates in the chosen ad placement on the live site for ${duration} days, once approved by our team.`;
+    priceEl.textContent = price != null ? 'R' + Number(price).toFixed(0) : '—';
+    return;
+  }
+  const info = SUBMIT_SERVICE_INFO[type];
+  if (!info) { typeEl.textContent = ''; descEl.textContent = ''; priceEl.textContent = ''; return; }
+  typeEl.textContent = info.label;
+  descEl.textContent = info.desc;
+  priceEl.textContent = 'R' + info.price;
+}
+document.getElementById('ab-duration') && document.getElementById('ab-duration').addEventListener('change', updateSubmitOrderDetails);
 
 function showSubmitError(message) {
   const el = document.getElementById('submitError');
@@ -1277,9 +1317,11 @@ async function setupBannerFields() {
       (o.placements || []).map((p) => `<option value="${p.key}">${p.label}</option>`).join('');
     document.getElementById('ab-duration').innerHTML =
       (o.durations || []).map((d) => `<option value="${d}">${d} days — R${Number(o.prices[d]).toFixed(0)}</option>`).join('');
+    _abPrices = o.prices || null;
   } catch (e) {
     document.getElementById('ab-placement').innerHTML = '<option value="">Could not load placements</option>';
   }
+  updateSubmitOrderDetails();
 }
 
 document.getElementById('submitAndPayBtn').addEventListener('click', async () => {
@@ -1368,6 +1410,7 @@ const MS_SERVICES=[
   { t:'Business Listing', d:'Directory profile', href:'unplug-magazine.html?p=directory' },
   { t:'Events', d:'List an event', submit:'event' },
   { t:'Marketplace Listing', d:'Advertise a poster', submit:'marketplace' },
+  { t:'Advertising Banner', d:'R300–R1000, 7/14/28 days', submit:'ad_banner' },
   { t:'Advertising', d:'Reserve ad space', href:'unplug-magazine.html?p=brandplacement' },
   { t:'Sponsorship', d:'Partner with us', href:'unplug-magazine.html?p=investors' },
   { t:'Magazine Feature', d:'Get featured', href:'unplug-magazine.html?p=editions' },
