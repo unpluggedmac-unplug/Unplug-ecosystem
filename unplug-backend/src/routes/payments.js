@@ -186,6 +186,37 @@ async function resolveAmount(linkedType, linkedId) {
   throw new Error(`Payments for linkedType "${linkedType}" are not implemented yet.`);
 }
 
+// Price for an order that doesn't exist in the database yet, so the checkout can
+// show a real total while the member is still filling in the form. Reads the
+// SAME constants as resolveAmount above — the two can't drift, and the browser
+// still never supplies a price. Types whose cost is stored per-row (edition
+// downloads, competition entries, profile packages) aren't quotable this way and
+// say so rather than guessing.
+function priceForNewOrder(linkedType, { durationDays, targetType } = {}) {
+  const FIXED = {
+    article_publish: ARTICLE_PUBLISH_FEE,
+    event_listing: EVENT_LISTING_FEE,
+    gallery_bundle: GALLERY_BUNDLE_PRICE,
+    top10_entry: TOP10_ENTRY_FEE,
+    marketplace_listing: MARKETPLACE_LISTING_PRICE,
+  };
+  if (FIXED[linkedType] !== undefined) return FIXED[linkedType];
+
+  if (linkedType === 'ad_banner') {
+    const price = AD_BANNER_PRICES[Number(durationDays)];
+    if (!price) throw new Error('Choose a valid banner duration (7, 14 or 28 days).');
+    return price;
+  }
+  if (linkedType === 'highlight') {
+    const table = HIGHLIGHT_PRICES[targetType];
+    if (!table) throw new Error('Highlight targetType must be "article" or "directory".');
+    const price = table[Number(durationDays)];
+    if (!price) throw new Error('Choose a valid highlight duration (7, 14, 21 or 28 days).');
+    return price;
+  }
+  throw new Error(`Cannot quote "${linkedType}" before it is created — create it first, then quote by id.`);
+}
+
 // Validates a voucher code for a given user + service + amount, and
 // returns the discounted amount. Does NOT record the redemption — call
 // recordVoucherRedemption() only after the payment record is created,
@@ -389,22 +420,143 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
   try {
     const rows = await pool.query(
       `SELECT p.id, p.gateway_reference, p.linked_type, p.linked_id, p.amount, p.credit_used,
+              p.voucher_discount, p.voucher_code,
               p.order_total, p.method, p.status, p.terms_version, p.terms_accepted_at,
               p.created_at, p.confirmed_at, u.email, u.full_name
          FROM payments p JOIN users u ON u.id = p.user_id
         ORDER BY p.created_at DESC LIMIT 500`
     );
     const orders = rows.rows.map((p) => {
+      const cash = Number(p.amount) || 0;          // the EFT/gateway portion
+      const credit = Number(p.credit_used) || 0;
+      const voucher = Number(p.voucher_discount) || 0;
       let label;
       if (p.status === 'failed') label = 'Failed';
-      else if (p.status === 'pending') label = 'Pending';
-      else if (Number(p.amount) === 0 && Number(p.credit_used) > 0) label = 'Credit Paid';
-      else if (Number(p.credit_used) > 0) label = 'Partially Paid';
+      // Still awaiting the EFT/gateway leg — anything already covered by
+      // voucher/credit is banked, but the order isn't settled until it clears.
+      else if (p.status === 'pending') label = (credit > 0 || voucher > 0) ? 'Partially Paid' : 'Pending';
+      // Settled with no cash leg at all.
+      else if (cash === 0 && credit > 0) label = 'Credit Paid';
+      else if (cash === 0 && voucher > 0) label = 'Voucher Paid';
+      // Settled, and part of it came off a voucher/credit.
+      else if (credit > 0 || voucher > 0) label = 'Paid (part credit/voucher)';
       else label = 'Paid';
-      return { ...p, statusLabel: label };
+      return { ...p, statusLabel: label, cashPortion: cash, creditPortion: credit, voucherPortion: voucher };
     });
     res.json({ orders });
   } catch (err) { next(err); }
+});
+
+// GET /payments/mine — the member's own payment history with the full
+// breakdown per transaction, so the dashboard can show what was bought, what it
+// cost, how it was paid (voucher / credit / EFT) and the reference to quote.
+// Scoped to req.user.id, so one member can never read another's payments.
+router.get('/mine', requireAuth, async (req, res, next) => {
+  try {
+    const rows = await pool.query(
+      `SELECT id, gateway_reference, linked_type, linked_id, amount, credit_used,
+              voucher_discount, voucher_code, order_total, method, status,
+              created_at, confirmed_at
+         FROM payments
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 100`,
+      [req.user.id]
+    );
+    const SERVICE_LABELS = {
+      profile_package: 'Directory Package', profile_upgrade: 'Package Upgrade',
+      competition_entry: 'Competition Entry', highlight: 'Highlight',
+      marketplace_listing: 'Marketplace Poster', vote_bundle: 'Vote Bundle',
+      article_publish: 'Article Submission', event_listing: 'Event Listing',
+      gallery_bundle: 'Gallery Bundle', top10_entry: 'Top 10 Entry',
+      edition_download: 'Edition Download', ad_banner: 'Advertising Banner',
+    };
+    const payments = rows.rows.map((p) => {
+      const cash = Number(p.amount) || 0;
+      const credit = Number(p.credit_used) || 0;
+      const voucher = Number(p.voucher_discount) || 0;
+      let label;
+      if (p.status === 'failed') label = 'Failed';
+      else if (p.status === 'pending') label = (credit > 0 || voucher > 0) ? 'Partially Paid' : 'Awaiting Payment';
+      else if (cash === 0 && credit > 0) label = 'Paid by Credit';
+      else if (cash === 0 && voucher > 0) label = 'Paid by Voucher';
+      else label = 'Paid';
+      return {
+        ...p,
+        serviceLabel: SERVICE_LABELS[p.linked_type] || p.linked_type,
+        statusLabel: label,
+        cashPortion: cash, creditPortion: credit, voucherPortion: voucher,
+      };
+    });
+    res.json({ payments });
+  } catch (err) { next(err); }
+});
+
+// POST /payments/quote — what this order would cost, worked out by the SERVER,
+// before any money moves. The checkout shows this breakdown so the member can
+// see exactly what they're paying and how voucher/credit reduce it.
+//
+// Nothing here is trusted from the browser: the price comes from resolveAmount
+// (the database), the voucher is validated the same way /initiate validates it,
+// and credit is capped at the balance. It writes nothing — no voucher is
+// redeemed and no credit is spent by asking for a quote.
+router.post('/quote', requireAuth, async (req, res, next) => {
+  try {
+    const { linkedType, linkedId, voucherCode, useCredit, durationDays, targetType } = req.body;
+
+    // A quote is usually needed BEFORE the thing being paid for exists (the
+    // member is still filling in the form), so there's no linkedId to price
+    // against yet. Price those from the same server-side constants
+    // resolveAmount uses; once a linkedId exists we defer to resolveAmount so a
+    // quote and the real charge can never disagree.
+    let orderTotal;
+    if (linkedId) {
+      orderTotal = await resolveAmount(linkedType, linkedId);
+    } else {
+      orderTotal = priceForNewOrder(linkedType, { durationDays, targetType });
+    }
+
+    let voucherDiscount = 0;
+    let voucherError = null;
+    let afterVoucher = orderTotal;
+    if (voucherCode) {
+      try {
+        const v = await applyVoucher(voucherCode, req.user.id, linkedType, orderTotal);
+        afterVoucher = v.finalAmount;
+        voucherDiscount = Number((orderTotal - afterVoucher).toFixed(2));
+      } catch (e) {
+        // A bad code shouldn't blank the whole quote — report it and price the
+        // order without it, so the form can show the message inline.
+        voucherError = e.message;
+      }
+    }
+
+    const creditBalance = await balanceFor(req.user.id);
+    // Never more than what's still owed — the same MIN() rule spendCredit uses,
+    // so a R150 balance against a R100 order only ever uses R100.
+    const creditApplied = useCredit === true
+      ? Number(Math.min(creditBalance, afterVoucher).toFixed(2))
+      : 0;
+    const amountToPay = Number((afterVoucher - creditApplied).toFixed(2));
+
+    res.json({
+      linkedType,
+      linkedId,
+      orderTotal,
+      voucherDiscount,
+      voucherCode: voucherDiscount > 0 ? voucherCode : null,
+      voucherError,
+      creditBalance,
+      creditApplied,
+      creditRemainingAfter: Number((creditBalance - creditApplied).toFixed(2)),
+      amountToPay,
+      // True when voucher+credit already cover it — the UI can then say
+      // "nothing to pay" instead of offering EFT instructions for R0.
+      settledWithoutPayment: amountToPay === 0,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok', 'sales_consultant', 'other'];
@@ -479,11 +631,15 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
 
       const result = await client.query(
         `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, referral_source, sales_consultant_id,
-                               terms_version, terms_accepted_at, terms_ip, terms_user_agent, credit_used, order_total)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10, $11, $12, $13)
+                               terms_version, terms_accepted_at, terms_ip, terms_user_agent, credit_used, order_total,
+                               voucher_discount, voucher_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10, $11, $12, $13, $14, $15)
          RETURNING *`,
+        // order_total is the FULL price before any discount, so the stored
+        // breakdown reconciles: order_total - voucher_discount - credit_used = amount.
         [req.user.id, payable, method, reference, linkedType, linkedId, referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null,
-          TERMS_VERSION, req.ip, req.get('user-agent') || null, creditUsed, finalAmount]
+          TERMS_VERSION, req.ip, req.get('user-agent') || null, creditUsed, amount,
+          Number((amount - finalAmount).toFixed(2)), appliedVoucher ? voucherCode : null]
       );
       payment = result.rows[0];
 

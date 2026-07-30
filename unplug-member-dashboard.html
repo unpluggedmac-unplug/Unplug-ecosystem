@@ -64,6 +64,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .toast.error{ background:var(--maroon); }
 .instructions-box{ background:var(--paper); border:1px solid var(--paper-line); padding:16px; font-size:13px; line-height:1.7; }
 .instructions-box .ref{ font-family:'Courier New',monospace; background:#fff; padding:3px 8px; border:1px solid var(--paper-line); display:inline-block; }
+/* Mandatory payment-reference notice — deliberately loud, never fine print. */
+.ref-notice{ margin-top:14px; border:2px solid var(--red); background:#fff6f6; border-radius:6px; padding:14px 16px; }
+.ref-notice-head{ font-weight:800; color:var(--red); letter-spacing:0.04em; font-size:13.5px; }
+.ref-notice p{ font-size:13px; line-height:1.5; }
+.ref-notice-code{ font-family:'Courier New',monospace; font-size:22px; font-weight:700; letter-spacing:2px;
+  background:#fff; border:1px dashed var(--red); border-radius:4px; padding:10px 14px; margin:8px 0; text-align:center; }
 .gate-options{ display:flex; flex-direction:column; gap:10px; }
 .gate-option{ display:block; width:100%; text-align:left; border:1px solid var(--paper-line); background:#fff; padding:16px; cursor:pointer; font-family:'Inter',sans-serif; text-decoration:none; color:var(--ink); }
 .gate-option:hover{ border-color:var(--red); }
@@ -291,6 +297,46 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="ms-services-grid" id="msServicesGrid"></div>
     </div>
 
+    <!-- HIGHLIGHT SERVICES — visibility add-ons for content the member already
+         owns. Both reuse the existing highlights system (no duplicate article or
+         profile is created; they reference the existing Article ID / Profile ID)
+         and the existing checkout, so voucher + credit + EFT all apply. -->
+    <div class="card" id="hlServicesCard">
+      <h2>Highlight Services</h2>
+      <p class="sub">Boost the visibility of something you've already published. Prices are set by Unplug and shown live.</p>
+
+      <div class="field" style="border-top:1px solid var(--paper-line); padding-top:12px;">
+        <label style="font-weight:700;">Highlight Article</label>
+        <p style="font-size:12.5px; color:var(--slate); margin:2px 0 8px;">Make one of your published articles more visible across the website for the period you choose.</p>
+        <div class="field-row">
+          <div class="field"><label>Article</label><select id="svcArtPick"><option value="">Loading…</option></select></div>
+          <div class="field"><label>Duration</label><select id="svcArtDuration"><option value="">Loading…</option></select></div>
+        </div>
+        <div id="svcArtError" class="error-banner" style="display:none;"></div>
+        <button class="btn btn-solid" id="svcArtBtn" style="width:auto;">Continue to Checkout</button>
+        <div class="instructions-box section-hidden" id="svcArtResult" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--paper-line); padding-top:12px; margin-top:6px;">
+        <label style="font-weight:700;">Highlight Profile</label>
+        <p style="font-size:12.5px; color:var(--slate); margin:2px 0 8px;">Increase the visibility of your Directory profile in the Highlighted Profiles section on the homepage.</p>
+        <div class="field-row">
+          <div class="field"><label>Duration</label><select id="svcProfDuration"><option value="">Loading…</option></select></div>
+          <div class="field"><label>Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="svcProfStart" type="date"></div>
+        </div>
+        <div id="svcProfError" class="error-banner" style="display:none;"></div>
+        <button class="btn btn-solid" id="svcProfBtn" style="width:auto;">Continue to Checkout</button>
+        <div class="instructions-box section-hidden" id="svcProfResult" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <!-- PAYMENT HISTORY -->
+    <div class="card">
+      <h2>Payment History</h2>
+      <p class="sub">Every order, how it was paid, and the reference to quote.</p>
+      <div id="paymentHistory"><div class="loading-state">Loading…</div></div>
+    </div>
+
     <!-- SUBMIT & PAY -->
     <div class="card">
       <h2>Submit &amp; Pay</h2>
@@ -420,6 +466,28 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div style="font-size:13.5px;">Available: <b id="submitCreditAvailable">R0.00</b></div>
         <label class="tc-row" style="margin-top:6px;"><input type="checkbox" id="submitUseCredit"> <span>Use my Unplug Credit toward this order</span></label>
         <p style="font-size:11.5px; color:var(--slate); margin:2px 0 0;">The amount applied (up to your balance) is worked out at checkout. Credit never expires.</p>
+      </div>
+
+      <!-- Voucher. Validated server-side; the discount is never taken from the
+           browser. Combines freely with credit and EFT. -->
+      <div class="field">
+        <label>Voucher code (optional)</label>
+        <div style="display:flex; gap:8px; align-items:flex-start;">
+          <input id="submitVoucher" placeholder="e.g. UNPLUG2026" style="flex:1;">
+          <button class="btn btn-line" type="button" id="submitApplyVoucher" style="width:auto; white-space:nowrap;">Apply</button>
+        </div>
+        <p id="submitVoucherNote" style="font-size:11.5px; margin:4px 0 0;"></p>
+      </div>
+
+      <!-- CHECKOUT SUMMARY — every figure here comes from POST /payments/quote,
+           i.e. calculated by the server, not by this page. -->
+      <div id="submitQuoteBox" style="border:1px solid var(--paper-line); border-radius:6px; padding:12px 14px; margin-bottom:14px; font-size:13.5px;">
+        <div style="font-weight:700; margin-bottom:8px;">Checkout summary</div>
+        <div style="display:flex; justify-content:space-between;"><span id="submitQuoteService">Service</span><span id="submitQuoteTotal">—</span></div>
+        <div style="display:flex; justify-content:space-between; color:var(--red);" class="section-hidden" id="submitQuoteVoucherRow"><span>Voucher</span><span id="submitQuoteVoucher">—</span></div>
+        <div style="display:flex; justify-content:space-between; color:var(--red);" class="section-hidden" id="submitQuoteCreditRow"><span>Account credit</span><span id="submitQuoteCredit">—</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:15px; font-weight:700; margin-top:8px; padding-top:8px; border-top:1px dashed var(--paper-line);"><span>Total to pay</span><span id="submitQuotePay">—</span></div>
+        <p id="submitQuoteNote" style="font-size:11.5px; color:var(--slate); margin:6px 0 0;"></p>
       </div>
 
       <!-- MANDATORY Terms & Conditions gate -->
@@ -823,6 +891,31 @@ function enterMemberDashboard(user){
   loadReadingList();
   loadCredits();
   setupSubmitGate();
+  loadHighlightServices();
+  loadPaymentHistory();
+
+  // Highlight Article / Highlight Profile purchase buttons.
+  const artBtn = document.getElementById('svcArtBtn');
+  if (artBtn && !artBtn.dataset.wired) {
+    artBtn.dataset.wired = '1';
+    artBtn.addEventListener('click', () => buyHighlight({
+      targetType: 'article',
+      targetId: Number(document.getElementById('svcArtPick').value),
+      durationDays: Number(document.getElementById('svcArtDuration').value),
+      errorEl: 'svcArtError', resultEl: 'svcArtResult', btn: 'svcArtBtn',
+    }));
+  }
+  const profBtn = document.getElementById('svcProfBtn');
+  if (profBtn && !profBtn.dataset.wired) {
+    profBtn.dataset.wired = '1';
+    profBtn.addEventListener('click', () => buyHighlight({
+      targetType: 'directory',
+      targetId: MY_PROFILE_ID,
+      durationDays: Number(document.getElementById('svcProfDuration').value),
+      requestedStartDate: document.getElementById('svcProfStart').value || undefined,
+      errorEl: 'svcProfError', resultEl: 'svcProfResult', btn: 'svcProfBtn',
+    }));
+  }
 }
 
 // On page load, restore a saved session rather than forcing a fresh
@@ -853,6 +946,19 @@ const TIER_PRICES = {
   business: { basic: 500, pro: 700, premium: 1000 },
 };
   let MY_PROFILE_ID = null;
+
+// The mandatory payment-reference notice. Deliberately a large, high-contrast
+// block rather than fine print — an EFT paid without this reference can't be
+// matched to the order, which is the single most common cause of a delayed
+// approval. Shown wherever a reference is issued.
+function refNotice(reference) {
+  return `<div class="ref-notice">
+    <div class="ref-notice-head">&#9888;&#65039; IMPORTANT PAYMENT NOTICE</div>
+    <p style="margin:6px 0;">Your generated reference number <strong>must</strong> be used when making payment.</p>
+    <div class="ref-notice-code">${escapeAttrM(reference)}</div>
+    <p style="margin:6px 0 0; font-size:12px;">Failure to use the correct reference number may delay payment verification and approval.</p>
+  </div>`;
+}
 
 // Escapes a value for use inside a double-quoted HTML attribute. escapeHtmlM
 // goes through textContent, which does NOT escape quotes — fine for element
@@ -895,6 +1001,111 @@ async function loadMyHighlights() {
       </div>`).join('');
   } catch (e) {
     el.innerHTML = `<div class="empty-state" style="font-size:12.5px;">Could not load: ${escapeAttrM(e.message)}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Highlight services (Services tab). Both buy through the SAME two endpoints as
+// everything else — POST /highlights to create the request against the existing
+// Article ID / Profile ID, then POST /payments/initiate — so no duplicate
+// article, profile, checkout or reference system is involved.
+// ---------------------------------------------------------------------------
+let _svcPkgs = null;
+async function loadHighlightServices() {
+  const artSel = document.getElementById('svcArtDuration');
+  if (!artSel) return;
+  // Durations + prices come from the server (the same constants it charges).
+  try {
+    if (!_svcPkgs) _svcPkgs = (await api('/highlights/packages')).packages;
+    const opts = (list) => list.map((pk) =>
+      `<option value="${pk.durationDays}">${pk.durationDays} Days — R${Number(pk.price).toFixed(0)}</option>`).join('');
+    artSel.innerHTML = opts(_svcPkgs.article || []);
+    document.getElementById('svcProfDuration').innerHTML = opts(_svcPkgs.directory || []);
+  } catch (e) {
+    artSel.innerHTML = '<option value="">Could not load prices</option>';
+  }
+  // Only the member's own approved articles can be highlighted.
+  try {
+    const d = await api('/articles/mine');
+    const eligible = (d.articles || []).filter((a) => a.status === 'approved');
+    document.getElementById('svcArtPick').innerHTML = eligible.length
+      ? eligible.map((a) => `<option value="${a.id}">${escapeAttrM(a.title)}</option>`).join('')
+      : '<option value="">No published articles yet</option>';
+  } catch (e) {
+    document.getElementById('svcArtPick').innerHTML = '<option value="">Could not load your articles</option>';
+  }
+  const ps = document.getElementById('svcProfStart');
+  const today = new Date().toISOString().slice(0, 10);
+  ps.min = today; ps.value = today;
+}
+
+// Shared buy routine for both highlight services.
+async function buyHighlight({ targetType, targetId, durationDays, requestedStartDate, errorEl, resultEl, btn }) {
+  const err = document.getElementById(errorEl);
+  const box = document.getElementById(resultEl);
+  err.style.display = 'none';
+  if (!targetId) { err.textContent = 'Nothing selected to highlight.'; err.style.display = 'block'; return; }
+  if (!durationDays) { err.textContent = 'Choose a duration.'; err.style.display = 'block'; return; }
+  const b = document.getElementById(btn);
+  b.disabled = true; b.textContent = 'Processing…';
+  try {
+    const created = await api('/highlights', { method: 'POST', body: JSON.stringify({
+      targetType, targetId, durationDays, requestedStartDate,
+    }) });
+    const pay = await api('/payments/initiate', { method: 'POST', body: JSON.stringify({
+      linkedType: 'highlight', linkedId: created.highlight.id, method: 'eft',
+      termsAccepted: true, termsVersion: SUBMIT_TERMS_VERSION, useCredit: false,
+    }) });
+    box.classList.remove('section-hidden');
+    if (pay.paidInFull) {
+      box.innerHTML = `<strong>Highlight booked — paid in full by your Unplug Credit.</strong><br><br>${pay.message || ''}` + refNotice(pay.payment.gateway_reference);
+    } else if (pay.instructions) {
+      const i = pay.instructions;
+      box.innerHTML = `<strong>Highlight reserved.</strong> Pay via EFT using the details below — it activates for the paid period once payment clears and our team approves it.<br><br>
+        <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
+        ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
+        <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br><br>
+        ${i.note}` + refNotice(i.reference);
+    } else {
+      box.innerHTML = `<strong>Highlight reserved.</strong> ${pay.note || ''}`;
+    }
+    showToast('Highlight reserved — complete payment to schedule it.');
+    loadPaymentHistory();
+  } catch (e) {
+    err.textContent = e.message || 'Could not start that purchase.';
+    err.style.display = 'block';
+  } finally {
+    b.disabled = false; b.textContent = 'Continue to Checkout';
+  }
+}
+
+// The member's payment history with the full breakdown per transaction.
+async function loadPaymentHistory() {
+  const el = document.getElementById('paymentHistory');
+  if (!el) return;
+  try {
+    const d = await api('/payments/mine');
+    const rows = d.payments || [];
+    if (!rows.length) { el.innerHTML = '<div class="empty-state">No payments yet.</div>'; return; }
+    const colour = { Paid: 'green', 'Paid by Credit': 'green', 'Paid by Voucher': 'green',
+      'Partially Paid': '#a15c00', 'Awaiting Payment': '#a15c00', Failed: 'var(--red)' };
+    el.innerHTML = `<table><tr><th>Reference</th><th>Service</th><th>Total</th><th>How paid</th><th>Status</th><th>Date</th></tr>` +
+      rows.map((p) => {
+        const parts = [];
+        if (p.voucherPortion > 0) parts.push(`Voucher ${R(p.voucherPortion)}`);
+        if (p.creditPortion > 0) parts.push(`Credit ${R(p.creditPortion)}`);
+        if (p.cashPortion > 0) parts.push(`${(p.method || 'EFT').toUpperCase()} ${R(p.cashPortion)}`);
+        return `<tr>
+          <td><span class="ref">${escapeAttrM(p.gateway_reference)}</span></td>
+          <td>${escapeAttrM(p.serviceLabel)}</td>
+          <td>${R(p.order_total != null ? p.order_total : p.amount)}</td>
+          <td style="font-size:12px;">${parts.length ? parts.map(escapeAttrM).join('<br>') : '—'}</td>
+          <td style="font-weight:700; color:${colour[p.statusLabel] || '#666'};">${escapeAttrM(p.statusLabel)}</td>
+          <td>${p.created_at ? new Date(p.created_at).toLocaleDateString('en-ZA') : '—'}</td>
+        </tr>`;
+      }).join('') + '</table>';
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state">Could not load: ${escapeAttrM(e.message)}</div>`;
   }
 }
 
@@ -1073,14 +1284,14 @@ async function loadProfile() {
           }) });
           box.classList.remove('section-hidden');
           if (pay.paidInFull) {
-            box.innerHTML = `<strong>Highlight booked — paid in full by your Unplug Credit.</strong><br><br>${pay.message || ''}<br><b>Reference:</b> <span class="ref">${pay.payment.gateway_reference}</span>`;
+            box.innerHTML = `<strong>Highlight booked — paid in full by your Unplug Credit.</strong><br><br>${pay.message || ''}` + refNotice(pay.payment.gateway_reference);
           } else if (pay.instructions) {
             const i = pay.instructions;
             box.innerHTML = `<strong>Highlight reserved.</strong> Pay via EFT using the details below — it goes live on your start date once payment clears and our team approves it.<br><br>
               <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
               ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
               <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br>
-              <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>${i.note}`;
+              ${i.note}` + refNotice(i.reference);
           } else {
             box.innerHTML = `<strong>Highlight reserved.</strong> ${pay.note || ''}`;
           }
@@ -1286,8 +1497,96 @@ function updateSubmitOrderDetails() {
   typeEl.textContent = info.label;
   descEl.textContent = info.desc;
   priceEl.textContent = 'R' + info.price;
+  refreshSubmitQuote();
 }
 document.getElementById('ab-duration') && document.getElementById('ab-duration').addEventListener('change', updateSubmitOrderDetails);
+
+// ---------------------------------------------------------------------------
+// Live checkout quote. EVERY figure comes from POST /payments/quote — the
+// server prices the order, validates the voucher and caps the credit. This page
+// only displays the result, so a member editing the DOM changes nothing about
+// what they owe. Asking for a quote writes nothing: no voucher is redeemed and
+// no credit is spent until they actually pay.
+// ---------------------------------------------------------------------------
+// A function declaration (not a const arrow) so it hoists — helpers defined
+// further down this block are used by functions declared above it.
+function R(n) { return 'R' + Number(n || 0).toFixed(2); }
+let SUBMIT_APPLIED_VOUCHER = '';   // only set once the server accepts a code
+let SUBMIT_LAST_QUOTE = null;
+
+async function refreshSubmitQuote() {
+  const box = document.getElementById('submitQuoteBox');
+  if (!box) return;
+  const type = document.getElementById('submitType').value;
+  // Map the form's submission type to the payment linkedType the server knows.
+  const LINKED = {
+    article: 'article_publish', event: 'event_listing', gallery: 'gallery_bundle',
+    top10: 'top10_entry', marketplace: 'marketplace_listing', ad_banner: 'ad_banner',
+  };
+  const linkedType = LINKED[type];
+  const svcEl = document.getElementById('submitQuoteService');
+  const noteEl = document.getElementById('submitQuoteNote');
+  if (!linkedType) { box.classList.add('section-hidden'); return; }
+  box.classList.remove('section-hidden');
+  svcEl.textContent = (SUBMIT_SERVICE_INFO[type] && SUBMIT_SERVICE_INFO[type].label)
+    || (type === 'ad_banner' ? 'Advertising Banner' : 'Service');
+  try {
+    const body = {
+      linkedType,
+      voucherCode: SUBMIT_APPLIED_VOUCHER || undefined,
+      useCredit: document.getElementById('submitUseCredit').checked,
+    };
+    if (type === 'ad_banner') body.durationDays = Number(document.getElementById('ab-duration').value) || 7;
+    const q = await api('/payments/quote', { method: 'POST', body: JSON.stringify(body) });
+    SUBMIT_LAST_QUOTE = q;
+
+    document.getElementById('submitQuoteTotal').textContent = R(q.orderTotal);
+    const vRow = document.getElementById('submitQuoteVoucherRow');
+    if (q.voucherDiscount > 0) {
+      vRow.classList.remove('section-hidden');
+      document.getElementById('submitQuoteVoucher').textContent = '-' + R(q.voucherDiscount);
+    } else vRow.classList.add('section-hidden');
+
+    const cRow = document.getElementById('submitQuoteCreditRow');
+    if (q.creditApplied > 0) {
+      cRow.classList.remove('section-hidden');
+      document.getElementById('submitQuoteCredit').textContent = '-' + R(q.creditApplied);
+    } else cRow.classList.add('section-hidden');
+
+    document.getElementById('submitQuotePay').textContent = R(q.amountToPay);
+    noteEl.textContent = q.settledWithoutPayment
+      ? 'Covered in full — nothing left to pay. You still need to accept the terms below to complete the order.'
+      : (q.creditBalance > 0 ? `You have ${R(q.creditBalance)} credit available${q.creditApplied > 0 ? `; ${R(q.creditRemainingAfter)} would remain after this order.` : '.'}` : '');
+    // Surface a rejected voucher inline rather than failing silently.
+    if (q.voucherError) {
+      const vn = document.getElementById('submitVoucherNote');
+      vn.textContent = q.voucherError;
+      vn.style.color = 'var(--red)';
+      SUBMIT_APPLIED_VOUCHER = '';
+    }
+  } catch (e) {
+    document.getElementById('submitQuoteTotal').textContent = '—';
+    document.getElementById('submitQuotePay').textContent = '—';
+    noteEl.textContent = 'Could not work out the total right now: ' + e.message;
+  }
+}
+
+// Applying a voucher just re-quotes — the server decides if it's valid.
+document.getElementById('submitApplyVoucher') && document.getElementById('submitApplyVoucher').addEventListener('click', async () => {
+  const code = document.getElementById('submitVoucher').value.trim();
+  const note = document.getElementById('submitVoucherNote');
+  SUBMIT_APPLIED_VOUCHER = code;
+  note.textContent = code ? 'Checking…' : '';
+  note.style.color = 'var(--slate)';
+  await refreshSubmitQuote();
+  if (SUBMIT_APPLIED_VOUCHER && SUBMIT_LAST_QUOTE && SUBMIT_LAST_QUOTE.voucherDiscount > 0) {
+    note.textContent = `Voucher applied — ${R(SUBMIT_LAST_QUOTE.voucherDiscount)} off.`;
+    note.style.color = 'green';
+  } else if (!code) {
+    note.textContent = 'Voucher removed.';
+  }
+});
+document.getElementById('submitUseCredit') && document.getElementById('submitUseCredit').addEventListener('change', refreshSubmitQuote);
 
 function showSubmitError(message) {
   const el = document.getElementById('submitError');
@@ -1535,6 +1834,8 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
         termsAccepted: true,
         termsVersion: SUBMIT_TERMS_VERSION,
         useCredit: document.getElementById('submitUseCredit').checked,
+        // Re-validated server-side; the quote above was only a preview.
+        voucherCode: SUBMIT_APPLIED_VOUCHER || undefined,
       }),
     });
 
@@ -1542,14 +1843,14 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
     resultBox.classList.remove('section-hidden');
 
     if (payment.paidInFull) {
-      resultBox.innerHTML = `<strong>${label} created — paid in full by your Unplug Credit.</strong><br><br>${payment.message || ''}<br><b>Reference:</b> <span class="ref">${payment.payment.gateway_reference}</span>`;
+      resultBox.innerHTML = `<strong>${label} created — paid in full by your Unplug Credit.</strong><br><br>${payment.message || ''}` + refNotice(payment.payment.gateway_reference);
     } else if (method === 'eft') {
       const i = payment.instructions;
       resultBox.innerHTML = `<strong>${label} created.</strong> Pay via EFT using the details below.<br><br>
         <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
         ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
-        <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br>
-        <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>${i.note}`;
+        <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br><br>
+        ${i.note}` + refNotice(i.reference);
     } else {
       resultBox.innerHTML = `<strong>${label} created.</strong> ${payment.note}<br><br>
         <a href="${payment.redirectUrl}" target="_blank">${payment.redirectUrl}</a>`;
