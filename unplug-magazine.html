@@ -3238,6 +3238,8 @@ function profileDetailHtml(profile, socials, gallery) {
         ${profile.deaf_owned_verified ? '<span class="tier-pill deaf-owned-badge" style="margin-left:6px;">🤟 Deaf-Owned Verified</span>' : ''}
         <h1 style="font-size:clamp(28px,4vw,42px); margin:10px 0 4px;">${escapeHtml(profile.display_name)}</h1>
         <p style="color:var(--red); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; font-size:13px;">${escapeHtml(profile.category || '')}</p>
+        ${profile.locationLabel ? `<p style="color:var(--slate); font-size:13.5px; margin-top:6px;">📍 ${escapeHtml(profile.locationLabel)}
+          ${(profile.suburb || profile.city) ? ` · <a href="?p=directory&view=map" style="color:var(--red);">View on Map</a>` : ''}</p>` : ''}
         ${showExtras && profile.quote ? `<p class="profile-quote">"${escapeHtml(profile.quote)}"</p>` : ''}
       </div>
     </div>

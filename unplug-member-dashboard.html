@@ -854,6 +854,15 @@ const TIER_PRICES = {
 };
   let MY_PROFILE_ID = null;
 
+// Escapes a value for use inside a double-quoted HTML attribute. escapeHtmlM
+// goes through textContent, which does NOT escape quotes — fine for element
+// text, unsafe for value="…" where a quote would break out of the attribute.
+function escapeAttrM(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 async function loadProfile() {
   const content = document.getElementById('profileContent');
   try {
@@ -878,7 +887,26 @@ async function loadProfile() {
         <div class="field"><label>Contact Email</label><input id="editEmail" value="${p.contact_email || ''}"></div>
         <div class="field"><label>Contact Phone</label><input id="editPhone" value="${p.contact_phone || ''}"></div>
       </div>
-      <button class="btn btn-line" id="saveProfileBtn">Save Changes</button>
+      <div style="border-top:1px solid var(--paper-line); margin-top:16px; padding-top:14px;">
+        <div style="font-weight:700; font-size:14px;">Location <span style="font-weight:400; color:var(--slate);">— optional</span></div>
+        <p style="font-size:12.5px; color:var(--slate); margin:4px 0 10px; line-height:1.5;">
+          ${p.type === 'business'
+            ? 'Your business location may be used to display your profile on the Directory Map and help nearby users discover your business.'
+            : 'Adding your location allows your profile to appear on the Map View and in relevant Near Me searches. We only ask for your area — never a street address.'}
+          Leave blank to stay off the map; your listing stays in the Directory either way.
+        </p>
+        ${p.type === 'business' ? `<div class="field"><label>Street Address</label><input id="editStreetAddress" maxlength="200" value="${escapeAttrM(p.street_address)}" placeholder="Enter physical street address"></div>` : ''}
+        <div class="field-row">
+          <div class="field"><label>Suburb</label><input id="editSuburb" maxlength="120" value="${escapeAttrM(p.suburb)}" placeholder="Enter suburb"></div>
+          <div class="field"><label>Town / City</label><input id="editCity" maxlength="120" value="${escapeAttrM(p.city)}" placeholder="Enter town or city"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Province</label><select id="editProvince"><option value="">Select province</option></select></div>
+          <div class="field"><label>Country</label><input id="editCountry" maxlength="80" value="${escapeAttrM(p.country) || 'South Africa'}" placeholder="Select country"></div>
+        </div>
+        <button class="btn btn-line" id="removeLocationBtn" type="button" style="width:auto; font-size:12px;">Remove location</button>
+      </div>
+      <button class="btn btn-line" id="saveProfileBtn" style="margin-top:14px;">Save Changes</button>
       ${higherTiers.length > 0 ? `
         <div class="tier-upgrade-row">
           <span style="font-size:13px;">Upgrade to:</span>
@@ -886,6 +914,30 @@ async function loadProfile() {
         </div>` : ''}
       ${p.status === 'awaiting_payment' ? `<p style="font-size:12.5px; color:var(--red); margin-top:12px;">Your profile is awaiting payment — use the Unplug checkout to complete it before it can be reviewed.</p>` : ''}
     `;
+
+    // Province options come from the API so they match what it validates.
+    (async () => {
+      const sel = document.getElementById('editProvince');
+      if (!sel) return;
+      try {
+        const d = await api('/directory/provinces');
+        sel.innerHTML = '<option value="">Select province</option>' +
+          (d.provinces || []).map((pr) => `<option value="${escapeAttrM(pr)}"${pr === p.province ? ' selected' : ''}>${escapeHtmlM(pr)}</option>`).join('');
+      } catch (e) { /* leave the placeholder — location is optional anyway */ }
+    })();
+
+    function locationPayload() {
+      const streetEl = document.getElementById('editStreetAddress');
+      const payload = {
+        suburb: document.getElementById('editSuburb').value.trim(),
+        city: document.getElementById('editCity').value.trim(),
+        province: document.getElementById('editProvince').value,
+        country: document.getElementById('editCountry').value.trim(),
+      };
+      // Only businesses have the field at all; never send it for individuals.
+      if (streetEl) payload.streetAddress = streetEl.value.trim();
+      return payload;
+    }
 
     document.getElementById('saveProfileBtn').addEventListener('click', async () => {
       try {
@@ -896,12 +948,31 @@ async function loadProfile() {
             quote: document.getElementById('editQuote').value,
             contactEmail: document.getElementById('editEmail').value,
             contactPhone: document.getElementById('editPhone').value,
+            ...locationPayload(),
           }),
         });
         showToast('Profile updated.');
       } catch (err) {
         showToast(err.message, true);
       }
+    });
+
+    // Removing location clears the fields and saves them empty — the listing
+    // stays in the Directory, it just drops off the map / Near Me results.
+    document.getElementById('removeLocationBtn').addEventListener('click', async () => {
+      if (!confirm('Remove your location? Your listing stays in the Directory, but it will no longer appear on the Map View or in Near Me results.')) return;
+      const streetEl = document.getElementById('editStreetAddress');
+      if (streetEl) streetEl.value = '';
+      document.getElementById('editSuburb').value = '';
+      document.getElementById('editCity').value = '';
+      document.getElementById('editProvince').value = '';
+      document.getElementById('editCountry').value = '';
+      try {
+        await api(`/profiles/${p.id}`, { method: 'PATCH', body: JSON.stringify({
+          ...locationPayload(), latitude: null, longitude: null,
+        }) });
+        showToast('Location removed.');
+      } catch (err) { showToast(err.message, true); }
     });
 
     document.querySelectorAll('.upgrade-btn').forEach((btn) => {

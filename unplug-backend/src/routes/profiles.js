@@ -2,8 +2,26 @@ const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireRole, requireOwnerOrAdmin } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
+const { SA_PROVINCES } = require('../utils/saPlaces');
 
 const router = express.Router();
+
+// Public shape of a listing's location. A street address belongs to a business
+// premises; an individual's would be their home, so it is stripped before the
+// profile ever leaves the API — `SELECT p.*` would otherwise publish it.
+// Also builds the display label the frontend shows, so the ordering of the
+// parts is decided in one place.
+function withPublicLocation(profile) {
+  if (!profile) return profile;
+  const isBusiness = profile.type === 'business';
+  const streetAddress = isBusiness ? profile.street_address : null;
+  return {
+    ...profile,
+    street_address: streetAddress,
+    locationLabel: [streetAddress, profile.suburb, profile.city, profile.province, profile.country]
+      .filter(Boolean).join(', ') || null,
+  };
+}
 
 const TIERS = ['basic', 'pro', 'premium']; // order matters — index = rank
 const PROFILE_TYPES = ['individual', 'business'];
@@ -90,6 +108,12 @@ router.get('/directory', async (req, res, next) => {
 // GET /directory/categories — public. Powers the category dropdown on
 // signup and the category filter buttons on the Directory page.
 // ---------------------------------------------------------------------------
+// GET /directory/provinces — the province dropdown options, served from the
+// same list the API validates against so the two can't drift apart.
+router.get('/directory/provinces', (req, res) => {
+  res.json({ provinces: SA_PROVINCES, defaultCountry: 'South Africa' });
+});
+
 router.get('/directory/categories', async (req, res, next) => {
   try {
     const result = await pool.query(
@@ -172,7 +196,7 @@ router.get('/profiles/:slug', async (req, res, next) => {
       pool.query(`SELECT id, image_url, caption FROM gallery_images WHERE owner_type = 'profile' AND owner_id = $1 AND status = 'approved'`, [profile.id]),
     ]);
 
-    res.json({ profile, socials: socials.rows, gallery: gallery.rows });
+    res.json({ profile: withPublicLocation(profile), socials: socials.rows, gallery: gallery.rows });
   } catch (err) {
     next(err);
   }
@@ -184,7 +208,7 @@ router.get('/profiles/:slug', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 router.post('/profiles', requireAuth, async (req, res, next) => {
   try {
-const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, achievements, career, quote, contactEmail, contactPhone, contactWebsite, demoReelUrl } = req.body;
+const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, achievements, career, quote, contactEmail, contactPhone, contactWebsite, demoReelUrl, streetAddress, suburb, city, province, country } = req.body;
     const allowSecondCategory = type === 'business' && packageTier === 'premium';
     const allowDemoReel = type === 'individual' && packageTier === 'premium';
     if (!TIERS.includes(packageTier)) {
@@ -206,12 +230,23 @@ const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, ac
       slug = `${slug}-${req.user.id}`;
     }
 
+    // Location is entirely optional. A street address is only stored for
+    // business listings — individuals give area-level location only, so a
+    // residential street address is never captured or published.
+    const isBusiness = (type || 'individual') === 'business';
     const result = await pool.query(
       `INSERT INTO profiles
-        (user_id, type, category_id, secondary_category_id, package_tier, slug, display_name, bio, achievements, career, quote, contact_email, contact_phone, contact_website, demo_reel_url, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'awaiting_payment')
+        (user_id, type, category_id, secondary_category_id, package_tier, slug, display_name, bio, achievements, career, quote, contact_email, contact_phone, contact_website, demo_reel_url, status,
+         street_address, suburb, city, province, country)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'awaiting_payment',
+         $16,$17,$18,$19,$20)
        RETURNING *`,
-      [req.user.id, type || 'individual', categoryId || null, allowSecondCategory ? (secondaryCategoryId || null) : null, packageTier, slug, displayName.trim(), bio || null, achievements || null, career || null, quote || null, contactEmail || null, contactPhone || null, contactWebsite || null, allowDemoReel ? (demoReelUrl || null) : null]
+      [req.user.id, type || 'individual', categoryId || null, allowSecondCategory ? (secondaryCategoryId || null) : null, packageTier, slug, displayName.trim(), bio || null, achievements || null, career || null, quote || null, contactEmail || null, contactPhone || null, contactWebsite || null, allowDemoReel ? (demoReelUrl || null) : null,
+        isBusiness ? ((streetAddress || '').trim() || null) : null,
+        (suburb || '').trim() || null,
+        (city || '').trim() || null,
+        (province || '').trim() || null,
+        (country || '').trim() || null]
     );
 
     res.status(201).json({
@@ -239,17 +274,56 @@ router.patch('/profiles/:id', requireOwnerOrAdmin(getProfileOwnerId), async (req
       // photo and its category placement.
       featureImageUrl: 'feature_image_url',
       categoryId: 'category_id', secondaryCategoryId: 'secondary_category_id',
-      // Location powers the directory map and "near me" search. Town alone is
-      // enough — the API derives coordinates from it — so most listings never
-      // need latitude/longitude filled in by hand.
+      // Location powers the directory map and "near me" search, and is entirely
+      // OPTIONAL — a listing with no location stays in the directory, it just
+      // doesn't get a map marker. Suburb/town alone is enough (the API derives
+      // coordinates from them), so latitude/longitude are rarely set by hand.
+      //
+      // streetAddress is accepted only for business listings; see the guard
+      // below. Individuals give area-level location only, so we never publish
+      // a residential street address.
+      streetAddress: 'street_address', suburb: 'suburb', country: 'country',
       city: 'city', province: 'province', latitude: 'latitude', longitude: 'longitude',
     };
 
+    // Length guards — all optional, but if given they must be sane.
+    const LOCATION_LIMITS = {
+      streetAddress: 200, suburb: 120, city: 120, province: 80, country: 80,
+    };
+    for (const [key, max] of Object.entries(LOCATION_LIMITS)) {
+      const val = req.body[key];
+      if (typeof val === 'string' && val.trim().length > max) {
+        return res.status(400).json({ error: `${key} must be ${max} characters or fewer.` });
+      }
+    }
+    if (req.body.province !== undefined && req.body.province) {
+      // Only validated when the country is South Africa (or unset) — an
+      // international listing may legitimately have a non-SA province/state.
+      const country = (req.body.country || '').trim().toLowerCase();
+      const isSA = !country || country === 'south africa';
+      if (isSA && !SA_PROVINCES.includes(String(req.body.province).trim())) {
+        return res.status(400).json({ error: `For South Africa, province must be one of: ${SA_PROVINCES.join(', ')}.` });
+      }
+    }
+    // Never store a street address against an individual, even if one is sent.
+    if (req.body.streetAddress) {
+      const existing = await pool.query('SELECT type FROM profiles WHERE id = $1', [req.params.id]);
+      if (existing.rows.length && existing.rows[0].type !== 'business') {
+        return res.status(400).json({ error: 'A street address is only used for business listings. Individual listings use suburb, town, province and country.' });
+      }
+    }
+
+    // Clearing a location field must store NULL, not '' — "no location" is
+    // tested with IS NULL (map eligibility, Near Me), and an empty string
+    // would read as a value and keep an unplaceable listing on the map queue.
+    const LOCATION_KEYS = new Set(['streetAddress', 'suburb', 'city', 'province', 'country']);
     const setClauses = [];
     const values = [];
     for (const [bodyKey, column] of Object.entries(bodyKeyMap)) {
       if (req.body[bodyKey] !== undefined) {
-        values.push(req.body[bodyKey]);
+        let value = req.body[bodyKey];
+        if (LOCATION_KEYS.has(bodyKey) && typeof value === 'string' && value.trim() === '') value = null;
+        values.push(value);
         setClauses.push(`${column} = $${values.length}`);
       }
     }

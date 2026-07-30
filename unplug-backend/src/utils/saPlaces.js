@@ -72,4 +72,26 @@ function coordsForPlace(name) {
   return PLACES[first] || null;
 }
 
-module.exports = { coordsForPlace, PLACES };
+// The nine South African provinces, for the province dropdown. Exported so the
+// API and the admin/member forms all validate against one list.
+const SA_PROVINCES = [
+  'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo',
+  'Mpumalanga', 'Northern Cape', 'North West', 'Western Cape',
+];
+
+// Resolves a listing's position from whatever location parts it has, most
+// specific first: suburb (many SA suburbs are in the lookup, e.g. Sandton,
+// Umhlanga), then town/city. Returns { coords, precision } so callers can be
+// honest about how exact the position is, or null when nothing resolves.
+//
+// Deliberately still a local lookup — no geocoding API key, no per-request
+// cost, and no third party ever sees a member's address.
+function resolveLocation({ suburb, city } = {}) {
+  const fromSuburb = coordsForPlace(suburb);
+  if (fromSuburb) return { coords: fromSuburb, precision: 'suburb' };
+  const fromCity = coordsForPlace(city);
+  if (fromCity) return { coords: fromCity, precision: 'town' };
+  return null;
+}
+
+module.exports = { coordsForPlace, resolveLocation, PLACES, SA_PROVINCES };

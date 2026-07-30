@@ -72,6 +72,27 @@ body{ min-height:100vh; }
     <div class="field"><label>Category</label><select id="profileCategory"><option value="">Loading…</option></select></div>
     <div class="field section-hidden" id="secondCategoryField"><label>Second Category (Business Premium only)</label><select id="profileSecondCategory"><option value="">None</option></select></div>
     <div class="field section-hidden" id="demoReelField"><label>Demo Reel / Music Link (Individual Premium only)</label><input id="profileDemoReelUrl" placeholder="https://youtube.com/... or https://soundcloud.com/..."></div>
+    <!-- LOCATION — entirely optional. Powers the existing Directory Map View
+         and Near Me. Street address is shown for businesses only; individuals
+         give area-level location so a home address is never published. -->
+    <div style="border-top:1px solid var(--paper-line); margin-top:18px; padding-top:14px;">
+      <div style="font-weight:700; font-size:14px;">Location <span style="font-weight:400; color:var(--slate);">— optional</span></div>
+      <p style="font-size:12.5px; color:var(--slate); margin:4px 0 10px; line-height:1.5;" id="locationNote">
+        Adding your location allows your Directory profile to appear on the Map View and in relevant Near Me searches. You can leave this blank and still create your profile.
+      </p>
+      <div class="field section-hidden" id="streetAddressField"><label>Street Address</label><input id="profileStreetAddress" maxlength="200" placeholder="Enter physical street address"></div>
+      <div class="field"><label>Suburb</label><input id="profileSuburb" maxlength="120" placeholder="Enter suburb"></div>
+      <div class="field"><label>Town / City</label><input id="profileCity" maxlength="120" placeholder="Enter town or city"></div>
+      <div class="field"><label>Province</label><select id="profileProvince"><option value="">Select province</option></select></div>
+      <div class="field"><label>Country</label><input id="profileCountry" maxlength="80" list="countryList" value="South Africa" placeholder="Select country">
+        <datalist id="countryList">
+          <option>South Africa</option><option>Botswana</option><option>Eswatini</option><option>Lesotho</option>
+          <option>Namibia</option><option>Zimbabwe</option><option>Mozambique</option><option>Zambia</option>
+          <option>United Kingdom</option><option>United States</option><option>Australia</option><option>Canada</option>
+        </datalist>
+      </div>
+    </div>
+
     <div class="tier-options" id="tierOptions">
       <div class="tier-option" data-tier="basic"><div class="name">Basic</div><div class="price">R150</div></div>
       <div class="tier-option" data-tier="pro"><div class="name">Pro</div><div class="price">R280</div></div>
@@ -253,6 +274,29 @@ function updateSecondCategoryVisibility() {
   document.getElementById('secondCategoryField').classList.toggle('section-hidden', !show);
   const showReel = SELECTED_TYPE === 'individual' && SELECTED_TIER === 'premium';
   document.getElementById('demoReelField').classList.toggle('section-hidden', !showReel);
+  updateLocationFields();
+}
+
+// Street address is a business-premises field. Individuals only give suburb/
+// town/province/country, so their home address is never captured or published.
+function updateLocationFields() {
+  const isBusiness = SELECTED_TYPE === 'business';
+  document.getElementById('streetAddressField').classList.toggle('section-hidden', !isBusiness);
+  if (!isBusiness) document.getElementById('profileStreetAddress').value = '';
+  document.getElementById('locationNote').textContent = isBusiness
+    ? 'Your business location may be used to display your profile on the Directory Map and help nearby users discover your business. You can leave this blank and still create your profile.'
+    : 'Adding your location allows your Directory profile to appear on the Map View and in relevant Near Me searches. We only ask for your area — never a street address. You can leave this blank and still create your profile.';
+}
+
+async function loadProvinces() {
+  const select = document.getElementById('profileProvince');
+  try {
+    const data = await api('/directory/provinces');
+    select.innerHTML = '<option value="">Select province</option>' +
+      (data.provinces || []).map((p) => `<option value="${p}">${p}</option>`).join('');
+  } catch (err) {
+    select.innerHTML = '<option value="">Select province</option>';
+  }
 }
 
 document.getElementById('profileTypeOptions').addEventListener('click', (e) => {
@@ -351,6 +395,8 @@ document.querySelectorAll('#tierOptions .tier-option').forEach((el) => {
 
 renderTierPrices();
 loadCategories();
+loadProvinces();
+updateLocationFields();
 
 document.getElementById('createProfileBtn').addEventListener('click', async () => {
   hideError('packageError');
@@ -373,7 +419,17 @@ document.getElementById('createProfileBtn').addEventListener('click', async () =
     const secondaryCategoryId = document.getElementById('profileSecondCategory').value || null;
     const data = await api('/profiles', {
       method: 'POST',
-body: JSON.stringify({ displayName, packageTier: SELECTED_TIER, type: SELECTED_TYPE, categoryId, secondaryCategoryId, demoReelUrl: document.getElementById('profileDemoReelUrl').value.trim() || undefined }),
+body: JSON.stringify({
+        displayName, packageTier: SELECTED_TIER, type: SELECTED_TYPE, categoryId, secondaryCategoryId,
+        demoReelUrl: document.getElementById('profileDemoReelUrl').value.trim() || undefined,
+        // Optional location — sent only when filled in. The server ignores a
+        // street address on an individual listing.
+        streetAddress: document.getElementById('profileStreetAddress').value.trim() || undefined,
+        suburb: document.getElementById('profileSuburb').value.trim() || undefined,
+        city: document.getElementById('profileCity').value.trim() || undefined,
+        province: document.getElementById('profileProvince').value || undefined,
+        country: document.getElementById('profileCountry').value.trim() || undefined,
+      }),
     });
     CURRENT_PROFILE_ID = data.profile.id;
     showOrderDetails(

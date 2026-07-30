@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { coordsForPlace } = require('../utils/saPlaces');
+const { resolveLocation } = require('../utils/saPlaces');
 
 const router = express.Router();
 
@@ -29,7 +29,8 @@ async function locatedListings(category) {
     where += ` AND c.name = $${values.length}`;
   }
   const result = await pool.query(
-    `SELECT p.id, p.slug, p.display_name, p.city, p.province,
+    `SELECT p.id, p.slug, p.display_name, p.type, p.street_address, p.suburb,
+            p.city, p.province, p.country,
             p.latitude, p.longitude, p.deaf_owned_verified, p.verified,
             c.name AS category
        FROM profiles p
@@ -43,15 +44,32 @@ async function locatedListings(category) {
     let lng = row.longitude === null ? null : Number(row.longitude);
     let approximate = false;
     if (lat === null || lng === null) {
-      const fromTown = coordsForPlace(row.city);
-      if (fromTown) {
-        [lat, lng] = fromTown;
-        // Flagged so the UI can say "approximate — town centre" rather than
+      // Suburb first, then town — so "Sandton" places more precisely than
+      // "Johannesburg" when the member gave us a suburb.
+      const resolved = resolveLocation({ suburb: row.suburb, city: row.city });
+      if (resolved) {
+        [lat, lng] = resolved.coords;
+        // Flagged so the UI can say "approximate — area centre" rather than
         // implying we know the exact street.
         approximate = true;
       }
     }
-    return { ...row, latitude: lat, longitude: lng, approximate };
+    // Privacy: a street address is only ever published for businesses. An
+    // individual's is never returned by the API, so it cannot leak to the map
+    // even if one somehow got stored.
+    const isBusiness = row.type === 'business';
+    const streetAddress = isBusiness ? row.street_address : null;
+    const locationLabel = [
+      streetAddress, row.suburb, row.city, row.province, row.country,
+    ].filter(Boolean).join(', ') || null;
+    return {
+      ...row,
+      street_address: streetAddress,
+      latitude: lat,
+      longitude: lng,
+      approximate,
+      locationLabel,
+    };
   });
 }
 

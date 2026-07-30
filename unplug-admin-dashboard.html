@@ -514,6 +514,24 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field" style="margin-top:12px;"><label>Achievements</label><textarea id="dpAchievements" rows="3"></textarea></div>
           <div class="field" style="margin-top:12px;"><label>Career</label><textarea id="dpCareer" rows="3"></textarea></div>
           <div class="field" style="margin-top:12px;"><label>Quote</label><input id="dpQuote"></div>
+
+          <!-- LOCATION — optional; drives the Directory Map View and Near Me. -->
+          <div style="border-top:1px solid var(--paper-line); margin-top:16px; padding-top:12px;">
+            <div style="font-weight:700; font-size:13.5px;">Location <span style="font-weight:400; color:var(--slate);">— optional, powers Map View &amp; Near Me</span>
+              <span id="dpMapStatus" style="margin-left:10px; font-size:12px; font-weight:400;"></span>
+            </div>
+            <div class="field section-hidden" id="dpStreetField" style="margin-top:10px;"><label>Street address <span style="font-weight:400; color:var(--slate);">— business listings only</span></label><input id="dpStreetAddress" maxlength="200"></div>
+            <div class="form-row" style="margin-top:10px;">
+              <div><label>Suburb</label><input id="dpSuburb" maxlength="120"></div>
+              <div><label>Town / City</label><input id="dpCity" maxlength="120"></div>
+            </div>
+            <div class="form-row" style="margin-top:10px;">
+              <div><label>Province</label><select id="dpProvince"><option value="">— none —</option></select></div>
+              <div><label>Country</label><input id="dpCountry" maxlength="80"></div>
+            </div>
+            <button class="btn btn-line" type="button" style="width:auto; margin-top:10px; font-size:12px;" id="dpRemoveLocationBtn">Remove location</button>
+          </div>
+
           <button class="btn btn-solid" style="width:auto; margin-top:14px;" id="dpSaveBtn">Save profile</button>
           <button class="btn btn-line" style="width:auto; margin-top:14px;" id="dpDiscardBtn">Discard changes</button>
           <span id="dpNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
@@ -1687,6 +1705,36 @@ document.getElementById('dpPicker').addEventListener('change', (e) => {
   dpLoadProfile(Number(id), opt.getAttribute('data-slug'));
 });
 
+let DP_TYPE = 'individual';
+let DP_PROVINCES = null;
+
+// Province options come from the API, so they always match what it validates.
+async function dpFillProvinces(selected) {
+  const sel = document.getElementById('dpProvince');
+  if (!DP_PROVINCES) {
+    try { DP_PROVINCES = (await api('/directory/provinces')).provinces || []; }
+    catch (e) { DP_PROVINCES = []; }
+  }
+  sel.innerHTML = '<option value="">— none —</option>' +
+    DP_PROVINCES.map((p) => `<option value="${escapeHtmlAdmin(p)}"${p === selected ? ' selected' : ''}>${escapeHtmlAdmin(p)}</option>`).join('');
+}
+
+// Tells the admin whether this listing will actually get a map marker, and if
+// not, why — so a failed location can be spotted and corrected here.
+function dpShowMapStatus(p) {
+  const el = document.getElementById('dpMapStatus');
+  const hasCoords = p.latitude !== null && p.latitude !== undefined
+    && p.longitude !== null && p.longitude !== undefined;
+  const hasPlace = !!(p.suburb || p.city);
+  if (hasCoords) {
+    el.innerHTML = '<span style="color:green;">✓ On the map</span> <span style="color:#666;">(exact coordinates)</span>';
+  } else if (hasPlace) {
+    el.innerHTML = '<span style="color:green;">✓ On the map</span> <span style="color:#666;">(approximate — area centre from suburb/town)</span>';
+  } else {
+    el.innerHTML = '<span style="color:#a15c00;">⚠ Not on the map</span> <span style="color:#666;">— add a suburb or town to place this listing</span>';
+  }
+}
+
 async function dpLoadProfile(id, slug) {
   DP_CURRENT = { id, slug };
   const note = document.getElementById('dpNote');
@@ -1706,6 +1754,18 @@ async function dpLoadProfile(id, slug) {
     document.getElementById('dpQuote').value = p.quote || '';
     document.getElementById('dpFeatureUpload').innerHTML = UnplugUpload.fieldHtml('dpFeature', p.feature_image_url || '');
     document.getElementById('dpGalleryUpload').innerHTML = UnplugUpload.fieldHtml('dpGalleryImage', '');
+
+    // Location. Street address is a business-only field, so it's hidden for
+    // individual listings (their home address is never stored or shown).
+    DP_TYPE = p.type || 'individual';
+    document.getElementById('dpStreetField').classList.toggle('section-hidden', DP_TYPE !== 'business');
+    document.getElementById('dpStreetAddress').value = p.street_address || '';
+    document.getElementById('dpSuburb').value = p.suburb || '';
+    document.getElementById('dpCity').value = p.city || '';
+    document.getElementById('dpCountry').value = p.country || '';
+    await dpFillProvinces(p.province || '');
+    dpShowMapStatus(p);
+
     document.getElementById('dpEditorPanel').style.display = 'block';
     document.getElementById('dpGalleryPanel').style.display = 'block';
     // Snapshot the values as loaded, so a save can be undone and the form can
@@ -1763,7 +1823,17 @@ document.getElementById('dpSaveBtn').addEventListener('click', async () => {
     career: document.getElementById('dpCareer').value.trim(),
     quote: document.getElementById('dpQuote').value.trim(),
     featureImageUrl: UnplugUpload.valueOf(document.getElementById('dpFeatureUpload')) || null,
+    // Location — optional; blank values clear it (the API stores NULL) and the
+    // listing simply drops off the map while staying in the Directory.
+    suburb: document.getElementById('dpSuburb').value.trim(),
+    city: document.getElementById('dpCity').value.trim(),
+    province: document.getElementById('dpProvince').value,
+    country: document.getElementById('dpCountry').value.trim(),
   };
+  // Street address only exists for business listings.
+  if (DP_TYPE === 'business') {
+    payload.streetAddress = document.getElementById('dpStreetAddress').value.trim();
+  }
   // Only send category when one is chosen — the empty option means "leave as is".
   const catVal = document.getElementById('dpCategory').value;
   if (catVal) payload.categoryId = Number(catVal);
@@ -1793,6 +1863,26 @@ document.getElementById('dpSaveBtn').addEventListener('click', async () => {
 });
 
 // Discard unsaved edits — reload the profile's saved values into the form.
+// Clears the location fields and saves — listing stays in the Directory, it
+// just stops appearing on the Map View and in Near Me results.
+document.getElementById('dpRemoveLocationBtn').addEventListener('click', async () => {
+  if (!DP_CURRENT) return;
+  if (!confirm('Remove this listing\'s location? It stays in the Directory but will no longer appear on the Map View or in Near Me results.')) return;
+  document.getElementById('dpStreetAddress').value = '';
+  document.getElementById('dpSuburb').value = '';
+  document.getElementById('dpCity').value = '';
+  document.getElementById('dpProvince').value = '';
+  document.getElementById('dpCountry').value = '';
+  try {
+    await api(`/profiles/${DP_CURRENT.id}`, { method: 'PATCH', body: JSON.stringify({
+      streetAddress: '', suburb: '', city: '', province: '', country: '',
+      latitude: null, longitude: null,
+    }) });
+    showToast('Location removed.');
+    dpLoadProfile(DP_CURRENT.id, DP_CURRENT.slug);
+  } catch (err) { showToast(err.message, true); }
+});
+
 document.getElementById('dpDiscardBtn').addEventListener('click', () => {
   if (DP_CURRENT) dpLoadProfile(DP_CURRENT.id, DP_CURRENT.slug);
 });
