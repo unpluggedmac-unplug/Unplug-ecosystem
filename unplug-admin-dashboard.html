@@ -25,6 +25,12 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .field{ margin-bottom:16px; }
 .field label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:6px; }
 .field input{ width:100%; border:1px solid var(--paper-line); padding:10px 12px; font-size:14px; font-family:'Inter',sans-serif; }
+/* .field only styled <input>; selects and textareas in admin forms were falling
+   back to browser defaults and looking out of place next to them. */
+.field select, .field textarea{ width:100%; border:1px solid var(--paper-line); padding:10px 12px; font-size:14px; font-family:'Inter',sans-serif; background:#fff; }
+.field textarea{ resize:vertical; }
+/* Two-up form layout that collapses on narrow screens. */
+.grid-2{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:0 14px; }
 .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
 .btn-solid{ background:var(--red); color:#fff; border-color:var(--red); width:100%; }
 .btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
@@ -203,6 +209,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="activitylog">Activity Log</a>
+    <a data-section="competitions">Competitions</a>
     <a data-section="vouchers">Vouchers</a>
     <!-- Same-tab link to the public site. No data-section, so the section
          router below ignores it and the browser just navigates. The session
@@ -1107,6 +1114,30 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="pricingBody" style="padding:0;">Loading…</div>
       </div>
     </div>
+
+    <!-- COMPETITIONS -->
+    <div class="admin-section" id="section-competitions">
+      <div class="main-head"><div><h1>Competitions</h1><p>Add a competition, or change an existing one's name, dates, entry fee and status. <strong>Open</strong> shows it on the site; <strong>Draft</strong> and <strong>Closed</strong> hide it while keeping every entry and vote. Changing the entry fee only affects <strong>new</strong> entries — anyone who has already entered keeps the fee they were charged. A competition's web address can't be changed, because the site's pages look it up by that name.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Add a competition</h3></div>
+        <div class="panel-body">
+          <div class="grid-2">
+            <div class="field"><label>Name</label><input id="compNewName" placeholder="e.g. Spring Impact Awards"></div>
+            <div class="field"><label>Web address <span style="font-weight:400; color:var(--slate);">— lowercase, hyphens, can't be changed later</span></label><input id="compNewSlug" placeholder="spring-impact-awards"></div>
+            <div class="field"><label>Opens</label><input id="compNewOpens" type="date"></div>
+            <div class="field"><label>Closes</label><input id="compNewCloses" type="date"></div>
+            <div class="field"><label>Entry fee (R)</label><input id="compNewFee" type="number" min="0" step="0.01" value="0"></div>
+            <div class="field"><label>Status</label><select id="compNewStatus"><option value="draft">Draft — hidden</option><option value="open">Open — live on the site</option><option value="closed">Closed — hidden</option></select></div>
+          </div>
+          <div class="field" style="margin-top:10px;"><label>Description</label><textarea id="compNewDesc" rows="2" placeholder="One line shown under the competition name."></textarea></div>
+          <button class="approve" id="compAddBtn" style="margin-top:10px;">Add competition</button>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>All competitions</h3></div>
+        <div class="panel-body" id="compBody" style="padding:0;">Loading…</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1366,6 +1397,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'projects') loadProjectsAdmin();
     if (section === 'gallerymgmt') loadGalleryAdmin();
     if (section === 'pricing') loadServicePricing();
+    if (section === 'competitions') loadCompetitions();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
     if (section === 'edcal') loadEdcalDates();
@@ -3149,6 +3181,16 @@ function escapeHtmlAdmin(str) {
   const div = document.createElement('div');
   div.textContent = str == null ? '' : String(str);
   return div.innerHTML;
+}
+
+// escapeHtmlAdmin goes through textContent, which escapes < > & but NOT quotes
+// — so it is not safe inside an attribute: a value containing a double quote
+// would close the attribute early. Use this for anything going into value="…"
+// or title="…".
+function escapeAttrAdmin(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ---------------------------------------------------------------------------
@@ -4999,6 +5041,144 @@ async function saveServicePackage(id) {
     loadServicePricing();
   } catch (e) { showToast(e.message || 'Could not save.', true); }
 }
+
+// ---------------------------------------------------------------------------
+// Competitions — add, edit, close and delete.
+//
+// The two things this screen deliberately will not let you do, both enforced
+// again on the server: change a competition's web address (page code looks
+// competitions up by it) and delete one that has entries (entries and votes
+// cascade, and they carry payments). Both surface as a disabled control with
+// the reason, rather than a button that fails when clicked.
+// ---------------------------------------------------------------------------
+const COMP_STATUS_LABEL = { draft: 'Draft — hidden', open: 'Open — live on the site', closed: 'Closed — hidden' };
+
+// <input type="date"> wants YYYY-MM-DD in local time; toISOString() would shift
+// a South African date back a day for anything before 02:00.
+function compDateInputValue(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+async function loadCompetitions() {
+  const body = document.getElementById('compBody');
+  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  try {
+    const d = await api('/competitions/admin/all');
+    const rows = d.competitions || [];
+    if (!rows.length) { body.innerHTML = '<div style="padding:16px; color:#666;">No competitions yet.</div>'; return; }
+    body.innerHTML = rows.map(competitionRowHtml).join('');
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load competitions.')}</div>`;
+  }
+}
+
+function competitionRowHtml(c) {
+  const entries = c.entry_count || 0;
+  const paid = c.paid_entry_count || 0;
+  // Say WHY delete is unavailable, so nobody hunts for a missing button.
+  let deleteBtn;
+  if (c.builtIn) {
+    deleteBtn = `<button class="reject" disabled title="Built into the site — set it to Closed to hide it instead." style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">Delete</button>`;
+  } else if (entries > 0) {
+    deleteBtn = `<button class="reject" disabled title="${entries} ${entries === 1 ? 'entry' : 'entries'} would be deleted along with their votes. Set it to Closed instead." style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">Delete</button>`;
+  } else {
+    // Name is read from the row at click time rather than interpolated into the
+    // handler — a competition called O'Brien's would break the quoting here.
+    deleteBtn = `<button class="reject" style="padding:5px 12px;" onclick="deleteCompetition(${c.id})">Delete</button>`;
+  }
+
+  const statusOpts = Object.keys(COMP_STATUS_LABEL).map((s) =>
+    `<option value="${s}"${c.status === s ? ' selected' : ''}>${escapeHtmlAdmin(COMP_STATUS_LABEL[s])}</option>`).join('');
+
+  return `<div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);" data-comp="${c.id}">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+      <div style="font-weight:700;">${escapeHtmlAdmin(c.name)}
+        ${c.builtIn ? '<span style="font-weight:400; font-size:11px; color:var(--slate); border:1px solid var(--paper-line); padding:1px 6px; margin-left:6px;">Built in</span>' : ''}
+      </div>
+      <div style="font-size:12px; color:#666;">
+        /${escapeHtmlAdmin(c.slug)} · ${entries} ${entries === 1 ? 'entry' : 'entries'}${paid > 0 ? ` (${paid} paid)` : ''}
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Name</label><input class="comp-name" value="${escapeAttrAdmin(c.name)}"></div>
+      <div class="field"><label>Status</label><select class="comp-status">${statusOpts}</select></div>
+      <div class="field"><label>Opens</label><input class="comp-opens" type="date" value="${compDateInputValue(c.opens_at)}"></div>
+      <div class="field"><label>Closes</label><input class="comp-closes" type="date" value="${compDateInputValue(c.closes_at)}"></div>
+      <div class="field"><label>Entry fee (R) <span style="font-weight:400; text-transform:none; letter-spacing:0;">— new entries only</span></label><input class="comp-fee" type="number" min="0" step="0.01" value="${Number(c.entry_fee).toFixed(2)}"></div>
+    </div>
+    <div class="field"><label>Description</label><textarea class="comp-desc" rows="2">${escapeHtmlAdmin(c.description || '')}</textarea></div>
+    <button class="approve" style="padding:5px 12px;" onclick="saveCompetition(${c.id})">Save changes</button>
+    ${deleteBtn}
+  </div>`;
+}
+
+async function saveCompetition(id) {
+  const row = document.querySelector(`div[data-comp="${id}"]`);
+  if (!row) return;
+  const name = row.querySelector('.comp-name').value.trim();
+  if (!name) { showToast('Give the competition a name.', true); return; }
+  const opens = row.querySelector('.comp-opens').value;
+  const closes = row.querySelector('.comp-closes').value;
+  if (opens && closes && closes <= opens) {
+    showToast('The closing date must be after the opening date.', true); return;
+  }
+  const fee = Number(row.querySelector('.comp-fee').value);
+  if (!Number.isFinite(fee) || fee < 0) { showToast('Entry fee must be zero or more.', true); return; }
+
+  try {
+    await api(`/competitions/${id}`, { method: 'PATCH', body: JSON.stringify({
+      name,
+      description: row.querySelector('.comp-desc').value,
+      status: row.querySelector('.comp-status').value,
+      entryFee: fee,
+      // End of day, so a competition is open for the whole of its closing date.
+      ...(opens ? { opensAt: opens + 'T00:00:00' } : {}),
+      ...(closes ? { closesAt: closes + 'T23:59:59' } : {}),
+    }) });
+    showToast('Competition saved.');
+    loadCompetitions();
+  } catch (e) { showToast(e.message || 'Could not save.', true); }
+}
+
+async function deleteCompetition(id) {
+  const row = document.querySelector(`div[data-comp="${id}"]`);
+  const name = row ? row.querySelector('.comp-name').value : 'this competition';
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    await api(`/competitions/${id}`, { method: 'DELETE' });
+    showToast('Competition deleted.');
+    loadCompetitions();
+  } catch (e) { showToast(e.message || 'Could not delete.', true); }
+}
+
+document.getElementById('compAddBtn').addEventListener('click', async () => {
+  const name = document.getElementById('compNewName').value.trim();
+  const slug = document.getElementById('compNewSlug').value.trim().toLowerCase();
+  const opens = document.getElementById('compNewOpens').value;
+  const closes = document.getElementById('compNewCloses').value;
+  if (!name || !slug || !opens || !closes) { showToast('Name, web address, opens and closes are all needed.', true); return; }
+  if (!/^[a-z0-9-]+$/.test(slug)) { showToast('The web address may use lowercase letters, numbers and hyphens only.', true); return; }
+  if (closes <= opens) { showToast('The closing date must be after the opening date.', true); return; }
+
+  try {
+    await api('/competitions', { method: 'POST', body: JSON.stringify({
+      name, slug,
+      description: document.getElementById('compNewDesc').value,
+      opensAt: opens + 'T00:00:00',
+      closesAt: closes + 'T23:59:59',
+      entryFee: Number(document.getElementById('compNewFee').value) || 0,
+      status: document.getElementById('compNewStatus').value,
+    }) });
+    showToast('Competition added.');
+    ['compNewName', 'compNewSlug', 'compNewOpens', 'compNewCloses', 'compNewDesc'].forEach((f) => {
+      document.getElementById(f).value = '';
+    });
+    loadCompetitions();
+  } catch (e) { showToast(e.message || 'Could not add competition.', true); }
+});
 </script>
 <script src="accessibility.js" defer></script>
 </body>

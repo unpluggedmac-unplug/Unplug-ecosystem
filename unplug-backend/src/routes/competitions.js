@@ -74,17 +74,181 @@ router.get('/competitions/:slug', async (req, res, next) => {
 // slug/date logic below, but still gated by requireRole('admin').
 router.post('/competitions', requireRole('admin'), async (req, res, next) => {
   try {
-    const { name, slug, description, opensAt, closesAt, entryFee } = req.body;
+    const { name, slug, description, opensAt, closesAt, entryFee, status } = req.body;
     if (!name || !slug || !opensAt || !closesAt) {
       return res.status(400).json({ error: 'name, slug, opensAt, and closesAt are required.' });
     }
+    // The slug ends up in URLs and is looked up by page code, so keep it to a
+    // predictable shape rather than storing whatever was typed.
+    const cleanSlug = String(slug).trim().toLowerCase();
+    if (!/^[a-z0-9-]+$/.test(cleanSlug)) {
+      return res.status(400).json({ error: 'The web address may use lowercase letters, numbers and hyphens only.' });
+    }
+    if (status !== undefined && !['draft', 'open', 'closed'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be draft, open or closed.' });
+    }
+    if (entryFee != null && (isNaN(Number(entryFee)) || Number(entryFee) < 0)) {
+      return res.status(400).json({ error: 'Entry fee must be zero or more.' });
+    }
+    if (new Date(closesAt) <= new Date(opensAt)) {
+      return res.status(400).json({ error: 'The closing date must be after the opening date.' });
+    }
     const result = await pool.query(
       `INSERT INTO competitions (name, slug, description, opens_at, closes_at, status, entry_fee)
-       VALUES ($1, $2, $3, $4, $5, 'open', $6)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [name, slug, description || null, opensAt, closesAt, entryFee != null ? entryFee : 50.00]
+      [String(name).trim().slice(0, 160), cleanSlug, description || null, opensAt, closesAt,
+       status || 'open', entryFee != null ? entryFee : 50.00]
     );
     res.status(201).json({ competition: result.rows[0] });
+  } catch (err) {
+    if (err.code === '23505') { // unique_violation on slug
+      return res.status(409).json({ error: 'A competition already uses that web address — pick another.' });
+    }
+    next(err);
+  }
+});
+
+// Competitions whose slug is wired into page code (the Competitions page reads
+// 'the-arena'; the Top 10 page reads 'top-10'; free Arena credits key off
+// 'the-arena' in the entry route above). They can be edited and closed like any
+// other, but not deleted — removing one would leave those pages with nothing to
+// load.
+const BUILT_IN_SLUGS = ['the-arena', 'top-10'];
+
+// GET /competitions/admin/all — admin list. Unlike the public route this
+// returns every competition whatever its status, plus the entry counts the
+// admin needs to judge whether a competition is safe to delete.
+//
+// Deliberately namespaced under /competitions rather than /admin: the /admin
+// router is mounted first in app.js, so an /admin/competitions path here would
+// only work by falling through it, and would break silently the day someone
+// adds a catch-all there. Three segments also keeps it clear of the
+// /competitions/:slug route, which only ever matches two.
+router.get('/competitions/admin/all', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.name, c.slug, c.description, c.opens_at, c.closes_at,
+              c.status, c.entry_fee, c.created_at,
+              COUNT(ce.id)::int AS entry_count,
+              COUNT(ce.id) FILTER (WHERE ce.status <> 'awaiting_payment')::int AS paid_entry_count
+         FROM competitions c
+         LEFT JOIN competition_entries ce ON ce.competition_id = c.id
+        GROUP BY c.id
+        ORDER BY c.closes_at DESC`
+    );
+    res.json({
+      competitions: result.rows.map((r) => ({
+        ...r,
+        entryFee: Number(r.entry_fee),
+        builtIn: BUILT_IN_SLUGS.includes(r.slug),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /competitions/:id — admin edits a competition.
+//
+// The slug is deliberately NOT editable. It is the competition's identity: page
+// code looks competitions up by slug, so renaming one would break the
+// Competitions or Top 10 page with no error to explain why.
+//
+// Changing entry_fee only affects FUTURE entries. Each entry snapshots the fee
+// it was created with (see the entry route above) and payments charge from that
+// snapshot, so raising the price never changes what an existing entrant owes or
+// already paid.
+router.patch('/competitions/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await pool.query('SELECT * FROM competitions WHERE id = $1', [id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Competition not found.' });
+
+    const b = req.body;
+    if (b.slug !== undefined && b.slug !== existing.rows[0].slug) {
+      return res.status(400).json({
+        error: 'A competition\'s web address (slug) cannot be changed — pages look it up by that name.',
+      });
+    }
+    if (b.status !== undefined && !['draft', 'open', 'closed'].includes(b.status)) {
+      return res.status(400).json({ error: 'Status must be draft, open or closed.' });
+    }
+    if (b.name !== undefined && !String(b.name).trim()) {
+      return res.status(400).json({ error: 'Give the competition a name.' });
+    }
+    if (b.entryFee !== undefined && (isNaN(Number(b.entryFee)) || Number(b.entryFee) < 0)) {
+      return res.status(400).json({ error: 'Entry fee must be zero or more.' });
+    }
+
+    // Only touch the fields actually sent, so a form that omits one can't blank it.
+    const sets = [];
+    const vals = [];
+    const put = (col, val) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
+    if (b.name !== undefined) put('name', String(b.name).trim().slice(0, 160));
+    if (b.description !== undefined) put('description', String(b.description || '').trim() || null);
+    if (b.opensAt !== undefined) put('opens_at', b.opensAt);
+    if (b.closesAt !== undefined) put('closes_at', b.closesAt);
+    if (b.status !== undefined) put('status', b.status);
+    if (b.entryFee !== undefined) put('entry_fee', Number(b.entryFee));
+    if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+
+    vals.push(id);
+    const result = await pool.query(
+      `UPDATE competitions SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`,
+      vals
+    );
+    // Reject an inverted window rather than storing dates that would render as
+    // a competition closing before it opens.
+    const row = result.rows[0];
+    if (new Date(row.closes_at) <= new Date(row.opens_at)) {
+      await pool.query('UPDATE competitions SET opens_at = $1, closes_at = $2 WHERE id = $3',
+        [existing.rows[0].opens_at, existing.rows[0].closes_at, id]);
+      return res.status(400).json({ error: 'The closing date must be after the opening date.' });
+    }
+    res.json({ competition: row });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /competitions/:id — admin removes a competition.
+//
+// Guarded on purpose. competition_entries and votes both CASCADE from this row,
+// and entries/votes carry payment_id, so deleting a competition that people
+// have paid to enter would silently destroy the entries and votes those
+// payments were for and leave the payment records pointing at nothing.
+//
+// So: a competition with any entries cannot be deleted — close it instead,
+// which hides it from the public site while keeping every record intact.
+// Delete is for competitions created by mistake.
+router.delete('/competitions/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await pool.query('SELECT slug, name FROM competitions WHERE id = $1', [id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Competition not found.' });
+
+    if (BUILT_IN_SLUGS.includes(existing.rows[0].slug)) {
+      return res.status(400).json({
+        error: `"${existing.rows[0].name}" is built into the site and can't be deleted. Set it to Closed to take it off the public pages.`,
+      });
+    }
+
+    const entries = await pool.query(
+      `SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE status <> 'awaiting_payment')::int AS paid
+         FROM competition_entries WHERE competition_id = $1`,
+      [id]
+    );
+    const { total, paid } = entries.rows[0];
+    if (total > 0) {
+      return res.status(409).json({
+        error: `This competition has ${total} ${total === 1 ? 'entry' : 'entries'}${paid > 0 ? ` (${paid} paid)` : ''}. Deleting it would remove those entries and their votes, so set it to Closed instead — that hides it from the site and keeps the records.`,
+      });
+    }
+
+    await pool.query('DELETE FROM competitions WHERE id = $1', [id]);
+    res.json({ deleted: true });
   } catch (err) {
     next(err);
   }
