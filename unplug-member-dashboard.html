@@ -351,7 +351,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <option value="gallery">Gallery Bundle — R100 for up to 3 photos</option>
           <option value="top10">Top 10 Entry — R100</option>
           <option value="marketplace">Marketplace Poster — R500 for 30 days</option>
-          <option value="ad_banner">Advertising Banner — R300 / R550 / R1000 (7 / 14 / 28 days)</option>
+          <option value="ad_banner">Page Banner — R300 / R550 / R1000 (7 / 14 / 28 days)</option>
         </select>
       </div>
 
@@ -1487,7 +1487,7 @@ function updateSubmitOrderDetails() {
   if (type === 'ad_banner') {
     const duration = Number(document.getElementById('ab-duration').value) || 7;
     const price = _abPrices ? _abPrices[duration] : null;
-    typeEl.textContent = 'Advertising Banner';
+    typeEl.textContent = 'Page Banner';
     descEl.textContent = `Your banner rotates in the chosen ad placement on the live site for ${duration} days, once approved by our team.`;
     priceEl.textContent = price != null ? 'R' + Number(price).toFixed(0) : '—';
     return;
@@ -1529,7 +1529,7 @@ async function refreshSubmitQuote() {
   if (!linkedType) { box.classList.add('section-hidden'); return; }
   box.classList.remove('section-hidden');
   svcEl.textContent = (SUBMIT_SERVICE_INFO[type] && SUBMIT_SERVICE_INFO[type].label)
-    || (type === 'ad_banner' ? 'Advertising Banner' : 'Service');
+    || (type === 'ad_banner' ? 'Page Banner' : 'Service');
   try {
     const body = {
       linkedType,
@@ -1762,7 +1762,7 @@ async function createSubmission(type) {
         startsAt: document.getElementById('ab-start').value || undefined,
       }),
     });
-    return { linkedType: 'ad_banner', linkedId: data.id, label: 'Advertising Banner' };
+    return { linkedType: 'ad_banner', linkedId: data.id, label: 'Page Banner' };
   }
 
   throw new Error('Unknown submission type.');
@@ -1902,8 +1902,11 @@ const MS_SERVICES=[
   { t:'Individuals/Business Listing', d:'Directory profile', href:'unplug-magazine.html?p=directory' },
   { t:'Events', d:'List an event', submit:'event' },
   { t:'Marketplace Listing', d:'Advertise a poster', submit:'marketplace' },
-  { t:'Advertising Banner', d:'R300–R1000, 7/14/28 days', submit:'ad_banner' },
-  { t:'Advertising', d:'Reserve ad space', href:'unplug-magazine.html?p=brandplacement' },
+  // The two advertising options are easy to confuse, so each description says
+  // WHERE it appears: a Page Banner runs on a page of your choosing, while a
+  // Marketplace poster only ever shows on the Marketplace page.
+  { t:'Page Banner', d:'Banner on a page you choose — R300–R1000, 7/14/28 days', submit:'ad_banner' },
+  { t:'Advertising', d:'Poster on the Marketplace page only', href:'unplug-magazine.html?p=brandplacement' },
   { t:'Sponsorship', d:'Partner with us', href:'unplug-magazine.html?p=investors' },
   { t:'Magazine Feature', d:'Get featured', href:'unplug-magazine.html?p=editions' },
   { t:'Competitions', d:'Enter Top 10 / Arena', submit:'top10' },

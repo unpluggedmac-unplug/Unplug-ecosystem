@@ -547,7 +547,7 @@ router.get('/mine', requireAuth, async (req, res, next) => {
       marketplace_listing: 'Marketplace Poster', vote_bundle: 'Vote Bundle',
       article_publish: 'Article Submission', event_listing: 'Event Listing',
       gallery_bundle: 'Gallery Bundle', top10_entry: 'Top 10 Entry',
-      edition_download: 'Edition Download', ad_banner: 'Advertising Banner',
+      edition_download: 'Edition Download', ad_banner: 'Page Banner',
     };
     const payments = rows.rows.map((p) => {
       const cash = Number(p.amount) || 0;
