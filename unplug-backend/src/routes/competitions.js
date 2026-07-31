@@ -390,6 +390,129 @@ router.post('/competitions/:id/admin-entries', requireRole('admin'), async (req,
   }
 });
 
+// GET /competitions/:id/entries/admin — every entry in a competition (or the
+// Top 10 list), whatever its status, with vote totals and whether it was paid
+// for. The admin-facing counterpart to the public list, which only ever shows
+// approved entries.
+router.get('/competitions/:id/entries/admin', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT ce.id, ce.status, ce.entry_fee, ce.created_at, ce.profile_id,
+              ce.manual_name, ce.manual_image_url,
+              COALESCE(p.display_name, ce.manual_name) AS display_name,
+              COALESCE(ce.manual_image_url, p.feature_image_url) AS image_url,
+              p.slug AS profile_slug,
+              COALESCE(SUM(v.bundle_size), 0) AS vote_count,
+              -- Whether real money is attached. Drives whether delete is safe.
+              EXISTS (
+                SELECT 1 FROM payments pay
+                 WHERE pay.linked_type = 'competition_entry' AND pay.linked_id = ce.id
+              ) AS has_payment
+         FROM competition_entries ce
+         LEFT JOIN profiles p ON p.id = ce.profile_id
+         LEFT JOIN votes v ON v.entry_id = ce.id
+        WHERE ce.competition_id = $1
+        GROUP BY ce.id, p.display_name, p.slug, p.feature_image_url
+        ORDER BY vote_count DESC, ce.created_at ASC, ce.id ASC`,
+      [Number(req.params.id)]
+    );
+    // SUM() arrives as a NUMERIC string; cast so "9" can't sort above "10".
+    res.json({
+      entries: result.rows.map((r) => ({ ...r, vote_count: Number(r.vote_count) })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /entries/:id — admin edits an entry: the displayed name, its picture,
+// or its status (which is how an entry is taken off the public list without
+// destroying its votes).
+//
+// For an entry attached to a real Directory profile, the name and photo come
+// from that profile and are edited there — overriding them here would make the
+// Top 10 disagree with the profile it links to.
+router.patch('/entries/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await pool.query(
+      'SELECT id, profile_id FROM competition_entries WHERE id = $1', [id]
+    );
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Entry not found.' });
+
+    const b = req.body;
+    if (b.status !== undefined && !['awaiting_payment', 'pending', 'approved', 'rejected'].includes(b.status)) {
+      return res.status(400).json({ error: 'Status must be awaiting_payment, pending, approved or rejected.' });
+    }
+    const isManual = existing.rows[0].profile_id === null;
+    if (!isManual && (b.manualName !== undefined || b.manualImageUrl !== undefined)) {
+      return res.status(400).json({
+        error: 'This entry is linked to a Directory profile — change its name or photo on the profile itself.',
+      });
+    }
+    if (isManual && b.manualName !== undefined && !String(b.manualName).trim()) {
+      return res.status(400).json({ error: 'A manual entry needs a name.' });
+    }
+
+    const sets = [];
+    const vals = [];
+    const put = (col, val) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
+    if (isManual && b.manualName !== undefined) put('manual_name', String(b.manualName).trim().slice(0, 160));
+    if (isManual && b.manualImageUrl !== undefined) put('manual_image_url', (b.manualImageUrl || '').trim() || null);
+    if (b.status !== undefined) put('status', b.status);
+    if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+
+    vals.push(id);
+    const result = await pool.query(
+      `UPDATE competition_entries SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`,
+      vals
+    );
+    res.json({ entry: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /entries/:id — admin removes an entry.
+//
+// Refused when someone PAID to enter: votes cascade from the entry, and the
+// payment row would be left pointing at nothing. Rejecting instead takes it off
+// the public list and keeps both the entry and the financial record.
+//
+// Admin-added entries (free, entry_fee 0) delete cleanly, which is the common
+// case for fixing a Top 10 mistake.
+router.delete('/entries/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await pool.query(
+      `SELECT ce.id,
+              COALESCE(p.display_name, ce.manual_name) AS display_name,
+              EXISTS (
+                SELECT 1 FROM payments pay
+                 WHERE pay.linked_type = 'competition_entry' AND pay.linked_id = ce.id
+              ) AS has_payment,
+              (SELECT COUNT(*)::int FROM votes v WHERE v.entry_id = ce.id) AS vote_rows
+         FROM competition_entries ce
+         LEFT JOIN profiles p ON p.id = ce.profile_id
+        WHERE ce.id = $1`,
+      [id]
+    );
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Entry not found.' });
+    const e = existing.rows[0];
+
+    if (e.has_payment) {
+      return res.status(409).json({
+        error: `"${e.display_name || 'This entry'}" was paid for. Deleting it would remove the entry its payment refers to, so set it to Rejected instead — that takes it off the list and keeps the record.`,
+      });
+    }
+
+    await pool.query('DELETE FROM competition_entries WHERE id = $1', [id]);
+    res.json({ deleted: true, votesRemoved: e.vote_rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /entries/mine — the authenticated member's own competition entries,
 // at any status, with their current vote count.
 router.get('/entries/mine', requireAuth, async (req, res, next) => {

@@ -303,3 +303,133 @@ test('closing a competition hides it from the public but keeps its entries', asy
   const entries = await pool.query('SELECT COUNT(*)::int AS n FROM competition_entries WHERE competition_id = $1', [rows[0].id]);
   assert.equal(entries.rows[0].n, 1, 'closing destroyed the entries');
 });
+
+// --------------------------------------------------------------- Top 10 entries
+//
+// Admin management of the entries themselves (the Top 10 list is the main user
+// of this). The delete guard matters: votes CASCADE from an entry, and a paid
+// entry is referenced by a payment row.
+
+async function seedEntryFixtures() {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (120, 'entrant2@test', 'x', 'member') ON CONFLICT DO NOTHING`);
+  await pool.query(`INSERT INTO profiles (id, user_id, display_name, slug, package_tier)
+                    VALUES (120, 120, 'Real Profile', 'real-profile', 'basic') ON CONFLICT DO NOTHING`);
+  const { rows } = await pool.query(`SELECT id FROM competitions WHERE slug = 'top-10'`);
+  return rows[0].id;
+}
+
+test('admin can add a manual Top 10 entry with a name and picture', async () => {
+  const compId = await seedEntryFixtures();
+  const r = await req('POST', `/competitions/${compId}/admin-entries`, {
+    token: adminToken,
+    body: { manualName: 'Thandi Mokoena', manualImageUrl: 'https://example.test/t.jpg' },
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.entry.status, 'approved', 'an admin-added entry should be live immediately');
+});
+
+test('the admin entry list shows entries the public list hides', async () => {
+  const compId = await seedEntryFixtures();
+  const added = await req('POST', `/competitions/${compId}/admin-entries`, {
+    token: adminToken, body: { manualName: 'Hidden Person' },
+  });
+  await req('PATCH', `/entries/${added.body.entry.id}`, { token: adminToken, body: { status: 'rejected' } });
+
+  const pub = await req('GET', '/competitions/top-10');
+  assert.ok(!pub.body.entries.some((e) => e.display_name === 'Hidden Person'), 'a rejected entry is still public');
+
+  const adm = await req('GET', `/competitions/${compId}/entries/admin`, { token: adminToken });
+  assert.ok(adm.body.entries.some((e) => e.display_name === 'Hidden Person'), 'admin cannot see the rejected entry');
+});
+
+test('members cannot edit or delete entries', async () => {
+  const compId = await seedEntryFixtures();
+  const added = await req('POST', `/competitions/${compId}/admin-entries`, {
+    token: adminToken, body: { manualName: 'Protected' },
+  });
+  assert.equal((await req('PATCH', `/entries/${added.body.entry.id}`, { token: memberToken, body: { manualName: 'Hacked' } })).status, 403);
+  assert.equal((await req('DELETE', `/entries/${added.body.entry.id}`, { token: memberToken })).status, 403);
+});
+
+test('admin can change a manual entry name and picture', async () => {
+  const compId = await seedEntryFixtures();
+  const added = await req('POST', `/competitions/${compId}/admin-entries`, {
+    token: adminToken, body: { manualName: 'Typo Nmae' },
+  });
+  const r = await req('PATCH', `/entries/${added.body.entry.id}`, {
+    token: adminToken,
+    body: { manualName: 'Correct Name', manualImageUrl: 'https://example.test/fixed.jpg' },
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.entry.manual_name, 'Correct Name');
+  assert.equal(r.body.entry.manual_image_url, 'https://example.test/fixed.jpg');
+});
+
+test('a profile-linked entry refuses a name override', async () => {
+  // Its name comes from the Directory profile; overriding here would make the
+  // Top 10 disagree with the profile it links to.
+  const compId = await seedEntryFixtures();
+  const added = await req('POST', `/competitions/${compId}/admin-entries`, {
+    token: adminToken, body: { profileId: 120 },
+  });
+  const r = await req('PATCH', `/entries/${added.body.entry.id}`, {
+    token: adminToken, body: { manualName: 'Renamed' },
+  });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /profile/i);
+});
+
+test('an admin-added entry can be deleted', async () => {
+  const compId = await seedEntryFixtures();
+  const added = await req('POST', `/competitions/${compId}/admin-entries`, {
+    token: adminToken, body: { manualName: 'Added By Mistake' },
+  });
+  assert.equal((await req('DELETE', `/entries/${added.body.entry.id}`, { token: adminToken })).status, 200);
+
+  const adm = await req('GET', `/competitions/${compId}/entries/admin`, { token: adminToken });
+  assert.ok(!adm.body.entries.some((e) => e.id === added.body.entry.id));
+});
+
+test('an entry someone PAID for cannot be deleted', async () => {
+  const compId = await seedEntryFixtures();
+  const added = await req('POST', `/competitions/${compId}/admin-entries`, {
+    token: adminToken, body: { manualName: 'Paid Entrant' },
+  });
+  const entryId = added.body.entry.id;
+  await pool.query(
+    `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, status)
+     VALUES (120, 250.00, 'eft', 'PAYREF1234', 'competition_entry', $1, 'confirmed')`,
+    [entryId]
+  );
+
+  const r = await req('DELETE', `/entries/${entryId}`, { token: adminToken });
+  assert.equal(r.status, 409);
+  assert.match(r.body.error, /Rejected/, 'the refusal should say what to do instead');
+
+  const still = await pool.query('SELECT COUNT(*)::int AS n FROM competition_entries WHERE id = $1', [entryId]);
+  assert.equal(still.rows[0].n, 1, 'a paid entry was destroyed');
+});
+
+test('rejecting a paid entry hides it but keeps its votes and payment', async () => {
+  const compId = await seedEntryFixtures();
+  const paid = await pool.query(
+    `SELECT ce.id FROM competition_entries ce
+      WHERE ce.competition_id = $1 AND ce.manual_name = 'Paid Entrant' LIMIT 1`, [compId]
+  );
+  const entryId = paid.rows[0].id;
+  await pool.query(`INSERT INTO votes (entry_id, session_id, bundle_size) VALUES ($1, 'sess-x', 3)`, [entryId]);
+
+  await req('PATCH', `/entries/${entryId}`, { token: adminToken, body: { status: 'rejected' } });
+
+  const pub = await req('GET', '/competitions/top-10');
+  assert.ok(!pub.body.entries.some((e) => e.id === entryId), 'a rejected entry is still on the public list');
+
+  const kept = await pool.query(
+    `SELECT (SELECT COUNT(*)::int FROM votes WHERE entry_id = $1) AS votes,
+            (SELECT COUNT(*)::int FROM payments WHERE linked_type = 'competition_entry' AND linked_id = $1) AS pays`,
+    [entryId]
+  );
+  assert.equal(kept.rows[0].votes, 1, 'rejecting destroyed the votes');
+  assert.equal(kept.rows[0].pays, 1, 'rejecting destroyed the payment record');
+});
