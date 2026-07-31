@@ -5354,9 +5354,11 @@ async function edUploadPdf(input, containerId) {
     form.append('file', file);
     // Deliberately NOT using api(): that helper sets a JSON Content-Type, which
     // would corrupt a multipart upload. fetch sets the boundary itself.
-    const res = await fetch(UnplugAPI.getApiBase() + '/uploads/pdf', {
+    // API_BASE / AUTH_TOKEN, not UnplugAPI: this dashboard does not load
+    // unplug-shared.js and keeps its own session in those two variables.
+    const res = await fetch(API_BASE + '/uploads/pdf', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + UnplugAPI.getToken() },
+      headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
       body: form,
     });
     const data = await res.json().catch(() => ({}));
