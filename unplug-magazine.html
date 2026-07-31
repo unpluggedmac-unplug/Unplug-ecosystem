@@ -780,6 +780,20 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* ---- feature-in-edition section (readable card, same style as the
    Ivorymuse card: label, title, image, button, stacked) ---- */
+/* Homepage "Latest Edition" — cover beside the copy on desktop, stacked on
+   phones. The cover keeps a magazine 3:4 portrait so covers of slightly
+   different sizes still line up. */
+.home-edition-card{ display:grid; grid-template-columns:minmax(180px,260px) 1fr; gap:28px; align-items:center; }
+.home-edition-cover{ position:relative; aspect-ratio:3/4; background:var(--paper); border:1px solid var(--paper-line); overflow:hidden; }
+.home-edition-cover img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.home-edition-cover .edition-issue-tag{ position:absolute; left:12px; top:12px; }
+.home-edition-copy h3{ font-family:'Playfair Display',serif; font-size:clamp(22px,2.6vw,30px); line-height:1.2; margin-bottom:6px; }
+.home-edition-meta{ font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--red); margin-bottom:10px; }
+.home-edition-copy p{ color:var(--slate); font-size:15px; line-height:1.6; max-width:56ch; margin-bottom:18px; }
+@media (max-width:720px){
+  .home-edition-card{ grid-template-columns:1fr; gap:18px; }
+  .home-edition-cover{ max-width:220px; }
+}
 .feature-edition-card{ display:flex; flex-direction:column; }
 .feature-edition-title{ font-size:clamp(22px,3vw,32px); font-weight:600; line-height:1.25; color:var(--ink); margin:10px 0 12px; max-width:36ch; }
 .feature-edition-card p{ color:var(--slate); font-size:15px; line-height:1.6; max-width:60ch; margin-bottom:24px; }
@@ -1646,6 +1660,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <p>Want your business featured here? Advertising banners run from R300 (7 days) to R1,000 (28 days) — R550 for 14 days — rotating with other featured advertisers.</p>
       <button class="btn btn-solid" data-page="brandplacement">Advertise Here</button>
     </div>
+  </section>
+
+  <!-- LATEST EDITION — filled by loadLatestEdition() from /editions/latest.
+       Hidden by default and only revealed once a published edition comes back,
+       so a site with nothing published shows no empty shell. Nothing about
+       which edition appears is written here: publishing a newer one changes
+       this section on its own. -->
+  <section class="wrap home-section" id="homeLatestEdition" hidden>
+    <div class="section-head">
+      <span class="eyebrow">Latest Edition</span>
+      <h2>Read this month's issue</h2>
+    </div>
+    <div class="home-edition-card" id="homeLatestEditionCard"></div>
   </section>
 
   <!-- FEATURE IN EDITION SECTION -->
@@ -5109,9 +5136,11 @@ function editionFeatureHtml(edition) {
       <span class="edition-issue-tag" style="position:relative;">Issue No. ${escapeHtml(String(edition.issue_number))}</span>
     </div>
     <div class="edition-feature-copy">
+      ${editionPeriodLabel(edition) ? `<div class="home-edition-meta">${escapeHtml(editionPeriodLabel(edition))}</div>` : ''}
       <h3>${escapeHtml(edition.title)}</h3>
+      ${edition.description ? `<p style="color:var(--slate); font-size:15px; line-height:1.6; max-width:56ch; margin-bottom:16px;">${escapeHtml(edition.description)}</p>` : ''}
       <div class="btn-row">
-        <button class="btn btn-line" onclick="viewEditionOnline(${edition.id}, '${escapeHtml(edition.pdf_url || '')}')">View Online</button>
+        <button class="btn btn-line" onclick="viewEditionOnline(${edition.id})">View Online</button>
         <button class="btn btn-solid" onclick="downloadEdition(${edition.id})">Download — R${Number(edition.download_price).toFixed(0)}</button>
       </div>
     </div>`;
@@ -5124,18 +5153,71 @@ function editionCardHtml(edition) {
       <span class="edition-issue-tag" style="position:relative;">Issue No. ${escapeHtml(String(edition.issue_number))}</span>
     </div>
     <h4>${escapeHtml(edition.title)}</h4>
+    ${editionPeriodLabel(edition) ? `<div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--slate); margin-bottom:8px;">${escapeHtml(editionPeriodLabel(edition))}</div>` : ''}
     <div class="edition-card-actions">
-      <button class="btn-mini btn-mini-line" onclick="viewEditionOnline(${edition.id}, '${escapeHtml(edition.pdf_url || '')}')">View Online</button>
+      <button class="btn-mini btn-mini-line" onclick="viewEditionOnline(${edition.id})">View Online</button>
       <button class="btn-mini btn-mini-solid" onclick="downloadEdition(${edition.id})">R${Number(edition.download_price).toFixed(0)}</button>
     </div>
   </div>`;
 }
 
-function viewEditionOnline(id, pdfUrl) {
-  if (pdfUrl) {
-    window.open(pdfUrl, '_blank');
-  } else {
+// Every edition the page has loaded, by id. The View Online buttons look the
+// PDF up here instead of carrying the URL inside an inline onclick string —
+// a URL containing an apostrophe used to break the generated handler.
+const EDITION_BY_ID = {};
+function rememberEdition(e) { if (e && e.id != null) EDITION_BY_ID[e.id] = e; return e; }
+
+// A readable "August 2026" line, falling back to the publication date when an
+// older edition has no month/year filled in.
+function editionPeriodLabel(e) {
+  if (e.month && e.year) return `${e.month} ${e.year}`;
+  if (e.year) return String(e.year);
+  const d = e.publication_date || e.published_at;
+  return d ? new Date(d).toLocaleDateString('en-ZA', { year: 'numeric', month: 'long' }) : '';
+}
+
+function viewEditionOnline(id) {
+  const pdfUrl = (EDITION_BY_ID[id] || {}).pdf_url;
+  if (!pdfUrl) {
     showToast('This edition has no viewable file yet.', true);
+    return;
+  }
+  // Opened, not downloaded: browsers render a PDF response inline in their own
+  // viewer. Reading online is free — paying is only for keeping a copy.
+  window.open(pdfUrl, '_blank', 'noopener');
+}
+
+// Homepage "Latest Edition". Asks the backend which published edition is
+// newest, so publishing a new one updates the homepage with no code change.
+async function loadLatestEdition() {
+  const section = document.getElementById('homeLatestEdition');
+  const card = document.getElementById('homeLatestEditionCard');
+  if (!section || !card) return;
+  try {
+    const data = await api('/editions/latest');
+    const e = data.edition;
+    if (!e) return; // nothing published yet — leave the section hidden
+    rememberEdition(e);
+
+    const period = editionPeriodLabel(e);
+    card.innerHTML = `
+      <div class="home-edition-cover">
+        ${e.cover_image_url ? `<img src="${escapeHtml(e.cover_image_url)}" alt="Cover of ${escapeHtml(e.title)}" loading="lazy" decoding="async">` : ''}
+        <span class="edition-issue-tag">Issue No. ${escapeHtml(String(e.issue_number))}</span>
+      </div>
+      <div class="home-edition-copy">
+        ${period ? `<div class="home-edition-meta">${escapeHtml(period)}</div>` : ''}
+        <h3>${escapeHtml(e.title)}</h3>
+        ${e.description ? `<p>${escapeHtml(e.description)}</p>` : ''}
+        <div class="btn-row">
+          <button class="btn btn-line" onclick="viewEditionOnline(${e.id})">View Online</button>
+          <button class="btn btn-solid" onclick="downloadEdition(${e.id})">Download — R${Number(e.download_price).toFixed(0)}</button>
+        </div>
+      </div>`;
+    section.hidden = false;
+  } catch (err) {
+    // Leave the section hidden rather than showing a broken panel — the
+    // homepage is fine without it.
   }
 }
 
@@ -5149,6 +5231,8 @@ async function loadEditions(reset) {
   if (reset) editionsPage = 1;
   try {
     const data = await api('/editions?page=' + editionsPage + '&limit=8');
+    // Register every edition so the View Online buttons can find its PDF.
+    data.editions.forEach(rememberEdition);
     const latestEl = document.getElementById('latestEdition');
     const pastEl = document.getElementById('pastEditionsGrid');
     const loadMoreBtn = document.getElementById('editionsLoadMoreBtn');
@@ -6192,6 +6276,7 @@ applyPageCms();
 trackPageView('home');
 loadLiveVisitors();
 loadTopArticleWeek();
+loadLatestEdition();
 loadShoutout();
 setupCalendarEvents();
 loadYoutubeImage();

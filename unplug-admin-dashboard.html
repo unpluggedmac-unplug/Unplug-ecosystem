@@ -209,6 +209,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="activitylog">Activity Log</a>
+    <a data-section="editions">Editions</a>
     <a data-section="competitions">Competitions</a>
     <a data-section="vouchers">Vouchers</a>
     <!-- Same-tab link to the public site. No data-section, so the section
@@ -1115,6 +1116,36 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- EDITIONS -->
+    <div class="admin-section" id="section-editions">
+      <div class="main-head"><div><h1>Editions Management</h1><p>Upload each monthly edition as a PDF and control how it appears on the site. Only <strong>Published</strong> editions are visible to readers — Draft, Unpublished and Archived are hidden but keep everything, including any purchases. The newest published edition automatically becomes the homepage's Latest Edition, so publishing a new one is all it takes to update the homepage.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Upload a new edition</h3></div>
+        <div class="panel-body">
+          <div class="grid-2">
+            <div class="field"><label>Edition title</label><input id="edNewTitle" placeholder="Unplug Magazine — August 2026"></div>
+            <div class="field"><label>Edition number <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional</span></label><input id="edNewNumber" placeholder="Edition 05"></div>
+            <div class="field"><label>Month</label><select id="edNewMonth"></select></div>
+            <div class="field"><label>Year</label><input id="edNewYear" type="number" min="2000" max="2100"></div>
+            <div class="field"><label>Publication date</label><input id="edNewDate" type="date"></div>
+            <div class="field"><label>Download price (R)</label><input id="edNewPrice" type="number" min="0" step="0.01" value="50.00"></div>
+            <div class="field"><label>Status</label><select id="edNewStatus">
+              <option value="published">Published — live on the site</option>
+              <option value="draft">Draft — hidden</option>
+            </select></div>
+          </div>
+          <div class="field"><label>Description</label><textarea id="edNewDesc" rows="2" placeholder="A short line shown under the edition title."></textarea></div>
+          <div class="field"><label>Cover image</label><div id="edNewCover"></div></div>
+          <div class="field"><label>Edition PDF</label><div id="edNewPdf"></div></div>
+          <button class="approve" id="edAddBtn">Add edition</button>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>All editions</h3></div>
+        <div class="panel-body" id="edBody" style="padding:0;">Loading…</div>
+      </div>
+    </div>
+
     <!-- COMPETITIONS -->
     <div class="admin-section" id="section-competitions">
       <div class="main-head"><div><h1>Competitions</h1><p>Add a competition, or change an existing one's name, dates, entry fee and status. <strong>Open</strong> shows it on the site; <strong>Draft</strong> and <strong>Closed</strong> hide it while keeping every entry and vote. Changing the entry fee only affects <strong>new</strong> entries — anyone who has already entered keeps the fee they were charged. A competition's web address can't be changed, because the site's pages look it up by that name.</p>
@@ -1399,6 +1430,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'gallerymgmt') loadGalleryAdmin();
     if (section === 'pricing') loadServicePricing();
     if (section === 'competitions') loadCompetitions();
+    if (section === 'editions') loadEditionsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
     if (section === 'edcal') loadEdcalDates();
@@ -5042,6 +5074,211 @@ async function saveServicePackage(id) {
     loadServicePricing();
   } catch (e) { showToast(e.message || 'Could not save.', true); }
 }
+
+// ---------------------------------------------------------------------------
+// Editions Management — upload monthly PDFs, edit them, publish/archive.
+//
+// The shared UnplugUpload widget handles the cover image, but it posts to
+// /uploads, which only accepts images and caps at 8MB. Edition PDFs go to
+// /uploads/pdf instead, so they get their own small uploader below.
+// ---------------------------------------------------------------------------
+const ED_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+const ED_STATUS_LABEL = {
+  published: 'Published — live on the site',
+  draft: 'Draft — hidden',
+  unpublished: 'Unpublished — hidden',
+  archived: 'Archived — hidden, kept for records',
+};
+
+// One PDF upload field. The chosen file uploads immediately and the resulting
+// URL is parked on the container, so saving the form is just reading it back.
+function edPdfFieldHtml(id, existingUrl) {
+  return `<div class="ed-pdf" id="${id}" data-url="${escapeAttrAdmin(existingUrl || '')}">
+    <input type="file" accept="application/pdf" onchange="edUploadPdf(this, '${id}')" style="font-size:13px;">
+    <span class="ed-pdf-status" style="display:block; font-size:12px; color:#666; margin-top:6px;">
+      ${existingUrl
+        ? `Current file: <a href="${escapeAttrAdmin(existingUrl)}" target="_blank" rel="noopener">view PDF</a> — choose a file to replace it.`
+        : 'No PDF chosen yet. Max 60MB.'}
+    </span>
+  </div>`;
+}
+function edPdfValue(id) {
+  const el = document.getElementById(id);
+  return el ? (el.dataset.url || '') : '';
+}
+
+async function edUploadPdf(input, containerId) {
+  const box = document.getElementById(containerId);
+  const status = box.querySelector('.ed-pdf-status');
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') {
+    status.textContent = 'That is not a PDF. Choose a .pdf file.';
+    input.value = '';
+    return;
+  }
+  status.textContent = `Uploading ${(file.size / (1024 * 1024)).toFixed(1)}MB…`;
+  input.disabled = true;
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    // Deliberately NOT using api(): that helper sets a JSON Content-Type, which
+    // would corrupt a multipart upload. fetch sets the boundary itself.
+    const res = await fetch(UnplugAPI.getApiBase() + '/uploads/pdf', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + UnplugAPI.getToken() },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+    box.dataset.url = data.url;
+    status.innerHTML = `Uploaded — <a href="${escapeAttrAdmin(data.url)}" target="_blank" rel="noopener">view PDF</a>`;
+  } catch (e) {
+    status.textContent = e.message || 'Upload failed.';
+  } finally {
+    input.disabled = false;
+  }
+}
+
+async function loadEditionsAdmin() {
+  // Fill the add-form pickers once.
+  const monthSel = document.getElementById('edNewMonth');
+  if (monthSel && !monthSel.options.length) {
+    const now = new Date();
+    monthSel.innerHTML = ED_MONTHS.map((m, i) =>
+      `<option value="${m}"${i === now.getMonth() ? ' selected' : ''}>${m}</option>`).join('');
+    document.getElementById('edNewYear').value = now.getFullYear();
+    document.getElementById('edNewCover').innerHTML = UnplugUpload.fieldHtml('edCover', '');
+    document.getElementById('edNewPdf').innerHTML = edPdfFieldHtml('edNewPdfBox', '');
+  }
+
+  const body = document.getElementById('edBody');
+  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  try {
+    const d = await api('/editions/admin/all');
+    const rows = d.editions || [];
+    if (!rows.length) { body.innerHTML = '<div style="padding:16px; color:#666;">No editions yet — upload the first one above.</div>'; return; }
+    body.innerHTML = rows.map(editionRowHtml).join('');
+    // Cover/PDF widgets have to be mounted after the rows are in the DOM.
+    rows.forEach((e) => {
+      const cover = document.getElementById(`edCoverBox-${e.id}`);
+      if (cover) cover.innerHTML = UnplugUpload.fieldHtml(`edCover-${e.id}`, e.cover_image_url || '');
+      const pdf = document.getElementById(`edPdfWrap-${e.id}`);
+      if (pdf) pdf.innerHTML = edPdfFieldHtml(`edPdfBox-${e.id}`, e.pdf_url || '');
+    });
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load editions.')}</div>`;
+  }
+}
+
+function editionRowHtml(e) {
+  const purchases = e.purchase_count || 0;
+  // Deleting an edition someone bought would erase their purchase, so the
+  // button says why rather than failing when clicked.
+  const deleteBtn = purchases > 0
+    ? `<button class="reject" disabled title="${purchases} ${purchases === 1 ? 'person has' : 'people have'} bought this edition. Set it to Archived instead." style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">Delete</button>`
+    : `<button class="reject" style="padding:5px 12px;" onclick="deleteEdition(${e.id})">Delete</button>`;
+
+  const monthOpts = ED_MONTHS.map((m) =>
+    `<option value="${m}"${e.month === m ? ' selected' : ''}>${m}</option>`).join('');
+  const statusOpts = Object.keys(ED_STATUS_LABEL).map((s) =>
+    `<option value="${s}"${e.status === s ? ' selected' : ''}>${escapeHtmlAdmin(ED_STATUS_LABEL[s])}</option>`).join('');
+  const pubDate = e.publication_date ? String(e.publication_date).slice(0, 10) : '';
+
+  return `<div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);" data-ed="${e.id}">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+      <div style="font-weight:700;">${escapeHtmlAdmin(e.title)}</div>
+      <div style="font-size:12px; color:#666;">
+        ${e.status === 'published' ? '<span style="color:var(--red); font-weight:700;">Live</span>' : escapeHtmlAdmin(e.status)}
+        · ${purchases} ${purchases === 1 ? 'purchase' : 'purchases'}
+        ${e.pdf_url ? ` · <a href="${escapeAttrAdmin(e.pdf_url)}" target="_blank" rel="noopener">preview PDF</a>` : ''}
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Edition title</label><input class="ed-title" value="${escapeAttrAdmin(e.title)}"></div>
+      <div class="field"><label>Edition number</label><input class="ed-number" value="${escapeAttrAdmin(e.edition_number || '')}"></div>
+      <div class="field"><label>Month</label><select class="ed-month"><option value="">—</option>${monthOpts}</select></div>
+      <div class="field"><label>Year</label><input class="ed-year" type="number" min="2000" max="2100" value="${e.year || ''}"></div>
+      <div class="field"><label>Publication date</label><input class="ed-date" type="date" value="${pubDate}"></div>
+      <div class="field"><label>Download price (R)</label><input class="ed-price" type="number" min="0" step="0.01" value="${Number(e.download_price).toFixed(2)}"></div>
+      <div class="field"><label>Status</label><select class="ed-status">${statusOpts}</select></div>
+      <div class="field"><label>Homepage priority <span style="font-weight:400; text-transform:none; letter-spacing:0;">— higher pins it above newer ones</span></label><input class="ed-order" type="number" value="${e.display_order || 0}"></div>
+    </div>
+    <div class="field"><label>Description</label><textarea class="ed-desc" rows="2">${escapeHtmlAdmin(e.description || '')}</textarea></div>
+    <div class="field"><label>Cover image</label><div id="edCoverBox-${e.id}"></div></div>
+    <div class="field"><label>Edition PDF <span style="font-weight:400; text-transform:none; letter-spacing:0;">— replacing this keeps existing purchases</span></label><div id="edPdfWrap-${e.id}"></div></div>
+    <button class="approve" style="padding:5px 12px;" onclick="saveEdition(${e.id})">Save changes</button>
+    ${deleteBtn}
+  </div>`;
+}
+
+async function saveEdition(id) {
+  const row = document.querySelector(`div[data-ed="${id}"]`);
+  if (!row) return;
+  const title = row.querySelector('.ed-title').value.trim();
+  if (!title) { showToast('Give the edition a title.', true); return; }
+  const price = Number(row.querySelector('.ed-price').value);
+  if (!Number.isFinite(price) || price < 0) { showToast('Price must be zero or more.', true); return; }
+
+  try {
+    await api(`/editions/${id}`, { method: 'PATCH', body: JSON.stringify({
+      title,
+      editionNumber: row.querySelector('.ed-number').value,
+      month: row.querySelector('.ed-month').value,
+      year: row.querySelector('.ed-year').value || null,
+      publicationDate: row.querySelector('.ed-date').value || null,
+      description: row.querySelector('.ed-desc').value,
+      downloadPrice: price,
+      status: row.querySelector('.ed-status').value,
+      displayOrder: Number(row.querySelector('.ed-order').value) || 0,
+      coverImageUrl: UnplugUpload.valueOf(document.getElementById(`edCoverBox-${id}`)) || null,
+      // Only sent when there IS a file, so an empty box can never blank the
+      // PDF on an edition people have already bought.
+      ...(edPdfValue(`edPdfBox-${id}`) ? { pdfUrl: edPdfValue(`edPdfBox-${id}`) } : {}),
+    }) });
+    showToast('Edition saved.');
+    loadEditionsAdmin();
+  } catch (e) { showToast(e.message || 'Could not save.', true); }
+}
+
+async function deleteEdition(id) {
+  const row = document.querySelector(`div[data-ed="${id}"]`);
+  const name = row ? row.querySelector('.ed-title').value : 'this edition';
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    await api(`/editions/${id}`, { method: 'DELETE' });
+    showToast('Edition deleted.');
+    loadEditionsAdmin();
+  } catch (e) { showToast(e.message || 'Could not delete.', true); }
+}
+
+document.getElementById('edAddBtn').addEventListener('click', async () => {
+  const title = document.getElementById('edNewTitle').value.trim();
+  const pdfUrl = edPdfValue('edNewPdfBox');
+  if (!title) { showToast('Give the edition a title.', true); return; }
+  if (!pdfUrl) { showToast('Upload the edition PDF first.', true); return; }
+
+  try {
+    await api('/editions', { method: 'POST', body: JSON.stringify({
+      title,
+      editionNumber: document.getElementById('edNewNumber').value,
+      month: document.getElementById('edNewMonth').value,
+      year: document.getElementById('edNewYear').value || null,
+      publicationDate: document.getElementById('edNewDate').value || null,
+      description: document.getElementById('edNewDesc').value,
+      downloadPrice: Number(document.getElementById('edNewPrice').value),
+      status: document.getElementById('edNewStatus').value,
+      coverImageUrl: UnplugUpload.valueOf(document.getElementById('edNewCover')) || null,
+      pdfUrl,
+    }) });
+    showToast('Edition added.');
+    ['edNewTitle', 'edNewNumber', 'edNewDate', 'edNewDesc'].forEach((f) => { document.getElementById(f).value = ''; });
+    document.getElementById('edNewCover').innerHTML = UnplugUpload.fieldHtml('edCover', '');
+    document.getElementById('edNewPdf').innerHTML = edPdfFieldHtml('edNewPdfBox', '');
+    loadEditionsAdmin();
+  } catch (e) { showToast(e.message || 'Could not add edition.', true); }
+});
 
 // ---------------------------------------------------------------------------
 // Competitions — add, edit, close and delete.
