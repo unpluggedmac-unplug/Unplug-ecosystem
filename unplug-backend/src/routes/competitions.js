@@ -116,6 +116,22 @@ router.post('/competitions', requireRole('admin'), async (req, res, next) => {
 // load.
 const BUILT_IN_SLUGS = ['the-arena', 'top-10'];
 
+// The Top 10 is NOT a competition from the magazine's point of view — it is the
+// Top 10 list, a separate thing with its own page and its own admin screen
+// (Publish → Top 10). It only lives in this table because the live-voting
+// machinery it needs is the competitions/votes system (see the 2026-07-07 note
+// in 013_top10_competition.sql), and its page never shows a closing date or an
+// entry fee — the two things the competitions editor exists to change.
+//
+// So it is hidden from the admin competitions list: showing it there would
+// invite edits to fields nothing renders, and would present the Top 10 and The
+// Arena as the same kind of object when they are not.
+//
+// It is deliberately still returned by the PUBLIC GET /competitions, because
+// the admin Publish section finds the Top 10 by looking its slug up in that
+// list — filtering it out there would break adding entries to the Top 10.
+const MANAGED_ELSEWHERE_SLUGS = ['top-10'];
+
 // GET /competitions/admin/all — admin list. Unlike the public route this
 // returns every competition whatever its status, plus the entry counts the
 // admin needs to judge whether a competition is safe to delete.
@@ -134,8 +150,10 @@ router.get('/competitions/admin/all', requireRole('admin'), async (req, res, nex
               COUNT(ce.id) FILTER (WHERE ce.status <> 'awaiting_payment')::int AS paid_entry_count
          FROM competitions c
          LEFT JOIN competition_entries ce ON ce.competition_id = c.id
+        WHERE c.slug <> ALL($1::text[])
         GROUP BY c.id
-        ORDER BY c.closes_at DESC`
+        ORDER BY c.closes_at DESC`,
+      [MANAGED_ELSEWHERE_SLUGS]
     );
     res.json({
       competitions: result.rows.map((r) => ({

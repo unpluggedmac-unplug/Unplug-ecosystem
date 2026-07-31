@@ -125,6 +125,29 @@ test('the admin list includes every status, not just open ones', async () => {
   assert.ok(adm.body.competitions.some((c) => c.slug === 'hidden-draft'), 'the draft is missing from the admin list');
 });
 
+test('the Top 10 is NOT listed as a competition — it is a separate thing', async () => {
+  // The Top 10 only lives in the competitions table because it reuses the
+  // voting machinery. It has its own page and its own admin screen, and its
+  // page renders neither a closing date nor an entry fee, so it must not
+  // appear in an editor whose whole job is changing those.
+  const { body } = await req('GET', '/competitions/admin/all', { token: adminToken });
+  assert.ok(
+    !body.competitions.some((c) => c.slug === 'top-10'),
+    'the Top 10 is being presented as an editable competition'
+  );
+  assert.ok(body.competitions.some((c) => c.slug === 'the-arena'), 'real competitions should still be listed');
+});
+
+test('the Top 10 is still in the public list, which the Publish screen depends on', async () => {
+  // Admin → Publish finds the Top 10 by looking its slug up in GET
+  // /competitions. Hiding it there too would break adding Top 10 entries.
+  const { body } = await req('GET', '/competitions');
+  assert.ok(
+    body.competitions.some((c) => c.slug === 'top-10'),
+    'the Publish screen can no longer find the Top 10 to add entries to it'
+  );
+});
+
 test('built-in competitions are flagged so the UI can protect them', async () => {
   const { body } = await req('GET', '/competitions/admin/all', { token: adminToken });
   const arena = body.competitions.find((c) => c.slug === 'the-arena');
