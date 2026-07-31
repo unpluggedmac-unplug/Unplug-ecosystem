@@ -131,6 +131,25 @@ nav.main-nav button.active{ color:var(--red); }
 nav.main-nav button.active::after{
   content:""; position:absolute; left:14px; right:14px; bottom:2px; height:2px; background:var(--red);
 }
+/* Account / Dashboard entry point at the end of the main nav. Matches the nav's
+   own type so it reads as navigation, but tinted red and rule-separated so it
+   is clearly an account action rather than another page. */
+nav.main-nav .nav-account{
+  font-family:'Inter',sans-serif; font-size:13px; font-weight:700;
+  letter-spacing:0.03em; text-transform:uppercase;
+  background:none; border:none; cursor:pointer; color:var(--red);
+  padding:10px 14px; text-decoration:none; display:flex; align-items:center; gap:6px;
+  margin-left:6px; border-left:1px solid var(--paper-line);
+}
+nav.main-nav .nav-account:hover{ color:var(--ink); }
+nav.main-nav .nav-signout{ color:var(--slate); font-weight:600; border-left:none; margin-left:0; padding-left:6px; }
+nav.main-nav .nav-signout:hover{ color:var(--red); }
+nav.main-nav .nav-account[hidden]{ display:none; }
+@media (max-width:960px){
+  /* Stacked menu: a top rule reads better than a left one. */
+  nav.main-nav .nav-account{ border-left:none; border-top:1px solid var(--paper-line); margin-left:0; }
+  nav.main-nav .nav-signout{ border-top:none; }
+}
 .header-cta{
   font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;
   background:var(--ink); color:var(--cream); padding:11px 18px; white-space:nowrap;
@@ -1278,6 +1297,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button data-page="about" data-i18n="nav.about">About</button>
       <button data-page="contact" data-i18n="nav.contact">Contact</button>
       <button data-page="refunds" data-i18n="nav.refunds">Terms &amp; Policies</button>
+      <!-- Account entry point. Lives inside the nav (not the header row) so it
+           is automatically inside the hamburger menu on mobile rather than
+           crowding the top bar. Label and destination are filled in by
+           renderAccountNav() once the saved session has been checked; it stays
+           hidden until then so signed-in users never see "Sign In" flash. -->
+      <a class="nav-account" id="navAccount" href="unplug-member-dashboard.html" hidden></a>
+      <button class="nav-account nav-signout" id="navSignOut" hidden>Sign Out</button>
     </nav>
     <label class="lang-picker-wrap">
       <span class="sr-only" data-i18n="ui.language">Language</span>
@@ -6084,15 +6110,65 @@ async function loadTopArticleWeek() {
   }
 }
 
+// Fills in the account item at the end of the main nav.
+//
+// Signed out it offers Sign In; signed in it points at whichever dashboard the
+// account actually belongs to. This is navigation only — the dashboards do
+// their own auth check on load, and the admin dashboard independently rejects
+// any non-admin account, so nothing here grants access.
+function renderAccountNav(user) {
+  const link = document.getElementById('navAccount');
+  const out = document.getElementById('navSignOut');
+  if (!link || !out) return;
+
+  if (!user) {
+    link.textContent = 'Sign In';
+    link.href = MEMBER_DASHBOARD_URL;
+    link.hidden = false;
+    out.hidden = true;
+    return;
+  }
+
+  // Only admins have a separate dashboard; every other role (member, business,
+  // investor, advertiser, consultant) is served by the member dashboard.
+  if (user.role === 'admin') {
+    link.textContent = '⚙️ Admin Dashboard';
+    link.href = 'unplug-admin-dashboard.html';
+  } else if (user.member_type === 'business') {
+    link.textContent = '🏢 Business Dashboard';
+    link.href = MEMBER_DASHBOARD_URL;
+  } else {
+    link.textContent = '👤 Dashboard';
+    link.href = MEMBER_DASHBOARD_URL;
+  }
+  link.hidden = false;
+  out.hidden = false;
+}
+
+(function setupSignOut() {
+  const out = document.getElementById('navSignOut');
+  if (!out) return;
+  out.addEventListener('click', () => {
+    UnplugAPI.setToken(null);
+    document.body.classList.remove('is-member');
+    renderAccountNav(null);
+    showToast('Signed out.');
+  });
+})();
+
 // Pick up a session started on the member dashboard (same origin, same
 // localStorage) so member-only touches like "Save for later" work here too.
 // Silent either way — the magazine itself stays fully readable signed out.
 UnplugAPI.restoreSession(
-  () => {
+  (user) => {
     document.body.classList.add('is-member');
+    renderAccountNav(user);
     loadForYou();
   },
-  () => { document.body.classList.remove('is-member'); }
+  () => {
+    document.body.classList.remove('is-member');
+    renderAccountNav(null);
+  }
 );
 
 // Topic picker toggles open under the "For you" heading.

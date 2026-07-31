@@ -39,6 +39,8 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .sidebar .brand{ font-family:'Playfair Display',serif; font-weight:700; font-size:17px; color:var(--red); margin-bottom:20px; }
 .sidebar a{ display:flex; align-items:center; justify-content:space-between; padding:9px 12px; color:#cfcac0; text-decoration:none; font-size:13px; font-weight:500; cursor:pointer; }
 .sidebar a.active{ background:rgba(210,7,9,0.16); color:var(--cream); border-left:3px solid var(--red); padding-left:9px; }
+.sidebar a.view-site-link{ margin-top:10px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.12); justify-content:flex-start; gap:8px; }
+.sidebar a.view-site-link:hover{ color:var(--cream); }
 .sidebar .foot{ margin-top:auto; font-size:11px; color:#8a8580; }
 .sidebar .foot button{ background:none; border:none; color:#cfcac0; font-size:11px; text-decoration:underline; cursor:pointer; padding:0; margin-top:6px; }
 
@@ -202,6 +204,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
     <a data-section="activitylog">Activity Log</a>
     <a data-section="vouchers">Vouchers</a>
+    <!-- Same-tab link to the public site. No data-section, so the section
+         router below ignores it and the browser just navigates. The session
+         lives in localStorage on the same origin, so coming back to the
+         dashboard does not require signing in again. -->
+    <a class="view-site-link" href="unplug-magazine.html">🌐 View Site</a>
     <div class="foot">
       Signed in as <span id="currentUserEmail"></span>
       <br><button id="logoutBtn">Log out</button>

@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { packagesFor } = require('../utils/servicePackages');
 
 const router = express.Router();
 
@@ -18,12 +19,27 @@ const AD_PLACEMENTS = [
   { key: 'competitions-leaderboard', label: 'Competitions — Leaderboard' },
 ];
 const PLACEMENT_KEYS = AD_PLACEMENTS.map((p) => p.key);
-const DURATIONS = [7, 14, 28];
-const PRICES = { 7: 300.0, 14: 550.0, 28: 1000.0 };
 
 // GET /ad-banners/options — public. Placements + pricing for the buy form.
-router.get('/options', (req, res) => {
-  res.json({ placements: AD_PLACEMENTS, durations: DURATIONS, prices: PRICES });
+//
+// Durations and prices come from the admin-managed service_packages table (the
+// same source resolveAmount() charges from), so an admin price change shows on
+// the buy form and on the invoice together. Hardcoding them here once meant the
+// form could advertise a price the checkout no longer charged.
+router.get('/options', async (req, res, next) => {
+  try {
+    const list = await packagesFor('ad_banner');
+    const prices = {};
+    list.forEach((p) => { prices[p.durationDays] = p.price; });
+    res.json({
+      placements: AD_PLACEMENTS,
+      durations: list.map((p) => p.durationDays),
+      prices,
+      packages: list,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // POST /ad-banners — a signed-in member/business submits a banner. It's created
@@ -35,7 +51,15 @@ router.post('/', requireAuth, async (req, res, next) => {
     const slotKey = (b.slotKey || '').trim();
     if (!PLACEMENT_KEYS.includes(slotKey)) return res.status(400).json({ error: 'Choose a valid placement.' });
     const durationDays = Number(b.durationDays);
-    if (!DURATIONS.includes(durationDays)) return res.status(400).json({ error: 'Duration must be 7, 14 or 28 days.' });
+    // Validate against the packages actually on sale right now, so a package an
+    // admin has switched off can't be bought by re-posting an old form.
+    const onSale = await packagesFor('ad_banner');
+    const chosen = onSale.find((p) => p.durationDays === durationDays);
+    if (!chosen) {
+      return res.status(400).json({
+        error: `Choose one of the available durations: ${onSale.map((p) => p.durationDays).join(', ')} days.`,
+      });
+    }
     const imageUrl = (b.imageUrl || '').trim();
     if (!imageUrl) return res.status(400).json({ error: 'Upload a banner image first.' });
     const linkUrl = (b.linkUrl || '').trim() || null;
@@ -62,7 +86,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       id: result.rows[0].id,
       linkedType: 'ad_banner',
       linkedId: result.rows[0].id,
-      price: PRICES[durationDays],
+      price: chosen.price,
       message: 'Banner created — complete payment, then it goes to admin for approval.',
     });
   } catch (err) { next(err); }
