@@ -433,6 +433,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel">
         <div class="panel-body" id="paymentsBody" style="padding:0;"></div>
       </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>All payments</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:0;">Every payment, newest first — use this to clear out test entries. <strong>Marking a payment Failed</strong> takes it out of the revenue figures and keeps the record, which is usually what you want. <strong>Delete</strong> removes it completely and is refused when something real depends on it: account credit, paid votes, or an edition purchase. Changing a status here never publishes or unlocks anything.</p>
+        </div>
+        <div class="panel-body" id="allPaymentsBody" style="padding:0; border-top:1px solid var(--paper-line);">Loading…</div>
+      </div>
     </div>
 
     <!-- USERS -->
@@ -1454,7 +1462,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'sitesettings') loadSiteSettings();
     if (section === 'halloffame') loadHallOfFame();
     if (section === 'birthdays') loadBirthdays();
-    if (section === 'payments') loadPendingEft();
+    if (section === 'payments') { loadPendingEft(); loadAllPayments(); }
     if (section === 'users') loadUsers();
     if (section === 'consultants') loadConsultants();
     if (section === 'notifications') loadNotifications();
@@ -4391,6 +4399,74 @@ async function loadPendingEft() {
     body.appendChild(table);
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// All payments — correct a status, or clear out a test payment.
+//
+// Delete is offered, but the server refuses it whenever the payment is part of
+// something real (account credit, paid votes, an edition purchase). Rather than
+// hiding the button, the refusal comes back as a plain message saying to mark
+// it Failed instead — which is the correct action for a real payment anyway.
+// ---------------------------------------------------------------------------
+const PAY_STATUS_LABEL = { pending: 'Pending', confirmed: 'Confirmed', failed: 'Failed / test' };
+
+async function loadAllPayments() {
+  const body = document.getElementById('allPaymentsBody');
+  if (!body) return;
+  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  try {
+    const d = await api('/payments/admin/all');
+    const rows = d.payments || [];
+    if (!rows.length) { body.innerHTML = '<div style="padding:16px; color:#666;">No payments recorded.</div>'; return; }
+
+    const table = document.createElement('table');
+    table.style.width = '100%';
+    table.innerHTML = '<tr><th>Reference</th><th>For</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr>';
+    rows.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.dataset.pay = p.id;
+      const when = p.created_at ? new Date(p.created_at).toLocaleDateString() : '—';
+      const statusOpts = Object.keys(PAY_STATUS_LABEL).map((s) =>
+        `<option value="${s}"${p.status === s ? ' selected' : ''}>${PAY_STATUS_LABEL[s]}</option>`).join('');
+      tr.innerHTML =
+        `<td style="font-family:monospace; font-size:12px;">${escapeHtmlAdmin(p.gateway_reference || '—')}</td>`
+        + `<td style="font-size:12.5px;">${escapeHtmlAdmin(p.serviceLabel || p.linked_type || '')}${p.linked_id ? ` #${p.linked_id}` : ''}</td>`
+        + `<td>R${Number(p.amount).toFixed(2)}</td>`
+        + `<td><select class="pay-status" style="padding:5px; font-size:12.5px;">${statusOpts}</select></td>`
+        + `<td style="font-size:12.5px; color:#666;">${when}</td>`
+        + `<td><div class="row-actions">`
+        + `<button class="approve pay-save" style="padding:5px 12px;">Save</button>`
+        + `<button class="reject pay-del" style="padding:5px 12px;">Delete</button>`
+        + `</div></td>`;
+
+      tr.querySelector('.pay-save').addEventListener('click', async () => {
+        try {
+          const res = await api(`/payments/admin/${p.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: tr.querySelector('.pay-status').value }),
+          });
+          showToast(res.message || 'Payment updated.');
+          loadAllPayments();
+        } catch (err) { showToast(err.message, true); }
+      });
+
+      tr.querySelector('.pay-del').addEventListener('click', async () => {
+        if (!confirm(`Delete payment ${p.gateway_reference || '#' + p.id} (R${Number(p.amount).toFixed(2)})?\n\nThis removes the financial record permanently. If it was a real payment, mark it Failed instead.`)) return;
+        try {
+          const res = await api(`/payments/admin/${p.id}`, { method: 'DELETE' });
+          showToast(res.message || 'Payment deleted.');
+          loadAllPayments();
+        } catch (err) { showToast(err.message, true); }
+      });
+
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load payments.')}</div>`;
   }
 }
 

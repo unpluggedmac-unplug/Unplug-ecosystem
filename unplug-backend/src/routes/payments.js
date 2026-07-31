@@ -516,6 +516,135 @@ router.get('/admin/packages', requireRole('admin'), async (req, res, next) => {
 // PATCH /payments/admin/packages/:id — admin edits price / name / description /
 // availability. The duration and service are NOT editable: they're the identity
 // of the package, and changing them would silently repoint existing links.
+// What else in the system points at this payment. Used by both the edit and
+// delete routes below, because "is it safe to touch this?" has exactly one
+// correct answer and it should not be written twice.
+//
+// account_credits is the serious one. Its payment_id is ON DELETE SET NULL and
+// a unique index on it is what stops the same payment being credited twice —
+// so deleting a credited payment would leave the money credited, lose where it
+// came from, AND disarm the double-credit guard.
+async function paymentDependants(id) {
+  const r = await pool.query(
+    `SELECT
+       (SELECT COUNT(*)::int FROM account_credits    WHERE payment_id = $1) AS credits,
+       (SELECT COUNT(*)::int FROM votes              WHERE payment_id = $1) AS votes,
+       (SELECT COUNT(*)::int FROM edition_purchases  WHERE payment_id = $1) AS edition_purchases,
+       (SELECT COUNT(*)::int FROM ad_slots           WHERE payment_id = $1) AS banners`,
+    [id]
+  );
+  const d = r.rows[0];
+  return { ...d, blocking: d.credits + d.votes + d.edition_purchases };
+}
+
+function dependantSummary(d) {
+  const parts = [];
+  if (d.credits) parts.push(`${d.credits} account-credit ${d.credits === 1 ? 'entry' : 'entries'}`);
+  if (d.votes) parts.push(`${d.votes} paid ${d.votes === 1 ? 'vote' : 'votes'}`);
+  if (d.edition_purchases) parts.push(`${d.edition_purchases} edition ${d.edition_purchases === 1 ? 'purchase' : 'purchases'}`);
+  return parts.join(', ');
+}
+
+// PATCH /payments/admin/:id — admin corrects a payment's status.
+//
+// This is the right tool for a test payment: marking it Failed takes it out of
+// the revenue figures while the record stays, which is what accounting rules
+// generally want. Deleting is below, for when the row should never have
+// existed at all.
+router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await pool.query('SELECT id, status FROM payments WHERE id = $1', [id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Payment not found.' });
+
+    const status = req.body.status;
+    if (!['pending', 'confirmed', 'failed'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be pending, confirmed or failed.' });
+    }
+
+    // Moving a credited payment off 'confirmed' would leave account credit
+    // that no longer has a confirmed payment behind it.
+    if (existing.rows[0].status === 'confirmed' && status !== 'confirmed') {
+      const d = await paymentDependants(id);
+      if (d.credits > 0) {
+        return res.status(409).json({
+          error: 'This payment has already been turned into account credit. Reverse the credit first, or the customer keeps credit with no confirmed payment behind it.',
+        });
+      }
+    }
+
+    // Deliberately does NOT re-run applyPaymentEffect: flipping a status by
+    // hand should not silently publish an article or unlock a download. Use
+    // the normal confirm route for that.
+    const result = await pool.query(
+      // $2 is cast explicitly: used both as the new status and inside a CASE
+      // whose other branch is a timestamp, Postgres otherwise deduces
+      // conflicting types for the same parameter and refuses the statement.
+      `UPDATE payments
+          SET status = $2::varchar,
+              confirmed_at = CASE WHEN $2::varchar = 'confirmed'
+                                  THEN COALESCE(confirmed_at, now()) ELSE NULL END
+        WHERE id = $1 RETURNING id, status`,
+      [id, status]
+    );
+    await logActivity(req.user.id, 'payment_status_edited',
+      `Payment #${id} set to ${status}`).catch(() => {});
+    res.json({
+      payment: result.rows[0],
+      message: `Payment marked as ${status}. Nothing was published or unlocked by this change.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /payments/admin/:id — removes a payment row entirely.
+//
+// Meant for clearing out test payments. Refused whenever the payment is part
+// of something real: account credit, paid votes, or an edition purchase all
+// point at it, and removing it would corrupt those records rather than tidy
+// them. In those cases marking it Failed is the correct action instead.
+//
+// A banner's payment_id is ON DELETE SET NULL, so a banner survives with its
+// payment link cleared — reported back so it isn't a surprise.
+router.delete('/admin/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await pool.query(
+      'SELECT id, amount, gateway_reference, status FROM payments WHERE id = $1', [id]
+    );
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Payment not found.' });
+
+    const d = await paymentDependants(id);
+    if (d.blocking > 0) {
+      return res.status(409).json({
+        error: `This payment is attached to ${dependantSummary(d)}. Deleting it would leave those records pointing at nothing — mark it as Failed instead, which removes it from the revenue figures and keeps the history.`,
+      });
+    }
+
+    await pool.query('DELETE FROM payments WHERE id = $1', [id]);
+    await logActivity(req.user.id, 'payment_deleted',
+      `Deleted payment #${id} (${existing.rows[0].gateway_reference}, R${existing.rows[0].amount}, ${existing.rows[0].status})`).catch(() => {});
+
+    res.json({
+      deleted: true,
+      bannersDetached: d.banners,
+      message: d.banners > 0
+        ? `Payment deleted. ${d.banners} banner${d.banners === 1 ? '' : 's'} kept, with the payment link cleared.`
+        : 'Payment deleted.',
+    });
+  } catch (err) {
+    // A foreign key we haven't accounted for. Report it rather than a 500 —
+    // the database refusing is the system working.
+    if (err.code === '23503') {
+      return res.status(409).json({
+        error: 'Something else in the system still refers to this payment, so it cannot be deleted. Mark it as Failed instead.',
+      });
+    }
+    next(err);
+  }
+});
+
 router.patch('/admin/packages/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const id = Number(req.params.id);
