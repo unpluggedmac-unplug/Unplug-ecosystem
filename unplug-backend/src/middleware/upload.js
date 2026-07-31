@@ -35,4 +35,22 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE_BYTES },
 });
 
-module.exports = { upload, UPLOAD_DIR };
+// Magazine edition PDFs need their own uploader: the image filter above would
+// reject them outright, and a print-quality monthly edition is comfortably
+// larger than the 8MB photo limit.
+const MAX_PDF_SIZE_BYTES = 60 * 1024 * 1024; // 60MB — a full magazine issue
+
+function pdfFileFilter(req, file, cb) {
+  if (file.mimetype !== 'application/pdf') {
+    return cb(new Error(`File type ${file.mimetype} is not allowed here. Upload a PDF.`));
+  }
+  cb(null, true);
+}
+
+const uploadPdf = multer({
+  storage,
+  fileFilter: pdfFileFilter,
+  limits: { fileSize: MAX_PDF_SIZE_BYTES },
+});
+
+module.exports = { upload, uploadPdf, UPLOAD_DIR, MAX_PDF_SIZE_BYTES };

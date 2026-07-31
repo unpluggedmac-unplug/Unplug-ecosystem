@@ -12,11 +12,20 @@ router.get('/', async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
 
-    const countResult = await pool.query('SELECT COUNT(*) FROM editions');
+    // Public list: published editions only. Draft, unpublished and archived
+    // editions stay visible to admin but never appear on the site.
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM editions WHERE status = 'published'`
+    );
 
     const result = await pool.query(
-      `SELECT id, issue_number, title, cover_image_url, pdf_url, download_price, published_at
-       FROM editions ORDER BY issue_number DESC
+      `SELECT id, issue_number, edition_number, title, month, year, description,
+              cover_image_url, pdf_url, download_price, publication_date, published_at
+       FROM editions
+       WHERE status = 'published'
+       -- Newest first. display_order lets an admin pin a specific edition to
+       -- the top; publication_date is the natural order otherwise.
+       ORDER BY display_order DESC, publication_date DESC NULLS LAST, issue_number DESC
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
@@ -112,6 +121,128 @@ router.delete('/calendar/:id', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// GET /editions/latest — public. The newest published edition, for the
+// homepage "Latest Edition" panel. Registered BEFORE /:id so "latest" isn't
+// read as an edition id.
+//
+// This is what keeps the homepage self-updating: it asks the database which
+// edition is newest rather than naming one, so publishing a new edition
+// changes the homepage with no code change.
+router.get('/latest', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, issue_number, edition_number, title, month, year, description,
+              cover_image_url, pdf_url, download_price, publication_date, published_at
+         FROM editions
+        WHERE status = 'published'
+        ORDER BY display_order DESC, publication_date DESC NULLS LAST, issue_number DESC
+        LIMIT 1`
+    );
+    // Not an error — a site with no published edition yet just hides the panel.
+    res.json({ edition: result.rows[0] || null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /editions/admin/all — admin list: every edition whatever its status,
+// plus how many people have bought each one (which decides whether it can be
+// safely deleted). Three segments keeps it clear of /:id.
+router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT e.*, COUNT(ep.id)::int AS purchase_count
+         FROM editions e
+         LEFT JOIN edition_purchases ep ON ep.edition_id = e.id
+        GROUP BY e.id
+        ORDER BY e.publication_date DESC NULLS LAST, e.issue_number DESC`
+    );
+    res.json({ editions: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /editions/:id — admin edits an edition.
+//
+// Replacing the PDF is allowed and deliberately does NOT affect existing
+// purchases: a purchase points at the edition, not at a file path, so buyers
+// keep their access and simply get the corrected file.
+router.patch('/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await pool.query('SELECT id FROM editions WHERE id = $1', [id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Edition not found.' });
+
+    const b = req.body;
+    if (b.status !== undefined && !['draft', 'published', 'unpublished', 'archived'].includes(b.status)) {
+      return res.status(400).json({ error: 'Status must be draft, published, unpublished or archived.' });
+    }
+    if (b.title !== undefined && !String(b.title).trim()) {
+      return res.status(400).json({ error: 'Give the edition a title.' });
+    }
+    if (b.downloadPrice !== undefined && (isNaN(Number(b.downloadPrice)) || Number(b.downloadPrice) < 0)) {
+      return res.status(400).json({ error: 'Download price must be zero or more.' });
+    }
+
+    // Only the fields actually sent are touched, so a partial save can't blank
+    // the rest of the record.
+    const sets = [];
+    const vals = [];
+    const put = (col, val) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
+    if (b.title !== undefined) put('title', String(b.title).trim().slice(0, 255));
+    if (b.editionNumber !== undefined) put('edition_number', String(b.editionNumber).trim().slice(0, 40) || null);
+    if (b.month !== undefined) put('month', String(b.month).trim().slice(0, 20) || null);
+    if (b.year !== undefined) put('year', b.year === null || b.year === '' ? null : Number(b.year));
+    if (b.description !== undefined) put('description', String(b.description || '').trim() || null);
+    if (b.publicationDate !== undefined) put('publication_date', b.publicationDate || null);
+    if (b.coverImageUrl !== undefined) put('cover_image_url', b.coverImageUrl || null);
+    if (b.pdfUrl !== undefined && b.pdfUrl) put('pdf_url', b.pdfUrl);
+    if (b.downloadPrice !== undefined) put('download_price', Number(b.downloadPrice));
+    if (b.status !== undefined) put('status', b.status);
+    if (b.displayOrder !== undefined) put('display_order', Number(b.displayOrder) || 0);
+    if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+    sets.push('updated_at = now()');
+
+    vals.push(id);
+    const result = await pool.query(
+      `UPDATE editions SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`,
+      vals
+    );
+    res.json({ edition: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /editions/:id — admin removes an edition.
+//
+// Refused once anyone has bought it. edition_purchases CASCADEs from editions
+// and its rows carry payment_id, so deleting a purchased edition would erase
+// the customer's proof of purchase and orphan the payment. Archive instead:
+// that hides it from the site and keeps every record.
+router.delete('/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = await pool.query('SELECT id FROM editions WHERE id = $1', [id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: 'Edition not found.' });
+
+    const bought = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM edition_purchases WHERE edition_id = $1', [id]
+    );
+    if (bought.rows[0].n > 0) {
+      return res.status(409).json({
+        error: `${bought.rows[0].n} ${bought.rows[0].n === 1 ? 'person has' : 'people have'} bought this edition. Deleting it would erase their purchase, so set it to Archived instead — that takes it off the site and keeps the records.`,
+      });
+    }
+
+    await pool.query('DELETE FROM editions WHERE id = $1', [id]);
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /editions/:id — single edition detail, same free-viewing info.
 router.get('/:id', async (req, res, next) => {
   try {
@@ -187,18 +318,52 @@ router.post('/:id/purchase-download', requireAuth, async (req, res, next) => {
 // comes from POST /uploads first (or wherever the owner hosts their PDF).
 router.post('/', requireRole('admin'), async (req, res, next) => {
   try {
-    const { issueNumber, title, coverImageUrl, pdfUrl, downloadPrice } = req.body;
-    if (!issueNumber || !title || !pdfUrl) {
-      return res.status(400).json({ error: 'issueNumber, title, and pdfUrl are required.' });
+    const b = req.body;
+    const title = (b.title || '').trim();
+    const pdfUrl = (b.pdfUrl || '').trim();
+    if (!title || !pdfUrl) {
+      return res.status(400).json({ error: 'A title and an uploaded PDF are required.' });
     }
+    if (b.status !== undefined && !['draft', 'published', 'unpublished', 'archived'].includes(b.status)) {
+      return res.status(400).json({ error: 'Status must be draft, published, unpublished or archived.' });
+    }
+    if (b.downloadPrice != null && (isNaN(Number(b.downloadPrice)) || Number(b.downloadPrice) < 0)) {
+      return res.status(400).json({ error: 'Download price must be zero or more.' });
+    }
+
+    // issue_number is NOT NULL UNIQUE from the original schema but is an
+    // internal counter, not something an admin should have to think about —
+    // default it to the next one up.
+    let issueNumber = b.issueNumber != null && b.issueNumber !== '' ? Number(b.issueNumber) : null;
+    if (issueNumber == null) {
+      const max = await pool.query('SELECT COALESCE(MAX(issue_number), 0) AS m FROM editions');
+      issueNumber = Number(max.rows[0].m) + 1;
+    }
+
     const result = await pool.query(
-      `INSERT INTO editions (issue_number, title, cover_image_url, pdf_url, download_price)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO editions
+         (issue_number, title, edition_number, month, year, description,
+          cover_image_url, pdf_url, download_price, publication_date, status, display_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [issueNumber, title, coverImageUrl || null, pdfUrl, downloadPrice != null ? downloadPrice : 50.00]
+      [
+        issueNumber, title.slice(0, 255),
+        (b.editionNumber || '').trim().slice(0, 40) || null,
+        (b.month || '').trim().slice(0, 20) || null,
+        b.year ? Number(b.year) : null,
+        (b.description || '').trim() || null,
+        b.coverImageUrl || null, pdfUrl,
+        b.downloadPrice != null ? Number(b.downloadPrice) : 50.00,
+        b.publicationDate || null,
+        b.status || 'published',
+        Number(b.displayOrder) || 0,
+      ]
     );
     res.status(201).json({ edition: result.rows[0] });
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'An edition with that issue number already exists.' });
+    }
     next(err);
   }
 });

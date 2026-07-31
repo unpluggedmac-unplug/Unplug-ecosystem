@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs');
-const { upload } = require('../middleware/upload');
-const { requireAuth } = require('../middleware/auth');
+const { upload, uploadPdf, MAX_PDF_SIZE_BYTES } = require('../middleware/upload');
+const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -46,6 +46,49 @@ async function uploadToSupabase(file) {
 // imageUrl / posterImageUrl / photoUrl in any of the other endpoints. Every
 // route that accepts an `imageUrl` string doesn't care where it lives, so
 // switching to object storage is transparent to them.
+// POST /uploads/pdf — admin uploads a magazine edition PDF. Separate from the
+// image route above because that one rejects anything that isn't an image and
+// caps at 8MB, which a full monthly edition exceeds.
+//
+// Registered BEFORE the '/' handler so the router matches it first.
+router.post('/pdf', requireRole('admin'), (req, res) => {
+  uploadPdf.single('file')(req, res, async (err) => {
+    if (err) {
+      // Multer's size message is unhelpful on its own — say the actual limit.
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? `That PDF is too large. The maximum is ${Math.round(MAX_PDF_SIZE_BYTES / (1024 * 1024))}MB.`
+        : err.message;
+      return res.status(400).json({ error: msg });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file was uploaded (expected multipart field "file").' });
+    }
+
+    if (supabaseConfigured) {
+      try {
+        const url = await uploadToSupabase(req.file);
+        return res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'supabase' });
+      } catch (e) {
+        // Same reasoning as the image route: never fall back to Render's
+        // ephemeral disk, or the edition PDF disappears on the next redeploy
+        // and paying customers are left with a dead download.
+        console.error('Supabase Storage PDF upload failed:', e.message);
+        return res.status(502).json({
+          error: 'PDF storage is misconfigured, so the upload was not saved. Please try again — if it keeps failing, check the Supabase Storage settings.',
+        });
+      }
+    }
+
+    const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+    res.status(201).json({
+      url: `${proto}://${req.get('host')}/uploads/${req.file.filename}`,
+      filename: req.file.filename,
+      sizeBytes: req.file.size,
+      storage: 'local',
+    });
+  });
+});
+
 router.post('/', requireAuth, (req, res) => {
   upload.single('file')(req, res, async (err) => {
     if (err) {
