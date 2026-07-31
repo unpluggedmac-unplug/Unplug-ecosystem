@@ -1144,6 +1144,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>All editions</h3></div>
         <div class="panel-body" id="edBody" style="padding:0;">Loading…</div>
       </div>
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Edition purchases</h3></div>
+        <div class="panel-body" style="padding:14px 16px 0;">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Match an EFT against your bank statement by its <strong>reference code</strong>, then Approve. Approving emails the customer their download link and reference — that email is only ever sent after you approve. Nothing here is deleted, so rejected and used purchases stay on record.</p>
+        </div>
+        <div class="panel-body" id="edPurchasesBody" style="padding:0;">Loading…</div>
+      </div>
     </div>
 
     <!-- COMPETITIONS -->
@@ -5153,6 +5160,10 @@ async function loadEditionsAdmin() {
     document.getElementById('edNewPdf').innerHTML = edPdfFieldHtml('edNewPdfBox', '');
   }
 
+  // Purchases load alongside, and independently — an empty editions list must
+  // not hide the purchase history.
+  loadEditionPurchases();
+
   const body = document.getElementById('edBody');
   body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
   try {
@@ -5211,6 +5222,79 @@ function editionRowHtml(e) {
     <button class="approve" style="padding:5px 12px;" onclick="saveEdition(${e.id})">Save changes</button>
     ${deleteBtn}
   </div>`;
+}
+
+// Edition purchases — the EFT approval queue.
+const ED_PAY_STATUS = {
+  awaiting_payment: 'Awaiting payment',
+  awaiting_eft: 'Awaiting EFT',
+  pending_approval: 'Pending approval',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+};
+
+async function loadEditionPurchases() {
+  const body = document.getElementById('edPurchasesBody');
+  if (!body) return;
+  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  try {
+    const d = await api('/editions/admin/purchases');
+    const rows = d.purchases || [];
+    if (!rows.length) { body.innerHTML = '<div style="padding:16px; color:#666;">No purchases yet.</div>'; return; }
+    body.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <thead><tr style="text-align:left; border-bottom:1px solid var(--paper-line);">
+        <th style="padding:8px;">Customer</th><th style="padding:8px;">Edition</th>
+        <th style="padding:8px;">Amount</th><th style="padding:8px;">Method</th>
+        <th style="padding:8px;">Reference</th><th style="padding:8px;">Status</th>
+        <th style="padding:8px;">Download</th><th style="padding:8px;"></th>
+      </tr></thead><tbody>${rows.map(purchaseRowHtml).join('')}</tbody></table></div>`;
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load purchases.')}</div>`;
+  }
+}
+
+function purchaseRowHtml(p) {
+  const pending = ['awaiting_eft', 'pending_approval', 'awaiting_payment'].includes(p.payment_status);
+  const actions = pending
+    ? `<button class="approve" style="padding:4px 10px;" onclick="approveEditionPurchase(${p.id})">Approve</button>
+       <button class="reject" style="padding:4px 10px;" onclick="rejectEditionPurchase(${p.id})">Reject</button>`
+    : '';
+  const dl = p.download_count >= 1 || p.download_status === 'used'
+    ? 'Used'
+    : (p.payment_status === 'approved' ? 'Available' : '—');
+  return `<tr style="border-bottom:1px solid var(--paper-line);">
+    <td style="padding:8px;">${escapeHtmlAdmin(p.customer_name || '')}<br><span style="color:#666; font-size:12px;">${escapeHtmlAdmin(p.customer_email || '')}</span></td>
+    <td style="padding:8px;">${escapeHtmlAdmin(p.edition_title || '—')}</td>
+    <td style="padding:8px;">R${Number(p.amount || 0).toFixed(0)}</td>
+    <td style="padding:8px;">${escapeHtmlAdmin((p.payment_method || '').toUpperCase())}</td>
+    <td style="padding:8px;"><code style="font-size:12.5px; letter-spacing:0.06em;">${escapeHtmlAdmin(p.download_reference || '—')}</code></td>
+    <td style="padding:8px;">${escapeHtmlAdmin(ED_PAY_STATUS[p.payment_status] || p.payment_status)}</td>
+    <td style="padding:8px;">${dl}</td>
+    <td style="padding:8px; white-space:nowrap;">${actions}</td>
+  </tr>`;
+}
+
+async function approveEditionPurchase(id) {
+  if (!confirm('Approve this payment? The customer will be emailed their download link and reference.')) return;
+  try {
+    const res = await api(`/editions/admin/purchases/${id}/approve`, { method: 'POST' });
+    // The message spells out the reference when the email could not be sent,
+    // so keep it on screen rather than letting a toast flash past.
+    if (res.emailed === false) alert(res.message);
+    showToast(res.emailed ? 'Approved and emailed.' : 'Approved — but the email was not sent.');
+    loadEditionPurchases();
+  } catch (e) { showToast(e.message || 'Could not approve.', true); }
+}
+
+async function rejectEditionPurchase(id) {
+  const reason = prompt('Reason for rejecting (optional — for your records):', '');
+  if (reason === null) return;
+  try {
+    await api(`/editions/admin/purchases/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
+    showToast('Marked as rejected.');
+    loadEditionPurchases();
+  } catch (e) { showToast(e.message || 'Could not reject.', true); }
 }
 
 async function saveEdition(id) {

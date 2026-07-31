@@ -780,6 +780,25 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* ---- feature-in-edition section (readable card, same style as the
    Ivorymuse card: label, title, image, button, stacked) ---- */
+/* Edition purchase / download-claim dialogs. */
+.ed-field{ display:block; margin-bottom:12px; }
+.ed-field span{ display:block; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--slate); margin-bottom:5px; }
+.ed-field input, .ed-field select{
+  width:100%; border:1px solid var(--paper-line); padding:11px 12px;
+  font-size:15px; font-family:'Inter',sans-serif; background:#fff; color:var(--ink);
+}
+.ed-error{ color:var(--red); font-size:13px; margin:0 0 12px; }
+.ed-error[hidden]{ display:none; }
+/* The reference code is read off the screen and typed onto a bank transfer, so
+   it is set large, monospaced and widely spaced to be hard to mistype. */
+.ed-reference{
+  font-family:ui-monospace,'SFMono-Regular',Menlo,monospace;
+  font-size:clamp(22px,5vw,30px); font-weight:700; letter-spacing:0.22em;
+  text-align:center; padding:16px 10px; margin:14px 0 12px;
+  background:var(--paper); border:1px dashed var(--red); color:var(--ink);
+  word-break:break-all;
+}
+
 /* Homepage "Latest Edition" — cover beside the copy on desktop, stacked on
    phones. The cover keeps a magazine 3:4 portrait so covers of slightly
    different sizes still line up. */
@@ -2084,6 +2103,72 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="edcal" id="editionCalendar"></div>
   </section>
 
+  <!-- BUY / CLAIM AN EDITION DOWNLOAD -->
+  <div class="shoutout-modal-overlay" id="edBuyModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true" aria-labelledby="edBuyTitle">
+      <button class="shoutout-modal-close" id="edBuyClose" aria-label="Close">&times;</button>
+
+      <!-- STEP 1: choose how to pay -->
+      <div id="edBuyStep1">
+        <span class="eyebrow" style="color:var(--red);">Download your copy</span>
+        <h3 id="edBuyTitle" style="font-family:'Playfair Display',serif; font-size:24px; margin:6px 0 4px;"></h3>
+        <p id="edBuyPrice" style="font-size:15px; color:var(--ink); margin-bottom:6px;"></p>
+        <p style="font-size:13.5px; color:var(--slate); line-height:1.6; margin-bottom:16px;">
+          Reading online is always free. This is a downloadable PDF copy to keep.
+          <strong>Your download is linked to the email address you enter below</strong> and can be used once.
+        </p>
+        <label class="ed-field"><span>Your email address</span>
+          <input type="email" id="edBuyEmail" placeholder="you@example.com" autocomplete="email"></label>
+        <label class="ed-field"><span>Your name <em style="color:var(--slate); font-style:normal;">(optional)</em></span>
+          <input type="text" id="edBuyName" autocomplete="name"></label>
+        <label class="ed-field"><span>How would you like to pay?</span>
+          <select id="edBuyMethod">
+            <option value="eft">EFT — pay by bank transfer</option>
+            <option value="online">Card / online payment</option>
+          </select></label>
+        <p id="edBuyError" class="ed-error" hidden></p>
+        <button class="btn btn-solid" id="edBuySubmit" style="width:100%; margin-top:6px;">Continue</button>
+      </div>
+
+      <!-- STEP 2: EFT reference + banking details -->
+      <div id="edBuyStep2" hidden>
+        <span class="eyebrow" style="color:var(--red);">Almost there</span>
+        <h3 style="font-family:'Playfair Display',serif; font-size:24px; margin:6px 0 10px;">Pay by EFT</h3>
+        <p style="font-size:13.5px; color:var(--slate); line-height:1.6;">Use this reference on your transfer so we can match it. Once we confirm the payment, we'll email your download link.</p>
+        <div class="ed-reference" id="edBuyReference"></div>
+        <p style="font-size:12.5px; color:var(--slate); margin:-6px 0 14px;">Keep this code — you'll need it with your email address to start the download.</p>
+        <div id="edBuyBank" style="font-size:13.5px; line-height:1.9;"></div>
+        <button class="btn btn-line" id="edBuyDone" style="width:100%; margin-top:16px;">Done</button>
+      </div>
+
+      <!-- STEP 3: already approved — claim the download now -->
+      <div id="edBuyStep3" hidden>
+        <span class="eyebrow" style="color:var(--red);">Your download</span>
+        <h3 style="font-family:'Playfair Display',serif; font-size:24px; margin:6px 0 10px;">Ready to download</h3>
+        <p id="edClaimTitle" style="font-size:14px; color:var(--slate); margin-bottom:14px;"></p>
+        <a class="btn btn-solid" id="edClaimLink" style="width:100%; text-align:center;" href="#">Download PDF</a>
+        <p style="font-size:12.5px; color:var(--slate); margin-top:12px;">This link works once. If your download fails, you can come back and try again.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLAIM A PAID DOWNLOAD (email + reference) -->
+  <div class="shoutout-modal-overlay" id="edClaimModal" aria-hidden="true">
+    <div class="shoutout-modal" role="dialog" aria-modal="true" aria-labelledby="edClaimHeading">
+      <button class="shoutout-modal-close" id="edClaimClose" aria-label="Close">&times;</button>
+      <span class="eyebrow" style="color:var(--red);">Already paid?</span>
+      <h3 id="edClaimHeading" style="font-family:'Playfair Display',serif; font-size:24px; margin:6px 0 10px;">Start your download</h3>
+      <p style="font-size:13.5px; color:var(--slate); line-height:1.6; margin-bottom:14px;">Enter the email address you bought with and the reference code we sent you.</p>
+      <label class="ed-field"><span>Email address</span>
+        <input type="email" id="edClaimEmail" placeholder="you@example.com" autocomplete="email"></label>
+      <label class="ed-field"><span>Reference code</span>
+        <input type="text" id="edClaimRef" placeholder="A7K29P4XQ8" maxlength="10"
+               style="text-transform:uppercase; letter-spacing:0.16em; font-family:ui-monospace,monospace;"></label>
+      <p id="edClaimError" class="ed-error" hidden></p>
+      <button class="btn btn-solid" id="edClaimSubmit" style="width:100%;">Find my download</button>
+    </div>
+  </div>
+
   <!-- EDITION CALENDAR DAY MODAL -->
   <div class="shoutout-modal-overlay" id="edcalModal" aria-hidden="true">
     <div class="shoutout-modal" role="dialog" aria-modal="true" aria-labelledby="edcalModalTitle">
@@ -2099,6 +2184,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="wrap">
       <div class="section-head">
         <div><span class="eyebrow">Archive</span><h2>Past Editions</h2></div>
+        <!-- Entry point for someone who already paid (EFT approved, or a
+             download they didn't finish) and just needs their file. -->
+        <button class="btn btn-line" onclick="openEditionClaim()">Already paid? Get your download</button>
       </div>
       <div class="editions-grid" id="pastEditionsGrid">
         <div class="dir-empty-state">Loading...</div>
@@ -5221,10 +5309,136 @@ async function loadLatestEdition() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Buying and claiming an edition download.
+//
+// No account needed. The email address the buyer gives here is what the
+// download is tied to, and the reference code is what they type back in — both
+// checked server-side, so nothing here is a security control on its own.
+// ---------------------------------------------------------------------------
+let edBuyingId = null;
+
+function edShowStep(step) {
+  ['edBuyStep1', 'edBuyStep2', 'edBuyStep3'].forEach((id, i) => {
+    document.getElementById(id).hidden = (i + 1) !== step;
+  });
+}
+function edOpenModal(id) {
+  const el = document.getElementById(id);
+  el.classList.add('open');
+  el.setAttribute('aria-hidden', 'false');
+}
+function edCloseModal(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('open');
+  el.setAttribute('aria-hidden', 'true');
+}
+
 function downloadEdition(editionId) {
-  // Real purchase flow: the checkout page handles login + payment, and the
-  // backend gates the actual download behind a confirmed purchase.
-  window.location.href = 'unplug-checkout.html?type=edition_download&id=' + editionId;
+  const e = EDITION_BY_ID[editionId];
+  if (!e) return;
+  edBuyingId = editionId;
+  document.getElementById('edBuyTitle').textContent = e.title;
+  document.getElementById('edBuyPrice').innerHTML =
+    `<strong>Downloadable PDF — R${Number(e.download_price).toFixed(0)}</strong>`;
+  document.getElementById('edBuyError').hidden = true;
+  edShowStep(1);
+  edOpenModal('edBuyModal');
+}
+
+document.getElementById('edBuySubmit').addEventListener('click', async () => {
+  const btn = document.getElementById('edBuySubmit');
+  const err = document.getElementById('edBuyError');
+  const email = document.getElementById('edBuyEmail').value.trim();
+  const method = document.getElementById('edBuyMethod').value;
+  err.hidden = true;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    err.textContent = 'Enter a valid email address — your download is linked to it.';
+    err.hidden = false;
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Please wait…';
+  try {
+    const res = await api(`/editions/${edBuyingId}/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ email, name: document.getElementById('edBuyName').value, method }),
+    });
+
+    if (method === 'online') {
+      // Straight into the existing checkout — no second payment system. The
+      // purchase row is already waiting and gets approved on confirmation.
+      window.location.href = 'unplug-checkout.html?type=edition_download&id=' + edBuyingId;
+      return;
+    }
+
+    document.getElementById('edBuyReference').textContent = res.reference;
+    const i = res.instructions || {};
+    document.getElementById('edBuyBank').innerHTML = `
+      <strong>Bank:</strong> ${escapeHtml(i.bank || '')}<br>
+      <strong>Account name:</strong> ${escapeHtml(i.accountName || '')}<br>
+      <strong>Account number:</strong> ${escapeHtml(i.accountNumber || '')}<br>
+      <strong>Branch code:</strong> ${escapeHtml(i.branchCode || '')}<br>
+      <strong>Reference:</strong> ${escapeHtml(res.reference)}
+      <p style="font-size:12.5px; color:var(--slate); line-height:1.6; margin-top:10px;">${escapeHtml(i.note || '')}</p>`;
+    edShowStep(2);
+  } catch (e) {
+    err.textContent = e.message || 'Something went wrong. Please try again.';
+    err.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+  }
+});
+
+document.getElementById('edBuyClose').addEventListener('click', () => edCloseModal('edBuyModal'));
+document.getElementById('edBuyDone').addEventListener('click', () => edCloseModal('edBuyModal'));
+
+// Claiming: email + reference in, one-time download link out.
+document.getElementById('edClaimSubmit').addEventListener('click', async () => {
+  const btn = document.getElementById('edClaimSubmit');
+  const err = document.getElementById('edClaimError');
+  const email = document.getElementById('edClaimEmail').value.trim();
+  const reference = document.getElementById('edClaimRef').value.trim().toUpperCase();
+  err.hidden = true;
+  if (!email || !reference) {
+    err.textContent = 'Enter both your email address and your reference code.';
+    err.hidden = false;
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  try {
+    const res = await api('/editions/download/claim', {
+      method: 'POST',
+      body: JSON.stringify({ email, reference }),
+    });
+    edCloseModal('edClaimModal');
+    document.getElementById('edClaimTitle').textContent = res.editionTitle || '';
+    document.getElementById('edClaimLink').href = UnplugAPI.getApiBase() + res.downloadPath;
+    edShowStep(3);
+    edOpenModal('edBuyModal');
+  } catch (e) {
+    // The server's message already says the right thing for each case (still
+    // awaiting approval, already used, no match) — don't second-guess it.
+    err.textContent = e.message || 'We could not find that download.';
+    err.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Find my download';
+  }
+});
+document.getElementById('edClaimClose').addEventListener('click', () => edCloseModal('edClaimModal'));
+
+function openEditionClaim() {
+  document.getElementById('edClaimError').hidden = true;
+  edOpenModal('edClaimModal');
+}
+
+// The approval email links to ?p=editions&claim=1, so arriving from it opens
+// the claim box straight away.
+if (new URLSearchParams(location.search).get('claim') === '1') {
+  document.addEventListener('DOMContentLoaded', openEditionClaim);
 }
 
 async function loadEditions(reset) {

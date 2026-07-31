@@ -5,6 +5,7 @@ const { getPagination, paginationMeta } = require('../utils/pagination');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const { sendEmail } = require('../utils/email');
 const { logActivity } = require('./activityLog');
+const { eftInstructions } = require('../utils/eftDetails');
 const {
   generateReference, generateToken, referenceMatches, normaliseEmail, isValidEmail,
 } = require('../utils/editionAccess');
@@ -191,6 +192,12 @@ router.post('/:id/purchase', publicSubmitLimiter, async (req, res, next) => {
       message: method === 'eft'
         ? 'Use this reference on your EFT. Once we confirm the payment we will email your download link.'
         : 'Continue to payment to unlock your download.',
+      // Same banking details the rest of the site quotes — one shared source,
+      // so they can never drift apart.
+      instructions: method === 'eft'
+        ? eftInstructions(result.rows[0].download_reference,
+            'Make a standard bank EFT to the account above using this exact reference. Once we confirm the payment we will email your download link. Keep this reference — you need it together with your email address to start the download.')
+        : null,
     });
   } catch (err) {
     next(err);
