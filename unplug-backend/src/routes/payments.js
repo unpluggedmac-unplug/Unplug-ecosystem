@@ -348,15 +348,45 @@ async function applyPaymentEffect(payment) {
       [payment.linked_id, payment.id]
     );
   } else if (payment.linked_type === 'edition_download') {
-    // Unlike everything else, there's no "awaiting_payment" row to flip —
-    // paying for an edition download directly creates the purchase record
-    // that GET /editions/:id/download checks for.
-    await pool.query(
-      `INSERT INTO edition_purchases (user_id, edition_id, payment_id)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, edition_id) DO NOTHING`,
+    // The buyer normally starts at POST /editions/:id/purchase, which creates
+    // the row (with its reference) as 'awaiting_payment'. Approve that row.
+    //
+    // Matched on the newest awaiting row for this buyer and edition — the old
+    // ON CONFLICT (user_id, edition_id) is gone, because a download is now
+    // single-use and buying the same edition twice is legitimate.
+    const pending = await pool.query(
+      `UPDATE edition_purchases
+          SET payment_status = 'approved', payment_id = $3, approved_at = now(), updated_at = now()
+        WHERE id = (
+          SELECT id FROM edition_purchases
+           WHERE edition_id = $2
+             AND payment_status = 'awaiting_payment'
+             AND (user_id = $1 OR ($1 IS NULL AND user_id IS NULL))
+           ORDER BY created_at DESC
+           LIMIT 1
+        )
+        RETURNING id`,
       [payment.user_id, payment.linked_id, payment.id]
     );
+
+    // No pending row — e.g. a checkout started before this flow existed. Create
+    // an approved purchase so the customer still gets what they paid for.
+    if (pending.rowCount === 0) {
+      const { generateReference } = require('../utils/editionAccess');
+      const reference = await generateReference();
+      const buyer = await pool.query('SELECT email FROM users WHERE id = $1', [payment.user_id]);
+      await pool.query(
+        `INSERT INTO edition_purchases
+           (user_id, edition_id, payment_id, customer_email, amount,
+            payment_method, payment_status, download_reference, approved_at)
+         VALUES ($1, $2, $3, $4, $5, 'online', 'approved', $6, now())`,
+        [
+          payment.user_id, payment.linked_id, payment.id,
+          buyer.rows[0] ? buyer.rows[0].email : null,
+          payment.amount, reference,
+        ]
+      );
+    }
   } else if (payment.linked_type === 'vote_bundle') {
     const bundleResult = await pool.query('SELECT * FROM vote_bundles WHERE id = $1', [payment.linked_id]);
     if (bundleResult.rows.length > 0) {
