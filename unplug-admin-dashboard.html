@@ -4412,18 +4412,40 @@ async function loadPendingEft() {
 // ---------------------------------------------------------------------------
 const PAY_STATUS_LABEL = { pending: 'Pending', confirmed: 'Confirmed', failed: 'Failed / test' };
 
+// What each payment was for, in the words the site uses. Falls back to the raw
+// linked_type so a new service still shows something readable rather than blank.
+const PAY_FOR_LABEL = {
+  article_publish: 'Article',
+  profile_package: 'Directory profile',
+  profile_upgrade: 'Profile upgrade',
+  competition_entry: 'Competition entry',
+  top10_entry: 'Top 10 entry',
+  vote_bundle: 'Votes',
+  highlight: 'Highlight',
+  marketplace_listing: 'Marketplace listing',
+  event_listing: 'Event listing',
+  gallery_bundle: 'Gallery',
+  edition_download: 'Edition download',
+  ad_banner: 'Page Banner',
+};
+function payForLabel(t) {
+  return PAY_FOR_LABEL[t] || String(t || '').replace(/_/g, ' ');
+}
+
 async function loadAllPayments() {
   const body = document.getElementById('allPaymentsBody');
   if (!body) return;
   body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
   try {
     const d = await api('/payments/admin/all');
-    const rows = d.payments || [];
+    // The endpoint returns `orders`, not `payments` — reading the wrong key
+    // made this panel report "No payments recorded" while payments existed.
+    const rows = d.orders || [];
     if (!rows.length) { body.innerHTML = '<div style="padding:16px; color:#666;">No payments recorded.</div>'; return; }
 
     const table = document.createElement('table');
     table.style.width = '100%';
-    table.innerHTML = '<tr><th>Reference</th><th>For</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr>';
+    table.innerHTML = '<tr><th>Reference</th><th>For</th><th>Who</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr>';
     rows.forEach((p) => {
       const tr = document.createElement('tr');
       tr.dataset.pay = p.id;
@@ -4432,7 +4454,8 @@ async function loadAllPayments() {
         `<option value="${s}"${p.status === s ? ' selected' : ''}>${PAY_STATUS_LABEL[s]}</option>`).join('');
       tr.innerHTML =
         `<td style="font-family:monospace; font-size:12px;">${escapeHtmlAdmin(p.gateway_reference || '—')}</td>`
-        + `<td style="font-size:12.5px;">${escapeHtmlAdmin(p.serviceLabel || p.linked_type || '')}${p.linked_id ? ` #${p.linked_id}` : ''}</td>`
+        + `<td style="font-size:12.5px;">${escapeHtmlAdmin(payForLabel(p.linked_type))}${p.linked_id ? ` #${p.linked_id}` : ''}</td>`
+        + `<td style="font-size:12.5px; color:#666;">${escapeHtmlAdmin(p.email || '—')}</td>`
         + `<td>R${Number(p.amount).toFixed(2)}</td>`
         + `<td><select class="pay-status" style="padding:5px; font-size:12.5px;">${statusOpts}</select></td>`
         + `<td style="font-size:12.5px; color:#666;">${when}</td>`

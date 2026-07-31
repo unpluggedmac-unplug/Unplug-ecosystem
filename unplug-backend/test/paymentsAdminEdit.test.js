@@ -234,3 +234,20 @@ test('deleting a banner payment keeps the banner, with its payment link cleared'
 test('deleting a payment that does not exist is a clean 404', async () => {
   assert.equal((await req('DELETE', '/payments/admin/999999', { token: adminToken })).status, 404);
 });
+
+// ------------------------------------------------------------------- contract
+
+test('the admin list returns payments under the key the dashboard reads', async () => {
+  // This exact mismatch shipped once: the route returns `orders`, the panel
+  // read `payments`, so the screen said "No payments recorded" while payments
+  // existed. Nothing threw — it just silently showed nothing.
+  const id = await makePayment({ status: 'pending' });
+  const r = await req('GET', '/payments/admin/all', { token: adminToken });
+  assert.equal(r.status, 200);
+  assert.ok(Array.isArray(r.body.orders), 'the admin list must return an `orders` array');
+  const found = r.body.orders.find((o) => o.id === id);
+  assert.ok(found, 'a payment that exists is missing from the admin list');
+  // Fields the dashboard renders for each row.
+  ['gateway_reference', 'linked_type', 'amount', 'status', 'created_at', 'email']
+    .forEach((f) => assert.ok(f in found, `the admin list row is missing ${f}`));
+});
