@@ -8,7 +8,7 @@
     "start": "npm run migrate && node src/app.js",
     "dev": "nodemon src/app.js",
     "migrate": "node db/migrate.js",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\""
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

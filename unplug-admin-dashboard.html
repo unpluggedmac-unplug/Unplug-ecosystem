@@ -926,12 +926,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
-      <div class="main-head"><div><h1>Highlighted Articles</h1><p>Editorially feature articles in the homepage "Highlighted Articles" strip. Pick the article, the dates it should run, the display order, and an optional cover image that overrides the article's own for this spot.</p></div></div>
+      <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
       <div class="panel" style="margin-bottom:20px;">
         <div class="panel-head"><h3 id="hlFormTitle">Add a highlight</h3></div>
         <div class="panel-body">
           <input type="hidden" id="hlEditId">
-          <div class="field"><label>Article</label><select id="hlArticle" style="padding:8px; width:100%;"></select></div>
+          <div class="field"><label>What to highlight</label><select id="hlTargetType" style="padding:8px; width:100%;">
+            <option value="article">Article</option>
+            <option value="directory">Directory profile</option>
+          </select></div>
+          <div class="field"><label id="hlTargetLabel">Article</label><select id="hlArticle" style="padding:8px; width:100%;"></select></div>
           <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
             <div class="field"><label>Start date</label><input id="hlStart" type="date" style="padding:8px;"></div>
             <div class="field"><label>End date</label><input id="hlEnd" type="date" style="padding:8px;"></div>
@@ -3255,6 +3259,30 @@ function escapeAttrAdmin(str) {
 // Highlighted Articles — admin editorial control of the homepage strip.
 // ---------------------------------------------------------------------------
 let _hlImageReady = false;
+// Pick-lists for the highlight form, held so switching type doesn't refetch.
+let _hlArticles = [];
+let _hlProfiles = [];
+
+// Repopulates the target picker for whichever type is selected, and renames
+// its label so the form reads correctly either way.
+function fillHighlightTargets(keepValue) {
+  const type = document.getElementById('hlTargetType').value;
+  const sel = document.getElementById('hlArticle');
+  const label = document.getElementById('hlTargetLabel');
+  if (type === 'directory') {
+    label.textContent = 'Directory profile';
+    sel.innerHTML = _hlProfiles.length
+      ? _hlProfiles.map((p) => `<option value="${p.id}">${escapeHtmlAdmin(p.display_name || ('#' + p.id))}</option>`).join('')
+      : '<option value="">No directory profiles yet</option>';
+  } else {
+    label.textContent = 'Article';
+    sel.innerHTML = _hlArticles.length
+      ? _hlArticles.map((a) => `<option value="${a.id}">#${a.id} — ${escapeHtmlAdmin(a.title)} (${a.status})</option>`).join('')
+      : '<option value="">No articles yet</option>';
+  }
+  if (keepValue != null) sel.value = String(keepValue);
+}
+
 async function loadHighlightsAdmin() {
   if (!_hlImageReady) {
     document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', '');
@@ -3264,15 +3292,22 @@ async function loadHighlightsAdmin() {
     document.getElementById('hlNoEnd').addEventListener('change', (e) => {
       document.getElementById('hlEnd').disabled = e.target.checked;
     });
+    // Switching between Article and Directory profile swaps the picker below.
+    document.getElementById('hlTargetType').addEventListener('change', () => fillHighlightTargets());
   }
   const list = document.getElementById('hlList');
   list.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
   try {
-    const [arts, hls] = await Promise.all([api('/articles/admin/all'), api('/highlights/admin/all')]);
-    const sel = document.getElementById('hlArticle');
-    sel.innerHTML = (arts.articles || [])
-      .map((a) => `<option value="${a.id}">#${a.id} — ${escapeHtmlAdmin(a.title)} (${a.status})</option>`)
-      .join('');
+    // Both pick-lists are loaded up front so switching type is instant and
+    // doesn't need another round trip.
+    const [arts, dir, hls] = await Promise.all([
+      api('/articles/admin/all'),
+      api('/directory?limit=200'),
+      api('/highlights/admin/all'),
+    ]);
+    _hlArticles = arts.articles || [];
+    _hlProfiles = dir.profiles || dir.directory || [];
+    fillHighlightTargets();
     renderHighlightsList(hls.highlights || []);
   } catch (e) {
     list.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load highlights.')}</div>`;
@@ -3291,7 +3326,7 @@ function renderHighlightsList(items) {
       <img src="${escapeHtmlAdmin(img)}" alt="" onerror="this.style.visibility='hidden'" style="width:66px; height:48px; object-fit:cover; background:#eee; border-radius:4px; flex:none;">
       <div style="flex:1; min-width:0;">
         <strong>${escapeHtmlAdmin(h.target_title || ('#' + h.target_id))}</strong>
-        <div style="font-size:12px; color:#666;">${escapeHtmlAdmin(h.target_type)} · order ${h.priority} · ${window} · <span style="color:${active ? 'green' : 'var(--red)'};">${active ? 'active' : h.status}</span></div>
+        <div style="font-size:12px; color:#666;">${h.target_type === 'directory' ? 'Directory profile' : 'Article'} · order ${h.priority} · ${dateWindow} · <span style="color:${active ? 'green' : 'var(--red)'};">${active ? 'active' : h.status}</span></div>
       </div>
       <button class="btn btn-line" style="width:auto;" onclick="editHighlight(${h.id})">Edit</button>
       <button class="btn btn-line" style="width:auto;" onclick="toggleHighlight(${h.id}, ${active})">${active ? 'Deactivate' : 'Activate'}</button>
@@ -3307,14 +3342,18 @@ async function saveHighlight() {
   const id = document.getElementById('hlEditId').value;
   const noEnd = document.getElementById('hlNoEnd').checked;
   const body = {
-    targetType: 'article',
+    targetType: document.getElementById('hlTargetType').value,
     targetId: Number(document.getElementById('hlArticle').value),
     startDate: document.getElementById('hlStart').value || null,
     endDate: noEnd ? null : (document.getElementById('hlEnd').value || null),
     priority: Number(document.getElementById('hlPriority').value) || 0,
     imageUrl: UnplugUpload.valueOf(document.getElementById('hlImageUpload')) || '',
   };
-  if (!body.targetId) { err.textContent = 'Choose an article.'; err.style.display = 'block'; return; }
+  if (!body.targetId) {
+    err.textContent = body.targetType === 'directory' ? 'Choose a directory profile.' : 'Choose an article.';
+    err.style.display = 'block';
+    return;
+  }
   try {
     if (id) await api('/highlights/admin/' + id, { method: 'PATCH', body: JSON.stringify(body) });
     else await api('/highlights/admin', { method: 'POST', body: JSON.stringify(body) });
@@ -3331,7 +3370,10 @@ function editHighlight(id) {
   const h = (window._hlItems || []).find((x) => x.id === id);
   if (!h) return;
   document.getElementById('hlEditId').value = h.id;
-  document.getElementById('hlArticle').value = h.target_id;
+  // Type first: the picker's options depend on it, so setting the target
+  // before repopulating would select nothing.
+  document.getElementById('hlTargetType').value = h.target_type || 'article';
+  fillHighlightTargets(h.target_id);
   document.getElementById('hlStart').value = h.start_date ? h.start_date.slice(0, 10) : '';
   document.getElementById('hlNoEnd').checked = !h.end_date;
   document.getElementById('hlEnd').disabled = !h.end_date;
@@ -3345,6 +3387,8 @@ function editHighlight(id) {
 
 function resetHighlightForm() {
   document.getElementById('hlEditId').value = '';
+  document.getElementById('hlTargetType').value = 'article';
+  fillHighlightTargets();
   document.getElementById('hlStart').value = '';
   document.getElementById('hlEnd').value = '';
   document.getElementById('hlEnd').disabled = false;
