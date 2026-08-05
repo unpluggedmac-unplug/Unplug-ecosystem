@@ -3058,6 +3058,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script src="unplug-shared.js"></script>
+<script src="unplug-participation-sdk.js"></script>
 <script>
 const api = UnplugAPI.api;
 
@@ -4865,6 +4866,10 @@ async function castVote(entryId){
       body: JSON.stringify({ sessionId: guestSessionId() }),
     });
     localStorage.setItem(votedEntryKey(), String(entryId));
+    // Fire-and-forget — a signed-in voter also earns participation points.
+    // Never awaited: must not slow down or fail the vote itself, and
+    // silently no-ops for guests (points require an account).
+    UnplugParticipation.action('top10_vote', { contentType: 'top10', contentId: entryId });
     // Refresh the full list AND the homepage Top 3 from the same endpoint, so
     // a vote is reflected in both places immediately without an admin step.
     await loadTop10(false);
@@ -6499,6 +6504,11 @@ function renderAccountNav(user) {
   });
 })();
 
+// Referral link capture — before restoreSession, so a ?ref= code on a
+// visitor's very first click is stashed even if they aren't signed in
+// yet. Registration itself only happens once they are (see below).
+UnplugParticipation.captureReferralFromUrl();
+
 // Pick up a session started on the member dashboard (same origin, same
 // localStorage) so member-only touches like "Save for later" work here too.
 // Silent either way — the magazine itself stays fully readable signed out.
@@ -6507,6 +6517,7 @@ UnplugAPI.restoreSession(
     document.body.classList.add('is-member');
     renderAccountNav(user);
     loadForYou();
+    UnplugParticipation.registerPendingReferral();
   },
   () => {
     document.body.classList.remove('is-member');
