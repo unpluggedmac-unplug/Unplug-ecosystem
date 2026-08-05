@@ -102,6 +102,36 @@ body{ min-height:100vh; }
     <button class="btn btn-solid" id="createProfileBtn">Continue to Payment</button>
   </div>
 
+  <!-- BULK VOTE checkout — reached via unplug-checkout.html?type=vote_bundle&id=<entryId>
+       (a click from the Top 10 page, which already knows which entry) or with
+       no id at all, in which case the entrant's 10-digit code is entered here
+       directly. Either path resolves to the same entry, then the same tier
+       picker and the same payment step every other checkout mode uses. -->
+  <div class="card section-hidden" id="voteBundleCard">
+    <div class="step-label">Step 2</div>
+    <h2>Buy Bulk Votes</h2>
+
+    <div class="field section-hidden" id="voteCodeField">
+      <label>Entry Code</label>
+      <p class="sub" style="margin-top:-4px;">Enter the entrant's 10-digit Entry Code — shown next to their name on the Top 10 page.</p>
+      <input id="voteCodeInput" placeholder="e.g. 0004821037" maxlength="10" inputmode="numeric" style="font-family:monospace; letter-spacing:0.06em;">
+      <div class="error-banner" id="voteCodeError"></div>
+      <button class="btn btn-solid" id="voteCodeSubmitBtn" style="margin-top:10px;">Find Entry</button>
+    </div>
+
+    <div class="section-hidden" id="voteEntryResolved">
+      <div style="background:var(--paper); border:1px solid var(--paper-line); border-radius:6px; padding:14px 16px; margin-bottom:16px;">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);" id="voteEntryCompetition"></div>
+        <div style="font-weight:700; font-size:16px; margin-top:2px;" id="voteEntryName"></div>
+      </div>
+      <label style="display:block; font-weight:700; font-size:13px; margin-bottom:8px;">Choose how many votes</label>
+      <div class="tier-options" id="voteTierOptions" style="grid-template-columns:repeat(3,1fr);"></div>
+      <br>
+      <div class="error-banner" id="voteTierError"></div>
+      <button class="btn btn-solid" id="voteContinueBtn" disabled>Continue to Payment</button>
+    </div>
+  </div>
+
   <!-- STEP 2: payment window with referral source -->
   <div class="card section-hidden" id="paymentCard">
     <div class="step-label">Step 3</div>
@@ -205,6 +235,10 @@ let CURRENT_PAYMENT_LINKED_TYPE = 'profile_package';
 // e.g. unplug-checkout.html?type=edition_download&id=3
 const CHECKOUT_PARAMS = new URLSearchParams(window.location.search);
 const EDITION_MODE = CHECKOUT_PARAMS.get('type') === 'edition_download' && CHECKOUT_PARAMS.get('id');
+// Unlike EDITION_MODE, the id is OPTIONAL here: a click from the Top 10 page
+// arrives with one already; someone who was just given a code and came here
+// directly did not, and enters it on this page instead.
+const VOTE_BUNDLE_MODE = CHECKOUT_PARAMS.get('type') === 'vote_bundle';
 
 // Package preselection from the public site's Directory page,
 // e.g. unplug-checkout.html?ptype=business&tier=pro
@@ -351,6 +385,7 @@ function enterCheckout(user){
   document.getElementById('statusLine').textContent = `Signed in as ${user.email}`;
   document.getElementById('loginCard').classList.add('section-hidden');
   if (EDITION_MODE) { enterEditionCheckout(); return; }
+  if (VOTE_BUNDLE_MODE) { enterVoteBundleCheckout(); return; }
   document.getElementById('packageCard').classList.remove('section-hidden');
 }
 
@@ -376,6 +411,111 @@ async function enterEditionCheckout(){
     showError('paymentError', 'Could not load that edition — ' + err.message);
   }
 }
+
+// Bulk-vote checkout: resolve an entry either by the id in the URL (arrived
+// via the "Buy Bulk Votes" button on the Top 10 page) or by the entry's
+// 10-digit code typed in here (arrived directly, e.g. from someone who was
+// just handed a code), then let the buyer pick one of the fixed vote-bundle
+// tiers before handing off to the existing payment step.
+let VOTE_BUNDLE_ENTRY = null;
+let VOTE_BUNDLE_SELECTED_TIER = null;
+
+async function enterVoteBundleCheckout(){
+  document.getElementById('voteBundleCard').classList.remove('section-hidden');
+  const id = CHECKOUT_PARAMS.get('id');
+  if (id) {
+    try {
+      const data = await api('/entries/' + encodeURIComponent(id));
+      resolveVoteBundleEntry(data.entry);
+    } catch (err) {
+      document.getElementById('voteCodeField').classList.remove('section-hidden');
+      showError('voteCodeError', 'Could not load that entry — enter its Entry Code below instead.');
+    }
+  } else {
+    document.getElementById('voteCodeField').classList.remove('section-hidden');
+  }
+}
+
+function resolveVoteBundleEntry(entry){
+  VOTE_BUNDLE_ENTRY = entry;
+  document.getElementById('voteCodeField').classList.add('section-hidden');
+  document.getElementById('voteEntryCompetition').textContent = entry.competition_name;
+  document.getElementById('voteEntryName').textContent = entry.display_name;
+  document.getElementById('voteEntryResolved').classList.remove('section-hidden');
+  loadVoteBundleTierOptions();
+}
+
+document.getElementById('voteCodeSubmitBtn').addEventListener('click', async () => {
+  hideError('voteCodeError');
+  const code = document.getElementById('voteCodeInput').value.trim();
+  if (!/^[0-9]{10}$/.test(code)) {
+    showError('voteCodeError', 'Enter the full 10-digit Entry Code exactly as shown on the Top 10 page.');
+    return;
+  }
+  const btn = document.getElementById('voteCodeSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Finding...';
+  try {
+    const data = await api('/entries/by-code/' + encodeURIComponent(code));
+    resolveVoteBundleEntry(data.entry);
+  } catch (err) {
+    showError('voteCodeError', err.message || 'No approved entry matches that code.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Find Entry';
+  }
+});
+
+async function loadVoteBundleTierOptions(){
+  const wrap = document.getElementById('voteTierOptions');
+  wrap.innerHTML = '<div class="sub">Loading tiers...</div>';
+  try {
+    const data = await api('/vote-bundle-tiers');
+    wrap.innerHTML = (data.tiers || []).map((t) => `
+      <div class="tier-option" data-votes="${t.votes}" data-price="${t.price}">
+        <div style="font-weight:700;">${t.votes} votes</div>
+        <div class="price">R${Number(t.price).toFixed(0)}</div>
+      </div>
+    `).join('');
+  } catch (err) {
+    wrap.innerHTML = '<div class="sub">Could not load Bundle Vote options — please try again shortly.</div>';
+  }
+}
+
+document.getElementById('voteTierOptions').addEventListener('click', (e) => {
+  const el = e.target.closest('.tier-option[data-votes]');
+  if (!el) return;
+  document.querySelectorAll('#voteTierOptions .tier-option').forEach((o) => o.classList.remove('selected'));
+  el.classList.add('selected');
+  VOTE_BUNDLE_SELECTED_TIER = { votes: Number(el.dataset.votes), price: Number(el.dataset.price) };
+  document.getElementById('voteContinueBtn').disabled = false;
+});
+
+document.getElementById('voteContinueBtn').addEventListener('click', async () => {
+  hideError('voteTierError');
+  if (!VOTE_BUNDLE_ENTRY || !VOTE_BUNDLE_SELECTED_TIER) return;
+  const btn = document.getElementById('voteContinueBtn');
+  btn.disabled = true; btn.textContent = 'Please wait...';
+  try {
+    const data = await api('/entries/' + VOTE_BUNDLE_ENTRY.id + '/vote-bundle', {
+      method: 'POST',
+      body: JSON.stringify({ votes: VOTE_BUNDLE_SELECTED_TIER.votes }),
+    });
+    CURRENT_PAYMENT_LINKED_TYPE = 'vote_bundle';
+    CURRENT_PROFILE_ID = data.bundle.id;
+    showOrderDetails(
+      `Bulk Votes — ${VOTE_BUNDLE_ENTRY.display_name}`,
+      `${VOTE_BUNDLE_SELECTED_TIER.votes} extra votes for entry code ${VOTE_BUNDLE_ENTRY.entry_code}.`,
+      data.bundle.price
+    );
+    document.getElementById('voteBundleCard').classList.add('section-hidden');
+    document.getElementById('paymentCard').classList.remove('section-hidden');
+    initCheckoutGate(Number(data.bundle.price));
+    loadConsultants();
+  } catch (err) {
+    showError('voteTierError', err.message || 'Could not start this purchase — please try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Continue to Payment';
+  }
+});
 
 // On page load, restore a saved session rather than forcing a fresh
 // login after every refresh.

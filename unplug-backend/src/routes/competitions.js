@@ -38,7 +38,7 @@ router.get('/competitions/:slug', async (req, res, next) => {
     // image are COALESCEd so the frontend renders both kinds the same way; a
     // manual entry returns a null profile_slug (no profile page to link to).
     const entries = await pool.query(
-      `SELECT ce.id, ce.profile_id, ce.created_at,
+      `SELECT ce.id, ce.profile_id, ce.created_at, ce.entry_code,
               COALESCE(p.display_name, ce.manual_name) AS display_name,
               p.slug AS profile_slug,
               ce.manual_image_url,
@@ -49,7 +49,7 @@ router.get('/competitions/:slug', async (req, res, next) => {
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN votes v ON v.entry_id = ce.id
        WHERE ce.competition_id = $1 AND ce.status = 'approved'
-       GROUP BY ce.id, p.display_name, p.slug, p.feature_image_url, ce.manual_name, ce.manual_image_url, c.name
+       GROUP BY ce.id, ce.entry_code, p.display_name, p.slug, p.feature_image_url, ce.manual_name, ce.manual_image_url, c.name
        -- Deterministic ranking, so every consumer (Top 10 page, homepage Top 3)
        -- gets the SAME order for the same data. Ties break on who reached the
        -- competition first, then on id — never arbitrarily, so positions don't
@@ -570,6 +570,60 @@ router.post('/entries/:id/vote', async (req, res, next) => {
     if (err.code === '23505') { // unique_violation
       return res.status(409).json({ error: 'You have already voted for this entry.' });
     }
+    next(err);
+  }
+});
+
+// Shared shape for the two entry-lookup routes below, so the checkout page
+// gets identical fields whether it resolved the entry by numeric id (a click
+// from the Top 10 page, which already knows it) or by the 10-digit code (typed
+// in directly at the payment portal). Only ever returns an APPROVED entry —
+// the code exists so a stranger can find who to vote for, not so a pending
+// entry can be discovered before it's public.
+const ENTRY_LOOKUP_SELECT = `
+  SELECT ce.id, ce.entry_code, ce.competition_id,
+         COALESCE(p.display_name, ce.manual_name) AS display_name,
+         COALESCE(ce.manual_image_url, p.feature_image_url) AS image_url,
+         c.name AS competition_name, c.slug AS competition_slug
+    FROM competition_entries ce
+    LEFT JOIN profiles p ON p.id = ce.profile_id
+    JOIN competitions c ON c.id = ce.competition_id
+`;
+
+// GET /entries/by-code/:code — public. Resolves an entry by its 10-digit
+// code, for the checkout page when someone arrives wanting to buy votes for a
+// specific entry without having browsed to it on the Top 10 page first —
+// e.g. a code shared by the entrant themselves ("vote for me, code
+// 0004821037"). MUST be registered before GET /entries/:id below: Express
+// matches in registration order, and :id would otherwise greedily match the
+// literal path segment "by-code" as if it were an id.
+router.get('/entries/by-code/:code', async (req, res, next) => {
+  try {
+    const code = String(req.params.code || '').trim();
+    if (!/^[0-9]{10}$/.test(code)) {
+      return res.status(400).json({ error: 'Enter the entry code exactly as shown — 10 digits, numbers only.' });
+    }
+    const result = await pool.query(`${ENTRY_LOOKUP_SELECT} WHERE ce.entry_code = $1 AND ce.status = 'approved'`, [code]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No entry was found for that code. Please check it and try again.' });
+    }
+    res.json({ entry: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /entries/:id — public. Resolves an entry by its database id, for the
+// checkout page when it was reached by clicking a specific entry on the Top
+// 10 page (the id is already known in that case, so no code entry is needed).
+router.get('/entries/:id', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid entry id is required.' });
+    const result = await pool.query(`${ENTRY_LOOKUP_SELECT} WHERE ce.id = $1 AND ce.status = 'approved'`, [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Entry not found.' });
+    res.json({ entry: result.rows[0] });
+  } catch (err) {
     next(err);
   }
 });

@@ -4830,13 +4830,16 @@ function renderPoll(sorted){
   }
   const votedEntryId = localStorage.getItem(votedEntryKey());
   const maxVotes = sorted[0] ? sorted[0].vote_count : 1;
+  const tierSummary = voteBundleTierSummary();
   el.innerHTML = sorted.map((p) => {
     const pct = Math.max(4, Math.round((p.vote_count / (maxVotes || 1)) * 100));
     const voted = String(votedEntryId) === String(p.id);
     return `
-    <div class="poll-row">
+    <div class="poll-row" style="flex-wrap:wrap;">
       <div class="poll-photo"><img src="${entryPhotoUrl(p)}" alt="${escapeHtml(p.display_name)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
-      <span class="poll-name">${escapeHtml(p.display_name)}${isEntryNew(p) ? ' <span style=\"color:var(--red); font-size:10px; font-weight:700; text-transform:uppercase;\">New</span>' : ''}</span>
+      <span class="poll-name">${escapeHtml(p.display_name)}${isEntryNew(p) ? ' <span style=\"color:var(--red); font-size:10px; font-weight:700; text-transform:uppercase;\">New</span>' : ''}
+        ${p.entry_code ? `<span style="display:block; font-size:10.5px; font-weight:400; letter-spacing:0.04em; color:var(--slate); font-family:monospace;">Entry Code: ${escapeHtml(p.entry_code)}</span>` : ''}
+      </span>
       <div class="poll-bar-wrap" title="${escapeHtml(p.category || '')}">
         <div class="poll-bar" style="width:${pct}%"></div>
         <span class="poll-pct">${p.vote_count} votes</span>
@@ -4844,6 +4847,11 @@ function renderPoll(sorted){
       <button class="btn btn-line poll-vote-btn" onclick="castVote(${p.id})" ${votedEntryId ? 'disabled' : ''} style="${voted?'background:var(--red);color:#fff;border-color:var(--red);':''}">
         ${voted?'✓ Voted':'Vote'}
       </button>
+      ${p.entry_code ? `
+      <div style="flex-basis:100%; display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; padding-top:6px; border-top:1px dashed var(--paper-line);">
+        <button class="btn btn-solid" style="width:auto; padding:7px 14px; background:var(--red); border-color:var(--red);" onclick="buyVotesFor(${p.id})">Buy Bulk Votes</button>
+        ${tierSummary ? `<span style="font-size:11.5px; color:var(--slate);">${escapeHtml(tierSummary)}</span>` : ''}
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -4883,9 +4891,41 @@ async function loadTop10(showLoading){
     top10CompetitionId = data.competition.id;
     top10Entries = data.entries;
     renderAll();
+    loadVoteBundleTiers(); // independent of entries loading; cached after first call
   } catch (err) {
     document.getElementById('top10List').innerHTML = '<div class="dir-empty-state">Couldn\'t load the Top 10 right now. Please try again shortly.</div>';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Bulk Vote — the paid vote_bundle tiers, shown next to every entry so a
+// voter can see the options right where they're deciding who to support. The
+// actual purchase happens at the payment portal (unplug-checkout.html), which
+// shows the same tiers again — fetched from the same endpoint, so the two
+// screens can never disagree on price.
+// ---------------------------------------------------------------------------
+let VOTE_BUNDLE_TIERS = null; // [{votes, price}, ...], fetched once and cached
+async function loadVoteBundleTiers() {
+  if (VOTE_BUNDLE_TIERS) { renderAll(); return; }
+  try {
+    const data = await api('/vote-bundle-tiers');
+    VOTE_BUNDLE_TIERS = data.tiers || [];
+  } catch (err) {
+    VOTE_BUNDLE_TIERS = []; // fail quietly — the free Vote button still works
+  }
+  renderAll();
+}
+
+// A compact "10 votes R10 · 50 votes R20 · ..." line — the actual selection
+// happens at checkout, this is so the options are visible without leaving
+// the Top 10 page first.
+function voteBundleTierSummary() {
+  if (!VOTE_BUNDLE_TIERS || VOTE_BUNDLE_TIERS.length === 0) return '';
+  return VOTE_BUNDLE_TIERS.map((t) => `${t.votes} votes — R${Number(t.price).toFixed(0)}`).join(' · ');
+}
+
+function buyVotesFor(entryId) {
+  window.location.href = 'unplug-checkout.html?type=vote_bundle&id=' + entryId;
 }
 
 // ---------------------------------------------------------------------------
