@@ -334,3 +334,75 @@ test('a sponsorship created via HTTP can immediately be used to create a campaig
   });
   assert.equal(campaign.status, 201);
 });
+
+test('PATCH /participation/admin/sponsor-campaigns/:id can pause/resume a campaign and edit its details', async () => {
+  const sponsorship = await pool.query(`INSERT INTO sponsorships (sponsor_name) VALUES ('Patch Test Brand') RETURNING id`);
+  const create = await req('POST', '/participation/admin/sponsor-campaigns', {
+    token: adminToken,
+    body: {
+      sponsorshipId: sponsorship.rows[0].id, campaignType: 'homepage',
+      campaignLabel: 'Original Label', placementCode: 'patch_test_placement',
+      startsAt: '2026-01-01', endsAt: '2026-12-31',
+    },
+  });
+  const campaignId = create.body.id;
+
+  const pause = await req('PATCH', `/participation/admin/sponsor-campaigns/${campaignId}`, {
+    token: adminToken, body: { isActive: false },
+  });
+  assert.equal(pause.status, 204);
+  const afterPause = await req('GET', '/participation/homepage/sponsor/patch_test_placement');
+  assert.equal(afterPause.body.sponsor, null); // inactive campaign no longer shows as the active sponsor
+
+  const relabel = await req('PATCH', `/participation/admin/sponsor-campaigns/${campaignId}`, {
+    token: adminToken, body: { campaignLabel: 'Updated Label', isActive: true },
+  });
+  assert.equal(relabel.status, 204);
+  const list = await req('GET', '/participation/admin/sponsor-campaigns', { token: adminToken });
+  const updated = list.body.campaigns.find((c) => c.id === campaignId);
+  assert.equal(updated.campaign_label, 'Updated Label');
+  assert.equal(updated.is_active, true);
+});
+
+test('PATCH /participation/admin/sponsor-campaigns/:id rejects an empty body and an unknown id', async () => {
+  const sponsorship = await pool.query(`INSERT INTO sponsorships (sponsor_name) VALUES ('Patch Test Brand 2') RETURNING id`);
+  const create = await req('POST', '/participation/admin/sponsor-campaigns', {
+    token: adminToken,
+    body: {
+      sponsorshipId: sponsorship.rows[0].id, campaignType: 'homepage',
+      campaignLabel: 'X', placementCode: 'patch_test_placement_2',
+      startsAt: '2026-01-01', endsAt: '2026-12-31',
+    },
+  });
+
+  const empty = await req('PATCH', `/participation/admin/sponsor-campaigns/${create.body.id}`, { token: adminToken, body: {} });
+  assert.equal(empty.status, 400);
+
+  const unknown = await req('PATCH', '/participation/admin/sponsor-campaigns/999999', { token: adminToken, body: { isActive: false } });
+  assert.equal(unknown.status, 404);
+});
+
+test('DELETE /participation/admin/sponsor-campaigns/:id removes the campaign and rejects non-admins', async () => {
+  const sponsorship = await pool.query(`INSERT INTO sponsorships (sponsor_name) VALUES ('Delete Test Brand') RETURNING id`);
+  const create = await req('POST', '/participation/admin/sponsor-campaigns', {
+    token: adminToken,
+    body: {
+      sponsorshipId: sponsorship.rows[0].id, campaignType: 'homepage',
+      campaignLabel: 'To Delete', placementCode: 'delete_test_placement',
+      startsAt: '2026-01-01', endsAt: '2026-12-31',
+    },
+  });
+  const campaignId = create.body.id;
+
+  const nonAdmin = await req('DELETE', `/participation/admin/sponsor-campaigns/${campaignId}`, { token: memberAToken });
+  assert.equal(nonAdmin.status, 403);
+
+  const del = await req('DELETE', `/participation/admin/sponsor-campaigns/${campaignId}`, { token: adminToken });
+  assert.equal(del.status, 204);
+
+  const list = await req('GET', '/participation/admin/sponsor-campaigns', { token: adminToken });
+  assert.ok(!list.body.campaigns.some((c) => c.id === campaignId));
+
+  const again = await req('DELETE', `/participation/admin/sponsor-campaigns/${campaignId}`, { token: adminToken });
+  assert.equal(again.status, 404);
+});

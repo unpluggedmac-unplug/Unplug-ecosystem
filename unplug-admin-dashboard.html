@@ -1114,8 +1114,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h3>New Campaign</h3></div>
+        <div class="panel-head"><h3 id="unplugCampaignFormTitle">New Campaign</h3></div>
         <div class="panel-body">
+          <input type="hidden" id="unplugCampaignEditId">
           <div class="field"><label>Sponsor</label><select id="unplugCampaignSponsor" style="padding:8px; width:100%;"></select></div>
           <div class="form-row">
             <div><label>Type</label><select id="unplugCampaignType" style="padding:8px; width:100%;">
@@ -1134,6 +1135,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div><label>Ends</label><input id="unplugCampaignEnds" type="date"></div>
           </div>
           <button class="approve" style="padding:9px 16px;" id="unplugAddCampaignBtn">Create Campaign</button>
+          <button class="btn btn-line" id="unplugCampaignCancelEditBtn" type="button" style="width:auto; display:none; margin-left:8px;">Cancel edit</button>
           <div id="unplugCampaignMsg" style="margin-top:8px; font-size:13px;"></div>
         </div>
       </div>
@@ -1141,6 +1143,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel">
         <div class="panel-head"><h3>Existing Campaigns</h3></div>
         <div class="panel-body" id="unplugCampaignsBody" style="padding:0;"></div>
+      </div>
+
+      <div class="panel" id="unplugCampaignReportPanel" style="display:none;">
+        <div class="panel-head"><h3 id="unplugCampaignReportTitle">Campaign Report</h3></div>
+        <div class="panel-body" id="unplugCampaignReportBody"></div>
       </div>
     </div>
 
@@ -5309,7 +5316,10 @@ document.getElementById('unplugAddSponsorBtn').addEventListener('click', async (
   }
 });
 
+// Create OR update, depending on whether unplugCampaignEditId is set —
+// mirrors the Highlights section's add/edit-in-one-form pattern above.
 document.getElementById('unplugAddCampaignBtn').addEventListener('click', async () => {
+  const editId = document.getElementById('unplugCampaignEditId').value;
   const sponsorshipId = parseInt(document.getElementById('unplugCampaignSponsor').value, 10);
   const campaignType = document.getElementById('unplugCampaignType').value;
   const placementCode = document.getElementById('unplugCampaignPlacement').value.trim();
@@ -5317,22 +5327,35 @@ document.getElementById('unplugAddCampaignBtn').addEventListener('click', async 
   const startsAt = document.getElementById('unplugCampaignStarts').value;
   const endsAt = document.getElementById('unplugCampaignEnds').value;
   const msgEl = document.getElementById('unplugCampaignMsg');
-  if (!sponsorshipId || !placementCode || !campaignLabel || !startsAt || !endsAt) {
+  if ((!editId && !sponsorshipId) || !placementCode || !campaignLabel || !startsAt || !endsAt) {
     msgEl.style.color = 'var(--red)';
     msgEl.textContent = 'Sponsor, placement code, label, and both dates are all required.';
     return;
   }
   try {
-    await api('/participation/admin/sponsor-campaigns', {
-      method: 'POST',
-      body: JSON.stringify({ sponsorshipId, campaignType, campaignLabel, placementCode, startsAt, endsAt }),
-    });
-    msgEl.style.color = 'green';
-    msgEl.textContent = 'Campaign created.';
-    document.getElementById('unplugCampaignPlacement').value = '';
-    document.getElementById('unplugCampaignLabel').value = '';
-    document.getElementById('unplugCampaignStarts').value = '';
-    document.getElementById('unplugCampaignEnds').value = '';
+    if (editId) {
+      // Sponsor and campaign type are not editable after creation — both
+      // are structural (which brand, which kind of placement), so
+      // changing them would really mean deleting and re-creating.
+      await api(`/participation/admin/sponsor-campaigns/${editId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ campaignLabel, placementCode, startsAt, endsAt }),
+      });
+      msgEl.style.color = 'green';
+      msgEl.textContent = 'Campaign updated.';
+      cancelUnplugCampaignEdit();
+    } else {
+      await api('/participation/admin/sponsor-campaigns', {
+        method: 'POST',
+        body: JSON.stringify({ sponsorshipId, campaignType, campaignLabel, placementCode, startsAt, endsAt }),
+      });
+      msgEl.style.color = 'green';
+      msgEl.textContent = 'Campaign created.';
+      document.getElementById('unplugCampaignPlacement').value = '';
+      document.getElementById('unplugCampaignLabel').value = '';
+      document.getElementById('unplugCampaignStarts').value = '';
+      document.getElementById('unplugCampaignEnds').value = '';
+    }
     loadUnplugCampaigns();
   } catch (err) {
     msgEl.style.color = 'var(--red)';
@@ -5340,36 +5363,112 @@ document.getElementById('unplugAddCampaignBtn').addEventListener('click', async 
   }
 });
 
+function cancelUnplugCampaignEdit() {
+  document.getElementById('unplugCampaignEditId').value = '';
+  document.getElementById('unplugCampaignFormTitle').textContent = 'New Campaign';
+  document.getElementById('unplugAddCampaignBtn').textContent = 'Create Campaign';
+  document.getElementById('unplugCampaignCancelEditBtn').style.display = 'none';
+  document.getElementById('unplugCampaignSponsor').disabled = false;
+  document.getElementById('unplugCampaignType').disabled = false;
+}
+document.getElementById('unplugCampaignCancelEditBtn').addEventListener('click', cancelUnplugCampaignEdit);
+
+let UNPLUG_CAMPAIGNS = [];
 async function loadUnplugCampaigns() {
   const body = document.getElementById('unplugCampaignsBody');
+  document.getElementById('unplugCampaignReportPanel').style.display = 'none';
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {
     const data = await api('/participation/admin/sponsor-campaigns');
-    const rows = data.campaigns || [];
-    if (!rows.length) {
+    UNPLUG_CAMPAIGNS = data.campaigns || [];
+    if (!UNPLUG_CAMPAIGNS.length) {
       body.innerHTML = '<div class="empty-state">No sponsor campaigns yet.</div>';
       return;
     }
-    body.innerHTML = rows.map((c) => `
+    body.innerHTML = UNPLUG_CAMPAIGNS.map((c) => `
       <div style="padding:12px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <div>
-          <div style="font-weight:700;">${escapeHtmlAdmin(c.campaign_label)}</div>
-          <div style="font-size:12px; color:#666;">${escapeHtmlAdmin(c.sponsor_name)} · ${escapeHtmlAdmin(c.placement_code)} · ${c.starts_at} → ${c.ends_at} · ${c.is_active ? 'Active' : 'Inactive'}</div>
+          <div style="font-weight:700;">${escapeHtmlAdmin(c.campaign_label)}
+            ${c.is_active ? '' : '<span style="font-weight:400; font-size:11px; color:#999; border:1px solid #ccc; padding:1px 6px; margin-left:6px;">Paused</span>'}
+          </div>
+          <div style="font-size:12px; color:#666;">${escapeHtmlAdmin(c.sponsor_name)} · ${escapeHtmlAdmin(c.placement_code)} · ${c.starts_at} → ${c.ends_at}</div>
         </div>
-        <button class="btn btn-line" style="width:auto; padding:6px 14px;" onclick="viewUnplugCampaignReport(${c.id}, '${escapeHtmlAdmin(c.campaign_label).replace(/'/g, "\\'")}')">View Report</button>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn btn-line" style="width:auto; padding:6px 14px;" onclick="viewUnplugCampaignReport(${c.id})">Report</button>
+          <button class="btn btn-line" style="width:auto; padding:6px 14px;" onclick="editUnplugCampaign(${c.id})">Edit</button>
+          <button class="btn btn-line" style="width:auto; padding:6px 14px;" onclick="toggleUnplugCampaignActive(${c.id}, ${!c.is_active})">${c.is_active ? 'Pause' : 'Resume'}</button>
+          <button class="reject" style="width:auto; padding:6px 14px;" onclick="deleteUnplugCampaign(${c.id}, '${escapeHtmlAdmin(c.campaign_label).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
       </div>`).join('');
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
   }
 }
 
-async function viewUnplugCampaignReport(id, label) {
+function editUnplugCampaign(id) {
+  const c = UNPLUG_CAMPAIGNS.find((x) => x.id === id);
+  if (!c) return;
+  document.getElementById('unplugCampaignEditId').value = c.id;
+  document.getElementById('unplugCampaignSponsor').value = c.sponsorship_id;
+  document.getElementById('unplugCampaignSponsor').disabled = true;
+  document.getElementById('unplugCampaignType').value = c.campaign_type;
+  document.getElementById('unplugCampaignType').disabled = true;
+  document.getElementById('unplugCampaignPlacement').value = c.placement_code;
+  document.getElementById('unplugCampaignLabel').value = c.campaign_label;
+  document.getElementById('unplugCampaignStarts').value = String(c.starts_at).slice(0, 10);
+  document.getElementById('unplugCampaignEnds').value = String(c.ends_at).slice(0, 10);
+  document.getElementById('unplugCampaignFormTitle').textContent = 'Edit Campaign';
+  document.getElementById('unplugAddCampaignBtn').textContent = 'Save Changes';
+  document.getElementById('unplugCampaignCancelEditBtn').style.display = 'inline-block';
+  document.getElementById('unplugCampaignMsg').textContent = '';
+  document.getElementById('unplugCampaignLabel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function toggleUnplugCampaignActive(id, makeActive) {
+  try {
+    await api(`/participation/admin/sponsor-campaigns/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive: makeActive }),
+    });
+    showToast(makeActive ? 'Campaign resumed.' : 'Campaign paused.');
+    loadUnplugCampaigns();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function deleteUnplugCampaign(id, label) {
+  if (!confirm(`Delete the campaign "${label}"? This also deletes its impression/click history and cannot be undone.`)) return;
+  try {
+    await api(`/participation/admin/sponsor-campaigns/${id}`, { method: 'DELETE' });
+    showToast('Campaign deleted.');
+    document.getElementById('unplugCampaignReportPanel').style.display = 'none';
+    loadUnplugCampaigns();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function viewUnplugCampaignReport(id) {
+  const panel = document.getElementById('unplugCampaignReportPanel');
+  const titleEl = document.getElementById('unplugCampaignReportTitle');
+  const bodyEl = document.getElementById('unplugCampaignReportBody');
+  panel.style.display = 'block';
+  bodyEl.innerHTML = '<div class="loading-state">Loading…</div>';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   try {
     const data = await api(`/participation/admin/sponsor-campaigns/${id}/report`);
     const r = data.report;
-    alert(`${label}\n\nImpressions: ${r.total_impressions}\nClicks: ${r.total_clicks}\nClick rate: ${r.click_rate}%\nDays active: ${r.days_active} · Days remaining: ${r.days_remaining}`);
+    titleEl.textContent = `Campaign Report — ${r.campaign_label}`;
+    bodyEl.innerHTML = `
+      <p style="font-size:13px; margin-bottom:14px;">
+        <strong>${Number(r.total_impressions).toLocaleString()}</strong> impressions &nbsp;·&nbsp;
+        <strong>${Number(r.total_clicks).toLocaleString()}</strong> clicks &nbsp;·&nbsp;
+        <strong style="color:var(--red);">${r.click_rate}%</strong> click rate
+      </p>
+      <p style="font-size:12.5px; color:#666;">${r.sponsor_name} · ${r.days_active} day(s) active · ${r.days_remaining} day(s) remaining</p>`;
   } catch (err) {
-    showToast(err.message, true);
+    bodyEl.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
   }
 }
 

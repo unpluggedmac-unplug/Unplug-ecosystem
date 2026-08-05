@@ -2211,7 +2211,20 @@ async function loadMyUnplug() {
         <div style="font-size:10px; margin-top:2px;">${escapeHtmlM(p.label)}</div>
       </div>`).join('');
   } catch (e) {
+    // Every other section on this page swaps its "Loading…" placeholder
+    // for an error message on failure — this one previously only updated
+    // the status badge and left Missions/Achievements/Passport stuck on
+    // "Loading…" forever.
+    const msg = `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(e.message || 'please try again shortly.')}</p>`;
     document.getElementById('unplugStatusBadge').textContent = 'Could not load';
+    document.getElementById('unplugStatusSince').textContent = '';
+    document.getElementById('unplugScore').textContent = '—';
+    document.getElementById('unplugNextStatus').textContent = '';
+    document.getElementById('unplugMissions').innerHTML = msg;
+    document.getElementById('unplugAchievements').innerHTML = msg;
+    document.getElementById('unplugPassport').innerHTML = msg;
+    document.getElementById('unplugReferralLink').textContent = '—';
+    document.getElementById('unplugReferralStats').textContent = '';
   }
 }
 

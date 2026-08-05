@@ -438,6 +438,53 @@ router.post('/admin/sponsor-campaigns', requireRole('admin'), async (req, res, n
   }
 });
 
+// PATCH /participation/admin/sponsor-campaigns/:id — partial update. Any of
+// campaignLabel, placementCode, startsAt, endsAt, isActive. Used both for
+// editing a campaign's details and for pausing/resuming it (isActive)
+// without deleting it.
+router.patch('/admin/sponsor-campaigns/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const campaignId = asInt(req.params.id);
+    if (!campaignId) return res.status(400).json({ error: 'A valid campaign id is required.' });
+
+    const fields = [];
+    const values = [];
+    const set = (column, value) => { values.push(value); fields.push(`${column} = $${values.length}`); };
+
+    if (req.body.campaignLabel !== undefined) set('campaign_label', req.body.campaignLabel);
+    if (req.body.placementCode !== undefined) set('placement_code', req.body.placementCode);
+    if (req.body.startsAt !== undefined) set('starts_at', req.body.startsAt);
+    if (req.body.endsAt !== undefined) set('ends_at', req.body.endsAt);
+    if (req.body.isActive !== undefined) set('is_active', !!req.body.isActive);
+
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
+
+    values.push(campaignId);
+    const result = await pool.query(
+      `UPDATE sponsor_campaigns SET ${fields.join(', ')} WHERE id = $${values.length} RETURNING id`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Campaign not found.' });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /participation/admin/sponsor-campaigns/:id — permanently removes
+// the campaign and its analytics (sponsor_analytics cascades on delete).
+router.delete('/admin/sponsor-campaigns/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const campaignId = asInt(req.params.id);
+    if (!campaignId) return res.status(400).json({ error: 'A valid campaign id is required.' });
+    const result = await pool.query('DELETE FROM sponsor_campaigns WHERE id = $1 RETURNING id', [campaignId]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Campaign not found.' });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /participation/admin/sponsor-campaigns/:id/report
 router.get('/admin/sponsor-campaigns/:id/report', requireRole('admin'), async (req, res, next) => {
   try {
