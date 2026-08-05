@@ -108,6 +108,33 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .pill.pending{ background:rgba(210,7,9,0.1); color:var(--red); }
 .pill.approved{ background:rgba(46,125,50,0.1); color:var(--green, #2e7d32); }
 
+/* .stat-card / .stat-row are used on the Analytics screen already (num/label
+   inside), but had never been given rules — they rendered as unstyled divs.
+   Defined once here so both Analytics and the new Dashboard Overview get
+   real stat tiles. */
+.stat-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+.stat-card{ background:var(--cream); border:1px solid var(--paper-line); padding:16px 18px; }
+.stat-card .num{ font-family:'Playfair Display',serif; font-size:28px; font-weight:700; line-height:1.1; }
+.stat-card .label{ font-size:11.5px; color:var(--slate); text-transform:uppercase; letter-spacing:0.03em; margin-top:4px; }
+.stat-card.alert .num{ color:var(--red); }
+.stat-card a.stat-link{ color:var(--red); font-size:11.5px; text-decoration:underline; }
+
+/* ---- sidebar nav groups ---- */
+.sidebar .nav-search{ width:100%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); color:var(--cream); padding:8px 10px; font-size:12.5px; margin-bottom:10px; }
+.sidebar .nav-search::placeholder{ color:#8a8580; }
+.sidebar .nav-pinned{ margin-bottom:8px; }
+.nav-group{ margin-bottom:2px; }
+.nav-group-head{ display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; color:#a8a29a; text-transform:uppercase; letter-spacing:0.05em; font-size:10.5px; font-weight:700; padding:10px 12px 6px; cursor:pointer; text-align:left; }
+.nav-group-head .chev{ transition:transform .15s ease; font-size:9px; }
+.nav-group.open .nav-group-head .chev{ transform:rotate(90deg); }
+.nav-group-items{ display:none; flex-direction:column; gap:1px; }
+.nav-group.open .nav-group-items{ display:flex; }
+.nav-group.has-active .nav-group-head{ color:var(--cream); }
+/* Search-filtered state: a group with no matching item hides entirely rather
+   than showing an empty header. */
+.nav-group.search-hidden{ display:none; }
+.sidebar a.search-hidden{ display:none; }
+
 /* ---- image upload widget ---- */
 .img-upload{ display:flex; flex-direction:column; gap:6px; }
 .img-upload-input{ font-size:12px; }
@@ -179,39 +206,90 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 <div class="app-shell" id="appShell">
   <div class="sidebar">
     <div class="brand">Unplug Admin</div>
-    <a class="active" data-section="queue">Approval Queue</a>
-    <a data-section="manage">Manage Content</a>
-    <a data-section="highlights">Highlighted Articles</a>
-    <a data-section="covers">Cover Images</a>
-    <a data-section="projects">Investor Projects</a>
-    <a data-section="gallerymgmt">Gallery</a>
-    <a data-section="pricing">Service Pricing</a>
-    <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-    <a data-section="calevents">Calendar Events</a>
-    <a data-section="edcal">Editions Calendar</a>
-    <a data-section="deafjobs">Deaf Jobs <span id="deafJobsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-    <a data-section="deafpassports">Deaf Passports <span id="deafPassportsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-    <a data-section="halloffame">Hall of Fame</a>
-    <a data-section="sitesettings">Site Settings</a>
-    <a data-section="birthdays">Birthdays</a>
-    <a data-section="payments">Payments (EFT)</a>
-    <a data-section="users">Users</a>
-    <a data-section="consultants">Sales Consultants</a>
-    <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-    <a data-section="analytics">Analytics</a>
-    <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-    <a data-section="dirprofiles">Directory Profiles</a>
-    <a data-section="pagecms">Page Content</a>
-    <a data-section="adbanners">Ad Banners</a>
-    <a data-section="publish">Publish</a>
-    <a data-section="polls">Polls</a>
-    <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-    <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-    <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-    <a data-section="activitylog">Activity Log</a>
-    <a data-section="editions">Editions</a>
-    <a data-section="competitions">Competitions</a>
-    <a data-section="vouchers">Vouchers</a>
+    <input type="search" class="nav-search" id="navSearch" placeholder="Search admin sections…" aria-label="Search admin sections">
+
+    <!-- Pinned: the two screens opened every single day sit above the
+         categories rather than inside one, so they are never a click away
+         behind a collapsed group. -->
+    <div class="nav-pinned">
+      <a class="active" data-section="overview">📊 Dashboard Overview</a>
+      <a data-section="queue">Approval Queue</a>
+    </div>
+
+    <div class="nav-group" data-group="content">
+      <button type="button" class="nav-group-head"><span>Content Management</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="manage">Manage Content</a>
+        <a data-section="highlights">Highlighted Articles</a>
+        <a data-section="covers">Cover Images</a>
+        <a data-section="gallerymgmt">Gallery</a>
+        <a data-section="publish">Publish</a>
+        <a data-section="polls">Polls</a>
+        <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="birthdays">Birthdays</a>
+        <a data-section="halloffame">Hall of Fame</a>
+        <a data-section="calevents">Calendar Events</a>
+        <a data-section="edcal">Editions Calendar</a>
+        <a data-section="editions">Editions</a>
+        <a data-section="deafjobs">Deaf Jobs <span id="deafJobsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="deafpassports">Deaf Passports <span id="deafPassportsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="business">
+      <button type="button" class="nav-group-head"><span>Business Management</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="dirprofiles">Directory Profiles</a>
+        <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="projects">Investor Projects</a>
+        <a data-section="adbanners">Ad Banners</a>
+        <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="competitions">
+      <button type="button" class="nav-group-head"><span>Competition Management</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="competitions">Competitions</a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="users">
+      <button type="button" class="nav-group-head"><span>User Management</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="users">Users</a>
+        <a data-section="consultants">Sales Consultants</a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="payments">
+      <button type="button" class="nav-group-head"><span>Payment Management</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="payments">Payments (EFT)</a>
+        <a data-section="pricing">Service Pricing</a>
+        <a data-section="vouchers">Vouchers</a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="settings">
+      <button type="button" class="nav-group-head"><span>Website Settings</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="sitesettings">Site Settings</a>
+        <a data-section="pagecms">Page Content</a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="system">
+      <button type="button" class="nav-group-head"><span>System</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="analytics">Analytics</a>
+        <a data-section="activitylog">Activity Log</a>
+      </div>
+    </div>
+
     <!-- Same-tab link to the public site. No data-section, so the section
          router below ignores it and the browser just navigates. The session
          lives in localStorage on the same origin, so coming back to the
@@ -224,8 +302,26 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   </div>
 
   <div class="main">
+    <!-- DASHBOARD OVERVIEW — the landing screen: "what needs my attention
+         today?" answered from one endpoint (GET /admin/overview) rather than
+         opening ten sections to find out. -->
+    <div class="admin-section active" id="section-overview">
+      <div class="main-head"><div><h1>Dashboard Overview</h1><p>A snapshot of the platform right now. Anything waiting on you is highlighted below — click through to act on it.</p></div></div>
+      <div class="stat-row" id="ovTotals">
+        <div class="stat-card"><div class="num">—</div><div class="label">Loading…</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Needs your attention</h3></div>
+        <div class="panel-body" id="ovPending" style="padding:0;">Loading…</div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Recent submissions</h3></div>
+        <div class="panel-body" id="ovRecent" style="padding:0;">Loading…</div>
+      </div>
+    </div>
+
     <!-- APPROVAL QUEUE -->
-    <div class="admin-section active" id="section-queue">
+    <div class="admin-section" id="section-queue">
       <div class="main-head"><div><h1>Approval Queue</h1><p>Live data from the Unplug API — approve or reject moves it immediately.</p></div></div>
       <div class="panel">
         <div class="queue-tabs" id="queueTabs"></div>
@@ -1413,6 +1509,10 @@ function enterDashboard(user){
   document.getElementById('currentUserEmail').textContent = user.email;
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appShell').classList.add('active');
+  // Dashboard Overview is the default screen now, so it needs data on first
+  // paint too — loadQueueTab stays as a cheap prefetch for when the admin
+  // clicks through to the queue.
+  loadOverview();
   loadQueueTab('news');
   refreshNotifBadge();
   // Fill the comments badge up front so a waiting queue is visible without
@@ -1460,6 +1560,13 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     document.querySelectorAll('.admin-section').forEach((s) => s.classList.remove('active'));
     const section = link.dataset.section;
     document.getElementById('section-' + section).classList.add('active');
+    // Clicking an item inside a collapsed group should reveal it, not just
+    // switch the section behind it — otherwise the sidebar can show a page
+    // as open with no visible highlighted link.
+    const parentGroup = link.closest('.nav-group');
+    if (parentGroup) parentGroup.classList.add('open');
+    if (window.innerWidth > 800) window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (section === 'overview') loadOverview();
     if (section === 'manage') loadManageContent();
     if (section === 'highlights') loadHighlightsAdmin();
     if (section === 'covers') loadCoverManager();
@@ -1494,6 +1601,108 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'vouchers') loadVouchers();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sidebar nav groups — collapse/expand, and expand-on-load for whichever
+// group holds the active section (so a saved bookmark or refresh doesn't land
+// on a highlighted link buried inside a collapsed group).
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.nav-group-head').forEach((head) => {
+  head.addEventListener('click', () => {
+    head.closest('.nav-group').classList.toggle('open');
+  });
+});
+(function expandActiveGroupOnLoad() {
+  const active = document.querySelector('.sidebar a.active');
+  const group = active && active.closest('.nav-group');
+  if (group) group.classList.add('open');
+})();
+
+// ---------------------------------------------------------------------------
+// Sidebar search — filters nav items by label text. A group with no
+// matching item hides entirely rather than showing an empty header; a group
+// WITH a match forces itself open so the result is actually visible.
+// ---------------------------------------------------------------------------
+document.getElementById('navSearch').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.nav-group').forEach((group) => {
+    const items = [...group.querySelectorAll('a[data-section]')];
+    let anyMatch = false;
+    items.forEach((a) => {
+      const match = !q || a.textContent.toLowerCase().includes(q);
+      a.classList.toggle('search-hidden', !match);
+      if (match) anyMatch = true;
+    });
+    group.classList.toggle('search-hidden', !anyMatch);
+    if (q && anyMatch) group.classList.add('open');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dashboard Overview — "what needs my attention today?" from one endpoint.
+// ---------------------------------------------------------------------------
+const OV_STAT_LABELS = { users: 'Members', articles: 'Published Articles', profiles: 'Directory Profiles', editions: 'Editions', gallery: 'Gallery Photos' };
+// Maps a pending-count key to the nav section it should jump to, so "3
+// pending" is something you can click through and act on, not just a number.
+const OV_PENDING_LINKS = {
+  articles: { section: 'queue', label: 'pending article' },
+  profiles: { section: 'queue', label: 'pending Directory profile' },
+  gallery: { section: 'queue', label: 'pending gallery photo' },
+  claims: { section: 'claims', label: 'pending listing claim' },
+  reviews: { section: 'reviews', label: 'pending review' },
+  comments: { section: 'comments', label: 'pending comment' },
+};
+
+function ovGoToSection(sectionKey) {
+  const link = document.querySelector(`.sidebar a[data-section="${sectionKey}"]`);
+  if (link) link.click();
+}
+
+async function loadOverview() {
+  const totalsEl = document.getElementById('ovTotals');
+  const pendingEl = document.getElementById('ovPending');
+  const recentEl = document.getElementById('ovRecent');
+  if (!totalsEl) return;
+  try {
+    const d = await api('/admin/overview');
+
+    totalsEl.innerHTML = Object.keys(OV_STAT_LABELS).map((k) =>
+      `<div class="stat-card"><div class="num">${(d.totals[k] || 0).toLocaleString()}</div><div class="label">${OV_STAT_LABELS[k]}</div></div>`
+    ).join('')
+      + `<div class="stat-card${d.payments.pendingEftCount > 0 ? ' alert' : ''}">
+           <div class="num">${d.payments.pendingEftCount}</div>
+           <div class="label">Pending EFT ${d.payments.pendingEftCount > 0 ? '(R' + d.payments.pendingEftAmount.toLocaleString() + ')' : ''}</div>
+         </div>`
+      + `<div class="stat-card"><div class="num">${d.activity.views7d.toLocaleString()}</div><div class="label">Views, Last 7 Days</div></div>`;
+
+    const pendingRows = Object.keys(OV_PENDING_LINKS)
+      .map((k) => ({ key: k, n: d.pending[k] || 0, ...OV_PENDING_LINKS[k] }))
+      .filter((r) => r.n > 0);
+    pendingEl.innerHTML = pendingRows.length
+      ? pendingRows.map((r) => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--paper-line);">
+            <span>${r.n} ${r.label}${r.n === 1 ? '' : 's'}</span>
+            <button class="btn btn-line" style="width:auto; padding:6px 14px;" onclick="ovGoToSection('${r.section}')">Review</button>
+          </div>`).join('')
+      : '<div style="padding:16px; color:#666;">Nothing waiting on you right now.</div>';
+
+    recentEl.innerHTML = d.recentSubmissions.length
+      ? d.recentSubmissions.map((r) => {
+          const when = r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : '';
+          const kindLabel = { article: 'Article', profile: 'Directory profile', gallery: 'Gallery photo' }[r.kind] || r.kind;
+          return `<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-bottom:1px solid var(--paper-line); gap:12px;">
+            <div style="min-width:0;">
+              <div style="font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtmlAdmin(r.label || '(untitled)')}</div>
+              <div style="font-size:11.5px; color:#666;">${kindLabel} · ${when}</div>
+            </div>
+            <span class="pill ${r.status === 'approved' ? 'approved' : 'pending'}">${escapeHtmlAdmin(r.status)}</span>
+          </div>`;
+        }).join('')
+      : '<div style="padding:16px; color:#666;">No submissions yet.</div>';
+  } catch (e) {
+    totalsEl.innerHTML = `<div class="stat-card"><div class="num" style="font-size:15px; color:var(--red);">Could not load</div><div class="label">${escapeHtmlAdmin(e.message || '')}</div></div>`;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Approval Queue — one config object per tab, so adding a new content

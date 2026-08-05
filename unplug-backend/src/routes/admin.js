@@ -98,6 +98,19 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
       });
     }
 
+    // Sales/consultant access is deliberately a ROLE (granted here, revocable
+    // later) rather than a live email-domain check on every request — see the
+    // comment in 046_consultant_role.sql for why: a pure domain check would
+    // mean anyone who ever signed up with a company address keeps free
+    // publishing forever, even after leaving, since there'd be no role to take
+    // away. The domain restriction the brief asks for is enforced at the one
+    // moment it actually matters — the grant itself.
+    if (b.role === 'consultant' && !/@unplugnews\.com$/i.test(target.rows[0].email)) {
+      return res.status(400).json({
+        error: 'Only an @unplugnews.com email address can be made a Sales Consultant. This account is ' + target.rows[0].email + '.',
+      });
+    }
+
     const sets = [];
     const vals = [];
     const put = (col, val) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
@@ -1030,6 +1043,88 @@ router.get('/sales-consultants/:id/payments', requireRole('admin'), async (req, 
 // GET /admin/notifications — unread-first feed. A sales-consultant-linked
 // payment automatically creates one of these (see payments.js) so the
 // admin doesn't have to go hunting through the full payments table.
+// GET /admin/overview — the Dashboard Overview landing screen: enough of the
+// platform's current state to answer "what needs my attention today?" in one
+// call, rather than opening ten sections to find out.
+//
+// Every count here reads a table that already exists and is already the
+// source of truth for its own admin section — this endpoint does not
+// duplicate any business logic, it only aggregates.
+router.get('/overview', requireRole('admin'), async (req, res, next) => {
+  try {
+    const [
+      users, articles, profiles, editions, gallery,
+      pendingEft, pendingArticles, pendingProfiles, pendingGallery,
+      pendingClaims, pendingReviews, pendingComments,
+      views7d, unreadNotifications,
+    ] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int AS n FROM users`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM articles WHERE status = 'approved'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM profiles WHERE status = 'approved'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM editions WHERE status = 'published'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM gallery_images WHERE status = 'approved'`),
+      pool.query(`SELECT COUNT(*)::int AS n, COALESCE(SUM(amount), 0)::numeric AS amount
+                    FROM payments WHERE method = 'eft' AND status = 'pending'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM articles WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM profiles WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM gallery_images WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM profile_claims WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM profile_reviews WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM article_comments WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM page_views WHERE viewed_at >= now() - interval '7 days'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM admin_notifications WHERE read = false`),
+    ]);
+
+    // Recent submissions across content types, newest first — the "what just
+    // came in" feed the brief asks for, built from tables that already exist
+    // rather than a new activity-log entry type.
+    const recent = await pool.query(
+      `SELECT * FROM (
+          SELECT id, title AS label, 'article' AS kind, status, created_at FROM articles
+          UNION ALL
+          SELECT id, display_name AS label, 'profile' AS kind, status, created_at FROM profiles
+          UNION ALL
+          SELECT id, COALESCE(caption, 'Untitled photo') AS label, 'gallery' AS kind, status, created_at FROM gallery_images
+        ) recent
+        ORDER BY created_at DESC
+        LIMIT 10`
+    );
+
+    res.json({
+      totals: {
+        users: users.rows[0].n,
+        articles: articles.rows[0].n,
+        profiles: profiles.rows[0].n,
+        editions: editions.rows[0].n,
+        gallery: gallery.rows[0].n,
+      },
+      pending: {
+        articles: pendingArticles.rows[0].n,
+        profiles: pendingProfiles.rows[0].n,
+        gallery: pendingGallery.rows[0].n,
+        claims: pendingClaims.rows[0].n,
+        reviews: pendingReviews.rows[0].n,
+        comments: pendingComments.rows[0].n,
+        // The single number a submission-inbox badge would show — how many
+        // things across every type are actually waiting on a decision.
+        total: pendingArticles.rows[0].n + pendingProfiles.rows[0].n + pendingGallery.rows[0].n
+          + pendingClaims.rows[0].n + pendingReviews.rows[0].n + pendingComments.rows[0].n,
+      },
+      payments: {
+        pendingEftCount: pendingEft.rows[0].n,
+        pendingEftAmount: Number(pendingEft.rows[0].amount),
+      },
+      activity: {
+        views7d: views7d.rows[0].n,
+        unreadNotifications: unreadNotifications.rows[0].n,
+      },
+      recentSubmissions: recent.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/notifications', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(

@@ -151,6 +151,41 @@ test('an invalid role or member type is refused', async () => {
   assert.equal((await req('PATCH', `/admin/users/${MEMBER_ID}`, { token: adminToken, body: { memberType: 'charity' } })).status, 400);
 });
 
+// ------------------------------------------------------------- consultant role
+
+test('only an @unplugnews.com account can be made a Sales Consultant', async () => {
+  const r = await req('PATCH', `/admin/users/${MEMBER_ID}`, { token: adminToken, body: { role: 'consultant' } });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /@unplugnews\.com/);
+
+  const still = await pool.query('SELECT role FROM users WHERE id = $1', [MEMBER_ID]);
+  assert.notEqual(still.rows[0].role, 'consultant', 'the role was changed despite the refusal');
+});
+
+test('an @unplugnews.com account CAN be made a Sales Consultant', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (777, 'rep@unplugnews.com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  const r = await req('PATCH', '/admin/users/777', { token: adminToken, body: { role: 'consultant' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.user.role, 'consultant');
+});
+
+test('the domain check is case-insensitive', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (778, 'Rep2@UnplugNews.Com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  const r = await req('PATCH', '/admin/users/778', { token: adminToken, body: { role: 'consultant' } });
+  assert.equal(r.status, 200);
+});
+
+test('a lookalike domain is refused, not just a missing @unplugnews.com suffix', async () => {
+  // Guards against a naive .includes('unplugnews.com') check, which
+  // 'rep@unplugnews.com.evil.example' would pass.
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (779, 'rep@unplugnews.com.evil.example', 'x', 'member') ON CONFLICT DO NOTHING`);
+  const r = await req('PATCH', '/admin/users/779', { token: adminToken, body: { role: 'consultant' } });
+  assert.equal(r.status, 400);
+});
+
 test('the email address cannot be changed here', async () => {
   // It is how sign-in works and how guest edition purchases are reunited with
   // an account — changing it would detach someone from their own history.
