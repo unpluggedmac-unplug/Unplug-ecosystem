@@ -262,6 +262,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
       <button class="ms-navlink" data-ms="editions"><span>📖</span> My Editions</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
+      <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
       <a class="ms-navlink" href="unplug-magazine.html"><span>🌐</span> View Official Site</a>
       <button class="ms-navlink ms-logout" id="msLogout"><span>↩</span> Logout</button>
     </aside>
@@ -584,6 +585,17 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <h2>My Payments</h2>
       <p class="sub">Everything you've paid for, newest first. If you paid by EFT, the reference is what we match against our bank statement.</p>
       <div id="myPaymentsContent"><div class="loading-state">Loading…</div></div>
+    </div>
+    </section>
+
+    <!-- MY REFERRALS — sales-consultant self-service. Nav link + this
+         section only appear for role='consultant' (see enterMemberDashboard),
+         since /sales-consultants/me 404s for anyone else anyway. -->
+    <section class="ms-section section-hidden" data-ms-section="myreferrals">
+    <div class="card">
+      <h2>My Referrals</h2>
+      <p class="sub">Your own commission summary — only confirmed sales count toward revenue and commission owed.</p>
+      <div id="myReferralsContent"><div class="loading-state">Loading…</div></div>
     </div>
     </section>
 
@@ -958,6 +970,10 @@ function enterMemberDashboard(user){
   loadMyPayments();
   loadMyUnplug();
   loadCredits();
+  if (CURRENT_USER && CURRENT_USER.role === 'consultant') {
+    document.getElementById('msMyReferralsNav').classList.remove('section-hidden');
+    loadMyReferrals();
+  }
   setupSubmitGate();
   loadHighlightServices();
   loadPaymentHistory();
@@ -2225,6 +2241,51 @@ async function loadMyUnplug() {
     document.getElementById('unplugPassport').innerHTML = msg;
     document.getElementById('unplugReferralLink').textContent = '—';
     document.getElementById('unplugReferralStats').textContent = '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// My Referrals — sales-consultant self-service. Previously a consultant had
+// no way to see their own commission without asking an admin; this reuses
+// the same numbers /admin/sales-consultants/performance shows, scoped to
+// just this consultant via GET /sales-consultants/me.
+// ---------------------------------------------------------------------------
+async function loadMyReferrals() {
+  const el = document.getElementById('myReferralsContent');
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/sales-consultants/me');
+    const c = data.consultant;
+    const sales = data.recentSales || [];
+    el.innerHTML = `
+      <div style="display:flex; gap:24px; flex-wrap:wrap; margin-bottom:16px;">
+        <div><div style="font-family:'Playfair Display',serif; font-size:24px; font-weight:700; color:var(--red);">R${Number(c.revenue).toFixed(2)}</div><div style="font-size:11.5px; color:var(--slate);">Confirmed revenue</div></div>
+        <div><div style="font-family:'Playfair Display',serif; font-size:24px; font-weight:700;">R${Number(c.commission_due).toFixed(2)}</div><div style="font-size:11.5px; color:var(--slate);">Commission owed (${c.commission_pct}%)</div></div>
+        <div><div style="font-family:'Playfair Display',serif; font-size:24px; font-weight:700;">${c.confirmed_referrals}</div><div style="font-size:11.5px; color:var(--slate);">Confirmed referrals</div></div>
+        <div><div style="font-family:'Playfair Display',serif; font-size:24px; font-weight:700;">${c.pending_referrals}</div><div style="font-size:11.5px; color:var(--slate);">Pending (not yet paid)</div></div>
+      </div>
+      <h3 style="font-size:14px; margin-bottom:8px;">Recent confirmed sales</h3>
+      ${sales.length
+        ? `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead><tr style="text-align:left; border-bottom:1px solid var(--paper-line);">
+              <th style="padding:6px;">For</th><th style="padding:6px;">Amount</th><th style="padding:6px;">Date</th>
+            </tr></thead>
+            <tbody>${sales.map((s) => `<tr style="border-bottom:1px solid var(--paper-line);">
+              <td style="padding:6px;">${escapeHtmlM(s.linked_type)} #${s.linked_id}</td>
+              <td style="padding:6px;">R${Number(s.amount).toFixed(2)}</td>
+              <td style="padding:6px; color:var(--slate);">${msDate(s.confirmed_at)}</td>
+            </tr>`).join('')}</tbody>
+          </table></div>`
+        : '<p class="sub" style="margin:0;">No confirmed sales yet.</p>'}
+    `;
+  } catch (err) {
+    // This file's api() helper only ever throws a plain Error with a
+    // message (see api(), no .status attached), so the 404 case is
+    // distinguished by matching the backend's message text rather than
+    // a status code.
+    el.innerHTML = /ask an admin/i.test(err.message || '')
+      ? '<p class="sub" style="margin:0;">Your account isn\'t linked to a consultant record yet — ask an admin to link it.</p>'
+      : `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(err.message)}</p>`;
   }
 }
 

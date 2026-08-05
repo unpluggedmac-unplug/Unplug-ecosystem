@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -14,6 +14,49 @@ router.get('/', async (req, res, next) => {
       `SELECT id, name FROM sales_consultants WHERE active = true ORDER BY name ASC`
     );
     res.json({ consultants: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /sales-consultants/me — self-service. A consultant's own referral
+// count, revenue, and commission owed, without needing to ask an admin.
+// Scoped by sales_consultants.user_id, not by role, so it works the moment
+// an admin links the account — see 046_consultant_role.sql for how that
+// link gets made (by matching email, or an admin can extend that later).
+//
+// Same "only CONFIRMED referrals count" rule as /performance, for the same
+// reason: an initiated-but-incomplete payment isn't money yet.
+router.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.name, c.commission_pct, c.active,
+              COUNT(p.id) FILTER (WHERE p.status = 'confirmed')::int AS confirmed_referrals,
+              COUNT(p.id) FILTER (WHERE p.status = 'pending')::int   AS pending_referrals,
+              COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'confirmed'), 0)::numeric AS revenue,
+              ROUND(COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'confirmed'), 0)
+                    * c.commission_pct / 100, 2)                     AS commission_due,
+              MAX(p.confirmed_at) FILTER (WHERE p.status = 'confirmed') AS last_sale_at
+         FROM sales_consultants c
+         LEFT JOIN payments p ON p.sales_consultant_id = c.id
+        WHERE c.user_id = $1
+        GROUP BY c.id`,
+      [req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No consultant record is linked to your account yet — ask an admin to link it.' });
+    }
+
+    const recentSales = await pool.query(
+      `SELECT p.linked_type, p.linked_id, p.amount, p.confirmed_at
+         FROM payments p
+        WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+        ORDER BY p.confirmed_at DESC
+        LIMIT 20`,
+      [result.rows[0].id]
+    );
+
+    res.json({ consultant: result.rows[0], recentSales: recentSales.rows });
   } catch (err) {
     next(err);
   }
