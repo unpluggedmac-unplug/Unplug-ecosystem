@@ -378,7 +378,33 @@ router.post('/admin/sync/:userId', requireRole('admin'), async (req, res, next) 
   }
 });
 
-// -- Sponsor campaigns (admin) --
+// -- Sponsorships (the brands themselves) + campaigns (admin) --
+
+// GET /participation/admin/sponsorships
+router.get('/admin/sponsorships', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT * FROM sponsorships ORDER BY sponsor_name ASC');
+    res.json({ sponsorships: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /participation/admin/sponsorships — body { sponsorName, sponsorLogoUrl?, sponsorUrl?, contactName?, contactEmail? }
+router.post('/admin/sponsorships', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { sponsorName, sponsorLogoUrl, sponsorUrl, contactName, contactEmail } = req.body;
+    if (!sponsorName) return res.status(400).json({ error: 'sponsorName is required.' });
+    const result = await pool.query(
+      `INSERT INTO sponsorships (sponsor_name, sponsor_logo_url, sponsor_url, contact_name, contact_email)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [sponsorName, sponsorLogoUrl || null, sponsorUrl || null, contactName || null, contactEmail || null]
+    );
+    res.status(201).json({ id: result.rows[0].id });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /participation/admin/sponsor-campaigns
 router.get('/admin/sponsor-campaigns', requireRole('admin'), async (req, res, next) => {

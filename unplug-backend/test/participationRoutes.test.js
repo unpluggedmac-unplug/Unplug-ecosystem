@@ -301,3 +301,36 @@ test('admin sponsor campaign CRUD + reporting over HTTP', async () => {
   assert.equal(report.status, 200);
   assert.equal(report.body.report.total_impressions, '1');
 });
+
+test('POST /participation/admin/sponsorships requires sponsorName and rejects non-admins', async () => {
+  const missingField = await req('POST', '/participation/admin/sponsorships', { token: adminToken, body: {} });
+  assert.equal(missingField.status, 400);
+
+  const nonAdmin = await req('POST', '/participation/admin/sponsorships', { token: memberAToken, body: { sponsorName: 'X' } });
+  assert.equal(nonAdmin.status, 403);
+});
+
+test('a sponsorship created via HTTP can immediately be used to create a campaign, without a direct DB insert', async () => {
+  const create = await req('POST', '/participation/admin/sponsorships', {
+    token: adminToken,
+    body: { sponsorName: 'End-to-End Brand', sponsorUrl: 'https://example.com' },
+  });
+  assert.equal(create.status, 201);
+  const sponsorshipId = create.body.id;
+
+  const list = await req('GET', '/participation/admin/sponsorships', { token: adminToken });
+  assert.ok(list.body.sponsorships.some((s) => s.id === sponsorshipId && s.sponsor_name === 'End-to-End Brand'));
+
+  const campaign = await req('POST', '/participation/admin/sponsor-campaigns', {
+    token: adminToken,
+    body: {
+      sponsorshipId,
+      campaignType: 'homepage',
+      campaignLabel: 'Presented by End-to-End Brand',
+      placementCode: 'e2e_test_placement',
+      startsAt: '2026-01-01',
+      endsAt: '2026-12-31',
+    },
+  });
+  assert.equal(campaign.status, 201);
+});

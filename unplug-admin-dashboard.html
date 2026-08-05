@@ -290,6 +290,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <div class="nav-group" data-group="participation">
+      <button type="button" class="nav-group-head"><span>Participation Engine</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="unplugmembers">Member Scores</a>
+        <a data-section="unplugsponsors">Sponsor Campaigns</a>
+      </div>
+    </div>
+
     <!-- Same-tab link to the public site. No data-section, so the section
          router below ignores it and the browser just navigates. The session
          lives in localStorage on the same origin, so coming back to the
@@ -1030,6 +1038,112 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- PARTICIPATION ENGINE: MEMBER SCORES -->
+    <div class="admin-section" id="section-unplugmembers">
+      <div class="main-head"><div><h1>Member Scores</h1><p>The participation engine's leaderboard, plus tools to manually award or reverse points and force a full resync for a member.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Leaderboard</h3></div>
+        <div class="panel-body" style="padding:0 16px 12px;">
+          <div class="form-row" style="align-items:flex-end;">
+            <div><label>Type</label><select id="unplugLbType" style="padding:8px; width:100%;">
+              <option value="overall">Overall</option>
+              <option value="momentum">Momentum</option>
+              <option value="recognition">Recognition</option>
+              <option value="contribution">Contribution</option>
+            </select></div>
+            <div style="display:flex; align-items:flex-end;"><button class="btn btn-solid" style="width:auto;" id="unplugLbLoadBtn">Refresh</button></div>
+          </div>
+        </div>
+        <div class="panel-body" id="unplugLeaderboardBody" style="padding:0;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Award Points</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>User ID</label><input id="unplugAwardUserId" type="number" placeholder="e.g. 42"></div>
+            <div><label>Points (+/-)</label><input id="unplugAwardPoints" type="number" placeholder="e.g. 100"></div>
+            <div><label>Reason (required)</label><input id="unplugAwardReason" placeholder="Why is this being granted?"></div>
+          </div>
+          <button class="approve" style="padding:9px 16px;" id="unplugAwardBtn">Award Points</button>
+          <div id="unplugAwardMsg" style="margin-top:8px; font-size:13px;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Reverse a Transaction</h3></div>
+        <div class="panel-body">
+          <p style="font-size:12.5px; color:#666; margin-top:0;">Find the transaction id from the member's dashboard or the point ledger, then reverse it here. This is permanent.</p>
+          <div class="form-row">
+            <div><label>Transaction ID</label><input id="unplugReverseTxId" type="number" placeholder="e.g. 918"></div>
+            <div><label>Reason (required)</label><input id="unplugReverseReason" placeholder="Why is this being reversed?"></div>
+          </div>
+          <button class="reject" style="padding:9px 16px;" id="unplugReverseBtn">Reverse Points</button>
+          <div id="unplugReverseMsg" style="margin-top:8px; font-size:13px;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Full Resync</h3></div>
+        <div class="panel-body">
+          <p style="font-size:12.5px; color:#666; margin-top:0;">Recalculates a member's score, re-checks every achievement, and re-evaluates their status tier. Use after a manual correction or a data import.</p>
+          <div class="form-row">
+            <div><label>User ID</label><input id="unplugSyncUserId" type="number" placeholder="e.g. 42"></div>
+          </div>
+          <button class="btn btn-solid" style="width:auto;" id="unplugSyncBtn">Resync Member</button>
+          <div id="unplugSyncMsg" style="margin-top:8px; font-size:13px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PARTICIPATION ENGINE: SPONSOR CAMPAIGNS -->
+    <div class="admin-section" id="section-unplugsponsors">
+      <div class="main-head"><div><h1>Sponsor Campaigns</h1><p>Brand deals that sponsor a mission, ranking, or homepage moment — separate from the Ad Banners rotation.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Add a Sponsor</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label>Sponsor name</label><input id="unplugSponsorName" placeholder="e.g. Brand X"></div>
+            <div><label>Logo URL (optional)</label><input id="unplugSponsorLogo" placeholder="https://…"></div>
+            <div><label>Website (optional)</label><input id="unplugSponsorUrl" placeholder="https://…"></div>
+          </div>
+          <button class="approve" style="padding:9px 16px;" id="unplugAddSponsorBtn">Add Sponsor</button>
+          <div id="unplugSponsorMsg" style="margin-top:8px; font-size:13px;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>New Campaign</h3></div>
+        <div class="panel-body">
+          <div class="field"><label>Sponsor</label><select id="unplugCampaignSponsor" style="padding:8px; width:100%;"></select></div>
+          <div class="form-row">
+            <div><label>Type</label><select id="unplugCampaignType" style="padding:8px; width:100%;">
+              <option value="homepage">Homepage</option>
+              <option value="daily_mission">Daily Mission</option>
+              <option value="rising_star">Rising Star</option>
+              <option value="ranking">Ranking</option>
+              <option value="challenge">Challenge</option>
+              <option value="achievement">Achievement</option>
+            </select></div>
+            <div><label>Placement code</label><input id="unplugCampaignPlacement" placeholder="e.g. homepage_todays_person"></div>
+            <div><label>Campaign label</label><input id="unplugCampaignLabel" placeholder="e.g. Presented by Brand X"></div>
+          </div>
+          <div class="form-row">
+            <div><label>Starts</label><input id="unplugCampaignStarts" type="date"></div>
+            <div><label>Ends</label><input id="unplugCampaignEnds" type="date"></div>
+          </div>
+          <button class="approve" style="padding:9px 16px;" id="unplugAddCampaignBtn">Create Campaign</button>
+          <div id="unplugCampaignMsg" style="margin-top:8px; font-size:13px;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Existing Campaigns</h3></div>
+        <div class="panel-body" id="unplugCampaignsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
       <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
@@ -1599,6 +1713,8 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'inquiries') loadInquiries();
     if (section === 'activitylog') loadActivityLog();
     if (section === 'vouchers') loadVouchers();
+    if (section === 'unplugmembers') loadUnplugLeaderboard();
+    if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
   });
 });
 
@@ -5043,6 +5159,217 @@ async function loadConsultantSubmissions(id, bodyEl) {
     block.appendChild(table);
   } catch (err) {
     block.innerHTML = `<div class="empty-state">Could not load submissions: ${err.message}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Participation Engine — leaderboard, manual point grants/reversals, full
+// resync, and sponsor campaign management. Talks to the /participation/*
+// routes added alongside the rest of the participation engine.
+// ---------------------------------------------------------------------------
+async function loadUnplugLeaderboard() {
+  const body = document.getElementById('unplugLeaderboardBody');
+  const type = document.getElementById('unplugLbType').value;
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api(`/participation/leaderboard?type=${type}&limit=50`);
+    const rows = data.leaderboard || [];
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-state">No ranked members yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>#</th><th>Member</th><th>Status</th><th>Score</th><th>Movement</th></tr>';
+    rows.forEach((r) => {
+      const tr = document.createElement('tr');
+      const movement = r.rank_movement > 0 ? `↑${r.rank_movement}` : r.rank_movement < 0 ? `↓${Math.abs(r.rank_movement)}` : '—';
+      tr.innerHTML = `<td>${r.rank_position}</td><td>${escapeHtmlAdmin(r.display_name)}</td>
+        <td>${r.status_emoji || ''} ${escapeHtmlAdmin(r.status_label || '—')}</td>
+        <td>${Number(r.score_value).toLocaleString()}</td><td>${movement}</td>`;
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+document.getElementById('unplugLbLoadBtn').addEventListener('click', loadUnplugLeaderboard);
+document.getElementById('unplugLbType').addEventListener('change', loadUnplugLeaderboard);
+
+document.getElementById('unplugAwardBtn').addEventListener('click', async () => {
+  const userId = parseInt(document.getElementById('unplugAwardUserId').value, 10);
+  const points = parseInt(document.getElementById('unplugAwardPoints').value, 10);
+  const reason = document.getElementById('unplugAwardReason').value.trim();
+  const msgEl = document.getElementById('unplugAwardMsg');
+  if (!userId || !points || !reason) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'A user ID, a non-zero points value, and a reason are all required.';
+    return;
+  }
+  try {
+    await api('/participation/admin/award-points', {
+      method: 'POST',
+      body: JSON.stringify({ userId, points, reason }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = `${points} points ${points > 0 ? 'awarded to' : 'deducted from'} user ${userId}.`;
+    document.getElementById('unplugAwardPoints').value = '';
+    document.getElementById('unplugAwardReason').value = '';
+    loadUnplugLeaderboard();
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+});
+
+document.getElementById('unplugReverseBtn').addEventListener('click', async () => {
+  const txId = parseInt(document.getElementById('unplugReverseTxId').value, 10);
+  const reason = document.getElementById('unplugReverseReason').value.trim();
+  const msgEl = document.getElementById('unplugReverseMsg');
+  if (!txId || !reason) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'A transaction ID and a reason are both required.';
+    return;
+  }
+  if (!confirm('Reverse this point transaction? This cannot be undone.')) return;
+  try {
+    await api('/participation/admin/reverse-points', {
+      method: 'POST',
+      body: JSON.stringify({ txId, reason }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = `Transaction ${txId} reversed.`;
+    document.getElementById('unplugReverseTxId').value = '';
+    document.getElementById('unplugReverseReason').value = '';
+    loadUnplugLeaderboard();
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+});
+
+document.getElementById('unplugSyncBtn').addEventListener('click', async () => {
+  const userId = parseInt(document.getElementById('unplugSyncUserId').value, 10);
+  const msgEl = document.getElementById('unplugSyncMsg');
+  if (!userId) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'A user ID is required.';
+    return;
+  }
+  try {
+    const res = await api(`/participation/admin/sync/${userId}`, { method: 'POST' });
+    msgEl.style.color = 'green';
+    msgEl.textContent = `Resynced — ${res.achievementsAwarded} new achievement(s) awarded. Status: ${res.statusResult}.`;
+    loadUnplugLeaderboard();
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+});
+
+let UNPLUG_SPONSORSHIPS = [];
+async function loadUnplugSponsorships() {
+  try {
+    const data = await api('/participation/admin/sponsorships');
+    UNPLUG_SPONSORSHIPS = data.sponsorships || [];
+    const select = document.getElementById('unplugCampaignSponsor');
+    select.innerHTML = UNPLUG_SPONSORSHIPS.length
+      ? UNPLUG_SPONSORSHIPS.map((s) => `<option value="${s.id}">${escapeHtmlAdmin(s.sponsor_name)}</option>`).join('')
+      : '<option value="">Add a sponsor first</option>';
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+document.getElementById('unplugAddSponsorBtn').addEventListener('click', async () => {
+  const sponsorName = document.getElementById('unplugSponsorName').value.trim();
+  const sponsorLogoUrl = document.getElementById('unplugSponsorLogo').value.trim();
+  const sponsorUrl = document.getElementById('unplugSponsorUrl').value.trim();
+  const msgEl = document.getElementById('unplugSponsorMsg');
+  if (!sponsorName) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'Sponsor name is required.';
+    return;
+  }
+  try {
+    await api('/participation/admin/sponsorships', {
+      method: 'POST',
+      body: JSON.stringify({ sponsorName, sponsorLogoUrl: sponsorLogoUrl || undefined, sponsorUrl: sponsorUrl || undefined }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = `${sponsorName} added.`;
+    document.getElementById('unplugSponsorName').value = '';
+    document.getElementById('unplugSponsorLogo').value = '';
+    document.getElementById('unplugSponsorUrl').value = '';
+    loadUnplugSponsorships();
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+});
+
+document.getElementById('unplugAddCampaignBtn').addEventListener('click', async () => {
+  const sponsorshipId = parseInt(document.getElementById('unplugCampaignSponsor').value, 10);
+  const campaignType = document.getElementById('unplugCampaignType').value;
+  const placementCode = document.getElementById('unplugCampaignPlacement').value.trim();
+  const campaignLabel = document.getElementById('unplugCampaignLabel').value.trim();
+  const startsAt = document.getElementById('unplugCampaignStarts').value;
+  const endsAt = document.getElementById('unplugCampaignEnds').value;
+  const msgEl = document.getElementById('unplugCampaignMsg');
+  if (!sponsorshipId || !placementCode || !campaignLabel || !startsAt || !endsAt) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'Sponsor, placement code, label, and both dates are all required.';
+    return;
+  }
+  try {
+    await api('/participation/admin/sponsor-campaigns', {
+      method: 'POST',
+      body: JSON.stringify({ sponsorshipId, campaignType, campaignLabel, placementCode, startsAt, endsAt }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = 'Campaign created.';
+    document.getElementById('unplugCampaignPlacement').value = '';
+    document.getElementById('unplugCampaignLabel').value = '';
+    document.getElementById('unplugCampaignStarts').value = '';
+    document.getElementById('unplugCampaignEnds').value = '';
+    loadUnplugCampaigns();
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+});
+
+async function loadUnplugCampaigns() {
+  const body = document.getElementById('unplugCampaignsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/participation/admin/sponsor-campaigns');
+    const rows = data.campaigns || [];
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-state">No sponsor campaigns yet.</div>';
+      return;
+    }
+    body.innerHTML = rows.map((c) => `
+      <div style="padding:12px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <div style="font-weight:700;">${escapeHtmlAdmin(c.campaign_label)}</div>
+          <div style="font-size:12px; color:#666;">${escapeHtmlAdmin(c.sponsor_name)} · ${escapeHtmlAdmin(c.placement_code)} · ${c.starts_at} → ${c.ends_at} · ${c.is_active ? 'Active' : 'Inactive'}</div>
+        </div>
+        <button class="btn btn-line" style="width:auto; padding:6px 14px;" onclick="viewUnplugCampaignReport(${c.id}, '${escapeHtmlAdmin(c.campaign_label).replace(/'/g, "\\'")}')">View Report</button>
+      </div>`).join('');
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+async function viewUnplugCampaignReport(id, label) {
+  try {
+    const data = await api(`/participation/admin/sponsor-campaigns/${id}/report`);
+    const r = data.report;
+    alert(`${label}\n\nImpressions: ${r.total_impressions}\nClicks: ${r.total_clicks}\nClick rate: ${r.click_rate}%\nDays active: ${r.days_active} · Days remaining: ${r.days_remaining}`);
+  } catch (err) {
+    showToast(err.message, true);
   }
 }
 
