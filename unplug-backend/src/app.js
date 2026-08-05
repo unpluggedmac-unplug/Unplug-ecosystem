@@ -136,6 +136,11 @@ setInterval(() => {
     .catch((err) => console.error('[birthday] check failed:', err.message));
 }, BIRTHDAY_CHECK_MS);
 
+// Participation engine: rankings + daily homepage recalculation. No
+// pg_cron on this Postgres, so this runs the same way the birthday
+// check above does — an in-process interval, not a database job.
+require('./utils/participationScheduler').start();
+
 const port = process.env.PORT || 4000;
 app.listen(port, () => {
   console.log(`Unplug backend listening on port ${port}`);
