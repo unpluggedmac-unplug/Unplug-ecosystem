@@ -1499,11 +1499,47 @@ const SUBMIT_SERVICE_INFO = {
   marketplace: { label: 'Marketplace Poster', desc: 'Your promotional poster listed in the Marketplace for 30 days.', price: 500 },
 };
 let _abPrices = null; // set once /ad-banners/options loads (setupBannerFields)
+
+// Types that go through publishesFree() on the backend (see articles.js,
+// events.js, gallery.js) — an admin or consultant submitting one of these is
+// never charged, whatever the standard price shown to a paying member is.
+const FREE_PUBLISH_TYPES = ['article', 'event', 'gallery'];
+function currentUserPublishesFree() {
+  return !!CURRENT_USER && ['admin', 'consultant'].includes(CURRENT_USER.role);
+}
+
+// Hides everything about paying — method, credit, voucher, the live quote —
+// for a submission that is going out free. Showing a price, a payment-method
+// picker and a checkout summary for something that will never be charged is
+// what let a consultant believe (wrongly, until this was fixed) that an
+// article they'd already had accepted for free still needed an EFT payment.
+function setSubmitPaymentUiVisible(visible) {
+  const ids = ['submitPaymentMethod', 'submitVoucher'];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    const field = el && el.closest('.field');
+    if (field) field.classList.toggle('section-hidden', !visible);
+  });
+  const credit = document.getElementById('submitCreditSection');
+  const quote = document.getElementById('submitQuoteBox');
+  // Only re-show the credit section if the member actually has credit —
+  // loadCredits() controls that toggle normally; hiding it here is always
+  // safe, un-hiding it isn't, so only touch it on the "hide" path.
+  if (!visible && credit) credit.classList.add('section-hidden');
+  if (quote) quote.classList.toggle('section-hidden', !visible);
+}
+
 function updateSubmitOrderDetails() {
   const type = document.getElementById('submitType').value;
   const typeEl = document.getElementById('submitOrderType');
   const descEl = document.getElementById('submitOrderDesc');
   const priceEl = document.getElementById('submitOrderPrice');
+  const btn = document.getElementById('submitAndPayBtn');
+
+  const isFree = currentUserPublishesFree() && FREE_PUBLISH_TYPES.includes(type);
+  setSubmitPaymentUiVisible(!isFree);
+  if (btn) btn.textContent = isFree ? 'Submit for Approval' : 'Create & Pay';
+
   if (type === 'ad_banner') {
     const duration = Number(document.getElementById('ab-duration').value) || 7;
     const price = _abPrices ? _abPrices[duration] : null;
@@ -1516,7 +1552,22 @@ function updateSubmitOrderDetails() {
   if (!info) { typeEl.textContent = ''; descEl.textContent = ''; priceEl.textContent = ''; return; }
   typeEl.textContent = info.label;
   descEl.textContent = info.desc;
+  if (isFree) {
+    // Publishing staff still see what a paying member would pay, phrased so
+    // it's clear the number doesn't apply to them — not just a blank space
+    // that reads as "the price didn't load".
+    priceEl.textContent = 'Free for your account — submitted for admin approval, no payment required.';
+    priceEl.style.color = 'var(--slate)';
+    priceEl.style.fontFamily = 'inherit';
+    priceEl.style.fontSize = '13px';
+    priceEl.style.fontWeight = '600';
+    return; // no quote to fetch — nothing is being charged
+  }
   priceEl.textContent = 'R' + info.price;
+  priceEl.style.color = 'var(--red)';
+  priceEl.style.fontFamily = "'Playfair Display',serif";
+  priceEl.style.fontSize = '19px';
+  priceEl.style.fontWeight = '700';
   refreshSubmitQuote();
 }
 document.getElementById('ab-duration') && document.getElementById('ab-duration').addEventListener('change', updateSubmitOrderDetails);
@@ -1617,8 +1668,18 @@ function hideSubmitError() {
   document.getElementById('submitError').classList.remove('show');
 }
 
-// Creates the underlying record for whichever type is selected, and
-// returns { linkedType, linkedId } to hand straight to /payments/initiate.
+// Creates the underlying record for whichever type is selected, and returns
+// { linkedType, linkedId, needsPayment, message }.
+//
+// needsPayment is read from the REAL status the backend actually persisted —
+// never assumed. Article, event and gallery submissions all go through a free
+// path for admins and consultants (see publishesFree() in the backend), and
+// for those the record comes back already 'pending' or 'approved', with no
+// payment owed. Blindly calling /payments/initiate after every submission
+// used to charge the standard fee regardless — a consultant would be shown a
+// real EFT reference and bank details for an article that was already
+// accepted for free. The caller must check needsPayment before ever touching
+// /payments/initiate.
 // Article images and links. Uploads go to the site's own storage — a pasted
 // URL points at someone else's server and can vanish or change.
 const ART_MAX_GALLERY = 5;
@@ -1704,7 +1765,11 @@ async function createSubmission(type) {
         emotion: document.getElementById('art-emotion').value || undefined,
       }),
     });
-    return { linkedType: 'article_publish', linkedId: data.article.id, label: 'Article' };
+    return {
+      linkedType: 'article_publish', linkedId: data.article.id, label: 'Article',
+      needsPayment: data.article.status === 'awaiting_payment',
+      message: data.message,
+    };
   }
 
   if (type === 'event') {
@@ -1726,7 +1791,11 @@ async function createSubmission(type) {
         eventLink: document.getElementById('evt-link').value.trim() || undefined,
       }),
     });
-    return { linkedType: 'event_listing', linkedId: data.event.id, label: 'Event' };
+    return {
+      linkedType: 'event_listing', linkedId: data.event.id, label: 'Event',
+      needsPayment: data.event.status === 'awaiting_payment',
+      message: data.message,
+    };
   }
 
   if (type === 'gallery') {
@@ -1741,12 +1810,17 @@ async function createSubmission(type) {
       method: 'POST',
       body: JSON.stringify({ images, ownerType: MY_PROFILE_ID ? 'profile' : undefined, ownerId: MY_PROFILE_ID || undefined }),
     });
-    return { linkedType: 'gallery_bundle', linkedId: data.bundle.id, label: 'Gallery Bundle' };
+    return {
+      linkedType: 'gallery_bundle', linkedId: data.bundle.id, label: 'Gallery Bundle',
+      needsPayment: data.bundle.status === 'awaiting_payment',
+      message: data.message,
+    };
   }
 
   if (type === 'top10') {
     const data = await api('/top10/enter', { method: 'POST' });
-    return { linkedType: 'top10_entry', linkedId: data.entry.id, label: 'Top 10 Entry' };
+    // No free path exists for Top 10 entries today — always needs payment.
+    return { linkedType: 'top10_entry', linkedId: data.entry.id, label: 'Top 10 Entry', needsPayment: true };
   }
 
   if (type === 'marketplace') {
@@ -1761,7 +1835,8 @@ async function createSubmission(type) {
         requestedStartDate: document.getElementById('mkt-start').value || undefined,
       }),
     });
-    return { linkedType: 'marketplace_listing', linkedId: data.listing.id, label: 'Marketplace Poster' };
+    // No free path exists for marketplace posters today — always needs payment.
+    return { linkedType: 'marketplace_listing', linkedId: data.listing.id, label: 'Marketplace Poster', needsPayment: true };
   }
 
   if (type === 'ad_banner') {
@@ -1782,7 +1857,8 @@ async function createSubmission(type) {
         startsAt: document.getElementById('ab-start').value || undefined,
       }),
     });
-    return { linkedType: 'ad_banner', linkedId: data.id, label: 'Page Banner' };
+    // No free path exists for banners today — always needs payment.
+    return { linkedType: 'ad_banner', linkedId: data.id, label: 'Page Banner', needsPayment: true };
   }
 
   throw new Error('Unknown submission type.');
@@ -1846,7 +1922,23 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
   btn.disabled = true; btn.textContent = 'Processing...';
 
   try {
-    const { linkedType, linkedId, label } = await createSubmission(type);
+    const { linkedType, linkedId, label, needsPayment, message } = await createSubmission(type);
+    const resultBox = document.getElementById('submitResultBox');
+    resultBox.classList.remove('section-hidden');
+
+    // The record was already created by createSubmission() above. If it did
+    // not need payment — an admin/consultant free-publish, or a paying
+    // member's article fully covered by a credit — stop here. Calling
+    // /payments/initiate anyway would charge the standard fee for something
+    // the backend already accepted for free, and show a real EFT reference
+    // for money that was never owed.
+    if (!needsPayment) {
+      resultBox.innerHTML = `<strong>${label} submitted.</strong><br><br>${message || 'No payment was required.'}`;
+      showToast(`${label} submitted — no payment needed.`);
+      loadMemberContent(); loadReadingList();
+      return;
+    }
+
     const payment = await api('/payments/initiate', {
       method: 'POST',
       body: JSON.stringify({
@@ -1858,9 +1950,6 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
         voucherCode: SUBMIT_APPLIED_VOUCHER || undefined,
       }),
     });
-
-    const resultBox = document.getElementById('submitResultBox');
-    resultBox.classList.remove('section-hidden');
 
     if (payment.paidInFull) {
       resultBox.innerHTML = `<strong>${label} created — paid in full by your Unplug Credit.</strong><br><br>${payment.message || ''}` + refNotice(payment.payment.gateway_reference);
@@ -1881,7 +1970,11 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
   } catch (err) {
     showSubmitError(err.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Create & Pay';
+    btn.disabled = false;
+    // Not a hardcoded 'Create & Pay': that would overwrite the correct
+    // 'Submit for Approval' label the moment a free-publishing submission
+    // finished, on the very screen meant to show it never needed paying.
+    updateSubmitOrderDetails();
   }
 });
 </script>

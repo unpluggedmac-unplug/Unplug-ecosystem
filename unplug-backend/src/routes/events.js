@@ -64,12 +64,30 @@ router.post('/', requireAuth, async (req, res, next) => {
       await pool.query('UPDATE profiles SET free_event_credits = free_event_credits - 1 WHERE id = $1', [profileResult.rows[0].id]);
     }
 
-    res.status(201).json({
-      event: result.rows[0],
-      message: hasCredit
-        ? 'Event created using your free Event credit — submitted for approval, no payment needed.'
-        : 'Event created — call POST /payments/initiate with linkedType "event_listing" and this event\'s id (R300.00) to submit it for approval.',
-    });
+    // Derived from the STATUS that was actually persisted, not re-derived from
+    // hasCredit alone — hasCredit only covers the paying-member free-credit
+    // case. A consultant has no event credits on their profile (they're staff,
+    // not a paying member with a package), so hasCredit is false for them even
+    // though statusForNewSubmission() already gave them 'pending' for free.
+    // Basing the message on hasCredit alone told a consultant to pay R300 for
+    // an event that had already been accepted without payment.
+    // Three real outcomes, matching articles.js: admin goes straight to
+    // 'approved' and is genuinely live already; a consultant (or a member
+    // spending a free credit) reaches 'pending' for a second pair of eyes,
+    // still without paying; anyone else owes the listing fee.
+    const eventStatus = result.rows[0].status;
+    let message;
+    if (eventStatus === 'awaiting_payment') {
+      message = 'Event created — call POST /payments/initiate with linkedType "event_listing" and this event\'s id (R300.00) to submit it for approval.';
+    } else if (eventStatus === 'approved') {
+      message = 'Published — this event is live on the calendar now.';
+    } else if (publishesFree(req.user)) {
+      message = 'Event submitted for approval — no payment needed.';
+    } else {
+      message = 'Event created using your free Event credit — submitted for approval, no payment needed.';
+    }
+
+    res.status(201).json({ event: result.rows[0], message });
   } catch (err) {
     next(err);
   }
