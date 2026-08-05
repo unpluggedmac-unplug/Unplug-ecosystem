@@ -20,16 +20,30 @@ function creditsForTier(type, tier) {
   return { article: 0, event: 0, arena: 0, gallery: 0 };
 }
 
-// GET /admin/users
-// Admin-only — lists every user account. This is a working example of how
-// every other /admin/* route from the Backend Spec (Section 3) should be
+// GET /admin/users?q=&limit=&offset=
+// Admin-only — lists user accounts, paginated. This is a working example of
+// how every other /admin/* route from the Backend Spec (Section 3) should be
 // wired: requireRole('admin') first, then the actual query.
+//
+// Search moved server-side (matching email or full_name) rather than the
+// dashboard filtering a client-cached full list — that pattern only worked
+// because the endpoint used to return every account unconditionally, which
+// does not scale as the member base grows.
 router.get('/users', requireRole('admin'), async (req, res, next) => {
   try {
+    const q = (req.query.q || '').trim();
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+    const whereClause = q ? `WHERE u.email ILIKE $1 OR u.full_name ILIKE $1` : '';
+    const searchParams = q ? [`%${q}%`] : [];
+
     // Each account carries a count of the PUBLISHED content it owns. Deleting a
     // user cascades to everything they own, so the admin has to be able to see,
     // before deleting, whether an account is a stray signup or the author of
     // live articles. The count is what the delete guard blocks on too.
+    const limitParamIdx = searchParams.length + 1;
+    const offsetParamIdx = searchParams.length + 2;
     const result = await pool.query(
       `SELECT u.id, u.email, u.phone, u.role, u.created_at, u.full_name, u.member_type,
               -- Credit is a SUM of the ledger, not a stored column, so it is
@@ -40,12 +54,20 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
               (SELECT COUNT(*) FROM events e WHERE e.organizer_user_id = u.id AND e.status = 'approved')::int AS published_events,
               (SELECT COUNT(*) FROM payments pm WHERE pm.user_id = u.id AND pm.status = 'confirmed')::int    AS confirmed_payments
          FROM users u
-        ORDER BY u.created_at DESC`
+         ${whereClause}
+        ORDER BY u.created_at DESC
+        LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}`,
+      [...searchParams, limit, offset]
     );
+    const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM users u ${whereClause}`, searchParams);
+
     res.json({
       // SUM() arrives from pg as a NUMERIC string; cast so the dashboard can
       // format it as money rather than concatenating it.
       users: result.rows.map((u) => ({ ...u, credit_balance: Number(u.credit_balance) })),
+      total: countResult.rows[0].total,
+      limit,
+      offset,
     });
   } catch (err) {
     next(err);

@@ -111,6 +111,50 @@ test('the list carries the credit balance as a number, not a string', async () =
   assert.equal(member.credit_balance, 150);
 });
 
+test('the list is paginated: total reflects everyone, but a page returns only limit rows', async () => {
+  for (let i = 0; i < 12; i++) {
+    await pool.query(
+      `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'x', 'member') ON CONFLICT DO NOTHING`,
+      [200 + i, `page-user-${i}@test.com`]
+    );
+  }
+  const r = await req('GET', '/admin/users?limit=5&offset=0', { token: adminToken });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.users.length, 5);
+  assert.equal(r.body.limit, 5);
+  assert.equal(r.body.offset, 0);
+  assert.ok(r.body.total >= 15); // 3 seeded + 12 just inserted
+
+  const page2 = await req('GET', '/admin/users?limit=5&offset=5', { token: adminToken });
+  assert.equal(page2.body.users.length, 5);
+  // No overlap between the two pages.
+  const idsPage1 = new Set(r.body.users.map((u) => u.id));
+  assert.ok(page2.body.users.every((u) => !idsPage1.has(u.id)));
+});
+
+test('a huge limit is clamped rather than trusted, and a nonsense offset does not error', async () => {
+  const r = await req('GET', '/admin/users?limit=999999&offset=abc', { token: adminToken });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.limit, 200); // clamped
+  assert.equal(r.body.offset, 0); // non-numeric offset falls back to 0
+});
+
+test('q searches by email or name, server-side, and only matching accounts are returned', async () => {
+  await pool.query(
+    `INSERT INTO users (id, email, password_hash, role, full_name) VALUES (300, 'searchable@test.com', 'x', 'member', 'Zanele Unique Name') ON CONFLICT DO NOTHING`
+  );
+  const byEmail = await req('GET', '/admin/users?q=searchable', { token: adminToken });
+  assert.ok(byEmail.body.users.some((u) => u.id === 300));
+  assert.ok(byEmail.body.users.every((u) => u.email.includes('searchable') || (u.full_name || '').includes('searchable')));
+
+  const byName = await req('GET', '/admin/users?q=Zanele%20Unique', { token: adminToken });
+  assert.ok(byName.body.users.some((u) => u.id === 300));
+
+  const noMatch = await req('GET', '/admin/users?q=definitely-nobody-has-this-string', { token: adminToken });
+  assert.equal(noMatch.body.users.length, 0);
+  assert.equal(noMatch.body.total, 0);
+});
+
 // ----------------------------------------------------------------------- edit
 
 test('admin can change a name, phone, role and member type', async () => {

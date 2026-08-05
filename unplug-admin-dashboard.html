@@ -162,15 +162,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <div class="sub">Sign in with your admin account to manage the platform.</div>
     <div class="error-banner" id="loginError"></div>
     <div class="field" style="display:none;">
-      <label>API Base URL</label>
+      <label for="apiBaseInput">API Base URL</label>
       <input id="apiBaseInput" value="https://unplug-ecosystem.onrender.com" placeholder="http://localhost:4000">
     </div>
     <div class="field">
-      <label>Email</label>
+      <label for="loginEmail">Email</label>
       <input id="loginEmail" type="email" placeholder="admin@unplugnews.com">
     </div>
     <div class="field">
-      <label>Password</label>
+      <label for="loginPassword">Password</label>
       <input id="loginPassword" type="password" placeholder="••••••••">
     </div>
     <button class="btn btn-solid" id="loginBtn">Sign In</button>
@@ -183,18 +183,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <div class="sub" id="forgotSub">Enter your admin email — we'll send a reset code you can use to set a new password.</div>
     <div class="error-banner" id="forgotError"></div>
     <div class="field" style="display:none;">
-      <label>API Base URL</label>
+      <label for="forgotApiBaseInput">API Base URL</label>
       <input id="forgotApiBaseInput" value="https://unplug-ecosystem.onrender.com">
     </div>
     <div class="field">
-      <label>Email</label>
+      <label for="forgotEmail">Email</label>
       <input id="forgotEmail" type="email" placeholder="admin@unplugnews.com">
     </div>
     <button class="btn btn-solid" id="requestResetBtn">Send Reset Code</button>
 
     <div id="resetStep2" class="section-hidden" style="margin-top:16px;">
-      <div class="field"><label>Reset Code (from email)</label><input id="resetToken"></div>
-      <div class="field"><label>New Password (8+ characters)</label><input id="resetNewPassword" type="password"></div>
+      <div class="field"><label for="resetToken">Reset Code (from email)</label><input id="resetToken"></div>
+      <div class="field"><label for="resetNewPassword">New Password (8+ characters)</label><input id="resetNewPassword" type="password"></div>
       <button class="btn btn-solid" id="submitResetBtn">Set New Password</button>
     </div>
 
@@ -344,10 +344,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Add a Birthday</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Name</label><input id="bdayName" placeholder="e.g. Naledi Mokoena"></div>
-            <div><label>Month (1-12)</label><input id="bdayMonth" type="number" min="1" max="12"></div>
-            <div><label>Day</label><input id="bdayDay" type="number" min="1" max="31"></div>
-            <div><label>Message (optional)</label><input id="bdayMessage" placeholder="Custom shout-out"></div>
+            <div><label for="bdayName">Name</label><input id="bdayName" placeholder="e.g. Naledi Mokoena"></div>
+            <div><label for="bdayMonth">Month (1-12)</label><input id="bdayMonth" type="number" min="1" max="12"></div>
+            <div><label for="bdayDay">Day</label><input id="bdayDay" type="number" min="1" max="31"></div>
+            <div><label for="bdayMessage">Message (optional)</label><input id="bdayMessage" placeholder="Custom shout-out"></div>
           </div>
           <button class="btn btn-solid" style="width:auto;" id="addBirthdayBtn">Schedule Birthday</button>
         </div>
@@ -369,7 +369,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Browse</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Content type</label>
+            <div><label for="manageResource">Content type</label>
               <select id="manageResource">
                 <option value="articles">Articles</option>
                 <option value="events">Events</option>
@@ -383,7 +383,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
                 <option value="edcal">Editions calendar (Save the Dates)</option>
               </select>
             </div>
-            <div><label>Status</label>
+            <div><label for="manageStatus">Status</label>
               <select id="manageStatus">
                 <option value="">All</option>
                 <option value="pending">Pending</option>
@@ -414,8 +414,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Add a Shout-out</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Name and surname</label><input id="shoutoutAddName" placeholder="e.g. Naledi Mokoena"></div>
-            <div><label>Note (optional)</label><input id="shoutoutAddMessage" placeholder="Why they're being recognised"></div>
+            <div><label for="shoutoutAddName">Name and surname</label><input id="shoutoutAddName" placeholder="e.g. Naledi Mokoena"></div>
+            <div><label for="shoutoutAddMessage">Note (optional)</label><input id="shoutoutAddMessage" placeholder="Why they're being recognised"></div>
             <div style="display:flex; align-items:flex-end;"><button class="btn btn-solid" style="width:100%;" id="addShoutoutBtn">Add</button></div>
           </div>
         </div>
@@ -439,22 +439,22 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3 id="calevFormTitle">Add an event</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Event name</label><input id="calevName" placeholder="e.g. Deaf Awareness Expo"></div>
-            <div><label>Date</label><input id="calevDate" type="date"></div>
+            <div><label for="calevName">Event name</label><input id="calevName" placeholder="e.g. Deaf Awareness Expo"></div>
+            <div><label for="calevDate">Date</label><input id="calevDate" type="date"></div>
           </div>
           <div class="form-row">
-            <div><label>Start time (optional)</label><input id="calevStart" type="time"></div>
-            <div><label>End time (optional)</label><input id="calevEnd" type="time"></div>
-            <div><label>Venue</label><input id="calevVenue" placeholder="e.g. Sandton Convention Centre"></div>
+            <div><label for="calevStart">Start time (optional)</label><input id="calevStart" type="time"></div>
+            <div><label for="calevEnd">End time (optional)</label><input id="calevEnd" type="time"></div>
+            <div><label for="calevVenue">Venue</label><input id="calevVenue" placeholder="e.g. Sandton Convention Centre"></div>
           </div>
           <div class="form-row">
-            <div><label>Entrance fee</label><input id="calevFee" placeholder='e.g. "R50" or "Free"'></div>
-            <div><label>Contact details</label><input id="calevContact" placeholder="phone / email shown on the event"></div>
-            <div><label>Event link (tickets / info)</label><input id="calevLink" placeholder="https://…"></div>
+            <div><label for="calevFee">Entrance fee</label><input id="calevFee" placeholder='e.g. "R50" or "Free"'></div>
+            <div><label for="calevContact">Contact details</label><input id="calevContact" placeholder="phone / email shown on the event"></div>
+            <div><label for="calevLink">Event link (tickets / info)</label><input id="calevLink" placeholder="https://…"></div>
           </div>
           <div class="field" style="margin-top:12px;"><label>Feature image <span style="font-weight:400; color:var(--slate);">— 800 × 1200px (2:3 portrait)</span></label><div id="calevImgUpload"></div></div>
-          <div class="field" style="margin-top:12px;"><label>Description</label><textarea id="calevDesc" rows="3"></textarea></div>
-          <div class="field" style="margin-top:12px;"><label>Show on calendar from (optional)</label><input id="calevDisplayStart" type="date"></div>
+          <div class="field" style="margin-top:12px;"><label for="calevDesc">Description</label><textarea id="calevDesc" rows="3"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label for="calevDisplayStart">Show on calendar from (optional)</label><input id="calevDisplayStart" type="date"></div>
           <button class="btn btn-solid" style="width:auto; margin-top:14px;" id="calevSaveBtn">Add event</button>
           <button class="btn btn-line" style="width:auto; margin-top:14px; display:none;" id="calevCancelBtn">Cancel edit</button>
           <span id="calevNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
@@ -473,10 +473,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Mark a Date</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Date</label><input id="edcalDate" type="date"></div>
-            <div><label>Title</label><input id="edcalTitle" placeholder="e.g. Issue #12 submissions close"></div>
+            <div><label for="edcalDate">Date</label><input id="edcalDate" type="date"></div>
+            <div><label for="edcalTitle">Title</label><input id="edcalTitle" placeholder="e.g. Issue #12 submissions close"></div>
           </div>
-          <div class="field" style="margin-top:12px;"><label>Description (shown when a visitor clicks the day)</label><textarea id="edcalDesc" rows="3" placeholder="Full details of what's happening on this day."></textarea></div>
+          <div class="field" style="margin-top:12px;"><label for="edcalDesc">Description (shown when a visitor clicks the day)</label><textarea id="edcalDesc" rows="3" placeholder="Full details of what's happening on this day."></textarea></div>
           <button class="btn btn-solid" style="width:auto;" id="addEdcalBtn">Save the Date</button>
           <button class="btn btn-line" style="width:auto; display:none;" id="edcalCancelEdit">Cancel edit</button>
         </div>
@@ -494,12 +494,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Add a Winner</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Year</label><input id="hofYear" type="number" placeholder="2025"></div>
-            <div><label>Name *</label><input id="hofName" placeholder="e.g. Thandi Mokoena"></div>
-            <div><label>Title / category</label><input id="hofTitle" placeholder="The Face of Unplug"></div>
+            <div><label for="hofYear">Year</label><input id="hofYear" type="number" placeholder="2025"></div>
+            <div><label for="hofName">Name *</label><input id="hofName" placeholder="e.g. Thandi Mokoena"></div>
+            <div><label for="hofTitle">Title / category</label><input id="hofTitle" placeholder="The Face of Unplug"></div>
           </div>
           <div class="field" style="margin-top:12px;"><label>Photo</label><div id="hofPhotoUpload"></div></div>
-          <div class="field"><label>Description</label><textarea id="hofDesc" rows="2"></textarea></div>
+          <div class="field"><label for="hofDesc">Description</label><textarea id="hofDesc" rows="2"></textarea></div>
           <button class="btn btn-solid" style="width:auto;" id="addHofBtn">Add Winner</button>
         </div>
       </div>
@@ -552,9 +552,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="main-head"><div><h1>Users &amp; Members</h1><p>Everyone with an account. Change a name, phone, role or member type, and add or take back account credit. An account's <strong>email address can't be changed</strong> — it's how they sign in and how their purchases are matched to them. Accounts that own published content can't be deleted; that content would go with them.</p></div></div>
       <div class="panel">
         <div class="panel-body" style="padding-bottom:0;">
-          <div class="field" style="margin-bottom:12px;"><label>Find someone</label><input id="userSearch" placeholder="Search by name or email…"></div>
+          <div class="field" style="margin-bottom:4px;"><label for="userSearch">Find someone</label><input id="userSearch" placeholder="Search by name or email…"></div>
+          <div id="usersCount" style="font-size:11.5px; color:#666; margin-bottom:8px;"></div>
         </div>
         <div class="panel-body" id="usersBody" style="padding:0; border-top:1px solid var(--paper-line);"></div>
+        <div class="panel-body" style="text-align:center;">
+          <button class="btn btn-line" id="usersLoadMoreBtn" style="width:auto; display:none;">Load more</button>
+        </div>
       </div>
     </div>
 
@@ -565,9 +569,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Add a Consultant</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Name</label><input id="consultantName" placeholder="e.g. Thabo Nkosi"></div>
-            <div><label>Email</label><input id="consultantEmail" placeholder="thabo@unplugnews.com"></div>
-            <div><label>Commission %</label><input id="consultantCommission" type="number" step="0.5" value="10"></div>
+            <div><label for="consultantName">Name</label><input id="consultantName" placeholder="e.g. Thabo Nkosi"></div>
+            <div><label for="consultantEmail">Email</label><input id="consultantEmail" placeholder="thabo@unplugnews.com"></div>
+            <div><label for="consultantCommission">Commission %</label><input id="consultantCommission" type="number" step="0.5" value="10"></div>
             <div style="display:flex; align-items:flex-end;"><button class="btn btn-solid" style="width:100%;" id="addConsultantBtn">Add</button></div>
           </div>
         </div>
@@ -631,7 +635,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Choose a profile</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div style="grid-column:1/-1;"><label>Profile</label><select id="dpPicker"><option value="">— choose a profile —</option></select></div>
+            <div style="grid-column:1/-1;"><label for="dpPicker">Profile</label><select id="dpPicker"><option value="">— choose a profile —</option></select></div>
           </div>
         </div>
       </div>
@@ -639,19 +643,19 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3 id="dpEditorTitle">Edit profile</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Display name</label><input id="dpName"></div>
-            <div><label>Category</label><select id="dpCategory"><option value="">— unchanged —</option></select></div>
+            <div><label for="dpName">Display name</label><input id="dpName"></div>
+            <div><label for="dpCategory">Category</label><select id="dpCategory"><option value="">— unchanged —</option></select></div>
           </div>
           <div class="field" style="margin-top:12px;"><label>Feature image <span style="font-weight:400; color:var(--slate);">— the banner / headshot on the card and profile page</span></label><div id="dpFeatureUpload"></div></div>
-          <div class="field" style="margin-top:12px;"><label>Bio</label><textarea id="dpBio" rows="4"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label for="dpBio">Bio</label><textarea id="dpBio" rows="4"></textarea></div>
           <div class="form-row">
-            <div><label>Contact email</label><input id="dpEmail"></div>
-            <div><label>Contact phone</label><input id="dpPhone"></div>
-            <div><label>Website</label><input id="dpWebsite"></div>
+            <div><label for="dpEmail">Contact email</label><input id="dpEmail"></div>
+            <div><label for="dpPhone">Contact phone</label><input id="dpPhone"></div>
+            <div><label for="dpWebsite">Website</label><input id="dpWebsite"></div>
           </div>
-          <div class="field" style="margin-top:12px;"><label>Achievements</label><textarea id="dpAchievements" rows="3"></textarea></div>
-          <div class="field" style="margin-top:12px;"><label>Career</label><textarea id="dpCareer" rows="3"></textarea></div>
-          <div class="field" style="margin-top:12px;"><label>Quote</label><input id="dpQuote"></div>
+          <div class="field" style="margin-top:12px;"><label for="dpAchievements">Achievements</label><textarea id="dpAchievements" rows="3"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label for="dpCareer">Career</label><textarea id="dpCareer" rows="3"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label for="dpQuote">Quote</label><input id="dpQuote"></div>
 
           <!-- LOCATION — optional; drives the Directory Map View and Near Me. -->
           <div style="border-top:1px solid var(--paper-line); margin-top:16px; padding-top:12px;">
@@ -660,12 +664,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             </div>
             <div class="field section-hidden" id="dpStreetField" style="margin-top:10px;"><label>Street address <span style="font-weight:400; color:var(--slate);">— business listings only</span></label><input id="dpStreetAddress" maxlength="200"></div>
             <div class="form-row" style="margin-top:10px;">
-              <div><label>Suburb</label><input id="dpSuburb" maxlength="120"></div>
-              <div><label>Town / City</label><input id="dpCity" maxlength="120"></div>
+              <div><label for="dpSuburb">Suburb</label><input id="dpSuburb" maxlength="120"></div>
+              <div><label for="dpCity">Town / City</label><input id="dpCity" maxlength="120"></div>
             </div>
             <div class="form-row" style="margin-top:10px;">
-              <div><label>Province</label><select id="dpProvince"><option value="">— none —</option></select></div>
-              <div><label>Country</label><input id="dpCountry" maxlength="80"></div>
+              <div><label for="dpProvince">Province</label><select id="dpProvince"><option value="">— none —</option></select></div>
+              <div><label for="dpCountry">Country</label><input id="dpCountry" maxlength="80"></div>
             </div>
             <button class="btn btn-line" type="button" style="width:auto; margin-top:10px; font-size:12px;" id="dpRemoveLocationBtn">Remove location</button>
           </div>
@@ -701,7 +705,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Add an image block</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Page</label>
+            <div><label for="cmsBlockPage">Page</label>
               <select id="cmsBlockPage">
                 <option value="home">Home</option>
                 <option value="news">Latest News</option>
@@ -717,17 +721,17 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
                 <option value="contact">Contact</option>
               </select>
             </div>
-            <div><label>Title</label><input id="cmsBlockTitle" placeholder="Headline"></div>
-            <div><label>Subheading</label><input id="cmsBlockSub" placeholder="Small label above the title"></div>
-            <div><label>Order</label><input id="cmsBlockPos" type="number" value="0"></div>
+            <div><label for="cmsBlockTitle">Title</label><input id="cmsBlockTitle" placeholder="Headline"></div>
+            <div><label for="cmsBlockSub">Subheading</label><input id="cmsBlockSub" placeholder="Small label above the title"></div>
+            <div><label for="cmsBlockPos">Order</label><input id="cmsBlockPos" type="number" value="0"></div>
           </div>
           <div class="form-row">
-            <div style="grid-column:1/-1;"><label>Description</label><input id="cmsBlockDesc" placeholder="A sentence or two"></div>
+            <div style="grid-column:1/-1;"><label for="cmsBlockDesc">Description</label><input id="cmsBlockDesc" placeholder="A sentence or two"></div>
           </div>
           <div class="form-row">
             <div style="grid-column:1/-2;"><label>Banner image <span style="font-weight:400; color:var(--slate);">— 1920 × 1080px (16:9)</span></label><div id="cmsBlockImgUpload"></div></div>
-            <div><label>Button label</label><input id="cmsBlockBtnLabel" placeholder="Read more"></div>
-            <div><label>Button link</label><input id="cmsBlockBtnUrl" placeholder="https://…"></div>
+            <div><label for="cmsBlockBtnLabel">Button label</label><input id="cmsBlockBtnLabel" placeholder="Read more"></div>
+            <div><label for="cmsBlockBtnUrl">Button link</label><input id="cmsBlockBtnUrl" placeholder="https://…"></div>
           </div>
           <button class="btn btn-solid" style="width:auto; margin-top:10px;" id="cmsAddBlockBtn">Add Block</button>
         </div>
@@ -743,7 +747,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Pick a piece of wording and type a replacement. Leave the box empty and save to put the original wording back.</p>
           <div class="form-row">
-            <div style="grid-column:1/-2;"><label>What to change</label>
+            <div style="grid-column:1/-2;"><label for="cmsContentKey">What to change</label>
               <select id="cmsContentKey">
                 <option value="home.newstories.title">Home — "New Stories" heading</option>
                 <option value="home.calendar.title">Home — "Calendar Events" heading</option>
@@ -791,7 +795,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <!-- A textarea, not a single-line input: policy paragraphs run to
                  several sentences and a one-line box makes fixing a word in
                  the middle of one genuinely painful. -->
-            <div style="grid-column:1/-1;"><label>New wording</label><textarea id="cmsContentValue" rows="5" style="width:100%;" placeholder="Leave empty to restore the original"></textarea></div>
+            <div style="grid-column:1/-1;"><label for="cmsContentValue">New wording</label><textarea id="cmsContentValue" rows="5" style="width:100%;" placeholder="Leave empty to restore the original"></textarea></div>
           </div>
           <div id="cmsContentBody" style="margin-top:16px;"></div>
         </div>
@@ -827,15 +831,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3 id="artEditorHeading">Write an article</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div style="grid-column:1/-2;"><label>Article</label>
+            <div style="grid-column:1/-2;"><label for="artPick">Article</label>
               <select id="artPick"><option value="">— new article —</option></select>
             </div>
             <div><label>&nbsp;</label><button class="btn btn-line" style="width:100%;" id="artLoadBtn">Load</button></div>
           </div>
 
           <div class="form-row" style="margin-top:14px;">
-            <div style="grid-column:1/-2;"><label>Headline</label><input id="artTitle" placeholder="The headline readers see"></div>
-            <div><label>Category</label><select id="artCategory"><option value="">— none —</option></select></div>
+            <div style="grid-column:1/-2;"><label for="artTitle">Headline</label><input id="artTitle" placeholder="The headline readers see"></div>
+            <div><label for="artCategory">Category</label><select id="artCategory"><option value="">— none —</option></select></div>
           </div>
           <div class="form-row">
             <div style="grid-column:1/-1;"><label>Subtitle <span style="font-style:italic; color:var(--slate);">(shown in italics under the headline)</span></label>
@@ -843,7 +847,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
           <div class="form-row">
             <div style="grid-column:1/-2;"><label>SEO title <span style="color:var(--slate);">(defaults to the headline)</span></label><input id="artSeoTitle" placeholder="Title used by Google and browser tabs"></div>
-            <div><label>URL slug</label><input id="artSlug" placeholder="auto-generated"></div>
+            <div><label for="artSlug">URL slug</label><input id="artSlug" placeholder="auto-generated"></div>
           </div>
           <div class="form-row">
             <div style="grid-column:1/-1;"><label>Meta description <span style="color:var(--slate);">(the summary shown when this is shared on social media)</span></label>
@@ -851,12 +855,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
               <span id="artMetaCount" style="font-size:11px; color:var(--slate);"></span></div>
           </div>
           <div class="form-row">
-            <div><label>Supplied by (optional)</label><input id="artKicker" placeholder="e.g. Thandi M."></div>
-            <div><label>Emotion (optional)</label><select id="artEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
+            <div><label for="artKicker">Supplied by (optional)</label><input id="artKicker" placeholder="e.g. Thandi M."></div>
+            <div><label for="artEmotion">Emotion (optional)</label><select id="artEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
             <div><label>Main image <span style="font-weight:400; color:var(--slate);">— 1920 × 1080px (16:9)</span></label><div id="artBannerUpload"></div></div>
           </div>
 
-          <div style="margin-top:14px;"><label>Opening / main story</label>
+          <div style="margin-top:14px;"><label for="artBody">Opening / main story</label>
             <textarea id="artBody" rows="8" style="width:100%;" placeholder="Write the opening of the story here."></textarea>
             <label style="margin-top:8px;"><input type="checkbox" id="artPlainText" style="width:auto; margin-right:6px;">Plain text — turn my line breaks into paragraphs (leave off if you're pasting HTML)</label>
           </div>
@@ -881,21 +885,21 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <p style="font-size:12.5px; color:var(--slate); margin-bottom:10px;">Each section is a new part of the article: a sub heading, a paragraph, and optionally a picture with a note. Leave any field blank if you don't need it — empty sections won't appear on the live article.</p>
           <div id="artSections"></div>
 
-          <div style="margin-top:16px;"><label>Conclusion (optional)</label>
+          <div style="margin-top:16px;"><label for="artConclusion">Conclusion (optional)</label>
             <textarea id="artConclusion" rows="4" style="width:100%;" placeholder="How the story closes."></textarea>
           </div>
           <div class="form-row" style="margin-top:10px;">
-            <div><label>Call-to-action label (optional)</label><input id="artCtaLabel" placeholder="e.g. Join the community"></div>
-            <div style="grid-column:2/-1;"><label>Call-to-action link</label><input id="artCtaUrl" placeholder="https://…"></div>
+            <div><label for="artCtaLabel">Call-to-action label (optional)</label><input id="artCtaLabel" placeholder="e.g. Join the community"></div>
+            <div style="grid-column:2/-1;"><label for="artCtaUrl">Call-to-action link</label><input id="artCtaUrl" placeholder="https://…"></div>
           </div>
 
           <div id="artDerived" style="display:none; margin-top:18px; padding:14px; border:1px solid var(--paper-line); background:var(--paper);">
             <strong style="font-size:13px;">Generated from the article — edit anything that reads badly</strong>
             <p style="font-size:12px; color:var(--slate); margin:4px 0 12px;">These are pulled from the text you wrote, not invented. Whatever you leave here is what publishes.</p>
-            <div style="margin-bottom:10px;"><label>Key takeaways (one per line)</label><textarea id="artTakeaways" rows="4" style="width:100%;"></textarea></div>
+            <div style="margin-bottom:10px;"><label for="artTakeaways">Key takeaways (one per line)</label><textarea id="artTakeaways" rows="4" style="width:100%;"></textarea></div>
             <div class="form-row">
-              <div><label>Keywords (comma separated)</label><input id="artKeywords"></div>
-              <div><label>Tags (comma separated)</label><input id="artTags"></div>
+              <div><label for="artKeywords">Keywords (comma separated)</label><input id="artKeywords"></div>
+              <div><label for="artTags">Tags (comma separated)</label><input id="artTags"></div>
             </div>
             <div id="artSuggestedCat" style="font-size:12.5px; color:var(--slate); margin-top:8px;"></div>
           </div>
@@ -916,7 +920,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Adds an existing directory profile straight onto the Top 10 list, approved and free of charge.</p>
           <div class="form-row">
-            <div style="grid-column:1/-2;"><label>Profile</label><select id="top10Profile"><option value="">— choose a profile —</option></select></div>
+            <div style="grid-column:1/-2;"><label for="top10Profile">Profile</label><select id="top10Profile"><option value="">— choose a profile —</option></select></div>
             <div><label>&nbsp;</label><button class="btn btn-solid" style="width:100%;" id="addTop10Btn">Add to Top 10</button></div>
           </div>
           <span id="top10Note" style="font-size:12px; color:var(--slate);"></span>
@@ -928,7 +932,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">For someone who has no Directory profile — just a name and a photo. Goes onto the Top 10 list approved, free of charge.</p>
           <div class="form-row">
-            <div><label>Name and surname</label><input id="top10ManualName" placeholder="e.g. Naledi Mokoena"></div>
+            <div><label for="top10ManualName">Name and surname</label><input id="top10ManualName" placeholder="e.g. Naledi Mokoena"></div>
             <div style="grid-column:span 1;"><label>Photo <span style="font-weight:400; color:var(--slate);">— 1080 × 1350px (4:5)</span></label><div id="top10ManualImgUpload"></div></div>
           </div>
           <button class="btn btn-solid" style="width:auto; margin-top:10px;" id="addTop10ManualBtn">Add to Top 10</button>
@@ -968,8 +972,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Create a poll</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div style="grid-column:1/-2;"><label>Question</label><input id="pollQuestion" placeholder="What should we cover next?"></div>
-            <div><label>Article ID (optional)</label><input id="pollArticleId" type="number" min="1" placeholder="Site-wide if blank"></div>
+            <div style="grid-column:1/-2;"><label for="pollQuestion">Question</label><input id="pollQuestion" placeholder="What should we cover next?"></div>
+            <div><label for="pollArticleId">Article ID (optional)</label><input id="pollArticleId" type="number" min="1" placeholder="Site-wide if blank"></div>
           </div>
           <div id="pollOptionsWrap" style="margin-top:12px;"></div>
           <button class="btn btn-line" style="width:auto; margin-top:8px;" id="addPollOptionBtn">+ Add option</button>
@@ -1045,7 +1049,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Leaderboard</h3></div>
         <div class="panel-body" style="padding:0 16px 12px;">
           <div class="form-row" style="align-items:flex-end;">
-            <div><label>Type</label><select id="unplugLbType" style="padding:8px; width:100%;">
+            <div><label for="unplugLbType">Type</label><select id="unplugLbType" style="padding:8px; width:100%;">
               <option value="overall">Overall</option>
               <option value="momentum">Momentum</option>
               <option value="recognition">Recognition</option>
@@ -1061,9 +1065,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Award Points</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>User ID</label><input id="unplugAwardUserId" type="number" placeholder="e.g. 42"></div>
-            <div><label>Points (+/-)</label><input id="unplugAwardPoints" type="number" placeholder="e.g. 100"></div>
-            <div><label>Reason (required)</label><input id="unplugAwardReason" placeholder="Why is this being granted?"></div>
+            <div><label for="unplugAwardUserId">User ID</label><input id="unplugAwardUserId" type="number" placeholder="e.g. 42"></div>
+            <div><label for="unplugAwardPoints">Points (+/-)</label><input id="unplugAwardPoints" type="number" placeholder="e.g. 100"></div>
+            <div><label for="unplugAwardReason">Reason (required)</label><input id="unplugAwardReason" placeholder="Why is this being granted?"></div>
           </div>
           <button class="approve" style="padding:9px 16px;" id="unplugAwardBtn">Award Points</button>
           <div id="unplugAwardMsg" style="margin-top:8px; font-size:13px;"></div>
@@ -1075,8 +1079,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body">
           <p style="font-size:12.5px; color:#666; margin-top:0;">Find the transaction id from the member's dashboard or the point ledger, then reverse it here. This is permanent.</p>
           <div class="form-row">
-            <div><label>Transaction ID</label><input id="unplugReverseTxId" type="number" placeholder="e.g. 918"></div>
-            <div><label>Reason (required)</label><input id="unplugReverseReason" placeholder="Why is this being reversed?"></div>
+            <div><label for="unplugReverseTxId">Transaction ID</label><input id="unplugReverseTxId" type="number" placeholder="e.g. 918"></div>
+            <div><label for="unplugReverseReason">Reason (required)</label><input id="unplugReverseReason" placeholder="Why is this being reversed?"></div>
           </div>
           <button class="reject" style="padding:9px 16px;" id="unplugReverseBtn">Reverse Points</button>
           <div id="unplugReverseMsg" style="margin-top:8px; font-size:13px;"></div>
@@ -1088,7 +1092,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body">
           <p style="font-size:12.5px; color:#666; margin-top:0;">Recalculates a member's score, re-checks every achievement, and re-evaluates their status tier. Use after a manual correction or a data import.</p>
           <div class="form-row">
-            <div><label>User ID</label><input id="unplugSyncUserId" type="number" placeholder="e.g. 42"></div>
+            <div><label for="unplugSyncUserId">User ID</label><input id="unplugSyncUserId" type="number" placeholder="e.g. 42"></div>
           </div>
           <button class="btn btn-solid" style="width:auto;" id="unplugSyncBtn">Resync Member</button>
           <div id="unplugSyncMsg" style="margin-top:8px; font-size:13px;"></div>
@@ -1104,9 +1108,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Add a Sponsor</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div><label>Sponsor name</label><input id="unplugSponsorName" placeholder="e.g. Brand X"></div>
-            <div><label>Logo URL (optional)</label><input id="unplugSponsorLogo" placeholder="https://…"></div>
-            <div><label>Website (optional)</label><input id="unplugSponsorUrl" placeholder="https://…"></div>
+            <div><label for="unplugSponsorName">Sponsor name</label><input id="unplugSponsorName" placeholder="e.g. Brand X"></div>
+            <div><label for="unplugSponsorLogo">Logo URL (optional)</label><input id="unplugSponsorLogo" placeholder="https://…"></div>
+            <div><label for="unplugSponsorUrl">Website (optional)</label><input id="unplugSponsorUrl" placeholder="https://…"></div>
           </div>
           <button class="approve" style="padding:9px 16px;" id="unplugAddSponsorBtn">Add Sponsor</button>
           <div id="unplugSponsorMsg" style="margin-top:8px; font-size:13px;"></div>
@@ -1117,9 +1121,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3 id="unplugCampaignFormTitle">New Campaign</h3></div>
         <div class="panel-body">
           <input type="hidden" id="unplugCampaignEditId">
-          <div class="field"><label>Sponsor</label><select id="unplugCampaignSponsor" style="padding:8px; width:100%;"></select></div>
+          <div class="field"><label for="unplugCampaignSponsor">Sponsor</label><select id="unplugCampaignSponsor" style="padding:8px; width:100%;"></select></div>
           <div class="form-row">
-            <div><label>Type</label><select id="unplugCampaignType" style="padding:8px; width:100%;">
+            <div><label for="unplugCampaignType">Type</label><select id="unplugCampaignType" style="padding:8px; width:100%;">
               <option value="homepage">Homepage</option>
               <option value="daily_mission">Daily Mission</option>
               <option value="rising_star">Rising Star</option>
@@ -1127,12 +1131,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
               <option value="challenge">Challenge</option>
               <option value="achievement">Achievement</option>
             </select></div>
-            <div><label>Placement code</label><input id="unplugCampaignPlacement" placeholder="e.g. homepage_todays_person"></div>
-            <div><label>Campaign label</label><input id="unplugCampaignLabel" placeholder="e.g. Presented by Brand X"></div>
+            <div><label for="unplugCampaignPlacement">Placement code</label><input id="unplugCampaignPlacement" placeholder="e.g. homepage_todays_person"></div>
+            <div><label for="unplugCampaignLabel">Campaign label</label><input id="unplugCampaignLabel" placeholder="e.g. Presented by Brand X"></div>
           </div>
           <div class="form-row">
-            <div><label>Starts</label><input id="unplugCampaignStarts" type="date"></div>
-            <div><label>Ends</label><input id="unplugCampaignEnds" type="date"></div>
+            <div><label for="unplugCampaignStarts">Starts</label><input id="unplugCampaignStarts" type="date"></div>
+            <div><label for="unplugCampaignEnds">Ends</label><input id="unplugCampaignEnds" type="date"></div>
           </div>
           <button class="approve" style="padding:9px 16px;" id="unplugAddCampaignBtn">Create Campaign</button>
           <button class="btn btn-line" id="unplugCampaignCancelEditBtn" type="button" style="width:auto; display:none; margin-left:8px;">Cancel edit</button>
@@ -1158,16 +1162,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3 id="hlFormTitle">Add a highlight</h3></div>
         <div class="panel-body">
           <input type="hidden" id="hlEditId">
-          <div class="field"><label>What to highlight</label><select id="hlTargetType" style="padding:8px; width:100%;">
+          <div class="field"><label for="hlTargetType">What to highlight</label><select id="hlTargetType" style="padding:8px; width:100%;">
             <option value="article">Article</option>
             <option value="directory">Directory profile</option>
           </select></div>
           <div class="field"><label id="hlTargetLabel">Article</label><select id="hlArticle" style="padding:8px; width:100%;"></select></div>
           <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-            <div class="field"><label>Start date</label><input id="hlStart" type="date" style="padding:8px;"></div>
-            <div class="field"><label>End date</label><input id="hlEnd" type="date" style="padding:8px;"></div>
+            <div class="field"><label for="hlStart">Start date</label><input id="hlStart" type="date" style="padding:8px;"></div>
+            <div class="field"><label for="hlEnd">End date</label><input id="hlEnd" type="date" style="padding:8px;"></div>
             <div class="field"><label style="white-space:nowrap;"><input id="hlNoEnd" type="checkbox"> No end date</label></div>
-            <div class="field"><label>Order</label><input id="hlPriority" type="number" value="0" style="padding:8px; width:80px;"></div>
+            <div class="field"><label for="hlPriority">Order</label><input id="hlPriority" type="number" value="0" style="padding:8px; width:80px;"></div>
           </div>
           <div class="field"><label>Cover image override (optional)</label><div id="hlImageUpload"></div></div>
           <div id="hlFormError" style="color:var(--red); margin-bottom:10px; display:none;"></div>
@@ -1223,7 +1227,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>★ Homepage Investor Spotlight</h3></div>
         <div class="panel-body">
           <div id="spotCurrent" style="margin-bottom:12px; font-size:13px;">Loading…</div>
-          <div class="field"><label>Search & select a published project</label>
+          <div class="field"><label for="spotSearch">Search & select a published project</label>
             <input id="spotSearch" placeholder="Search by project title…" style="padding:8px; width:100%; margin-bottom:6px;">
             <div id="spotResults" style="max-height:200px; overflow:auto; border:1px solid var(--paper-line); border-radius:4px;"></div>
           </div>
@@ -1247,18 +1251,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="panel-body">
             <input type="hidden" id="projId">
             <h4 style="margin:0 0 10px;">Project information</h4>
-            <div class="field"><label>Title *</label><input id="projTitle" style="padding:8px; width:100%;" maxlength="200"></div>
+            <div class="field"><label for="projTitle">Title *</label><input id="projTitle" style="padding:8px; width:100%;" maxlength="200"></div>
             <div class="field"><label>Description <span style="color:#888; font-weight:400;">(max ~3 min / <span id="projWordMax">450</span> words)</span></label>
               <textarea id="projDesc" rows="7" style="padding:8px; width:100%;"></textarea>
               <div id="projWordCount" style="font-size:12px; color:#666; margin-top:4px;">0 / 450 words</div>
             </div>
             <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-              <div class="field"><label>Status</label><select id="projStatus" style="padding:8px;"><option value="draft">Draft</option><option value="published">Published</option><option value="unpublished">Unpublished</option><option value="archived">Archived</option></select></div>
-              <div class="field"><label>Display order</label><input id="projOrder" type="number" value="0" style="padding:8px; width:90px;"></div>
+              <div class="field"><label for="projStatus">Status</label><select id="projStatus" style="padding:8px;"><option value="draft">Draft</option><option value="published">Published</option><option value="unpublished">Unpublished</option><option value="archived">Archived</option></select></div>
+              <div class="field"><label for="projOrder">Display order</label><input id="projOrder" type="number" value="0" style="padding:8px; width:90px;"></div>
               <div class="field"><label style="white-space:nowrap;"><input id="projFeatured" type="checkbox"> Featured</label></div>
             </div>
-            <div class="field"><label>SEO title (optional)</label><input id="projSeoTitle" style="padding:8px; width:100%;" maxlength="200"></div>
-            <div class="field"><label>Meta description (optional)</label><input id="projMetaDesc" style="padding:8px; width:100%;" maxlength="400"></div>
+            <div class="field"><label for="projSeoTitle">SEO title (optional)</label><input id="projSeoTitle" style="padding:8px; width:100%;" maxlength="200"></div>
+            <div class="field"><label for="projMetaDesc">Meta description (optional)</label><input id="projMetaDesc" style="padding:8px; width:100%;" maxlength="400"></div>
             <div id="projInfoError" style="color:var(--red); margin:8px 0; display:none;"></div>
             <button class="approve" id="projSaveInfoBtn" style="padding:9px 16px;">Save project info</button>
             <span id="projSaveHint" style="font-size:12px; color:#888; margin-left:8px;"></span>
@@ -1273,12 +1277,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
               <div id="projSponsorList" style="margin-bottom:14px;"></div>
               <div style="border-top:1px solid var(--paper-line); padding-top:12px;">
                 <strong style="display:block; margin-bottom:8px;">+ Add sponsor</strong>
-                <div class="field"><label>Sponsor name *</label><input id="spName" style="padding:8px; width:100%;"></div>
+                <div class="field"><label for="spName">Sponsor name *</label><input id="spName" style="padding:8px; width:100%;"></div>
                 <div class="field"><label>Sponsor logo <span style="color:#888; font-weight:400;">(PNG/WEBP, transparent preferred, ≤5MB — shown with object-fit:contain)</span></label><div id="spLogoUpload"></div></div>
                 <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-                  <div class="field"><label>Link type</label><select id="spLinkType" style="padding:8px;"><option value="website">Website</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option></select></div>
-                  <div class="field" style="flex:1; min-width:220px;"><label>Link (https://…)</label><input id="spLink" style="padding:8px; width:100%;"></div>
-                  <div class="field"><label>Order</label><input id="spOrder" type="number" value="0" style="padding:8px; width:80px;"></div>
+                  <div class="field"><label for="spLinkType">Link type</label><select id="spLinkType" style="padding:8px;"><option value="website">Website</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option></select></div>
+                  <div class="field" style="flex:1; min-width:220px;"><label for="spLink">Link (https://…)</label><input id="spLink" style="padding:8px; width:100%;"></div>
+                  <div class="field"><label for="spOrder">Order</label><input id="spOrder" type="number" value="0" style="padding:8px; width:80px;"></div>
                 </div>
                 <div id="spError" style="color:var(--red); margin:6px 0; display:none;"></div>
                 <button class="approve" id="spAddBtn" style="padding:8px 14px;">Add sponsor</button>
@@ -1290,8 +1294,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div class="panel-head"><h3>Video</h3></div>
             <div class="panel-body">
               <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-                <div class="field"><label>Platform</label><select id="vidPlatform" style="padding:8px;"><option value="none">None</option><option value="youtube">YouTube</option><option value="instagram">Instagram</option></select></div>
-                <div class="field" style="flex:1; min-width:260px;"><label>Video URL</label><input id="vidUrl" style="padding:8px; width:100%;" placeholder="https://www.youtube.com/watch?v=… or https://www.instagram.com/reel/…"></div>
+                <div class="field"><label for="vidPlatform">Platform</label><select id="vidPlatform" style="padding:8px;"><option value="none">None</option><option value="youtube">YouTube</option><option value="instagram">Instagram</option></select></div>
+                <div class="field" style="flex:1; min-width:260px;"><label for="vidUrl">Video URL</label><input id="vidUrl" style="padding:8px; width:100%;" placeholder="https://www.youtube.com/watch?v=… or https://www.instagram.com/reel/…"></div>
               </div>
               <div id="vidError" style="color:var(--red); margin:6px 0; display:none;"></div>
               <button class="approve" id="vidSaveBtn" style="padding:8px 14px;">Save video</button>
@@ -1334,16 +1338,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body">
           <input type="hidden" id="galId">
           <div class="field"><label>Image</label><div id="galImgUpload"></div></div>
-          <div class="field"><label>Title</label><input id="galTitle" maxlength="200" placeholder="e.g. African Summer"></div>
-          <div class="field"><label>Description</label><textarea id="galDesc" rows="3" placeholder="e.g. A celebration of South African lifestyle, creativity and culture."></textarea></div>
+          <div class="field"><label for="galTitle">Title</label><input id="galTitle" maxlength="200" placeholder="e.g. African Summer"></div>
+          <div class="field"><label for="galDesc">Description</label><textarea id="galDesc" rows="3" placeholder="e.g. A celebration of South African lifestyle, creativity and culture."></textarea></div>
           <div class="field"><label>Alt text <span style="color:#888; font-weight:400;">(optional — falls back to title)</span></label><input id="galAlt" maxlength="255"></div>
           <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-            <div class="field"><label>Link type</label><select id="galLinkType" style="padding:8px;"><option value="none">No link</option><option value="external">External URL</option><option value="article">Article</option><option value="profile">Profile</option><option value="business">Business</option><option value="event">Event</option><option value="investor">Investor</option></select></div>
-            <div class="field" style="flex:1; min-width:220px;"><label>Link (URL, or internal path)</label><input id="galLink" placeholder="https://… or ?p=article&id=12"></div>
+            <div class="field"><label for="galLinkType">Link type</label><select id="galLinkType" style="padding:8px;"><option value="none">No link</option><option value="external">External URL</option><option value="article">Article</option><option value="profile">Profile</option><option value="business">Business</option><option value="event">Event</option><option value="investor">Investor</option></select></div>
+            <div class="field" style="flex:1; min-width:220px;"><label for="galLink">Link (URL, or internal path)</label><input id="galLink" placeholder="https://… or ?p=article&id=12"></div>
           </div>
           <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-            <div class="field"><label>Status</label><select id="galStatus" style="padding:8px;"><option value="published">Published</option><option value="draft">Draft</option><option value="unpublished">Unpublished</option><option value="archived">Archived</option></select></div>
-            <div class="field"><label>Display order</label><input id="galOrder" type="number" value="0" style="padding:8px; width:90px;"></div>
+            <div class="field"><label for="galStatus">Status</label><select id="galStatus" style="padding:8px;"><option value="published">Published</option><option value="draft">Draft</option><option value="unpublished">Unpublished</option><option value="archived">Archived</option></select></div>
+            <div class="field"><label for="galOrder">Display order</label><input id="galOrder" type="number" value="0" style="padding:8px; width:90px;"></div>
           </div>
           <div id="galError" style="color:var(--red); margin:8px 0; display:none;"></div>
           <button class="approve" id="galSaveBtn" style="padding:9px 16px;">Save</button>
@@ -1370,18 +1374,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Upload a new edition</h3></div>
         <div class="panel-body">
           <div class="grid-2">
-            <div class="field"><label>Edition title</label><input id="edNewTitle" placeholder="Unplug Magazine — August 2026"></div>
+            <div class="field"><label for="edNewTitle">Edition title</label><input id="edNewTitle" placeholder="Unplug Magazine — August 2026"></div>
             <div class="field"><label>Edition number <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional</span></label><input id="edNewNumber" placeholder="Edition 05"></div>
-            <div class="field"><label>Month</label><select id="edNewMonth"></select></div>
-            <div class="field"><label>Year</label><input id="edNewYear" type="number" min="2000" max="2100"></div>
-            <div class="field"><label>Publication date</label><input id="edNewDate" type="date"></div>
-            <div class="field"><label>Download price (R)</label><input id="edNewPrice" type="number" min="0" step="0.01" value="50.00"></div>
-            <div class="field"><label>Status</label><select id="edNewStatus">
+            <div class="field"><label for="edNewMonth">Month</label><select id="edNewMonth"></select></div>
+            <div class="field"><label for="edNewYear">Year</label><input id="edNewYear" type="number" min="2000" max="2100"></div>
+            <div class="field"><label for="edNewDate">Publication date</label><input id="edNewDate" type="date"></div>
+            <div class="field"><label for="edNewPrice">Download price (R)</label><input id="edNewPrice" type="number" min="0" step="0.01" value="50.00"></div>
+            <div class="field"><label for="edNewStatus">Status</label><select id="edNewStatus">
               <option value="published">Published — live on the site</option>
               <option value="draft">Draft — hidden</option>
             </select></div>
           </div>
-          <div class="field"><label>Description</label><textarea id="edNewDesc" rows="2" placeholder="A short line shown under the edition title."></textarea></div>
+          <div class="field"><label for="edNewDesc">Description</label><textarea id="edNewDesc" rows="2" placeholder="A short line shown under the edition title."></textarea></div>
           <div class="field"><label>Cover image</label><div id="edNewCover"></div></div>
           <div class="field"><label>Edition PDF</label><div id="edNewPdf"></div></div>
           <button class="approve" id="edAddBtn">Add edition</button>
@@ -1408,14 +1412,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Add a competition</h3></div>
         <div class="panel-body">
           <div class="grid-2">
-            <div class="field"><label>Name</label><input id="compNewName" placeholder="e.g. Spring Impact Awards"></div>
+            <div class="field"><label for="compNewName">Name</label><input id="compNewName" placeholder="e.g. Spring Impact Awards"></div>
             <div class="field"><label>Web address <span style="font-weight:400; color:var(--slate);">— lowercase, hyphens, can't be changed later</span></label><input id="compNewSlug" placeholder="spring-impact-awards"></div>
-            <div class="field"><label>Opens</label><input id="compNewOpens" type="date"></div>
-            <div class="field"><label>Closes</label><input id="compNewCloses" type="date"></div>
-            <div class="field"><label>Entry fee (R)</label><input id="compNewFee" type="number" min="0" step="0.01" value="0"></div>
-            <div class="field"><label>Status</label><select id="compNewStatus"><option value="draft">Draft — hidden</option><option value="open">Open — live on the site</option><option value="closed">Closed — hidden</option></select></div>
+            <div class="field"><label for="compNewOpens">Opens</label><input id="compNewOpens" type="date"></div>
+            <div class="field"><label for="compNewCloses">Closes</label><input id="compNewCloses" type="date"></div>
+            <div class="field"><label for="compNewFee">Entry fee (R)</label><input id="compNewFee" type="number" min="0" step="0.01" value="0"></div>
+            <div class="field"><label for="compNewStatus">Status</label><select id="compNewStatus"><option value="draft">Draft — hidden</option><option value="open">Open — live on the site</option><option value="closed">Closed — hidden</option></select></div>
           </div>
-          <div class="field" style="margin-top:10px;"><label>Description</label><textarea id="compNewDesc" rows="2" placeholder="One line shown under the competition name."></textarea></div>
+          <div class="field" style="margin-top:10px;"><label for="compNewDesc">Description</label><textarea id="compNewDesc" rows="2" placeholder="One line shown under the competition name."></textarea></div>
           <button class="approve" id="compAddBtn" style="margin-top:10px;">Add competition</button>
         </div>
       </div>
@@ -4889,35 +4893,54 @@ async function loadAllPayments() {
 // never touched — an admin should not be able to set someone's password.
 // ---------------------------------------------------------------------------
 const USER_ROLES = ['member', 'investor', 'advertiser', 'consultant', 'admin'];
+const USERS_PAGE_SIZE = 50;
 let _allUsers = [];
+let _usersTotal = 0;
+let _usersOffset = 0;
 
+// Loads the FIRST page for the current search term (server-side now — see
+// GET /admin/users?q=&limit=&offset= — the old version fetched every account
+// unconditionally and filtered client-side, which stopped scaling once the
+// member base grew past a page).
 async function loadUsers() {
+  _usersOffset = 0;
+  _allUsers = [];
+  await fetchUsersPage(true);
+}
+
+async function loadMoreUsers() {
+  await fetchUsersPage(false);
+}
+
+async function fetchUsersPage(replace) {
   const body = document.getElementById('usersBody');
-  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  const countEl = document.getElementById('usersCount');
+  const loadMoreBtn = document.getElementById('usersLoadMoreBtn');
+  const q = (document.getElementById('userSearch').value || '').trim();
+  if (replace) body.innerHTML = '<div class="loading-state">Loading…</div>';
+  loadMoreBtn.disabled = true;
   try {
-    const data = await api('/admin/users');
-    _allUsers = data.users || [];
-    renderUsers();
+    const params = new URLSearchParams({ limit: USERS_PAGE_SIZE, offset: _usersOffset });
+    if (q) params.set('q', q);
+    const data = await api(`/admin/users?${params}`);
+    _usersTotal = data.total;
+    _allUsers = replace ? (data.users || []) : _allUsers.concat(data.users || []);
+    _usersOffset += (data.users || []).length;
+
+    if (!_allUsers.length) {
+      body.innerHTML = '<div style="padding:16px; color:#666;">' + (q ? 'Nobody matches that search.' : 'No accounts yet.') + '</div>';
+    } else {
+      body.innerHTML = _allUsers.map(userRowHtml).join('');
+    }
+    countEl.textContent = _usersTotal ? `Showing ${_allUsers.length} of ${_usersTotal}` : '';
+    loadMoreBtn.style.display = _allUsers.length < _usersTotal ? 'inline-block' : 'none';
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  } finally {
+    loadMoreBtn.disabled = false;
   }
 }
-
-function renderUsers() {
-  const body = document.getElementById('usersBody');
-  const search = document.getElementById('userSearch');
-  const q = ((search && search.value) || '').trim().toLowerCase();
-  const rows = q
-    ? _allUsers.filter((u) => (u.email || '').toLowerCase().includes(q)
-        || (u.full_name || '').toLowerCase().includes(q))
-    : _allUsers;
-  if (!rows.length) {
-    body.innerHTML = '<div style="padding:16px; color:#666;">'
-      + (q ? 'Nobody matches that search.' : 'No accounts yet.') + '</div>';
-    return;
-  }
-  body.innerHTML = rows.map(userRowHtml).join('');
-}
+document.getElementById('usersLoadMoreBtn').addEventListener('click', loadMoreUsers);
 
 function userRowHtml(u) {
   const owns = (u.published_articles || 0) + (u.approved_profiles || 0)
@@ -6534,7 +6557,15 @@ async function deleteCompetition(id) {
 
 (function setupUserSearch() {
   const box = document.getElementById('userSearch');
-  if (box) box.addEventListener('input', renderUsers);
+  if (!box) return;
+  // Debounced — search is now a real server round-trip (was an instant
+  // client-side filter over an already-fetched full list), so firing on
+  // every keystroke would hammer the API while someone is still typing.
+  let debounceTimer = null;
+  box.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(loadUsers, 300);
+  });
 })();
 
 document.getElementById('compAddBtn').addEventListener('click', async () => {

@@ -170,11 +170,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2 id="registerTitle">Create your account</h2>
     <p class="sub" id="registerSub">Completely free. This just creates your account — you'll only pay later, and only if you choose a paid service.</p>
     <div class="error-banner" id="registerError"></div>
-    <div class="field" style="display:none;"><label>API Base URL</label><input id="registerApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
+    <div class="field" style="display:none;"><label for="registerApiBaseInput">API Base URL</label><input id="registerApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
     <div class="field"><label id="registerNameLabel">Full Name</label><input id="registerName" autocomplete="name"></div>
     <div class="field-row">
-      <div class="field"><label>Email Address</label><input id="registerEmail" type="email" autocomplete="email"></div>
-      <div class="field"><label>Mobile Number</label><input id="registerPhone" type="tel" autocomplete="tel" placeholder="e.g. 082 000 0000"></div>
+      <div class="field"><label for="registerEmail">Email Address</label><input id="registerEmail" type="email" autocomplete="email"></div>
+      <div class="field"><label for="registerPhone">Mobile Number</label><input id="registerPhone" type="tel" autocomplete="tel" placeholder="e.g. 082 000 0000"></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Password (8+ characters)</label>
@@ -194,7 +194,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Check Your Email</h2>
     <p class="sub" id="verifySub">We sent a 6-digit code to your email. Enter it below to activate your account.</p>
     <div class="error-banner" id="verifyError"></div>
-    <div class="field"><label>6-Digit Code</label><input id="verifyCode" maxlength="6" placeholder="000000"></div>
+    <div class="field"><label for="verifyCode">6-Digit Code</label><input id="verifyCode" maxlength="6" placeholder="000000"></div>
     <button class="btn btn-solid" id="verifyBtn">Activate Account</button>
     <button class="btn btn-line" id="resendCodeBtn" style="margin-top:10px;">Resend Code</button>
   </div>
@@ -204,10 +204,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Sign In</h2>
     <p class="sub">Sign in to manage your Directory profile, submissions, and entries.</p>
     <div class="error-banner" id="loginError"></div>
-    <div class="field" style="display:none;"><label>API Base URL</label><input id="apiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
+    <div class="field" style="display:none;"><label for="apiBaseInput">API Base URL</label><input id="apiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
     <div class="field-row">
-      <div class="field"><label>Email</label><input id="loginEmail" type="email"></div>
-      <div class="field"><label>Password</label><input id="loginPassword" type="password"></div>
+      <div class="field"><label for="loginEmail">Email</label><input id="loginEmail" type="email"></div>
+      <div class="field"><label for="loginPassword">Password</label><input id="loginPassword" type="password"></div>
     </div>
     <button class="btn btn-solid" id="loginBtn">Sign In</button>
     <button class="btn btn-line" id="magicLinkBtn" style="margin-top:10px;">Email me a sign-in link instead</button>
@@ -221,13 +221,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Reset Your Password</h2>
     <p class="sub" id="forgotSub">Enter your email — we'll send a reset code you can use to set a new password.</p>
     <div class="error-banner" id="forgotError"></div>
-    <div class="field" style="display:none;"><label>API Base URL</label><input id="forgotApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
-    <div class="field"><label>Email</label><input id="forgotEmail" type="email"></div>
+    <div class="field" style="display:none;"><label for="forgotApiBaseInput">API Base URL</label><input id="forgotApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
+    <div class="field"><label for="forgotEmail">Email</label><input id="forgotEmail" type="email"></div>
     <button class="btn btn-solid" id="requestResetBtn">Send Reset Code</button>
 
     <div id="resetStep2" class="section-hidden" style="margin-top:16px;">
-      <div class="field"><label>Reset Code (from your email)</label><input id="resetToken"></div>
-      <div class="field"><label>New Password (8+ characters)</label><input id="resetNewPassword" type="password"></div>
+      <div class="field"><label for="resetToken">Reset Code (from your email)</label><input id="resetToken"></div>
+      <div class="field"><label for="resetNewPassword">New Password (8+ characters)</label><input id="resetNewPassword" type="password"></div>
       <button class="btn btn-solid" id="submitResetBtn">Set New Password</button>
     </div>
 
@@ -359,8 +359,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <label style="font-weight:700;">Highlight Article</label>
         <p style="font-size:12.5px; color:var(--slate); margin:2px 0 8px;">Make one of your published articles more visible across the website for the period you choose.</p>
         <div class="field-row">
-          <div class="field"><label>Article</label><select id="svcArtPick"><option value="">Loading…</option></select></div>
-          <div class="field"><label>Duration</label><select id="svcArtDuration"><option value="">Loading…</option></select></div>
+          <div class="field"><label for="svcArtPick">Article</label><select id="svcArtPick"><option value="">Loading…</option></select></div>
+          <div class="field"><label for="svcArtDuration">Duration</label><select id="svcArtDuration"><option value="">Loading…</option></select></div>
         </div>
         <div id="svcArtError" class="error-banner" style="display:none;"></div>
         <button class="btn btn-solid" id="svcArtBtn" style="width:auto;">Continue to Checkout</button>
@@ -371,7 +371,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <label style="font-weight:700;">Highlight Profile</label>
         <p style="font-size:12.5px; color:var(--slate); margin:2px 0 8px;">Increase the visibility of your Directory profile in the Highlighted Profiles section on the homepage.</p>
         <div class="field-row">
-          <div class="field"><label>Duration</label><select id="svcProfDuration"><option value="">Loading…</option></select></div>
+          <div class="field"><label for="svcProfDuration">Duration</label><select id="svcProfDuration"><option value="">Loading…</option></select></div>
           <div class="field"><label>Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="svcProfStart" type="date"></div>
         </div>
         <div id="svcProfError" class="error-banner" style="display:none;"></div>
@@ -394,7 +394,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="error-banner" id="submitError"></div>
 
       <div class="field">
-        <label>What are you submitting?</label>
+        <label for="submitType">What are you submitting?</label>
         <select id="submitType">
           <option value="article">Article — R95 once-off</option>
           <option value="event">Event Listing — R300 once-off</option>
@@ -407,10 +407,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
       <!-- Article fields -->
       <div id="fields-article">
-        <div class="field"><label>Title</label><input id="art-title"></div>
-        <div class="field"><label>Story</label><textarea id="art-body" rows="4"></textarea></div>
+        <div class="field"><label for="art-title">Title</label><input id="art-title"></div>
+        <div class="field"><label for="art-body">Story</label><textarea id="art-body" rows="4"></textarea></div>
         <p id="art-readtime-hint" style="font-size:12px; color:var(--slate); margin-top:-4px;">Aim for a 3-6 minute read (roughly 600-1200 words). Current: 0 words, ~0 min.</p>
-        <div class="field"><label>Supplied By (kicker byline)</label><input id="art-kicker"></div>
+        <div class="field"><label for="art-kicker">Supplied By (kicker byline)</label><input id="art-kicker"></div>
         <div class="field"><label>Cover image <span style="font-weight:400; opacity:0.7;">— 1920 × 1080px (16:9)</span></label>
           <div id="art-cover-upload"></div>
           <span style="font-size:12px; color:var(--slate);">The main picture shown with your story.</span>
@@ -424,7 +424,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div id="art-links"></div>
           <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="art-add-link">+ Add a link</button>
         </div>
-        <div class="field"><label>Emotion (optional)</label>
+        <div class="field"><label for="art-emotion">Emotion (optional)</label>
           <select id="art-emotion">
             <option value="">— none —</option>
             <option value="inspiring">😊 Inspiring</option>
@@ -439,31 +439,31 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <!-- Event fields -->
       <div id="fields-event" class="section-hidden">
         <div class="field-row">
-          <div class="field"><label>Event Name</label><input id="evt-name"></div>
-          <div class="field"><label>Event Date</label><input id="evt-date" type="date"></div>
+          <div class="field"><label for="evt-name">Event Name</label><input id="evt-name"></div>
+          <div class="field"><label for="evt-date">Event Date</label><input id="evt-date" type="date"></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Start Time</label><input id="evt-start-time" type="time"></div>
-          <div class="field"><label>End Time</label><input id="evt-end-time" type="time"></div>
+          <div class="field"><label for="evt-start-time">Start Time</label><input id="evt-start-time" type="time"></div>
+          <div class="field"><label for="evt-end-time">End Time</label><input id="evt-end-time" type="time"></div>
         </div>
-        <div class="field"><label>Venue</label><input id="evt-venue"></div>
-        <div class="field"><label>Entrance Fee (what attendees pay, e.g. "R50" or "Free")</label><input id="evt-fee" placeholder="Free"></div>
+        <div class="field"><label for="evt-venue">Venue</label><input id="evt-venue"></div>
+        <div class="field"><label for="evt-fee">Entrance Fee (what attendees pay, e.g. "R50" or "Free")</label><input id="evt-fee" placeholder="Free"></div>
         <div class="field"><label>Feature Image URL <span style="font-weight:400; opacity:0.7;">— 800 × 1200px (2:3 portrait)</span></label><input id="evt-image" placeholder="https://..."></div>
-        <div class="field"><label>Contact Details (shown on the event)</label><input id="evt-contact" placeholder="e.g. 082 000 0000 / email"></div>
-        <div class="field"><label>Event Link (tickets / more info)</label><input id="evt-link" placeholder="https://..."></div>
-        <div class="field"><label>Description</label><textarea id="evt-desc" rows="3"></textarea></div>
-        <div class="field"><label>Calendar Promotion Start Date (optional)</label><input id="evt-display-start" type="date"></div>
+        <div class="field"><label for="evt-contact">Contact Details (shown on the event)</label><input id="evt-contact" placeholder="e.g. 082 000 0000 / email"></div>
+        <div class="field"><label for="evt-link">Event Link (tickets / more info)</label><input id="evt-link" placeholder="https://..."></div>
+        <div class="field"><label for="evt-desc">Description</label><textarea id="evt-desc" rows="3"></textarea></div>
+        <div class="field"><label for="evt-display-start">Calendar Promotion Start Date (optional)</label><input id="evt-display-start" type="date"></div>
       </div>
 
       <!-- Gallery fields -->
       <div id="fields-gallery" class="section-hidden">
         <p class="sub" style="margin-top:0;">Provide up to 3 image URLs (upload elsewhere and paste the links here).</p>
-        <div class="field"><label>Image 1 URL</label><input id="gal-url-1"></div>
-        <div class="field"><label>Caption 1 (optional)</label><input id="gal-cap-1"></div>
-        <div class="field"><label>Image 2 URL (optional)</label><input id="gal-url-2"></div>
-        <div class="field"><label>Caption 2 (optional)</label><input id="gal-cap-2"></div>
-        <div class="field"><label>Image 3 URL (optional)</label><input id="gal-url-3"></div>
-        <div class="field"><label>Caption 3 (optional)</label><input id="gal-cap-3"></div>
+        <div class="field"><label for="gal-url-1">Image 1 URL</label><input id="gal-url-1"></div>
+        <div class="field"><label for="gal-cap-1">Caption 1 (optional)</label><input id="gal-cap-1"></div>
+        <div class="field"><label for="gal-url-2">Image 2 URL (optional)</label><input id="gal-url-2"></div>
+        <div class="field"><label for="gal-cap-2">Caption 2 (optional)</label><input id="gal-cap-2"></div>
+        <div class="field"><label for="gal-url-3">Image 3 URL (optional)</label><input id="gal-url-3"></div>
+        <div class="field"><label for="gal-cap-3">Caption 3 (optional)</label><input id="gal-cap-3"></div>
       </div>
 
       <!-- Top 10 fields -->
@@ -473,22 +473,22 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
       <!-- Marketplace fields -->
       <div id="fields-marketplace" class="section-hidden">
-        <div class="field"><label>Business Name (first-time advertisers only)</label><input id="mkt-business"></div>
+        <div class="field"><label for="mkt-business">Business Name (first-time advertisers only)</label><input id="mkt-business"></div>
         <div class="field"><label>Poster Image URL <span style="font-weight:400; opacity:0.7;">— 1080 × 1350px (4:5)</span></label><input id="mkt-poster"></div>
-        <div class="field"><label>Headline</label><input id="mkt-headline"></div>
-        <div class="field"><label>Requested Start Date (optional — defaults to today)</label><input id="mkt-start" type="date"></div>
+        <div class="field"><label for="mkt-headline">Headline</label><input id="mkt-headline"></div>
+        <div class="field"><label for="mkt-start">Requested Start Date (optional — defaults to today)</label><input id="mkt-start" type="date"></div>
       </div>
 
       <!-- Advertising banner fields -->
       <div id="fields-ad_banner" class="section-hidden">
-        <div class="field"><label>Where should it appear?</label><select id="ab-placement"><option value="">Loading placements…</option></select></div>
-        <div class="field"><label>Campaign length</label><select id="ab-duration"><option value="">Loading…</option></select></div>
-        <div class="field"><label>Start date (optional — defaults to today)</label><input id="ab-start" type="date"></div>
+        <div class="field"><label for="ab-placement">Where should it appear?</label><select id="ab-placement"><option value="">Loading placements…</option></select></div>
+        <div class="field"><label for="ab-duration">Campaign length</label><select id="ab-duration"><option value="">Loading…</option></select></div>
+        <div class="field"><label for="ab-start">Start date (optional — defaults to today)</label><input id="ab-start" type="date"></div>
         <div class="field"><label>Banner image <span style="font-weight:400; opacity:0.7;">— 1920 × 600px, landscape 16:5, JPG/PNG/WEBP, max 5 MB. Keep text/logos away from the edges.</span></label><div id="ab-image-upload"></div></div>
         <div class="field"><label>Mobile image (optional — narrower crop for phones)</label><div id="ab-mimage-upload"></div></div>
-        <div class="field"><label>Click-through link (optional)</label><input id="ab-link" placeholder="https://…"></div>
-        <div class="field"><label>Advertiser / banner name (optional)</label><input id="ab-name" placeholder="e.g. ABC Investments"></div>
-        <div class="field"><label>CTA button text (optional)</label><input id="ab-cta" maxlength="40" placeholder="e.g. Learn More"></div>
+        <div class="field"><label for="ab-link">Click-through link (optional)</label><input id="ab-link" placeholder="https://…"></div>
+        <div class="field"><label for="ab-name">Advertiser / banner name (optional)</label><input id="ab-name" placeholder="e.g. ABC Investments"></div>
+        <div class="field"><label for="ab-cta">CTA button text (optional)</label><input id="ab-cta" maxlength="40" placeholder="e.g. Learn More"></div>
         <p style="font-size:12px; color:var(--slate);">After payment your banner goes to our team for approval, then runs on your chosen page for the selected dates.</p>
       </div>
 
@@ -501,7 +501,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="field">
-        <label>Payment Method</label>
+        <label for="submitPaymentMethod">Payment Method</label>
         <select id="submitPaymentMethod">
           <option value="eft" selected>Manual EFT</option>
           <option value="payfast" disabled>PayFast — coming soon</option>
@@ -1210,12 +1210,12 @@ async function loadProfile() {
         </div>
       </div>
       <div class="field-row">
-        <div class="field"><label>Bio</label><textarea id="editBio" rows="3">${p.bio || ''}</textarea></div>
-        <div class="field"><label>Quote</label><textarea id="editQuote" rows="3">${p.quote || ''}</textarea></div>
+        <div class="field"><label for="editBio">Bio</label><textarea id="editBio" rows="3">${p.bio || ''}</textarea></div>
+        <div class="field"><label for="editQuote">Quote</label><textarea id="editQuote" rows="3">${p.quote || ''}</textarea></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>Contact Email</label><input id="editEmail" value="${p.contact_email || ''}"></div>
-        <div class="field"><label>Contact Phone</label><input id="editPhone" value="${p.contact_phone || ''}"></div>
+        <div class="field"><label for="editEmail">Contact Email</label><input id="editEmail" value="${p.contact_email || ''}"></div>
+        <div class="field"><label for="editPhone">Contact Phone</label><input id="editPhone" value="${p.contact_phone || ''}"></div>
       </div>
       <div style="border-top:1px solid var(--paper-line); margin-top:16px; padding-top:14px;">
         <div style="font-weight:700; font-size:14px;">Location <span style="font-weight:400; color:var(--slate);">— optional</span></div>
@@ -1225,14 +1225,14 @@ async function loadProfile() {
             : 'Adding your location allows your profile to appear on the Map View and in relevant Near Me searches. We only ask for your area — never a street address.'}
           Leave blank to stay off the map; your listing stays in the Directory either way.
         </p>
-        ${p.type === 'business' ? `<div class="field"><label>Street Address</label><input id="editStreetAddress" maxlength="200" value="${escapeAttrM(p.street_address)}" placeholder="Enter physical street address"></div>` : ''}
+        ${p.type === 'business' ? `<div class="field"><label for="editStreetAddress">Street Address</label><input id="editStreetAddress" maxlength="200" value="${escapeAttrM(p.street_address)}" placeholder="Enter physical street address"></div>` : ''}
         <div class="field-row">
-          <div class="field"><label>Suburb</label><input id="editSuburb" maxlength="120" value="${escapeAttrM(p.suburb)}" placeholder="Enter suburb"></div>
-          <div class="field"><label>Town / City</label><input id="editCity" maxlength="120" value="${escapeAttrM(p.city)}" placeholder="Enter town or city"></div>
+          <div class="field"><label for="editSuburb">Suburb</label><input id="editSuburb" maxlength="120" value="${escapeAttrM(p.suburb)}" placeholder="Enter suburb"></div>
+          <div class="field"><label for="editCity">Town / City</label><input id="editCity" maxlength="120" value="${escapeAttrM(p.city)}" placeholder="Enter town or city"></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>Province</label><select id="editProvince"><option value="">Select province</option></select></div>
-          <div class="field"><label>Country</label><input id="editCountry" maxlength="80" value="${escapeAttrM(p.country) || 'South Africa'}" placeholder="Select country"></div>
+          <div class="field"><label for="editProvince">Province</label><select id="editProvince"><option value="">Select province</option></select></div>
+          <div class="field"><label for="editCountry">Country</label><input id="editCountry" maxlength="80" value="${escapeAttrM(p.country) || 'South Africa'}" placeholder="Select country"></div>
         </div>
         <button class="btn btn-line" id="removeLocationBtn" type="button" style="width:auto; font-size:12px;">Remove location</button>
       </div>
@@ -1251,10 +1251,10 @@ async function loadProfile() {
         </p>
         ${p.status !== 'approved' ? `<p style="font-size:12.5px; color:var(--red);">Your listing needs to be approved before it can be highlighted on the homepage.</p>` : `
           <div class="field-row">
-            <div class="field"><label>Package</label><select id="hlPackage"><option value="">Loading…</option></select></div>
+            <div class="field"><label for="hlPackage">Package</label><select id="hlPackage"><option value="">Loading…</option></select></div>
             <div class="field"><label>Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="hlStartDate" type="date"></div>
           </div>
-          <div class="field"><label>Payment Method</label><select id="hlPayMethod"><option value="eft" selected>Manual EFT</option></select></div>
+          <div class="field"><label for="hlPayMethod">Payment Method</label><select id="hlPayMethod"><option value="eft" selected>Manual EFT</option></select></div>
           <div id="hlBuyError" class="error-banner" style="display:none;"></div>
           <button class="btn btn-solid" id="hlBuyBtn" style="width:auto;">Continue to Payment</button>
           <div class="instructions-box section-hidden" id="hlBuyResult" style="margin-top:14px;"></div>
