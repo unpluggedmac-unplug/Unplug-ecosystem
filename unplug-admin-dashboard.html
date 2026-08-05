@@ -445,9 +445,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- USERS -->
     <div class="admin-section" id="section-users">
-      <div class="main-head"><div><h1>Users</h1><p>Everyone with an account on Unplug.</p></div></div>
+      <div class="main-head"><div><h1>Users &amp; Members</h1><p>Everyone with an account. Change a name, phone, role or member type, and add or take back account credit. An account's <strong>email address can't be changed</strong> — it's how they sign in and how their purchases are matched to them. Accounts that own published content can't be deleted; that content would go with them.</p></div></div>
       <div class="panel">
-        <div class="panel-body" id="usersBody" style="padding:0;"></div>
+        <div class="panel-body" style="padding-bottom:0;">
+          <div class="field" style="margin-bottom:12px;"><label>Find someone</label><input id="userSearch" placeholder="Search by name or email…"></div>
+        </div>
+        <div class="panel-body" id="usersBody" style="padding:0; border-top:1px solid var(--paper-line);"></div>
       </div>
     </div>
 
@@ -4540,51 +4543,147 @@ async function loadAllPayments() {
 // ---------------------------------------------------------------------------
 // Users (read-only)
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Users & Members — edit an account, adjust its credit, delete a stray signup.
+//
+// Email is not editable here (it is the account's identity), and passwords are
+// never touched — an admin should not be able to set someone's password.
+// ---------------------------------------------------------------------------
+const USER_ROLES = ['member', 'investor', 'advertiser', 'consultant', 'admin'];
+let _allUsers = [];
+
 async function loadUsers() {
   const body = document.getElementById('usersBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {
     const data = await api('/admin/users');
-    const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Email</th><th>Role</th><th>Published content</th><th>Joined</th><th></th></tr>';
-    data.users.forEach((u) => {
-      const owns = (u.published_articles || 0) + (u.approved_profiles || 0)
-        + (u.published_events || 0) + (u.confirmed_payments || 0);
-      const parts = [];
-      if (u.published_articles) parts.push(`${u.published_articles} article${u.published_articles > 1 ? 's' : ''}`);
-      if (u.approved_profiles) parts.push(`${u.approved_profiles} profile${u.approved_profiles > 1 ? 's' : ''}`);
-      if (u.published_events) parts.push(`${u.published_events} event${u.published_events > 1 ? 's' : ''}`);
-      if (u.confirmed_payments) parts.push(`${u.confirmed_payments} payment${u.confirmed_payments > 1 ? 's' : ''}`);
-      const ownsLabel = parts.length ? parts.join(', ') : '—';
-
-      const tr = document.createElement('tr');
-      // An account is deletable only if it's not an admin and owns nothing
-      // published — the same rule the server enforces, shown here so the button
-      // isn't offered when it would just be refused.
-      const deletable = u.role !== 'admin' && owns === 0;
-      tr.innerHTML = `<td>${escapeHtmlAdmin(u.email)}</td><td>${u.role}</td>`
-        + `<td>${escapeHtmlAdmin(ownsLabel)}</td>`
-        + `<td>${new Date(u.created_at).toLocaleDateString()}</td>`
-        + `<td><div class="row-actions">${deletable ? '<button class="reject">Delete</button>'
-            : '<span style="color:var(--slate); font-size:12px;">kept</span>'}</div></td>`;
-      const del = tr.querySelector('.reject');
-      if (del) {
-        del.addEventListener('click', async () => {
-          if (!confirm(`Delete ${u.email}?\n\nThis permanently removes the account. It owns no published content, so nothing on the live site is affected. This cannot be undone.`)) return;
-          try {
-            await api(`/admin/users/${u.id}`, { method: 'DELETE' });
-            showToast('Account deleted.');
-            loadUsers();
-          } catch (err) { showToast(err.message, true); }
-        });
-      }
-      table.appendChild(tr);
-    });
-    body.innerHTML = '';
-    body.appendChild(table);
+    _allUsers = data.users || [];
+    renderUsers();
   } catch (err) {
-    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
   }
+}
+
+function renderUsers() {
+  const body = document.getElementById('usersBody');
+  const search = document.getElementById('userSearch');
+  const q = ((search && search.value) || '').trim().toLowerCase();
+  const rows = q
+    ? _allUsers.filter((u) => (u.email || '').toLowerCase().includes(q)
+        || (u.full_name || '').toLowerCase().includes(q))
+    : _allUsers;
+  if (!rows.length) {
+    body.innerHTML = '<div style="padding:16px; color:#666;">'
+      + (q ? 'Nobody matches that search.' : 'No accounts yet.') + '</div>';
+    return;
+  }
+  body.innerHTML = rows.map(userRowHtml).join('');
+}
+
+function userRowHtml(u) {
+  const owns = (u.published_articles || 0) + (u.approved_profiles || 0)
+    + (u.published_events || 0) + (u.confirmed_payments || 0);
+  const parts = [];
+  if (u.published_articles) parts.push(`${u.published_articles} article${u.published_articles > 1 ? 's' : ''}`);
+  if (u.approved_profiles) parts.push(`${u.approved_profiles} profile${u.approved_profiles > 1 ? 's' : ''}`);
+  if (u.published_events) parts.push(`${u.published_events} event${u.published_events > 1 ? 's' : ''}`);
+  if (u.confirmed_payments) parts.push(`${u.confirmed_payments} payment${u.confirmed_payments > 1 ? 's' : ''}`);
+  const ownsLabel = parts.length ? parts.join(', ') : 'nothing published';
+
+  // Same rule the server enforces, shown here so a button isn't offered that
+  // would only be refused.
+  const deletable = u.role !== 'admin' && owns === 0;
+  const isSelf = u.email === (document.getElementById('currentUserEmail') || {}).textContent;
+  const credit = Number(u.credit_balance) || 0;
+
+  const roleOpts = USER_ROLES.map((r) =>
+    `<option value="${r}"${u.role === r ? ' selected' : ''}>${r}</option>`).join('');
+  const typeOpts = ['', 'individual', 'business'].map((t) =>
+    `<option value="${t}"${(u.member_type || '') === t ? ' selected' : ''}>${t || '— not set —'}</option>`).join('');
+
+  const deleteTitle = u.role === 'admin'
+    ? 'Admin accounts are not deleted here — change the role first.'
+    : `This account owns ${ownsLabel}. That content would be deleted with it.`;
+
+  return `<div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);" data-user="${u.id}">
+    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+      <div style="font-weight:700;">${escapeHtmlAdmin(u.full_name || u.email)}
+        ${isSelf ? '<span style="font-weight:400; font-size:11px; color:var(--red); border:1px solid var(--red); padding:1px 6px; margin-left:6px;">You</span>' : ''}
+      </div>
+      <div style="font-size:12px; color:#666;">
+        ${escapeHtmlAdmin(u.email)} · joined ${new Date(u.created_at).toLocaleDateString()} · ${escapeHtmlAdmin(ownsLabel)}
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Full name</label><input class="u-name" value="${escapeAttrAdmin(u.full_name || '')}"></div>
+      <div class="field"><label>Phone</label><input class="u-phone" value="${escapeAttrAdmin(u.phone || '')}"></div>
+      <div class="field"><label>Role${isSelf ? ' — you cannot change your own' : ''}</label>
+        <select class="u-role"${isSelf ? ' disabled style="opacity:0.6;"' : ''}>${roleOpts}</select></div>
+      <div class="field"><label>Member type</label><select class="u-type">${typeOpts}</select></div>
+    </div>
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:10px;">
+      <div class="field" style="margin-bottom:0;"><label>Account credit</label>
+        <div style="font-weight:700; font-size:15px;">R${credit.toFixed(2)}</div></div>
+      <div class="field" style="margin-bottom:0;"><label>Adjust by (R)</label>
+        <input class="u-credit" type="number" step="0.01" placeholder="e.g. 50 or -50" style="width:130px;"></div>
+      <div class="field" style="margin-bottom:0; flex:1; min-width:200px;"><label>Reason (required)</label>
+        <input class="u-credit-note" placeholder="Why is this changing?"></div>
+      <button class="approve" style="padding:9px 14px;" onclick="adjustUserCredit(${u.id})">Apply credit</button>
+    </div>
+    <button class="approve" style="padding:5px 12px;" onclick="saveUser(${u.id})">Save changes</button>
+    ${deletable
+      ? `<button class="reject" style="padding:5px 12px;" onclick="deleteUser(${u.id})">Delete account</button>`
+      : `<button class="reject" disabled title="${escapeAttrAdmin(deleteTitle)}" style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">Delete account</button>`}
+  </div>`;
+}
+
+async function saveUser(id) {
+  const row = document.querySelector(`div[data-user="${id}"]`);
+  if (!row) return;
+  const roleSel = row.querySelector('.u-role');
+  const payload = {
+    fullName: row.querySelector('.u-name').value,
+    phone: row.querySelector('.u-phone').value,
+    memberType: row.querySelector('.u-type').value || null,
+  };
+  // Only send the role when it is actually editable, so a disabled control
+  // can't post its value back and trip the self-demotion guard.
+  if (roleSel && !roleSel.disabled) payload.role = roleSel.value;
+  try {
+    const res = await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    showToast(res.message || 'Account updated.');
+    loadUsers();
+  } catch (e) { showToast(e.message || 'Could not save.', true); }
+}
+
+async function adjustUserCredit(id) {
+  const row = document.querySelector(`div[data-user="${id}"]`);
+  if (!row) return;
+  const amount = Number(row.querySelector('.u-credit').value);
+  const note = row.querySelector('.u-credit-note').value.trim();
+  if (!Number.isFinite(amount) || amount === 0) {
+    showToast('Enter an amount — positive to add, negative to take back.', true); return;
+  }
+  if (!note) { showToast('Add a reason — account credit should never be unexplained.', true); return; }
+  if (!confirm(`${amount > 0 ? 'Add' : 'Take back'} R${Math.abs(amount).toFixed(2)} of credit?\n\nThis is money the member can spend at checkout.`)) return;
+  try {
+    const res = await api(`/admin/users/${id}/credits`, {
+      method: 'POST', body: JSON.stringify({ amount, note }),
+    });
+    showToast(res.message || 'Credit updated.');
+    loadUsers();
+  } catch (e) { showToast(e.message || 'Could not adjust credit.', true); }
+}
+
+async function deleteUser(id) {
+  const u = _allUsers.find((x) => x.id === id);
+  if (!u) return;
+  if (!confirm(`Delete ${u.email}?\n\nThis permanently removes the account. It owns no published content, so nothing on the live site is affected. This cannot be undone.`)) return;
+  try {
+    await api(`/admin/users/${id}`, { method: 'DELETE' });
+    showToast('Account deleted.');
+    loadUsers();
+  } catch (e) { showToast(e.message || 'Could not delete.', true); }
 }
 
 // ---------------------------------------------------------------------------
@@ -5743,6 +5842,11 @@ async function deleteCompetition(id) {
     loadCompetitions();
   } catch (e) { showToast(e.message || 'Could not delete.', true); }
 }
+
+(function setupUserSearch() {
+  const box = document.getElementById('userSearch');
+  if (box) box.addEventListener('input', renderUsers);
+})();
 
 document.getElementById('compAddBtn').addEventListener('click', async () => {
   const name = document.getElementById('compNewName').value.trim();

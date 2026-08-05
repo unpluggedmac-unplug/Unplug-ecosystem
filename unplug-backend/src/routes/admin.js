@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
+const { balanceFor, historyFor } = require('../utils/accountCredit');
 const { sendEmail, isConfigured, verifyConnection, config: emailConfig } = require('../utils/email');
 const { probe } = require('../utils/portProbe');
 
@@ -30,7 +31,10 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
     // before deleting, whether an account is a stray signup or the author of
     // live articles. The count is what the delete guard blocks on too.
     const result = await pool.query(
-      `SELECT u.id, u.email, u.phone, u.role, u.created_at,
+      `SELECT u.id, u.email, u.phone, u.role, u.created_at, u.full_name, u.member_type,
+              -- Credit is a SUM of the ledger, not a stored column, so it is
+              -- computed here rather than trusted from anywhere else.
+              (SELECT COALESCE(SUM(amount), 0) FROM account_credits ac WHERE ac.user_id = u.id)::numeric AS credit_balance,
               (SELECT COUNT(*) FROM articles a WHERE a.author_user_id = u.id AND a.status = 'approved')::int AS published_articles,
               (SELECT COUNT(*) FROM profiles p WHERE p.user_id = u.id AND p.status = 'approved')::int       AS approved_profiles,
               (SELECT COUNT(*) FROM events e WHERE e.organizer_user_id = u.id AND e.status = 'approved')::int AS published_events,
@@ -38,9 +42,165 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
          FROM users u
         ORDER BY u.created_at DESC`
     );
-    res.json({ users: result.rows });
+    res.json({
+      // SUM() arrives from pg as a NUMERIC string; cast so the dashboard can
+      // format it as money rather than concatenating it.
+      users: result.rows.map((u) => ({ ...u, credit_balance: Number(u.credit_balance) })),
+    });
   } catch (err) {
     next(err);
+  }
+});
+
+// The roles an account can hold, and the two kinds of member. Kept here rather
+// than inline so the API and the CHECK constraint in 046_consultant_role.sql
+// can be compared at a glance.
+const ASSIGNABLE_ROLES = ['member', 'investor', 'advertiser', 'admin', 'consultant'];
+const MEMBER_TYPES = ['individual', 'business'];
+
+// PATCH /admin/users/:id — edit an account's name, phone, role or member type.
+//
+// Email is deliberately NOT editable. It is the account's identity: it is how
+// sign-in works, how magic links are matched, and how guest edition purchases
+// are reunited with an account. Changing it here would silently detach a person
+// from their own purchase history.
+//
+// Passwords are not touched either — an admin should never be able to set
+// someone's password. Members reset their own.
+router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid user id is required.' });
+
+    const target = await pool.query('SELECT id, email, role FROM users WHERE id = $1', [id]);
+    if (target.rowCount === 0) return res.status(404).json({ error: 'That account no longer exists.' });
+
+    const b = req.body;
+    if (b.email !== undefined) {
+      return res.status(400).json({
+        error: "An account's email address can't be changed here — it is how the person signs in and how their purchases are matched to them.",
+      });
+    }
+    if (b.role !== undefined && !ASSIGNABLE_ROLES.includes(b.role)) {
+      return res.status(400).json({ error: `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}.` });
+    }
+    if (b.memberType !== undefined && b.memberType !== null && b.memberType !== ''
+        && !MEMBER_TYPES.includes(b.memberType)) {
+      return res.status(400).json({ error: `Member type must be ${MEMBER_TYPES.join(' or ')}.` });
+    }
+
+    // Changing your own role is how an admin locks themselves out of the
+    // dashboard they are standing in. Another admin can do it; you can't do it
+    // to yourself.
+    if (b.role !== undefined && id === req.user.id && b.role !== target.rows[0].role) {
+      return res.status(400).json({
+        error: 'You cannot change your own role — that would lock you out of the admin dashboard.',
+      });
+    }
+
+    const sets = [];
+    const vals = [];
+    const put = (col, val) => { vals.push(val); sets.push(`${col} = $${vals.length}`); };
+    if (b.fullName !== undefined) put('full_name', String(b.fullName).trim().slice(0, 160) || null);
+    if (b.phone !== undefined) put('phone', String(b.phone).trim().slice(0, 40) || null);
+    if (b.role !== undefined) put('role', b.role);
+    if (b.memberType !== undefined) put('member_type', b.memberType || null);
+    if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+
+    vals.push(id);
+    const result = await pool.query(
+      `UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length}
+       RETURNING id, email, phone, role, full_name, member_type`,
+      vals
+    );
+
+    // Granting or removing admin is the change most worth being able to trace
+    // later, so it is called out rather than folded into a generic message.
+    const roleChanged = b.role !== undefined && b.role !== target.rows[0].role;
+    logActivity(
+      req.user.id,
+      roleChanged ? 'user_role_changed' : 'user_edited',
+      roleChanged
+        ? `${target.rows[0].email} (#${id}): ${target.rows[0].role} → ${b.role}`
+        : `${target.rows[0].email} (#${id})`
+    );
+
+    res.json({ user: result.rows[0], message: 'Account updated.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/users/:id/credits — an account's credit balance and every entry
+// behind it, so an admin can answer "why does this person have R150?".
+router.get('/users/:id/credits', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid user id is required.' });
+    const [balance, history] = await Promise.all([balanceFor(id), historyFor(id)]);
+    res.json({ balance, history });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/users/:id/credits — manually add or remove account credit.
+//
+// This is real money the customer can spend at checkout, so: a note is
+// required (a credit with no stated reason is unauditable), the balance can
+// never be pushed below zero, and the whole thing runs in a transaction with
+// the balance read FOR UPDATE — two admins adjusting at once would otherwise
+// both read the old balance and both succeed.
+router.post('/users/:id/credits', requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid user id is required.' });
+
+    const amount = Number(req.body.amount);
+    if (!Number.isFinite(amount) || amount === 0) {
+      return res.status(400).json({ error: 'Enter an amount — positive to add credit, negative to take it away.' });
+    }
+    const note = String(req.body.note || '').trim();
+    if (!note) {
+      return res.status(400).json({ error: 'Add a note saying why — account credit should never be unexplained.' });
+    }
+
+    await client.query('BEGIN');
+    const target = await client.query('SELECT id, email FROM users WHERE id = $1 FOR UPDATE', [id]);
+    if (target.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'That account no longer exists.' });
+    }
+
+    const current = await balanceFor(id, client);
+    const next = current + amount;
+    if (next < 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `That would take the balance to R${next.toFixed(2)}. This account only has R${current.toFixed(2)} of credit.`,
+      });
+    }
+
+    await client.query(
+      `INSERT INTO account_credits (user_id, amount, reason, note, created_by)
+       VALUES ($1, $2, 'admin_adjustment', $3, $4)`,
+      [id, amount, note.slice(0, 500), req.user.id]
+    );
+    await client.query('COMMIT');
+
+    logActivity(req.user.id, 'credit_adjusted',
+      `${target.rows[0].email} (#${id}): ${amount > 0 ? '+' : ''}R${amount.toFixed(2)} — ${note.slice(0, 120)}`);
+
+    res.json({
+      balance: next,
+      message: `${amount > 0 ? 'Added' : 'Removed'} R${Math.abs(amount).toFixed(2)}. New balance: R${next.toFixed(2)}.`,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
   }
 });
 
