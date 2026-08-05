@@ -333,6 +333,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="main-head"><div><h1>Approval Queue</h1><p>Live data from the Unplug API — approve or reject moves it immediately.</p></div></div>
       <div class="panel">
         <div class="queue-tabs" id="queueTabs"></div>
+        <div id="queueBulkBar" style="display:none; padding:10px 16px; background:var(--paper); border-bottom:1px solid var(--paper-line); align-items:center; gap:10px; font-size:13px;">
+          <span id="queueBulkCount">0 selected</span>
+          <button class="approve" id="queueBulkApproveBtn" style="padding:5px 12px;">Approve Selected</button>
+          <button class="reject" id="queueBulkRejectBtn" style="padding:5px 12px;">Reject Selected</button>
+          <button class="btn btn-line" id="queueBulkClearBtn" style="width:auto; padding:5px 12px;">Clear</button>
+        </div>
         <div class="panel-body" id="queueBody" style="padding:0;"></div>
       </div>
     </div>
@@ -1940,10 +1946,27 @@ Object.entries(QUEUE_TABS).forEach(([key, cfg], i) => {
   queueTabsEl.appendChild(btn);
 });
 
+// Bulk selection state — cleared on every tab load, since selecting rows
+// across a tab switch would silently "approve" items the admin never
+// actually looked at on screen.
+let QUEUE_SELECTED_IDS = new Set();
+let QUEUE_BULK_CFG = null;
+let QUEUE_BULK_KEY = null;
+
 async function loadQueueTab(key) {
   const cfg = QUEUE_TABS[key];
   const body = document.getElementById('queueBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
+  QUEUE_SELECTED_IDS = new Set();
+  QUEUE_BULK_CFG = cfg;
+  QUEUE_BULK_KEY = key;
+  updateQueueBulkBar();
+
+  // Bulk select only applies to the plain approve/reject tabs — tabs with
+  // their own custom action set (cfg.actions, e.g. "Approved Profiles":
+  // verify/deaf-owned/renew) don't have a single obvious meaning for
+  // "bulk approve", so they keep the existing per-row-only buttons.
+  const bulkCapable = !cfg.actions;
 
   try {
     const data = await api(cfg.listPath);
@@ -1955,6 +1978,12 @@ async function loadQueueTab(key) {
 
     const table = document.createElement('table');
     const thead = document.createElement('tr');
+    if (bulkCapable) {
+      const th = document.createElement('th');
+      th.style.width = '32px';
+      th.innerHTML = '<input type="checkbox" id="queueSelectAllChk" aria-label="Select all">';
+      thead.appendChild(th);
+    }
     cfg.columns.forEach((c) => {
       const th = document.createElement('th');
       th.textContent = c.header;
@@ -1965,6 +1994,15 @@ async function loadQueueTab(key) {
 
     rows.forEach((row) => {
       const tr = document.createElement('tr');
+      if (bulkCapable) {
+        const chkTd = document.createElement('td');
+        chkTd.innerHTML = `<input type="checkbox" class="queueRowChk" value="${row.id}" aria-label="Select this row">`;
+        chkTd.querySelector('input').addEventListener('change', (e) => {
+          if (e.target.checked) QUEUE_SELECTED_IDS.add(row.id); else QUEUE_SELECTED_IDS.delete(row.id);
+          updateQueueBulkBar();
+        });
+        tr.appendChild(chkTd);
+      }
       cfg.columns.forEach((c) => {
         const td = document.createElement('td');
         td.textContent = c.render(row);
@@ -1997,9 +2035,79 @@ async function loadQueueTab(key) {
 
     body.innerHTML = '';
     body.appendChild(table);
+
+    if (bulkCapable) {
+      document.getElementById('queueSelectAllChk').addEventListener('change', (e) => {
+        rows.forEach((row) => { if (e.target.checked) QUEUE_SELECTED_IDS.add(row.id); else QUEUE_SELECTED_IDS.delete(row.id); });
+        table.querySelectorAll('.queueRowChk').forEach((chk) => { chk.checked = e.target.checked; });
+        updateQueueBulkBar();
+      });
+    }
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
+}
+
+function updateQueueBulkBar() {
+  const bar = document.getElementById('queueBulkBar');
+  const n = QUEUE_SELECTED_IDS.size;
+  if (n === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  document.getElementById('queueBulkCount').textContent = `${n} selected`;
+}
+
+document.getElementById('queueBulkClearBtn').addEventListener('click', () => {
+  QUEUE_SELECTED_IDS = new Set();
+  document.querySelectorAll('.queueRowChk').forEach((chk) => { chk.checked = false; });
+  const selectAll = document.getElementById('queueSelectAllChk');
+  if (selectAll) selectAll.checked = false;
+  updateQueueBulkBar();
+});
+
+document.getElementById('queueBulkApproveBtn').addEventListener('click', () => bulkActOnQueueItems('approve'));
+document.getElementById('queueBulkRejectBtn').addEventListener('click', () => bulkActOnQueueItems('reject'));
+
+// Runs the SAME per-item endpoint the single Approve/Reject buttons use, in
+// sequence, one item at a time — never Promise.all, so a slow or failing
+// item can't be lost in a burst of concurrent requests and the admin gets
+// an accurate "X succeeded, Y failed" count at the end rather than a
+// half-applied batch with no way to tell which ones landed.
+async function bulkActOnQueueItems(action) {
+  const cfg = QUEUE_BULK_CFG;
+  const key = QUEUE_BULK_KEY;
+  const ids = Array.from(QUEUE_SELECTED_IDS);
+  if (!ids.length) return;
+  if (!confirm(`${action === 'approve' ? 'Approve' : 'Reject'} ${ids.length} item${ids.length > 1 ? 's' : ''}? This cannot be undone in bulk.`)) return;
+
+  const approveBtn = document.getElementById('queueBulkApproveBtn');
+  const rejectBtn = document.getElementById('queueBulkRejectBtn');
+  approveBtn.disabled = true; rejectBtn.disabled = true;
+
+  let succeeded = 0;
+  const failures = [];
+  for (const id of ids) {
+    try {
+      // Bulk approve never prompts for a per-article publish date (unlike
+      // the single-row Approve button) — asking that question once per
+      // selected item would mean N blocking prompts in a row. Bulk-approved
+      // articles simply go live immediately.
+      await api(`/admin/${cfg.resource}/${id}/${action}`, { method: 'PATCH' });
+      succeeded++;
+    } catch (err) {
+      failures.push({ id, message: err.message });
+    }
+  }
+
+  approveBtn.disabled = false; rejectBtn.disabled = false;
+  if (failures.length === 0) {
+    showToast(`${succeeded} item${succeeded === 1 ? '' : 's'} ${action}d.`);
+  } else {
+    showToast(`${succeeded} ${action}d, ${failures.length} failed (${failures.map((f) => `#${f.id}: ${f.message}`).join('; ')}).`, true);
+  }
+  loadQueueTab(key);
 }
 
 // "Decline & credit R…" — the decline path from the Refund & Cancellation
