@@ -259,6 +259,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="services"><span>🧩</span> Services</button>
       <button class="ms-navlink" data-ms="content"><span>📄</span> Content</button>
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
+      <button class="ms-navlink" data-ms="editions"><span>📖</span> My Editions</button>
+      <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
       <a class="ms-navlink" href="unplug-magazine.html"><span>🌐</span> View Official Site</a>
       <button class="ms-navlink ms-logout" id="msLogout"><span>↩</span> Logout</button>
     </aside>
@@ -519,6 +521,22 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <h2>My Reading List</h2>
       <p class="sub">Stories you saved with the ☆ Save button while reading.</p>
       <div id="readingListContent"><div class="loading-state">Loading…</div></div>
+    </div>
+    </section>
+
+    <section class="ms-section section-hidden" data-ms-section="editions">
+    <div class="card">
+      <h2>My Editions</h2>
+      <p class="sub">Editions you've bought a downloadable copy of. Each purchase can be downloaded <strong>once</strong>, so save the file somewhere safe when you do. Reading an edition online on the Editions page is always free and unlimited.</p>
+      <div id="myEditionsContent"><div class="loading-state">Loading…</div></div>
+    </div>
+    </section>
+
+    <section class="ms-section section-hidden" data-ms-section="payments">
+    <div class="card">
+      <h2>My Payments</h2>
+      <p class="sub">Everything you've paid for, newest first. If you paid by EFT, the reference is what we match against our bank statement.</p>
+      <div id="myPaymentsContent"><div class="loading-state">Loading…</div></div>
     </div>
     </section>
 
@@ -889,6 +907,8 @@ function enterMemberDashboard(user){
   loadProfile();
   loadMemberContent();
   loadReadingList();
+  loadMyEditions();
+  loadMyPayments();
   loadCredits();
   setupSubmitGate();
   loadHighlightServices();
@@ -1872,6 +1892,116 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
 // from enterMemberDashboard after login.
 // ===========================================================================
 function escapeHtmlM(str){ const d=document.createElement('div'); d.textContent = str==null?'':String(str); return d.innerHTML; }
+
+// ---------------------------------------------------------------------------
+// My Editions — the member's purchased edition downloads.
+//
+// The download itself is single-use, so this screen is careful about saying so
+// BEFORE the click rather than after: once the file has been delivered the
+// purchase is spent, and a customer who assumed they could fetch it again would
+// be justifiably annoyed.
+// ---------------------------------------------------------------------------
+async function loadMyEditions() {
+  const el = document.getElementById('myEditionsContent');
+  if (!el) return;
+  try {
+    const data = await api('/editions/my-purchases');
+    const rows = data.purchases || [];
+    if (!rows.length) {
+      el.innerHTML = '<p class="sub" style="margin:0;">You haven\'t bought an edition download yet. Browse them on the <a href="unplug-magazine.html?p=editions">Editions page</a> — reading online is free.</p>';
+      return;
+    }
+    el.innerHTML = rows.map(myEditionCardHtml).join('');
+  } catch (e) {
+    el.innerHTML = `<p class="sub" style="margin:0; color:var(--red);">${escapeHtmlM(e.message || 'Could not load your editions.')}</p>`;
+  }
+}
+
+function myEditionCardHtml(p) {
+  const period = [p.month, p.year].filter(Boolean).join(' ');
+  const paid = p.payment_status === 'approved';
+  const used = p.download_count >= 1 || p.download_status === 'used';
+
+  let action;
+  if (p.canDownload) {
+    action = `<button class="btn btn-solid" style="width:auto;" onclick="downloadMyEdition(${p.id}, ${p.edition_id})">Download PDF</button>
+      <span style="display:block; font-size:12px; color:var(--slate); margin-top:6px;">This can be used once — save the file when it opens.</span>`;
+  } else if (used) {
+    action = `<span style="font-size:13px; color:var(--slate);">Already downloaded. Contact us if something went wrong.</span>`;
+  } else if (p.payment_status === 'rejected') {
+    action = `<span style="font-size:13px; color:var(--red);">Payment wasn't approved. Please contact us if you believe this is a mistake.</span>`;
+  } else if (p.payment_method === 'eft') {
+    action = `<span style="font-size:13px; color:var(--slate);">We'll email your download link once we've matched your EFT.</span>`;
+  } else {
+    action = `<span style="font-size:13px; color:var(--slate);">Waiting for your payment to clear.</span>`;
+  }
+
+  return `<div style="display:flex; gap:14px; align-items:flex-start; padding:14px 0; border-bottom:1px solid var(--paper-line);">
+    ${p.cover_image_url
+      ? `<img src="${escapeAttrM(p.cover_image_url)}" alt="" style="width:64px; height:85px; object-fit:cover; flex:none; background:#eee;">`
+      : ''}
+    <div style="flex:1; min-width:0;">
+      <strong>${escapeHtmlM(p.edition_title)}</strong>
+      ${period ? `<div style="font-size:12px; color:var(--slate);">${escapeHtmlM(period)}</div>` : ''}
+      <div style="font-size:12.5px; color:var(--slate); margin:4px 0 8px;">
+        R${Number(p.amount).toFixed(2)} · ${escapeHtmlM(p.statusLabel)}
+        ${p.download_reference ? ` · Ref <strong>${escapeHtmlM(p.download_reference)}</strong>` : ''}
+      </div>
+      ${action}
+    </div>
+  </div>`;
+}
+
+async function downloadMyEdition(purchaseId, editionId) {
+  try {
+    // Asks the server for a fresh one-time link rather than holding one in the
+    // page — a link sitting in the DOM could be copied out and shared.
+    const res = await api('/editions/' + editionId + '/download');
+    if (!res.downloadPath) throw new Error('No download is available for this purchase.');
+    // Same tab would fight the SPA; a new tab lets the browser handle the file.
+    window.open(API_BASE + res.downloadPath, '_blank', 'noopener');
+    showToast('Your download has started.');
+    // Refresh so it immediately reads "Already downloaded" rather than
+    // inviting a second click that would be refused.
+    setTimeout(loadMyEditions, 2500);
+  } catch (e) {
+    showToast(e.message || 'Could not start the download.', true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// My Payments — everything the member has paid for.
+// ---------------------------------------------------------------------------
+async function loadMyPayments() {
+  const el = document.getElementById('myPaymentsContent');
+  if (!el) return;
+  try {
+    const data = await api('/payments/mine');
+    const rows = data.payments || [];
+    if (!rows.length) {
+      el.innerHTML = '<p class="sub" style="margin:0;">No payments yet.</p>';
+      return;
+    }
+    el.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13.5px;">
+      <thead><tr style="text-align:left; border-bottom:1px solid var(--paper-line);">
+        <th style="padding:8px 6px;">Service</th><th style="padding:8px 6px;">Reference</th>
+        <th style="padding:8px 6px;">Amount</th><th style="padding:8px 6px;">Status</th><th style="padding:8px 6px;">Date</th>
+      </tr></thead><tbody>${rows.map(myPaymentRowHtml).join('')}</tbody></table></div>`;
+  } catch (e) {
+    el.innerHTML = `<p class="sub" style="margin:0; color:var(--red);">${escapeHtmlM(e.message || 'Could not load your payments.')}</p>`;
+  }
+}
+
+function myPaymentRowHtml(p) {
+  const when = p.created_at ? new Date(p.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  return `<tr style="border-bottom:1px solid var(--paper-line);">
+    <td style="padding:8px 6px;">${escapeHtmlM(p.serviceLabel || p.linked_type || '')}</td>
+    <td style="padding:8px 6px; font-family:monospace; font-size:12px;">${escapeHtmlM(p.gateway_reference || '—')}</td>
+    <td style="padding:8px 6px;">R${Number(p.amount).toFixed(2)}</td>
+    <td style="padding:8px 6px;">${escapeHtmlM(p.statusLabel || p.status || '')}</td>
+    <td style="padding:8px 6px; color:var(--slate);">${escapeHtmlM(when)}</td>
+  </tr>`;
+}
 function msDate(d){ return d ? new Date(d).toLocaleDateString() : '—'; }
 
 let MS_NAV_READY=false;

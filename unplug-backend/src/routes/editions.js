@@ -414,6 +414,53 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
 
 // GET /editions/admin/purchases — admin list of every edition purchase, so
 // EFT payments can be matched against the bank statement by reference.
+// GET /editions/my-purchases — the signed-in member's own edition purchases.
+//
+// Matched on the account id OR the email the purchase was made with: someone
+// can buy as a guest and register later with the same address, and it would be
+// strange for the purchase they just made not to appear.
+//
+// Returns the reference code, which is the customer's own credential for their
+// download — but never the download token or the PDF url, so this list can't
+// become a way around the single-use gate.
+router.get('/my-purchases', requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT ep.id, ep.amount, ep.payment_method, ep.payment_status,
+              ep.download_reference, ep.download_count, ep.download_status,
+              ep.created_at, ep.approved_at,
+              e.id AS edition_id, e.title AS edition_title, e.month, e.year,
+              e.cover_image_url
+         FROM edition_purchases ep
+         JOIN editions e ON e.id = ep.edition_id
+        WHERE ep.user_id = $1 OR lower(ep.customer_email) = lower($2)
+        ORDER BY ep.created_at DESC`,
+      [req.user.id, req.user.email || '']
+    );
+
+    res.json({
+      purchases: result.rows.map((p) => {
+        const used = p.download_count >= 1 || p.download_status === 'used';
+        let statusLabel;
+        if (p.payment_status === 'rejected') statusLabel = 'Payment not approved';
+        else if (p.payment_status === 'awaiting_eft') statusLabel = 'Awaiting your EFT';
+        else if (p.payment_status === 'pending_approval') statusLabel = 'Awaiting approval';
+        else if (p.payment_status !== 'approved') statusLabel = 'Awaiting payment';
+        else statusLabel = used ? 'Downloaded' : 'Ready to download';
+        return {
+          ...p,
+          amount: Number(p.amount),
+          statusLabel,
+          // Whether the Download button should be offered at all.
+          canDownload: p.payment_status === 'approved' && !used,
+        };
+      }),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/admin/purchases', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
@@ -542,7 +589,7 @@ router.post('/admin/purchases/:id/reject', requireRole('admin'), async (req, res
 router.patch('/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const existing = await pool.query('SELECT id FROM editions WHERE id = $1', [id]);
+    const existing = await pool.query('SELECT id, pdf_url FROM editions WHERE id = $1', [id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: 'Edition not found.' });
 
     const b = req.body;
@@ -580,6 +627,18 @@ router.patch('/:id', requireRole('admin'), async (req, res, next) => {
       `UPDATE editions SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`,
       vals
     );
+
+    // Keep a record of the file that was replaced. Overwriting pdf_url would
+    // otherwise erase the only reference to it, even though the file is still
+    // in storage and may be what earlier buyers actually received.
+    const oldPdf = existing.rows[0].pdf_url;
+    if (b.pdfUrl && oldPdf && b.pdfUrl !== oldPdf) {
+      await pool.query(
+        `INSERT INTO edition_pdf_versions (edition_id, pdf_url, replaced_by) VALUES ($1, $2, $3)`,
+        [id, oldPdf, req.user.id]
+      ).catch((e) => console.error('Could not record replaced edition PDF:', e.message));
+    }
+
     res.json({ edition: result.rows[0] });
   } catch (err) {
     next(err);

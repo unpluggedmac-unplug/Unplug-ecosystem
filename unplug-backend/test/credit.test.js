@@ -29,7 +29,7 @@ let credit;         // required lazily, AFTER DATABASE_URL is set
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-pgtest-'));
 // A high, fixed-ish port derived from the pid to avoid clashing with a real
 // local Postgres on 5432.
-const port = 5610 + (process.pid % 300);
+const port = 5600 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 
 before(async () => {
   pg = new EmbeddedPostgres({

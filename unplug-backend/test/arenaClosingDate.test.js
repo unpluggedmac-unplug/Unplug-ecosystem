@@ -18,7 +18,7 @@ const EmbeddedPostgres = require('embedded-postgres').default;
 let pg;
 let pool;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-arenatest-'));
-const port = 6210 + (process.pid % 300);
+const port = 6400 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 
 function migrationFiles() {
   const dir = path.join(__dirname, '..', 'db', 'migrations');

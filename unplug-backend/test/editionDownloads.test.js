@@ -28,7 +28,7 @@ let pdfUrl;
 let adminToken;
 let editionId;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-dltest-'));
-const port = 6810 + (process.pid % 300);
+const port = 7600 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 const PDF_BODY = '%PDF-1.4\n' + 'x'.repeat(4096) + '\n%%EOF';
 
 async function req(method, urlPath, { token, body } = {}) {
@@ -336,4 +336,75 @@ test('the admin purchases list shows what is needed to match an EFT', async () =
 
 test('the purchases list is admin-only', async () => {
   assert.equal((await req('GET', '/editions/admin/purchases')).status, 401);
+});
+
+// ----------------------------------------------------- member's own purchases
+
+const memberToken = require('jsonwebtoken').sign(
+  { id: 5, email: 'member@test.com', role: 'member' }, 'test-secret-for-edition-downloads'
+);
+//
+// "My Editions" in the member dashboard. Two things matter: a member sees their
+// own purchases (including ones made as a guest with the same email, since
+// people buy first and register after), and the response never carries the
+// download token or the PDF url — that would route around the single-use gate.
+
+test('a member sees their own edition purchases, guest ones included', async () => {
+  // edition_purchases.user_id is a real foreign key, so the member has to exist.
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (5, 'member@test.com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  // Bought while signed in.
+  const asMember = await req('POST', `/editions/${editionId}/purchase`, {
+    token: memberToken, body: { email: 'member@test.com', method: 'eft' },
+  });
+  assert.equal(asMember.status, 201, 'signed-in purchase failed: ' + JSON.stringify(asMember.body));
+  // Bought as a guest, with the same email, before registering.
+  const asGuest = await req('POST', `/editions/${editionId}/purchase`, {
+    body: { email: 'MEMBER@TEST.COM', method: 'eft' },
+  });
+  assert.equal(asGuest.status, 201, 'guest purchase failed: ' + JSON.stringify(asGuest.body));
+
+  const r = await req('GET', '/editions/my-purchases', { token: memberToken });
+  assert.equal(r.status, 200);
+  assert.ok(r.body.purchases.length >= 2,
+    'the guest purchase made with the same email is missing');
+});
+
+test('my-purchases never exposes the download token or the PDF url', async () => {
+  const r = await req('GET', '/editions/my-purchases', { token: memberToken });
+  const serialised = JSON.stringify(r.body);
+  assert.ok(!/download_token/.test(serialised), 'the download token leaked to the member list');
+  assert.ok(!/pdf_url/.test(serialised), 'the PDF url leaked to the member list');
+  // The reference IS theirs to see — it is how they claim their download.
+  assert.ok(r.body.purchases.every((p) => 'download_reference' in p));
+});
+
+test('my-purchases only offers a download once the payment is approved', async () => {
+  const before = await req('GET', '/editions/my-purchases', { token: memberToken });
+  assert.ok(before.body.purchases.every((p) => p.canDownload === false),
+    'an unapproved purchase was offered as downloadable');
+  assert.ok(before.body.purchases.some((p) => /Awaiting/i.test(p.statusLabel)));
+});
+
+test('a signed-out visitor cannot list purchases', async () => {
+  assert.equal((await req('GET', '/editions/my-purchases')).status, 401);
+});
+
+test('replacing an edition PDF records the file it replaced', async () => {
+  const original = await pool.query('SELECT pdf_url FROM editions WHERE id = $1', [editionId]);
+
+  await req('PATCH', `/editions/${editionId}`, {
+    token: adminToken, body: { pdfUrl: 'https://example.test/corrected.pdf' },
+  });
+
+  const versions = await pool.query(
+    'SELECT pdf_url FROM edition_pdf_versions WHERE edition_id = $1 ORDER BY replaced_at DESC', [editionId]
+  );
+  assert.equal(versions.rowCount, 1, 'the replaced PDF was not recorded');
+  assert.equal(versions.rows[0].pdf_url, original.rows[0].pdf_url);
+
+  // Saving without touching the PDF must not add a spurious version row.
+  await req('PATCH', `/editions/${editionId}`, { token: adminToken, body: { title: 'Renamed Only' } });
+  const after = await pool.query('SELECT COUNT(*)::int AS n FROM edition_pdf_versions WHERE edition_id = $1', [editionId]);
+  assert.equal(after.rows[0].n, 1, 'an unrelated edit logged a PDF replacement');
 });

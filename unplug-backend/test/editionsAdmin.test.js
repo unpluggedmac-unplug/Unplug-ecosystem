@@ -24,7 +24,7 @@ let baseUrl;
 let adminToken;
 let memberToken;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-edtest-'));
-const port = 6610 + (process.pid % 300);
+const port = 7200 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 
 function migrationFiles() {
   const dir = path.join(__dirname, '..', 'db', 'migrations');

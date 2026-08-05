@@ -26,7 +26,7 @@ let pg;
 let pool;
 let packages;       // required lazily, AFTER DATABASE_URL is set
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-pkgtest-'));
-const port = 5910 + (process.pid % 300);
+const port = 6000 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 
 function migrationFiles() {
   const dir = path.join(__dirname, '..', 'db', 'migrations');
