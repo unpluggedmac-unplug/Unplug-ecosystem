@@ -78,6 +78,97 @@ router.get('/live-visitors', async (req, res, next) => {
 // visitors (by session_id), pages tracked, a daily breakdown for the
 // chart, and the top pages — everything the Site Analytics screen needs
 // in one call.
+// Which content type each tracked page belongs to.
+//
+// page_views.page_path holds the SPA's own page ids ('home', 'news',
+// 'directory'), not URLs — plus detail views recorded as '<thing>-<id>'
+// ('article-12', 'profile-jane-doe'). Categorising is therefore a mapping over
+// those names, which means it works on all the history already recorded rather
+// than only on views collected from today.
+//
+// Order matters: the prefix rules are checked before the exact names so
+// 'article-12' is counted as Articles rather than falling through to Other.
+const CATEGORY_PREFIXES = [
+  ['article-', 'Articles'],
+  ['profile-', 'Directory'],
+  ['edition-', 'Editions'],
+  ['project-', 'Investor Projects'],
+];
+const CATEGORY_PAGES = {
+  home: 'Homepage',
+  news: 'Articles',
+  article: 'Articles',
+  directory: 'Directory',
+  directoryprofile: 'Directory',
+  gallery: 'Gallery',
+  editions: 'Editions',
+  top10: 'Top 10',
+  competitions: 'Competitions',
+  arena: 'Competitions',
+  investors: 'Investors',
+  investorproject: 'Investor Projects',
+  brandplacement: 'Marketplace',
+  marketplace: 'Marketplace',
+  deafcommunity: 'Deaf Community',
+  about: 'About & Info',
+  contact: 'About & Info',
+  refunds: 'About & Info',
+  privacy: 'About & Info',
+  terms: 'About & Info',
+};
+
+function categoryFor(pagePath) {
+  const p = String(pagePath || '').trim();
+  for (const [prefix, label] of CATEGORY_PREFIXES) {
+    if (p.startsWith(prefix)) return label;
+  }
+  return CATEGORY_PAGES[p] || 'Other';
+}
+
+// GET /analytics/by-category — views grouped by what the page actually is,
+// rather than one figure for the whole site. Answers "is the Directory pulling
+// its weight against the articles?", which the flat top-pages list cannot.
+router.get('/by-category', requireRole('admin'), async (req, res, next) => {
+  try {
+    const range = [7, 30, 90].includes(Number(req.query.range)) ? Number(req.query.range) : 30;
+
+    // Grouped in JS rather than SQL: the mapping is a product decision that
+    // changes as pages are added, and it belongs next to the list above rather
+    // than buried in a CASE expression.
+    const rows = await pool.query(
+      `SELECT page_path, COUNT(*)::int AS views, COUNT(DISTINCT session_id)::int AS visitors
+         FROM page_views
+        WHERE viewed_at >= now() - ($1::text || ' days')::interval
+        GROUP BY page_path`,
+      [range]
+    );
+
+    const byCategory = new Map();
+    for (const r of rows.rows) {
+      const label = categoryFor(r.page_path);
+      const entry = byCategory.get(label) || { category: label, views: 0, pages: 0, topPages: [] };
+      entry.views += r.views;
+      entry.pages += 1;
+      entry.topPages.push({ path: r.page_path, views: r.views, visitors: r.visitors });
+      byCategory.set(label, entry);
+    }
+
+    const totalViews = rows.rows.reduce((sum, r) => sum + r.views, 0);
+    const categories = [...byCategory.values()]
+      .map((c) => ({
+        ...c,
+        // Share of all tracked views, so a big number can be read in context.
+        share: totalViews > 0 ? Math.round((c.views / totalViews) * 1000) / 10 : 0,
+        topPages: c.topPages.sort((a, b) => b.views - a.views).slice(0, 5),
+      }))
+      .sort((a, b) => b.views - a.views);
+
+    res.json({ range, totalViews, categories });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/summary', requireRole('admin'), async (req, res, next) => {
   try {
     const range = [7, 30, 90].includes(Number(req.query.range)) ? Number(req.query.range) : 30;

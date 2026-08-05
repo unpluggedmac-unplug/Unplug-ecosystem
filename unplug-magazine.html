@@ -3563,6 +3563,11 @@ async function loadProfileReviews(profile) {
 async function loadProfileDetail(slug) {
   const container = document.getElementById('profileDetailContent');
   container.innerHTML = '<div class="dir-empty-state">Loading profile…</div>';
+  // Record WHICH profile was opened, not just that the profile page was shown.
+  // goToPage already logs the generic 'directoryprofile'; without this, every
+  // listing in the Directory is indistinguishable in the analytics, so nobody
+  // can be told how their own listing is performing.
+  trackPageView('profile-' + slug);
   try {
     const data = await api('/profiles/' + encodeURIComponent(slug));
     container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery)

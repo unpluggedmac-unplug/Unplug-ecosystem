@@ -506,6 +506,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="dailyViewsChart" style="overflow-x:auto;"></div>
       </div>
       <div class="panel">
+        <div class="panel-head"><h3>By content type</h3></div>
+        <div class="panel-body" style="padding-bottom:0;">
+          <p style="font-size:13px; color:var(--slate); margin:0;">Which parts of the site people actually use. Each bar is a share of all views in the period; open one to see the individual pages behind it.</p>
+        </div>
+        <div class="panel-body" id="categoryBody" style="padding:0; border-top:1px solid var(--paper-line);">Loading…</div>
+      </div>
+      <div class="panel">
         <div class="panel-head"><h3>Top Pages</h3></div>
         <div class="panel-body" id="topPagesBody" style="padding:0;"></div>
       </div>
@@ -4935,6 +4942,53 @@ async function loadAnalytics(range) {
     }
   } catch (err) {
     chartEl.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+
+  loadCategoryAnalytics(range);
+}
+
+// ---------------------------------------------------------------------------
+// Views grouped by what the page actually is. The flat Top Pages list can't
+// answer "is the Directory pulling its weight against the articles?" — every
+// row there is one page, so a section made of hundreds of small pages always
+// looks smaller than a single busy one.
+// ---------------------------------------------------------------------------
+async function loadCategoryAnalytics(range) {
+  const el = document.getElementById('categoryBody');
+  if (!el) return;
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api(`/analytics/by-category?range=${range}`);
+    const rows = data.categories || [];
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty-state">No page views recorded in this period yet.</div>';
+      return;
+    }
+    // Bars are scaled against the BIGGEST category, not against 100%, so the
+    // smaller ones stay readable instead of collapsing to a sliver.
+    const max = Math.max(...rows.map((c) => c.views), 1);
+    el.innerHTML = rows.map((c, i) => {
+      const pct = Math.round((c.views / max) * 100);
+      const detail = c.topPages.map((p) =>
+        `<div style="display:flex; justify-content:space-between; gap:12px; font-size:12.5px; color:#666; padding:3px 0;">
+           <span>${escapeHtmlAdmin(p.path)}</span><span>${p.views.toLocaleString()}</span>
+         </div>`).join('');
+      return `<div style="padding:12px 16px; border-bottom:1px solid var(--paper-line);">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;">
+          <strong style="font-size:14px;">${escapeHtmlAdmin(c.category)}</strong>
+          <span style="font-size:12.5px; color:#666;">${c.views.toLocaleString()} views · ${c.share}%</span>
+        </div>
+        <div style="background:var(--paper); height:8px; margin:6px 0 4px; overflow:hidden;">
+          <div style="background:var(--red); height:100%; width:${pct}%;"></div>
+        </div>
+        <details${i === 0 ? ' open' : ''}>
+          <summary style="font-size:12px; color:var(--slate); cursor:pointer;">${c.pages} page${c.pages === 1 ? '' : 's'} — show the busiest</summary>
+          <div style="margin-top:6px;">${detail}</div>
+        </details>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(e.message)}</div>`;
   }
 }
 
