@@ -71,6 +71,22 @@ router.get('/business-status/:profileId', async (req, res, next) => {
   }
 });
 
+// GET /participation/discovery — three under-exposed lists (articles,
+// members, businesses). Public, read-only, no rotation state — see
+// 082_discovery_engine.sql for why each ranking works the way it does.
+router.get('/discovery', async (req, res, next) => {
+  try {
+    const [articles, members, businesses] = await Promise.all([
+      pool.query('SELECT * FROM get_discovery_articles(6)'),
+      pool.query('SELECT * FROM get_discovery_members(6)'),
+      pool.query('SELECT * FROM get_discovery_businesses(6)'),
+    ]);
+    res.json({ articles: articles.rows, members: members.rows, businesses: businesses.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /participation/streak-tiers — the 7 streak milestones.
 router.get('/streak-tiers', async (req, res, next) => {
   try {

@@ -1586,6 +1586,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </section>
 
+  <!-- Discovery Engine — genuinely under-exposed things: good articles
+       few people have found yet, active members nobody's recognised, and
+       new-ish business listings. Hidden entirely if all three lists come
+       back empty (a brand-new/quiet site shouldn't show three "nothing
+       here" boxes). -->
+  <section class="wrap home-section" id="discoverySection" hidden>
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Worth a look</span>
+        <h2>Discover</h2>
+      </div>
+    </div>
+    <div id="discoveryContent" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:24px;"></div>
+  </section>
+
   <section class="wrap home-section">
     <div class="section-head">
       <div>
@@ -5154,11 +5169,63 @@ async function loadHighlightedProfiles() {
 // Platform stats (statReaders/statMembers/statArticles) are populated by
 // the centralized loader in unplug-shared.js — no per-page script needed.
 
+// Discovery Engine (Stage M) — three under-exposed lists, GET
+// /participation/discovery. Public, no sign-in required. The section
+// stays hidden if every list is empty, rather than showing three
+// "nothing here" placeholders on a quiet or brand-new site.
+async function loadDiscovery() {
+  const section = document.getElementById('discoverySection');
+  const content = document.getElementById('discoveryContent');
+  try {
+    const data = await api('/participation/discovery');
+    const { articles, members, businesses } = data;
+    if (!articles.length && !members.length && !businesses.length) return;
+    section.hidden = false;
+
+    const blocks = [];
+    if (articles.length) {
+      blocks.push(`
+        <div>
+          <h4 style="font-size:14px; margin-bottom:10px;">📖 Stories worth finding</h4>
+          ${articles.map((a) => `<a href="?p=article&id=${a.id}" class="discovery-row" style="display:block; padding:8px 0; border-bottom:1px solid var(--paper-line); color:inherit; text-decoration:none;">
+            <div style="font-weight:600; font-size:13.5px;">${escapeHtml(a.title)}</div>
+            <div style="font-size:11.5px; color:var(--slate);">${escapeHtml(a.category || '')}</div>
+          </a>`).join('')}
+        </div>`);
+    }
+    if (members.length) {
+      blocks.push(`
+        <div>
+          <h4 style="font-size:14px; margin-bottom:10px;">🙌 Active, under the radar</h4>
+          ${members.map((m) => `<div style="padding:8px 0; border-bottom:1px solid var(--paper-line);">
+            <div style="font-weight:600; font-size:13.5px;">${escapeHtml(m.display_name)}</div>
+            <div style="font-size:11.5px; color:var(--slate);">${m.status_emoji || '🌱'} ${escapeHtml(m.status_label || 'Explorer')}</div>
+          </div>`).join('')}
+        </div>`);
+    }
+    if (businesses.length) {
+      blocks.push(`
+        <div>
+          <h4 style="font-size:14px; margin-bottom:10px;">🏪 New in the Directory</h4>
+          ${businesses.map((b) => `<a href="?p=profile&slug=${encodeURIComponent(b.slug)}" class="discovery-row" style="display:block; padding:8px 0; border-bottom:1px solid var(--paper-line); color:inherit; text-decoration:none;">
+            <div style="font-weight:600; font-size:13.5px;">${escapeHtml(b.display_name)}</div>
+            <div style="font-size:11.5px; color:var(--slate);">${escapeHtml(b.category || '')} · ${b.status_emoji} ${escapeHtml(b.status_label)}</div>
+          </a>`).join('')}
+        </div>`);
+    }
+    content.innerHTML = blocks.join('');
+  } catch (err) {
+    // Discovery is a nice-to-have homepage extra, not core content — fail
+    // silently rather than showing an error box on the homepage.
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadHighlightedArticles();
   loadNewStories();
   loadHighlightedProfiles();
   loadSpotlight();
+  loadDiscovery();
 });
 
 // ---------------------------------------------------------------------------
