@@ -416,7 +416,7 @@ router.get('/profiles/renewals-due', requireRole('admin'), async (req, res, next
 router.get('/profiles/approved', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT p.id, p.display_name, p.type, p.package_tier, p.verified, p.deaf_owned_verified, p.renews_at, p.feature_image_url, c.name AS category, u.email AS submitted_by
+      `SELECT p.id, p.display_name, p.type, p.package_tier, p.verified, p.deaf_owned_verified, p.is_featured, p.renews_at, p.feature_image_url, c.name AS category, u.email AS submitted_by
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
        JOIN users u ON u.id = p.user_id
@@ -492,6 +492,28 @@ router.patch('/profiles/:id/deaf-owned', requireRole('admin'), async (req, res, 
     }
     await logActivity(req.user.id, 'profile_deaf_owned_toggled',
       `Profile #${req.params.id} — ${result.rows[0].display_name} → deaf-owned ${result.rows[0].deaf_owned_verified}`);
+    res.json({ profile: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/profiles/:id/feature — Members/Community System Phase 8:
+// toggles a listing's is_featured flag, which controls whether it shows
+// up under the Members page's "Featured" sort (Phase 5). Same
+// toggle-not-set pattern as /deaf-owned above.
+router.patch('/profiles/:id/feature', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `UPDATE profiles SET is_featured = NOT is_featured, updated_at = now()
+       WHERE id = $1 RETURNING id, display_name, is_featured`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found.' });
+    }
+    await logActivity(req.user.id, 'profile_featured_toggled',
+      `Profile #${req.params.id} — ${result.rows[0].display_name} → featured ${result.rows[0].is_featured}`);
     res.json({ profile: result.rows[0] });
   } catch (err) {
     next(err);

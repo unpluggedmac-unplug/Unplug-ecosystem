@@ -5,6 +5,7 @@ const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { notifyProfileOwner } = require('./interactions');
+const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
 
 const router = express.Router();
 
@@ -62,6 +63,9 @@ router.post('/profile/:profileId', requireAuth, publicSubmitLimiter, honeypot, a
     const body = (req.body.body || '').trim();
     if (!Number.isInteger(profileId)) {
       return res.status(400).json({ error: 'A valid listing id is required.' });
+    }
+    if (!(await isCommunityFeatureEnabled('community_reviews_enabled'))) {
+      return res.status(403).json({ error: 'Reviews are currently disabled.' });
     }
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
       return res.status(400).json({ error: 'Choose a rating from 1 to 5 stars.' });

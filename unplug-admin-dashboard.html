@@ -302,6 +302,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="unplugstreaktiers">Streak Tiers</a>
         <a data-section="unplugtrust">Trust & Anti-Cheat</a>
         <a data-section="unplugpanalytics">Participation Analytics</a>
+        <a data-section="communitysettings">Community Settings</a>
       </div>
     </div>
 
@@ -1331,6 +1332,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- COMMUNITY SETTINGS (Members/Community System Phase 8) -->
+    <div class="admin-section" id="section-communitysettings">
+      <div class="main-head"><div><h1>Community Settings</h1><p>Switch any interaction type off site-wide without touching code. Disabling one only blocks new actions of that type — nothing already posted is hidden or deleted.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Interaction toggles</h3></div>
+        <div class="panel-body" id="communityTogglesBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
       <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
@@ -1909,6 +1919,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'unplugstreaktiers') loadUnplugStreakTiers();
     if (section === 'unplugtrust') loadUnplugTrust();
     if (section === 'unplugpanalytics') loadUnplugParticipationAnalytics(30);
+    if (section === 'communitysettings') loadCommunitySettings();
   });
 });
 
@@ -2038,7 +2049,7 @@ const QUEUE_TABS = {
     ],
   },
   approvedProfiles: {
-    label: 'Approved Profiles', listPath: '/admin/profiles/approved', resource: 'profiles', actions: ['verify', 'deaf-owned', 'renew'],
+    label: 'Approved Profiles', listPath: '/admin/profiles/approved', resource: 'profiles', actions: ['verify', 'deaf-owned', 'feature', 'renew'],
     columns: [
       { header: 'Name', render: (r) => r.display_name },
       { header: 'Type', render: (r) => r.type },
@@ -2046,6 +2057,7 @@ const QUEUE_TABS = {
       { header: 'Category', render: (r) => r.category || '—' },
       { header: 'Verified', render: (r) => r.verified ? 'Yes' : 'No' },
       { header: 'Deaf-Owned', render: (r) => r.deaf_owned_verified ? '🤟 Yes' : 'No' },
+      { header: 'Featured', render: (r) => r.is_featured ? '⭐ Yes' : 'No' },
       { header: 'Renews', render: (r) => r.renews_at ? new Date(r.renews_at).toLocaleDateString() : '—' },
     ],
   },
@@ -6300,6 +6312,54 @@ async function loadUnplugParticipationAnalytics(range) {
     document.getElementById('panalyticsMissionRates').innerHTML = '';
     document.getElementById('panalyticsStreakDist').innerHTML = '';
     document.getElementById('panalyticsTrust').innerHTML = '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Community Settings (Members/Community System Phase 8) — reuses the
+// existing generic GET/PATCH /admin/settings routes (008_settings_bundle_vote.sql),
+// filtered to the community_* keys seeded in 090_community_settings.sql.
+// ---------------------------------------------------------------------------
+const COMMUNITY_TOGGLE_LABELS = {
+  community_likes_enabled: 'Likes',
+  community_dislikes_enabled: 'Dislikes',
+  community_comments_enabled: 'Comments',
+  community_saves_enabled: 'Saves',
+  community_reviews_enabled: 'Reviews',
+  community_follow_enabled: 'Following',
+  community_unfollow_enabled: 'Unfollowing',
+};
+
+async function loadCommunitySettings() {
+  const body = document.getElementById('communityTogglesBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/settings');
+    const rows = (data.settings || []).filter((s) => s.key.startsWith('community_'));
+    body.innerHTML = rows.map((s) => {
+      const enabled = s.value === 'true';
+      const label = COMMUNITY_TOGGLE_LABELS[s.key] || s.key;
+      return `<div style="padding:12px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-weight:600;">${escapeHtmlAdmin(label)}</span>
+        <button class="btn ${enabled ? 'btn-solid' : 'btn-line'}" data-key="${s.key}" data-enabled="${enabled}" style="width:auto; padding:6px 16px; font-size:12.5px;">${enabled ? 'Enabled' : 'Disabled'}</button>
+      </div>`;
+    }).join('');
+    body.querySelectorAll('button[data-key]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const nowEnabled = btn.dataset.enabled === 'true';
+        btn.disabled = true;
+        try {
+          await api(`/admin/settings/${btn.dataset.key}`, { method: 'PATCH', body: JSON.stringify({ value: nowEnabled ? 'false' : 'true' }) });
+          showToast(`${COMMUNITY_TOGGLE_LABELS[btn.dataset.key] || btn.dataset.key} ${nowEnabled ? 'disabled' : 'enabled'}.`);
+          loadCommunitySettings();
+        } catch (err) {
+          btn.disabled = false;
+          showToast(err.message, true);
+        }
+      });
+    });
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
   }
 }
 

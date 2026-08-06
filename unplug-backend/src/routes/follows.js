@@ -4,6 +4,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
 
 const router = express.Router();
 
@@ -18,6 +19,9 @@ router.post('/:userId', requireAuth, async (req, res, next) => {
     }
     if (followedId === req.user.id) {
       return res.status(400).json({ error: 'You cannot follow yourself.' });
+    }
+    if (!(await isCommunityFeatureEnabled('community_follow_enabled'))) {
+      return res.status(403).json({ error: 'Following is currently disabled.' });
     }
     const exists = await pool.query('SELECT 1 FROM users WHERE id = $1', [followedId]);
     if (exists.rowCount === 0) {
@@ -36,6 +40,9 @@ router.delete('/:userId', requireAuth, async (req, res, next) => {
     const followedId = Number(req.params.userId);
     if (!Number.isInteger(followedId)) {
       return res.status(400).json({ error: 'A valid userId is required.' });
+    }
+    if (!(await isCommunityFeatureEnabled('community_unfollow_enabled'))) {
+      return res.status(403).json({ error: 'Unfollowing is currently disabled.' });
     }
     await pool.query('SELECT unfollow_member($1, $2)', [req.user.id, followedId]);
     res.json({ following: false });

@@ -5,6 +5,7 @@ const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { notifyProfileOwner } = require('./interactions');
+const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
 
 const router = express.Router();
 
@@ -80,6 +81,9 @@ router.post('/:targetType/:targetId', requireAuth, publicSubmitLimiter, honeypot
     }
     if (!Number.isInteger(targetId)) {
       return res.status(400).json({ error: 'A valid id is required.' });
+    }
+    if (!(await isCommunityFeatureEnabled('community_comments_enabled'))) {
+      return res.status(403).json({ error: 'Comments are currently disabled.' });
     }
     const body = (req.body.body || '').trim();
     if (!body) {

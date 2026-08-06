@@ -15,6 +15,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
 
 const router = express.Router();
 
@@ -121,6 +122,9 @@ router.post('/:targetType/:targetId/react', requireAuth, async (req, res, next) 
     if (!['like', 'dislike'].includes(reaction)) {
       return res.status(400).json({ error: 'reaction must be "like" or "dislike".' });
     }
+    if (!(await isCommunityFeatureEnabled(reaction === 'like' ? 'community_likes_enabled' : 'community_dislikes_enabled'))) {
+      return res.status(403).json({ error: `${reaction === 'like' ? 'Likes' : 'Dislikes'} are currently disabled.` });
+    }
     if (!(await targetExists(target.targetType, target.targetId))) {
       return res.status(404).json({ error: 'That item no longer exists.' });
     }
@@ -168,6 +172,9 @@ router.post('/:targetType/:targetId/save', requireAuth, async (req, res, next) =
   try {
     const target = validTarget(req, res);
     if (!target) return;
+    if (!(await isCommunityFeatureEnabled('community_saves_enabled'))) {
+      return res.status(403).json({ error: 'Saves are currently disabled.' });
+    }
     if (!(await targetExists(target.targetType, target.targetId))) {
       return res.status(404).json({ error: 'That item no longer exists.' });
     }
