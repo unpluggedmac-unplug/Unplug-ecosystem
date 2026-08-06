@@ -16,8 +16,13 @@ async function refreshDailyHomepage() {
   await pool.query('SELECT calculate_daily_homepage()');
 }
 
+async function rotateWeeklyMission() {
+  await pool.query('SELECT rotate_weekly_mission()');
+}
+
 const RANKINGS_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6 hours
 const HOMEPAGE_INTERVAL_MS = 60 * 60 * 1000; // hourly — cheap to re-run, and picks up a new day promptly even if the instance was asleep at midnight
+const WEEKLY_MISSION_INTERVAL_MS = 60 * 60 * 1000; // hourly — rotate_weekly_mission() is a no-op once this week's pick exists, so this just catches the Monday boundary promptly even through sleep/restarts
 
 function start() {
   setInterval(() => {
@@ -32,9 +37,15 @@ function start() {
       .catch((err) => console.error('[participation] daily homepage refresh failed:', err.message));
   }, HOMEPAGE_INTERVAL_MS);
 
+  setInterval(() => {
+    rotateWeeklyMission()
+      .then(() => console.log('[participation] weekly mission check done'))
+      .catch((err) => console.error('[participation] weekly mission rotation failed:', err.message));
+  }, WEEKLY_MISSION_INTERVAL_MS);
+
   // Run once shortly after boot too, same reasoning as the birthday
   // check: a restart during the day shouldn't mean stale rankings until
-  // the next 6-hour mark.
+  // the next scheduled mark.
   setTimeout(() => {
     recalculateRankings()
       .then(() => console.log('[participation] startup rankings recalculation done'))
@@ -42,7 +53,10 @@ function start() {
     refreshDailyHomepage()
       .then(() => console.log('[participation] startup daily homepage refresh done'))
       .catch((err) => console.error('[participation] startup daily homepage refresh failed:', err.message));
+    rotateWeeklyMission()
+      .then(() => console.log('[participation] startup weekly mission check done'))
+      .catch((err) => console.error('[participation] startup weekly mission rotation failed:', err.message));
   }, 25000);
 }
 
-module.exports = { start, recalculateRankings, refreshDailyHomepage };
+module.exports = { start, recalculateRankings, refreshDailyHomepage, rotateWeeklyMission };

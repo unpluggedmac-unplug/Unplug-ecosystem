@@ -153,8 +153,9 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
     const userId = req.user.id;
     await pool.query('SELECT ensure_member_participation_profile($1)', [userId]);
     await pool.query('SELECT assign_daily_missions($1)', [userId]);
+    await pool.query('SELECT assign_weekly_mission($1)', [userId]);
 
-    const [profile, score, statusHistory, statusLevels, streak, achievements, passport, missions, myRankings, notifications, recognitionCounts] = await Promise.all([
+    const [profile, score, statusHistory, statusLevels, streak, achievements, passport, missions, weeklyMission, myRankings, notifications, recognitionCounts] = await Promise.all([
       pool.query('SELECT referral_code, show_on_leaderboard FROM member_participation_profiles WHERE user_id = $1', [userId]),
       pool.query('SELECT * FROM score_cache WHERE user_id = $1', [userId]),
       pool.query(
@@ -180,7 +181,13 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
       pool.query(
         `SELECT um.mission_code, m.title, m.description, m.points_reward, m.target_count, um.progress_count, um.is_completed
            FROM user_missions um JOIN missions m ON m.code = um.mission_code
-          WHERE um.user_id = $1 AND um.assigned_date = CURRENT_DATE`,
+          WHERE um.user_id = $1 AND m.mission_type = 'daily' AND um.assigned_date = CURRENT_DATE`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT um.mission_code, m.title, m.description, m.points_reward, m.target_count, um.progress_count, um.is_completed, um.assigned_date
+           FROM user_missions um JOIN missions m ON m.code = um.mission_code
+          WHERE um.user_id = $1 AND m.mission_type = 'weekly' AND um.assigned_date = date_trunc('week', CURRENT_DATE)::DATE`,
         [userId]
       ),
       pool.query('SELECT ranking_type, rank_position, rank_movement, score_value FROM rankings WHERE user_id = $1', [userId]),
@@ -200,6 +207,7 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
       achievements: achievements.rows,
       passport: passport.rows,
       todayMissions: missions.rows,
+      weeklyMission: weeklyMission.rows[0] || null,
       rankings: myRankings.rows,
       notifications: notifications.rows,
       recognitionCounts: recognitionCounts.rows[0] || null,
@@ -324,6 +332,106 @@ router.post('/notifications/read', requireAuth, async (req, res, next) => {
 // ---------------------------------------------------------------------------
 // ADMIN
 // ---------------------------------------------------------------------------
+
+// -- Missions (daily + weekly) --
+
+// GET /participation/admin/missions?type=daily|weekly — full list including
+// disabled ones (admin needs to see everything, not just what's live).
+router.get('/admin/missions', requireRole('admin'), async (req, res, next) => {
+  try {
+    const type = req.query.type;
+    const result = await pool.query(
+      type
+        ? 'SELECT * FROM missions WHERE mission_type = $1 ORDER BY code ASC'
+        : 'SELECT * FROM missions ORDER BY mission_type ASC, code ASC',
+      type ? [type] : []
+    );
+    res.json({ missions: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /participation/admin/missions/weekly-current — this week's active
+// mission plus rotation history, for the admin screen to show "what's
+// live right now" without the admin having to compute the ISO week
+// themselves.
+router.get('/admin/missions/weekly-current', requireRole('admin'), async (req, res, next) => {
+  try {
+    const current = await pool.query('SELECT * FROM get_current_weekly_mission()');
+    const history = await pool.query(
+      `SELECT wr.week_start, wr.week_end, m.code, m.title
+         FROM weekly_mission_rotation wr JOIN missions m ON m.code = wr.mission_code
+        ORDER BY wr.week_start DESC LIMIT 12`
+    );
+    res.json({ current: current.rows[0] || null, history: history.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /participation/admin/missions — body { code, title, description,
+// missionType, actionCode?, pointsReward, targetCount, minStatusRank?,
+// maxStatusRank? }. actionCode must already exist in participation_actions
+// (FK-enforced) — the whole point of Stage A-G's "never seed a mission for
+// an action nothing can trigger" rule is that this constraint is real, not
+// just a convention, so a typo'd or not-yet-built action_code fails loudly
+// here instead of creating a mission nobody can ever complete.
+router.post('/admin/missions', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { code, title, description, missionType, actionCode, pointsReward, targetCount, minStatusRank, maxStatusRank } = req.body;
+    if (!code || !title || !description || !missionType) {
+      return res.status(400).json({ error: 'code, title, description and missionType are all required.' });
+    }
+    if (!['daily', 'weekly', 'challenge'].includes(missionType)) {
+      return res.status(400).json({ error: 'missionType must be daily, weekly or challenge.' });
+    }
+    const result = await pool.query(
+      `INSERT INTO missions (code, title, description, mission_type, action_code, points_reward, target_count, min_status_rank, max_status_rank)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING code`,
+      [code, title, description, missionType, actionCode || null, pointsReward || 0, targetCount || 1, minStatusRank || 0, maxStatusRank != null ? maxStatusRank : 99]
+    );
+    res.status(201).json({ code: result.rows[0].code });
+  } catch (err) {
+    if (err.code === '23503') return res.status(400).json({ error: `actionCode "${req.body.actionCode}" does not exist — a mission can't reward an action nothing on the site can trigger.` });
+    if (err.code === '23505') return res.status(400).json({ error: `A mission with code "${req.body.code}" already exists.` });
+    next(err);
+  }
+});
+
+// PATCH /participation/admin/missions/:code — partial update. Same fields
+// as POST, all optional. isEnabled toggles it in/out of daily assignment
+// and weekly rotation without deleting its history.
+router.patch('/admin/missions/:code', requireRole('admin'), async (req, res, next) => {
+  try {
+    const fields = [];
+    const values = [];
+    const set = (column, value) => { values.push(value); fields.push(`${column} = $${values.length}`); };
+
+    const b = req.body;
+    if (b.title !== undefined) set('title', b.title);
+    if (b.description !== undefined) set('description', b.description);
+    if (b.actionCode !== undefined) set('action_code', b.actionCode);
+    if (b.pointsReward !== undefined) set('points_reward', b.pointsReward);
+    if (b.targetCount !== undefined) set('target_count', b.targetCount);
+    if (b.minStatusRank !== undefined) set('min_status_rank', b.minStatusRank);
+    if (b.maxStatusRank !== undefined) set('max_status_rank', b.maxStatusRank);
+    if (b.isEnabled !== undefined) set('is_enabled', !!b.isEnabled);
+
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
+
+    values.push(req.params.code);
+    const result = await pool.query(
+      `UPDATE missions SET ${fields.join(', ')} WHERE code = $${values.length} RETURNING code`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Mission not found.' });
+    res.status(204).end();
+  } catch (err) {
+    if (err.code === '23503') return res.status(400).json({ error: `actionCode "${req.body.actionCode}" does not exist.` });
+    next(err);
+  }
+});
 
 // POST /participation/admin/award-points — body { userId, points, reason }
 router.post('/admin/award-points', requireRole('admin'), async (req, res, next) => {

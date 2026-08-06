@@ -295,6 +295,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="nav-group-items">
         <a data-section="unplugmembers">Member Scores</a>
         <a data-section="unplugsponsors">Sponsor Campaigns</a>
+        <a data-section="unplugmissions">Missions</a>
       </div>
     </div>
 
@@ -1161,6 +1162,50 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- MISSIONS (daily + weekly) -->
+    <div class="admin-section" id="section-unplugmissions">
+      <div class="main-head"><div><h1>Missions</h1><p>Daily missions are re-assigned to every member each day. Weekly missions rotate automatically, one active at a time, from the pool of enabled weekly missions below. Only point missions tied to an action already firing on the live site should be enabled — disable rather than delete anything that isn't wired up yet.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3 id="missionFormTitle">New Mission</h3></div>
+        <div class="panel-body">
+          <input type="hidden" id="missionEditCode">
+          <div class="form-row">
+            <div><label for="missionCode">Code (unique, no spaces)</label><input id="missionCode" placeholder="e.g. weekly_read5"></div>
+            <div><label for="missionType">Type</label><select id="missionType" style="padding:8px; width:100%;">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select></div>
+            <div><label for="missionActionCode">Action code</label><input id="missionActionCode" placeholder="e.g. recognition_give"></div>
+          </div>
+          <div class="form-row">
+            <div><label for="missionTitle">Title</label><input id="missionTitle" placeholder="e.g. Recognise 5 People"></div>
+            <div><label for="missionPoints">Points reward</label><input id="missionPoints" type="number" value="10"></div>
+            <div><label for="missionTarget">Target count</label><input id="missionTarget" type="number" value="1"></div>
+          </div>
+          <div class="field"><label for="missionDescription">Description</label><input id="missionDescription" placeholder="Shown to members on their dashboard"></div>
+          <div id="missionFormError" style="color:var(--red); margin-bottom:10px; display:none;"></div>
+          <button class="approve" id="missionSaveBtn" style="padding:9px 16px;">Create Mission</button>
+          <button class="btn btn-line" id="missionCancelEditBtn" type="button" style="width:auto; display:none; margin-left:8px;">Cancel edit</button>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-head"><h3>This week's active mission</h3></div>
+        <div class="panel-body" id="weeklyMissionCurrent" style="padding:0;"></div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-head"><h3>Daily missions</h3></div>
+        <div class="panel-body" id="dailyMissionsBody" style="padding:0;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Weekly missions</h3></div>
+        <div class="panel-body" id="weeklyMissionsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
       <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
@@ -1732,6 +1777,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
+    if (section === 'unplugmissions') loadUnplugMissions();
   });
 });
 
@@ -5575,6 +5621,153 @@ async function deleteUnplugCampaign(id, label) {
     showToast('Campaign deleted.');
     document.getElementById('unplugCampaignReportPanel').style.display = 'none';
     loadUnplugCampaigns();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Missions (Stage H) — daily + weekly, same table, same form. There is no
+// delete endpoint on purpose: missions have completion/points history
+// attached, so "isEnabled" is how an admin retires one instead.
+// ---------------------------------------------------------------------------
+let UNPLUG_MISSIONS = [];
+
+async function loadUnplugMissions() {
+  document.getElementById('weeklyMissionCurrent').innerHTML = '<div class="loading-state">Loading…</div>';
+  document.getElementById('dailyMissionsBody').innerHTML = '<div class="loading-state">Loading…</div>';
+  document.getElementById('weeklyMissionsBody').innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const [all, weeklyCurrent] = await Promise.all([
+      api('/participation/admin/missions'),
+      api('/participation/admin/missions/weekly-current'),
+    ]);
+    UNPLUG_MISSIONS = all.missions || [];
+    renderMissionList('dailyMissionsBody', UNPLUG_MISSIONS.filter((m) => m.mission_type === 'daily'));
+    renderMissionList('weeklyMissionsBody', UNPLUG_MISSIONS.filter((m) => m.mission_type === 'weekly'));
+
+    const cur = weeklyCurrent.current;
+    const history = weeklyCurrent.history || [];
+    document.getElementById('weeklyMissionCurrent').innerHTML = `
+      <div style="padding:12px 16px;">
+        ${cur
+          ? `<div style="font-weight:700;">${escapeHtmlAdmin(cur.title)}</div>
+             <div style="font-size:12px; color:#666;">${cur.week_start} → ${cur.week_end} · +${cur.points_reward} pts</div>`
+          : '<div class="empty-state">No weekly mission active yet — it rotates in automatically once one is enabled below.</div>'}
+        ${history.length ? `<div style="font-size:12px; color:#666; margin-top:10px;">Recent rotation: ${history.map((h) => `${escapeHtmlAdmin(h.title)} (${h.week_start})`).join(' · ')}</div>` : ''}
+      </div>`;
+  } catch (err) {
+    document.getElementById('weeklyMissionCurrent').innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+    document.getElementById('dailyMissionsBody').innerHTML = '';
+    document.getElementById('weeklyMissionsBody').innerHTML = '';
+  }
+}
+
+function renderMissionList(elId, missions) {
+  const el = document.getElementById(elId);
+  if (!missions.length) {
+    el.innerHTML = '<div class="empty-state">None yet.</div>';
+    return;
+  }
+  el.innerHTML = missions.map((m) => `
+    <div style="padding:12px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <div style="font-weight:700;">${escapeHtmlAdmin(m.title)}
+          ${m.is_enabled ? '' : '<span style="font-weight:400; font-size:11px; color:#999; border:1px solid #ccc; padding:1px 6px; margin-left:6px;">Disabled</span>'}
+        </div>
+        <div style="font-size:12px; color:#666;">${escapeHtmlAdmin(m.code)} · action: ${escapeHtmlAdmin(m.action_code || '—')} · +${m.points_reward} pts · target ${m.target_count}</div>
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="btn btn-line" style="width:auto; padding:6px 14px;" onclick="editUnplugMission('${m.code}')">Edit</button>
+        <button class="btn btn-line" style="width:auto; padding:6px 14px;" onclick="toggleUnplugMissionEnabled('${m.code}', ${!m.is_enabled})">${m.is_enabled ? 'Disable' : 'Enable'}</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('missionSaveBtn').addEventListener('click', async () => {
+  const editCode = document.getElementById('missionEditCode').value;
+  const code = document.getElementById('missionCode').value.trim();
+  const missionType = document.getElementById('missionType').value;
+  const actionCode = document.getElementById('missionActionCode').value.trim();
+  const title = document.getElementById('missionTitle').value.trim();
+  const description = document.getElementById('missionDescription').value.trim();
+  const pointsReward = parseInt(document.getElementById('missionPoints').value, 10) || 0;
+  const targetCount = parseInt(document.getElementById('missionTarget').value, 10) || 1;
+  const errEl = document.getElementById('missionFormError');
+  errEl.style.display = 'none';
+
+  if ((!editCode && !code) || !title || !description) {
+    errEl.textContent = 'Code, title and description are all required.';
+    errEl.style.display = 'block';
+    return;
+  }
+  try {
+    if (editCode) {
+      await api(`/participation/admin/missions/${editCode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title, description, actionCode: actionCode || null, pointsReward, targetCount }),
+      });
+      showToast('Mission updated.');
+      cancelUnplugMissionEdit();
+    } else {
+      await api('/participation/admin/missions', {
+        method: 'POST',
+        body: JSON.stringify({ code, title, description, missionType, actionCode: actionCode || undefined, pointsReward, targetCount }),
+      });
+      showToast('Mission created.');
+      document.getElementById('missionCode').value = '';
+      document.getElementById('missionActionCode').value = '';
+      document.getElementById('missionTitle').value = '';
+      document.getElementById('missionDescription').value = '';
+      document.getElementById('missionPoints').value = '10';
+      document.getElementById('missionTarget').value = '1';
+    }
+    loadUnplugMissions();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+  }
+});
+
+function editUnplugMission(code) {
+  const m = UNPLUG_MISSIONS.find((x) => x.code === code);
+  if (!m) return;
+  document.getElementById('missionEditCode').value = m.code;
+  document.getElementById('missionCode').value = m.code;
+  document.getElementById('missionCode').disabled = true;
+  document.getElementById('missionType').value = m.mission_type;
+  document.getElementById('missionType').disabled = true;
+  document.getElementById('missionActionCode').value = m.action_code || '';
+  document.getElementById('missionTitle').value = m.title;
+  document.getElementById('missionDescription').value = m.description;
+  document.getElementById('missionPoints').value = m.points_reward;
+  document.getElementById('missionTarget').value = m.target_count;
+  document.getElementById('missionFormTitle').textContent = 'Edit Mission';
+  document.getElementById('missionSaveBtn').textContent = 'Save Changes';
+  document.getElementById('missionCancelEditBtn').style.display = 'inline-block';
+  document.getElementById('missionFormError').style.display = 'none';
+  document.getElementById('missionTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelUnplugMissionEdit() {
+  document.getElementById('missionEditCode').value = '';
+  document.getElementById('missionCode').value = '';
+  document.getElementById('missionCode').disabled = false;
+  document.getElementById('missionType').disabled = false;
+  document.getElementById('missionFormTitle').textContent = 'New Mission';
+  document.getElementById('missionSaveBtn').textContent = 'Create Mission';
+  document.getElementById('missionCancelEditBtn').style.display = 'none';
+}
+document.getElementById('missionCancelEditBtn').addEventListener('click', cancelUnplugMissionEdit);
+
+async function toggleUnplugMissionEnabled(code, makeEnabled) {
+  try {
+    await api(`/participation/admin/missions/${code}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isEnabled: makeEnabled }),
+    });
+    showToast(makeEnabled ? 'Mission enabled.' : 'Mission disabled.');
+    loadUnplugMissions();
   } catch (err) {
     showToast(err.message, true);
   }
