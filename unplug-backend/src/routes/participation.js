@@ -548,6 +548,82 @@ router.patch('/admin/streak-tiers/:code', requireRole('admin'), async (req, res,
   }
 });
 
+// -- Participation Analytics (Stage P) --
+
+// GET /participation/admin/analytics?range=7|30|90 — everything the
+// admin Participation Analytics screen needs in one call: status ladder
+// distribution (member + business), mission/challenge completion rates
+// over the range, a daily points-awarded chart, streak-tier
+// distribution, and a trust/anti-cheat summary. Read-only aggregation
+// over tables every earlier stage already writes to — no new tables.
+router.get('/admin/analytics', requireRole('admin'), async (req, res, next) => {
+  try {
+    const range = [7, 30, 90].includes(Number(req.query.range)) ? Number(req.query.range) : 30;
+
+    const [
+      statusDist, businessStatusDist, missionRates, dailyPoints, streakDist, trustSummary,
+    ] = await Promise.all([
+      pool.query(
+        `SELECT sl.code, sl.label, sl.emoji, sl.rank_order, COUNT(msh.user_id)::INTEGER AS n
+           FROM member_status_levels sl
+           LEFT JOIN member_status_history msh ON msh.status_code = sl.code AND msh.is_active_status = TRUE
+          GROUP BY sl.code, sl.label, sl.emoji, sl.rank_order
+          ORDER BY sl.rank_order ASC`
+      ),
+      pool.query(
+        `SELECT sl.code, sl.label, sl.emoji, sl.rank_order, COUNT(bsh.profile_id)::INTEGER AS n
+           FROM business_status_levels sl
+           LEFT JOIN business_status_history bsh ON bsh.status_code = sl.code AND bsh.is_active_status = TRUE
+          GROUP BY sl.code, sl.label, sl.emoji, sl.rank_order
+          ORDER BY sl.rank_order ASC`
+      ),
+      pool.query(
+        `SELECT m.mission_type,
+                COUNT(*)::INTEGER AS assigned,
+                COUNT(*) FILTER (WHERE um.is_completed)::INTEGER AS completed
+           FROM user_missions um JOIN missions m ON m.code = um.mission_code
+          WHERE um.assigned_date >= CURRENT_DATE - ($1 || ' days')::INTERVAL
+          GROUP BY m.mission_type`,
+        [range]
+      ),
+      pool.query(
+        `SELECT DATE(earned_at) AS day, SUM(total_points)::INTEGER AS points, COUNT(*)::INTEGER AS actions
+           FROM participation_points
+          WHERE is_reversed = FALSE AND earned_at >= now() - ($1 || ' days')::INTERVAL
+          GROUP BY DATE(earned_at)
+          ORDER BY day ASC`,
+        [range]
+      ),
+      pool.query(
+        `SELECT st.code, st.label, st.emoji, st.min_days, COUNT(us.user_id)::INTEGER AS n
+           FROM streak_tiers st
+           LEFT JOIN user_streaks us ON us.highest_tier_code = st.code AND us.current_streak_days > 0
+          GROUP BY st.code, st.label, st.emoji, st.min_days
+          ORDER BY st.min_days ASC`
+      ),
+      pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM trust_scores WHERE score < 100)::INTEGER AS flagged_count,
+           (SELECT COALESCE(AVG(score), 100) FROM trust_scores)::NUMERIC(5,2) AS avg_score_among_flagged,
+           (SELECT COUNT(*) FROM moderation_actions WHERE action_type LIKE 'auto_flag_%' AND created_at >= now() - ($1 || ' days')::INTERVAL)::INTEGER AS flags_in_range`,
+        [range]
+      ),
+    ]);
+
+    res.json({
+      range,
+      statusDistribution: statusDist.rows,
+      businessStatusDistribution: businessStatusDist.rows,
+      missionCompletionRates: missionRates.rows,
+      dailyPoints: dailyPoints.rows,
+      streakDistribution: streakDist.rows,
+      trustSummary: trustSummary.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // -- Trust & anti-cheat (Stage O) --
 
 // GET /participation/admin/trust-flags — members with a below-100 trust

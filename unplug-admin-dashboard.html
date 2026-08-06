@@ -301,6 +301,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="unplugmemberstatus">Member Status</a>
         <a data-section="unplugstreaktiers">Streak Tiers</a>
         <a data-section="unplugtrust">Trust & Anti-Cheat</a>
+        <a data-section="unplugpanalytics">Participation Analytics</a>
       </div>
     </div>
 
@@ -1285,6 +1286,51 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- PARTICIPATION ANALYTICS -->
+    <div class="admin-section" id="section-unplugpanalytics">
+      <div class="main-head"><div><h1>Participation Analytics</h1><p>Health of the gamification engine: how points, missions, statuses, streaks and trust are trending.</p></div></div>
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-body" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <strong style="margin-right:6px;">Range:</strong>
+          <button class="btn btn-line panalytics-range-btn" data-range="7" style="width:auto;">7 days</button>
+          <button class="btn btn-line panalytics-range-btn active" data-range="30" style="width:auto;">30 days</button>
+          <button class="btn btn-line panalytics-range-btn" data-range="90" style="width:auto;">90 days</button>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-head"><h3>Points awarded per day</h3></div>
+        <div class="panel-body" id="panalyticsPointsChart" style="overflow-x:auto;"></div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:16px;">
+        <div class="panel">
+          <div class="panel-head"><h3>Member status distribution</h3></div>
+          <div class="panel-body" id="panalyticsStatusDist" style="padding:0;"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Business status distribution</h3></div>
+          <div class="panel-body" id="panalyticsBizStatusDist" style="padding:0;"></div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:16px;">
+        <div class="panel">
+          <div class="panel-head"><h3>Mission / challenge completion rates</h3></div>
+          <div class="panel-body" id="panalyticsMissionRates" style="padding:0;"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Active streak tier distribution</h3></div>
+          <div class="panel-body" id="panalyticsStreakDist" style="padding:0;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Trust & anti-cheat</h3></div>
+        <div class="panel-body" id="panalyticsTrust" style="padding:0;"></div>
+      </div>
+    </div>
+
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
       <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
@@ -1862,6 +1908,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'unplugmemberstatus') loadUnplugMemberStatus();
     if (section === 'unplugstreaktiers') loadUnplugStreakTiers();
     if (section === 'unplugtrust') loadUnplugTrust();
+    if (section === 'unplugpanalytics') loadUnplugParticipationAnalytics(30);
   });
 });
 
@@ -6156,6 +6203,102 @@ async function resetUnplugTrust(userId) {
     loadUnplugTrust();
   } catch (err) {
     showToast(err.message, true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Participation Analytics (Stage P)
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.panalytics-range-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.panalytics-range-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadUnplugParticipationAnalytics(Number(btn.dataset.range));
+  });
+});
+
+function panalyticsBarList(rows, labelFn, countFn) {
+  if (!rows.length) return '<div class="empty-state">No data yet.</div>';
+  const max = Math.max(...rows.map(countFn), 1);
+  return rows.map((r) => {
+    const n = countFn(r);
+    const pct = Math.max(2, Math.round((n / max) * 100));
+    return `<div style="padding:8px 16px;">
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;">
+        <span>${labelFn(r)}</span><strong>${n}</strong>
+      </div>
+      <div style="background:var(--paper); border-radius:3px; height:8px; overflow:hidden;">
+        <div style="background:var(--red); height:100%; width:${pct}%;"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadUnplugParticipationAnalytics(range) {
+  document.getElementById('panalyticsPointsChart').innerHTML = '<div class="loading-state">Loading…</div>';
+  document.getElementById('panalyticsStatusDist').innerHTML = '<div class="loading-state">Loading…</div>';
+  document.getElementById('panalyticsBizStatusDist').innerHTML = '<div class="loading-state">Loading…</div>';
+  document.getElementById('panalyticsMissionRates').innerHTML = '<div class="loading-state">Loading…</div>';
+  document.getElementById('panalyticsStreakDist').innerHTML = '<div class="loading-state">Loading…</div>';
+  document.getElementById('panalyticsTrust').innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api(`/participation/admin/analytics?range=${range}`);
+
+    // Points-per-day chart, same .chart-bars pattern as Site Analytics.
+    const daily = data.dailyPoints || [];
+    if (!daily.length) {
+      document.getElementById('panalyticsPointsChart').innerHTML = '<div class="empty-state">No points awarded in this period yet.</div>';
+    } else {
+      const maxPoints = Math.max(...daily.map((d) => d.points), 1);
+      const bars = daily.map((d) => {
+        const heightPct = Math.max(4, Math.round((d.points / maxPoints) * 100));
+        const dateLabel = new Date(d.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        return `<div class="chart-bar-col" title="${d.points} points (${d.actions} actions) on ${dateLabel}">
+          <div class="chart-bar" style="height:${heightPct}%;"></div>
+          <span class="chart-bar-label">${dateLabel}</span>
+        </div>`;
+      }).join('');
+      document.getElementById('panalyticsPointsChart').innerHTML = `<div class="chart-bars">${bars}</div>`;
+    }
+
+    document.getElementById('panalyticsStatusDist').innerHTML = panalyticsBarList(
+      data.statusDistribution || [], (r) => `${r.emoji} ${escapeHtmlAdmin(r.label)}`, (r) => r.n
+    );
+    document.getElementById('panalyticsBizStatusDist').innerHTML = panalyticsBarList(
+      data.businessStatusDistribution || [], (r) => `${r.emoji} ${escapeHtmlAdmin(r.label)}`, (r) => r.n
+    );
+    document.getElementById('panalyticsStreakDist').innerHTML = panalyticsBarList(
+      data.streakDistribution || [], (r) => `${r.emoji} ${escapeHtmlAdmin(r.label)} (${r.min_days}+ days)`, (r) => r.n
+    );
+
+    const rates = data.missionCompletionRates || [];
+    const typeLabels = { daily: 'Daily missions', weekly: 'Weekly missions', challenge: 'Monthly challenges' };
+    document.getElementById('panalyticsMissionRates').innerHTML = rates.length
+      ? rates.map((r) => {
+          const pct = r.assigned ? Math.round((r.completed / r.assigned) * 100) : 0;
+          return `<div style="padding:10px 16px; border-bottom:1px solid var(--paper-line);">
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600;">
+              <span>${typeLabels[r.mission_type] || r.mission_type}</span><span>${pct}%</span>
+            </div>
+            <div style="font-size:11.5px; color:#666;">${r.completed} completed / ${r.assigned} assigned</div>
+          </div>`;
+        }).join('')
+      : '<div class="empty-state">No missions assigned in this period yet.</div>';
+
+    const trust = data.trustSummary || {};
+    document.getElementById('panalyticsTrust').innerHTML = `
+      <div style="padding:14px 16px; display:flex; gap:24px; flex-wrap:wrap;">
+        <div><div style="font-family:'Playfair Display',serif; font-size:24px; font-weight:700; color:var(--red);">${trust.flagged_count || 0}</div><div style="font-size:11.5px; color:#666;">Currently flagged</div></div>
+        <div><div style="font-family:'Playfair Display',serif; font-size:24px; font-weight:700;">${Number(trust.avg_score_among_flagged || 100).toFixed(0)}</div><div style="font-size:11.5px; color:#666;">Avg trust score</div></div>
+        <div><div style="font-family:'Playfair Display',serif; font-size:24px; font-weight:700;">${trust.flags_in_range || 0}</div><div style="font-size:11.5px; color:#666;">New flags in range</div></div>
+      </div>`;
+  } catch (err) {
+    document.getElementById('panalyticsPointsChart').innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+    document.getElementById('panalyticsStatusDist').innerHTML = '';
+    document.getElementById('panalyticsBizStatusDist').innerHTML = '';
+    document.getElementById('panalyticsMissionRates').innerHTML = '';
+    document.getElementById('panalyticsStreakDist').innerHTML = '';
+    document.getElementById('panalyticsTrust').innerHTML = '';
   }
 }
 
