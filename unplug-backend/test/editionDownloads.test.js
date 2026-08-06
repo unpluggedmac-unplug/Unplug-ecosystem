@@ -109,6 +109,8 @@ before(async () => {
 after(async () => {
   if (server) await new Promise((r) => server.close(r));
   if (pdfServer) await new Promise((r) => pdfServer.close(r));
+  if (privateServer) await new Promise((r) => privateServer.close(r));
+  if (viewServer2) await new Promise((r) => viewServer2.close(r));
   if (pool) await pool.end();
   if (pg) await pg.stop();
   fs.rmSync(dataDir, { recursive: true, force: true });
@@ -407,4 +409,97 @@ test('replacing an edition PDF records the file it replaced', async () => {
   await req('PATCH', `/editions/${editionId}`, { token: adminToken, body: { title: 'Renamed Only' } });
   const after = await pool.query('SELECT COUNT(*)::int AS n FROM edition_pdf_versions WHERE edition_id = $1', [editionId]);
   assert.equal(after.rows[0].n, 1, 'an unrelated edit logged a PDF replacement');
+});
+
+// ---------------------------------------------------------------------------
+// download_pdf_url (094_edition_download_pdf.sql) — the private file behind
+// the paid single-use download, separate from the free "View Online" pdf_url.
+// A second local origin stands in for the private Supabase bucket, with
+// different bytes, so "the download served the PRIVATE file, not the free
+// one" is something these tests can actually prove rather than assume.
+// ---------------------------------------------------------------------------
+let privateServer;
+let viewServer2;
+let privatePdfUrl;
+let viewOnlyPdfUrl;
+let dualFileEditionId;
+const PRIVATE_PDF_BODY = '%PDF-1.4\n' + 'PRIVATE-DOWNLOAD-COPY-'.repeat(50) + '\n%%EOF';
+
+test('setup: a second edition with separate view/download files', async () => {
+  privateServer = http.createServer((_r, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': Buffer.byteLength(PRIVATE_PDF_BODY) });
+    res.end(PRIVATE_PDF_BODY);
+  });
+  await new Promise((r) => privateServer.listen(0, r));
+  privatePdfUrl = `http://127.0.0.1:${privateServer.address().port}/private.pdf`;
+
+  viewServer2 = http.createServer((_r, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': Buffer.byteLength(PDF_BODY) });
+    res.end(PDF_BODY);
+  });
+  await new Promise((r) => viewServer2.listen(0, r));
+  viewOnlyPdfUrl = `http://127.0.0.1:${viewServer2.address().port}/view.pdf`;
+
+  const ed = await pool.query(
+    `INSERT INTO editions (issue_number, title, pdf_url, download_pdf_url, download_price, status, publication_date)
+     VALUES (2, 'September 2026', $1, $2, 50.00, 'published', '2026-09-01') RETURNING id`,
+    [viewOnlyPdfUrl, privatePdfUrl]
+  );
+  dualFileEditionId = ed.rows[0].id;
+});
+
+test('the paid download serves download_pdf_url, not the free View Online file', async () => {
+  const purchase = await req('POST', `/editions/${dualFileEditionId}/purchase`, { body: { email: 'dualfile@test.com', method: 'eft' } });
+  assert.equal(purchase.status, 201);
+  await approve(purchase.body.purchaseId);
+  const claim = await req('POST', '/editions/download/claim', { body: { email: 'dualfile@test.com', reference: purchase.body.reference } });
+  assert.equal(claim.status, 200, JSON.stringify(claim.body));
+
+  const download = await fetch(baseUrl + claim.body.downloadPath);
+  const bytes = await download.text();
+  assert.equal(download.status, 200);
+  assert.match(bytes, /PRIVATE-DOWNLOAD-COPY-/, 'the download did not serve the private download_pdf_url file');
+});
+
+test('an edition with no separate download_pdf_url still downloads (falls back to pdf_url)', async () => {
+  // A fresh edition, not the original `editionId` — an earlier test
+  // ("replacing an edition PDF records the file it replaced") already
+  // patched editionId's pdf_url to a fake, unreachable
+  // https://example.test/corrected.pdf, which would make this test fail
+  // for a reason unrelated to the fallback logic it's meant to check.
+  const ed = await pool.query(
+    `INSERT INTO editions (issue_number, title, pdf_url, download_price, status, publication_date)
+     VALUES (3, 'October 2026', $1, 50.00, 'published', '2026-10-01') RETURNING id`, [pdfUrl]
+  );
+  const noDownloadFileEditionId = ed.rows[0].id;
+
+  const purchase = await req('POST', `/editions/${noDownloadFileEditionId}/purchase`, { body: { email: 'fallback@test.com', method: 'eft' } });
+  assert.equal(purchase.status, 201);
+  await approve(purchase.body.purchaseId);
+  const claim = await req('POST', '/editions/download/claim', { body: { email: 'fallback@test.com', reference: purchase.body.reference } });
+  assert.equal(claim.status, 200, JSON.stringify(claim.body));
+
+  const download = await fetch(baseUrl + claim.body.downloadPath);
+  assert.equal(download.status, 200);
+});
+
+test('download_pdf_url never appears in the public edition list or detail routes', async () => {
+  const list = await req('GET', '/editions');
+  assert.ok(!/download_pdf_url/.test(JSON.stringify(list.body)), 'download_pdf_url leaked via GET /editions');
+
+  const detail = await req('GET', `/editions/${dualFileEditionId}`);
+  assert.equal(detail.status, 200);
+  assert.ok(!('download_pdf_url' in detail.body.edition), 'download_pdf_url leaked via GET /editions/:id');
+  // pdf_url (the free View Online file) is fine to still be there.
+  assert.ok('pdf_url' in detail.body.edition);
+
+  const latest = await req('GET', '/editions/latest');
+  assert.ok(!/download_pdf_url/.test(JSON.stringify(latest.body)), 'download_pdf_url leaked via GET /editions/latest');
+});
+
+test('download_pdf_url is visible to admin (GET /editions/admin/all), unlike the public routes', async () => {
+  const admin = await req('GET', '/editions/admin/all', { token: adminToken });
+  const found = admin.body.editions.find((e) => e.id === dualFileEditionId);
+  assert.ok(found);
+  assert.equal(found.download_pdf_url, privatePdfUrl);
 });

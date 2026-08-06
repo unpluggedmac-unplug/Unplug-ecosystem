@@ -15,6 +15,15 @@ const router = express.Router();
 const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET } = process.env;
 const supabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY && SUPABASE_BUCKET);
 
+// A second, PRIVATE bucket — used only for the full-quality edition PDF
+// behind the paid single-use download (094_edition_download_pdf.sql).
+// Deliberately not the same bucket as SUPABASE_BUCKET above: that one is
+// public (needed for "View Online" and every other image on the site),
+// and a public bucket can't be made to enforce the single-use gate — the
+// raw URL is fetchable by anyone who has it, app logic notwithstanding.
+const SUPABASE_PRIVATE_BUCKET = process.env.SUPABASE_PRIVATE_BUCKET || 'edition-downloads';
+const supabasePrivateConfigured = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY);
+
 // Uploads the just-saved multer file to Supabase Storage over the REST API
 // (no extra dependency — uses Node's built-in fetch) and returns its public
 // URL, then removes the local temp copy.
@@ -40,6 +49,31 @@ async function uploadToSupabase(file) {
   }
   fs.unlink(file.path, () => {}); // best-effort cleanup of the local temp file
   return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${objectPath}`;
+}
+
+// Same upload mechanics as uploadToSupabase above, but targets the PRIVATE
+// bucket and returns the non-public object URL (no `/public/` segment) —
+// fetching it back later requires the same service-role auth headers used
+// here, which only this backend has (see GET /editions/download/:token).
+async function uploadToSupabasePrivate(file) {
+  const buffer = fs.readFileSync(file.path);
+  const objectPath = `${Date.now()}-${file.filename}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_PRIVATE_BUCKET}/${objectPath}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      apikey: SUPABASE_SERVICE_KEY,
+      'Content-Type': file.mimetype || 'application/octet-stream',
+      'x-upsert': 'true',
+    },
+    body: buffer,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Supabase Storage upload failed (${res.status}): ${detail}`);
+  }
+  fs.unlink(file.path, () => {});
+  return `${SUPABASE_URL}/storage/v1/object/${SUPABASE_PRIVATE_BUCKET}/${objectPath}`;
 }
 
 // POST /uploads — member uploads a single image, gets back a URL to use as
@@ -86,6 +120,35 @@ router.post('/pdf', requireRole('admin'), (req, res) => {
       sizeBytes: req.file.size,
       storage: 'local',
     });
+  });
+});
+
+// POST /uploads/edition-download-pdf — admin uploads the full-quality file
+// behind a paid edition's single-use download, kept separate from the free
+// "View Online" PDF above. Never returns a fetchable URL to the browser —
+// only GET /editions/download/:token (with the server's own service-role
+// key) can ever retrieve it.
+router.post('/edition-download-pdf', requireRole('admin'), (req, res) => {
+  if (!supabasePrivateConfigured) {
+    return res.status(400).json({ error: 'Supabase Storage is not configured (SUPABASE_URL / SUPABASE_SERVICE_KEY), so there is nowhere private to put this file.' });
+  }
+  uploadPdf.single('file')(req, res, async (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? `That PDF is too large. The maximum is ${Math.round(MAX_PDF_SIZE_BYTES / (1024 * 1024))}MB.`
+        : err.message;
+      return res.status(400).json({ error: msg });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file was uploaded (expected multipart field "file").' });
+    }
+    try {
+      const url = await uploadToSupabasePrivate(req.file);
+      res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'supabase-private' });
+    } catch (e) {
+      console.error('Supabase Storage private PDF upload failed:', e.message);
+      res.status(502).json({ error: 'The download file could not be saved. Please try again.' });
+    }
   });
 });
 

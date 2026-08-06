@@ -1629,7 +1629,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
           <div class="field"><label for="edNewDesc">Description</label><textarea id="edNewDesc" rows="2" placeholder="A short line shown under the edition title."></textarea></div>
           <div class="field"><label>Cover image</label><div id="edNewCover"></div></div>
-          <div class="field"><label>Edition PDF</label><div id="edNewPdf"></div></div>
+          <div class="field"><label>Edition PDF <span style="font-weight:400; text-transform:none; letter-spacing:0;">— free "View Online", always public</span></label><div id="edNewPdf"></div></div>
+          <div class="field"><label>Download PDF <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional, private, used only for the paid download</span></label><div id="edNewDownloadPdf"></div></div>
           <button class="approve" id="edAddBtn">Add edition</button>
         </div>
       </div>
@@ -7414,6 +7415,55 @@ async function edUploadPdf(input, containerId) {
   }
 }
 
+// The private, full-quality file behind the paid single-use download —
+// separate from the free "View Online" PDF above (094_edition_download_pdf.sql).
+// Optional: if never uploaded, the download falls back to the View Online
+// file, same as before this existed.
+function edDownloadPdfFieldHtml(id, existingUrl) {
+  return `<div class="ed-pdf" id="${id}" data-url="${escapeAttrAdmin(existingUrl || '')}">
+    <input type="file" accept="application/pdf" onchange="edUploadDownloadPdf(this, '${id}')" style="font-size:13px;">
+    <span class="ed-pdf-status" style="display:block; font-size:12px; color:#666; margin-top:6px;">
+      ${existingUrl
+        ? `A separate download file is set — choose a file to replace it, or leave as is.`
+        : 'Not set — the paid download will use the View Online file above until one is uploaded here.'}
+    </span>
+  </div>`;
+}
+function edDownloadPdfValue(id) {
+  const el = document.getElementById(id);
+  return el ? (el.dataset.url || '') : '';
+}
+async function edUploadDownloadPdf(input, containerId) {
+  const box = document.getElementById(containerId);
+  const status = box.querySelector('.ed-pdf-status');
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') {
+    status.textContent = 'That is not a PDF. Choose a .pdf file.';
+    input.value = '';
+    return;
+  }
+  status.textContent = `Uploading ${(file.size / (1024 * 1024)).toFixed(1)}MB…`;
+  input.disabled = true;
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(API_BASE + '/uploads/edition-download-pdf', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
+    box.dataset.url = data.url;
+    status.textContent = 'Uploaded — this file is private and only used for the paid download.';
+  } catch (e) {
+    status.textContent = e.message || 'Upload failed.';
+  } finally {
+    input.disabled = false;
+  }
+}
+
 async function loadEditionsAdmin() {
   // Fill the add-form pickers once.
   const monthSel = document.getElementById('edNewMonth');
@@ -7424,6 +7474,7 @@ async function loadEditionsAdmin() {
     document.getElementById('edNewYear').value = now.getFullYear();
     document.getElementById('edNewCover').innerHTML = UnplugUpload.fieldHtml('edCover', '');
     document.getElementById('edNewPdf').innerHTML = edPdfFieldHtml('edNewPdfBox', '');
+    document.getElementById('edNewDownloadPdf').innerHTML = edDownloadPdfFieldHtml('edNewDownloadPdfBox', '');
   }
 
   // Purchases load alongside, and independently — an empty editions list must
@@ -7443,6 +7494,8 @@ async function loadEditionsAdmin() {
       if (cover) cover.innerHTML = UnplugUpload.fieldHtml(`edCover-${e.id}`, e.cover_image_url || '');
       const pdf = document.getElementById(`edPdfWrap-${e.id}`);
       if (pdf) pdf.innerHTML = edPdfFieldHtml(`edPdfBox-${e.id}`, e.pdf_url || '');
+      const dlPdf = document.getElementById(`edDownloadPdfWrap-${e.id}`);
+      if (dlPdf) dlPdf.innerHTML = edDownloadPdfFieldHtml(`edDownloadPdfBox-${e.id}`, e.download_pdf_url || '');
     });
   } catch (e) {
     body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load editions.')}</div>`;
@@ -7484,7 +7537,8 @@ function editionRowHtml(e) {
     </div>
     <div class="field"><label>Description</label><textarea class="ed-desc" rows="2">${escapeHtmlAdmin(e.description || '')}</textarea></div>
     <div class="field"><label>Cover image</label><div id="edCoverBox-${e.id}"></div></div>
-    <div class="field"><label>Edition PDF <span style="font-weight:400; text-transform:none; letter-spacing:0;">— replacing this keeps existing purchases</span></label><div id="edPdfWrap-${e.id}"></div></div>
+    <div class="field"><label>Edition PDF <span style="font-weight:400; text-transform:none; letter-spacing:0;">— free "View Online", always public</span></label><div id="edPdfWrap-${e.id}"></div></div>
+    <div class="field"><label>Download PDF <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional, private, used only for the paid download</span></label><div id="edDownloadPdfWrap-${e.id}"></div></div>
     <button class="approve" style="padding:5px 12px;" onclick="saveEdition(${e.id})">Save changes</button>
     ${deleteBtn}
   </div>`;
@@ -7586,6 +7640,7 @@ async function saveEdition(id) {
       // Only sent when there IS a file, so an empty box can never blank the
       // PDF on an edition people have already bought.
       ...(edPdfValue(`edPdfBox-${id}`) ? { pdfUrl: edPdfValue(`edPdfBox-${id}`) } : {}),
+      ...(edDownloadPdfValue(`edDownloadPdfBox-${id}`) ? { downloadPdfUrl: edDownloadPdfValue(`edDownloadPdfBox-${id}`) } : {}),
     }) });
     showToast('Edition saved.');
     loadEditionsAdmin();
@@ -7621,11 +7676,13 @@ document.getElementById('edAddBtn').addEventListener('click', async () => {
       status: document.getElementById('edNewStatus').value,
       coverImageUrl: UnplugUpload.valueOf(document.getElementById('edNewCover')) || null,
       pdfUrl,
+      ...(edDownloadPdfValue('edNewDownloadPdfBox') ? { downloadPdfUrl: edDownloadPdfValue('edNewDownloadPdfBox') } : {}),
     }) });
     showToast('Edition added.');
     ['edNewTitle', 'edNewNumber', 'edNewDate', 'edNewDesc'].forEach((f) => { document.getElementById(f).value = ''; });
     document.getElementById('edNewCover').innerHTML = UnplugUpload.fieldHtml('edCover', '');
     document.getElementById('edNewPdf').innerHTML = edPdfFieldHtml('edNewPdfBox', '');
+    document.getElementById('edNewDownloadPdf').innerHTML = edDownloadPdfFieldHtml('edNewDownloadPdfBox', '');
     loadEditionsAdmin();
   } catch (e) { showToast(e.message || 'Could not add edition.', true); }
 });

@@ -292,7 +292,7 @@ router.get('/download/:token', async (req, res, next) => {
   try {
     const found = await pool.query(
       `SELECT ep.id, ep.edition_id, ep.payment_status, ep.download_status, ep.download_count,
-              e.pdf_url, e.title
+              e.pdf_url, e.download_pdf_url, e.title
          FROM edition_purchases ep
          JOIN editions e ON e.id = ep.edition_id
         WHERE ep.download_token = $1`,
@@ -301,7 +301,12 @@ router.get('/download/:token', async (req, res, next) => {
     if (found.rowCount === 0) return res.status(404).json({ error: 'This download link is not valid.' });
     const p = found.rows[0];
     if (p.payment_status !== 'approved') return res.status(403).json({ error: 'This purchase is not approved.' });
-    if (!p.pdf_url) return res.status(404).json({ error: 'This edition is currently unavailable.' });
+    // The private, full-quality file if the admin uploaded one separately;
+    // falls back to the free-view file for editions published before
+    // 094_edition_download_pdf.sql (or where an admin never uploaded a
+    // separate download copy) — see that migration for the full reasoning.
+    const fileUrl = p.download_pdf_url || p.pdf_url;
+    if (!fileUrl) return res.status(404).json({ error: 'This edition is currently unavailable.' });
 
     const reserve = await pool.query(
       `UPDATE edition_purchases
@@ -315,7 +320,13 @@ router.get('/download/:token', async (req, res, next) => {
     }
     claimed = p;
 
-    const upstream = await fetch(p.pdf_url);
+    // The service-role key is included unconditionally — required for the
+    // private download_pdf_url, and harmless on the public pdf_url
+    // fallback (a public bucket object ignores auth headers it doesn't need).
+    const { SUPABASE_SERVICE_KEY } = process.env;
+    const upstream = await fetch(fileUrl, SUPABASE_SERVICE_KEY
+      ? { headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, apikey: SUPABASE_SERVICE_KEY } }
+      : undefined);
     if (!upstream.ok || !upstream.body) throw new Error(`Could not fetch the edition file (${upstream.status})`);
 
     const safeName = (p.title || 'unplug-edition').replace(/[^a-z0-9\- ]/gi, '').trim() || 'unplug-edition';
@@ -589,7 +600,7 @@ router.post('/admin/purchases/:id/reject', requireRole('admin'), async (req, res
 router.patch('/:id', requireRole('admin'), async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const existing = await pool.query('SELECT id, pdf_url FROM editions WHERE id = $1', [id]);
+    const existing = await pool.query('SELECT id, pdf_url, download_pdf_url FROM editions WHERE id = $1', [id]);
     if (existing.rows.length === 0) return res.status(404).json({ error: 'Edition not found.' });
 
     const b = req.body;
@@ -616,6 +627,11 @@ router.patch('/:id', requireRole('admin'), async (req, res, next) => {
     if (b.publicationDate !== undefined) put('publication_date', b.publicationDate || null);
     if (b.coverImageUrl !== undefined) put('cover_image_url', b.coverImageUrl || null);
     if (b.pdfUrl !== undefined && b.pdfUrl) put('pdf_url', b.pdfUrl);
+    // The private, full-quality file behind the paid single-use download —
+    // separate from pdf_url (free "View Online"), see 094_edition_download_pdf.sql.
+    // Explicitly clearable (empty string) so an admin can fall back to
+    // pdf_url again without needing a workaround.
+    if (b.downloadPdfUrl !== undefined) put('download_pdf_url', b.downloadPdfUrl || null);
     if (b.downloadPrice !== undefined) put('download_price', Number(b.downloadPrice));
     if (b.status !== undefined) put('status', b.status);
     if (b.displayOrder !== undefined) put('display_order', Number(b.displayOrder) || 0);
@@ -673,14 +689,19 @@ router.delete('/:id', requireRole('admin'), async (req, res, next) => {
   }
 });
 
-// GET /editions/:id — single edition detail, same free-viewing info.
+// GET /editions/:id — single edition detail, same free-viewing info. Public
+// (no auth), so download_pdf_url — the private single-use download file —
+// is stripped before responding, same as it's never selected in the other
+// public routes above.
 router.get('/:id', async (req, res, next) => {
   try {
     const result = await pool.query('SELECT * FROM editions WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Edition not found.' });
     }
-    res.json({ edition: result.rows[0] });
+    const edition = result.rows[0];
+    delete edition.download_pdf_url;
+    res.json({ edition });
   } catch (err) {
     next(err);
   }
@@ -795,8 +816,8 @@ router.post('/', requireRole('admin'), async (req, res, next) => {
     const result = await pool.query(
       `INSERT INTO editions
          (issue_number, title, edition_number, month, year, description,
-          cover_image_url, pdf_url, download_price, publication_date, status, display_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          cover_image_url, pdf_url, download_pdf_url, download_price, publication_date, status, display_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         issueNumber, title.slice(0, 255),
@@ -805,6 +826,7 @@ router.post('/', requireRole('admin'), async (req, res, next) => {
         b.year ? Number(b.year) : null,
         (b.description || '').trim() || null,
         b.coverImageUrl || null, pdfUrl,
+        (b.downloadPdfUrl || '').trim() || null,
         b.downloadPrice != null ? Number(b.downloadPrice) : 50.00,
         b.publicationDate || null,
         b.status || 'published',

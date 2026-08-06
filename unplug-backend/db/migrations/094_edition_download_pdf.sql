@@ -1,0 +1,20 @@
+-- Editions & Paid Downloads — Phase 3 fix for the "public bucket" gap.
+--
+-- Root cause (confirmed by inspecting the live Supabase project's
+-- storage.buckets): the general-purpose "uploads" bucket is public, and
+-- GET /editions deliberately returns pdf_url to everyone unauthenticated
+-- so "View Online" can embed it for free. That is the SAME file the paid
+-- single-use "Download" flow served — so paying for a download unlocked
+-- nothing beyond what was already free, since a public URL is fetchable
+-- by anyone regardless of the app's own single-use token logic.
+--
+-- Fix: a second, separate file per edition. pdf_url (public bucket) stays
+-- exactly as it was — free "View Online", unauthenticated, unchanged.
+-- download_pdf_url is new, optional, and lives in a PRIVATE Supabase
+-- bucket ("edition-downloads", created directly on the project — see
+-- src/routes/uploads.js) that has no public access at all; only the
+-- single-use download route (with the server's own service-role key) can
+-- ever fetch it. Nullable and falls back to pdf_url when absent, so
+-- editions published before this migration keep working exactly as
+-- before until an admin uploads a real, separate download file for them.
+ALTER TABLE editions ADD COLUMN IF NOT EXISTS download_pdf_url TEXT;
