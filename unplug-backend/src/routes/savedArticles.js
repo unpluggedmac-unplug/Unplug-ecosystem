@@ -7,6 +7,14 @@ const router = express.Router();
 // Every route here is personal to the signed-in member — the user id always
 // comes from the verified token, never from the request body, so one member
 // can't read or change another's reading list.
+//
+// Backed by content_saves (target_type='article') since the Members/Profile
+// Social Interaction System's Phase 1 consolidated the old article-only
+// saved_articles table into the universal saves engine (see
+// 085_universal_interactions.sql and routes/interactions.js, which covers
+// saving every other content type). URLs here are unchanged on purpose —
+// the frontend's existing /saved/ids and /saved/:articleId call sites don't
+// need to know the storage moved.
 
 // GET /saved — the member's reading list, newest save first.
 router.get('/', requireAuth, async (req, res, next) => {
@@ -15,10 +23,10 @@ router.get('/', requireAuth, async (req, res, next) => {
       // Category lives on the categories table, not on articles — articles
       // only carries category_id.
       `SELECT a.id, a.title, c.name AS category, a.body, a.banner_image_url, a.created_at, s.saved_at
-         FROM saved_articles s
-         JOIN articles a ON a.id = s.article_id
+         FROM content_saves s
+         JOIN articles a ON a.id = s.target_id
          LEFT JOIN categories c ON c.id = a.category_id
-        WHERE s.user_id = $1
+        WHERE s.user_id = $1 AND s.target_type = 'article'
         ORDER BY s.saved_at DESC`,
       [req.user.id]
     );
@@ -33,10 +41,10 @@ router.get('/', requireAuth, async (req, res, next) => {
 router.get('/ids', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      'SELECT article_id FROM saved_articles WHERE user_id = $1',
+      `SELECT target_id FROM content_saves WHERE user_id = $1 AND target_type = 'article'`,
       [req.user.id]
     );
-    res.json({ ids: result.rows.map((r) => r.article_id) });
+    res.json({ ids: result.rows.map((r) => r.target_id) });
   } catch (err) {
     next(err);
   }
@@ -55,8 +63,8 @@ router.post('/:articleId', requireAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'That article no longer exists.' });
     }
     await pool.query(
-      `INSERT INTO saved_articles (user_id, article_id) VALUES ($1, $2)
-       ON CONFLICT (user_id, article_id) DO NOTHING`,
+      `INSERT INTO content_saves (user_id, target_type, target_id) VALUES ($1, 'article', $2)
+       ON CONFLICT (user_id, target_type, target_id) DO NOTHING`,
       [req.user.id, articleId]
     );
     res.status(201).json({ saved: true });
@@ -74,7 +82,7 @@ router.delete('/:articleId', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'A valid article id is required.' });
     }
     await pool.query(
-      'DELETE FROM saved_articles WHERE user_id = $1 AND article_id = $2',
+      `DELETE FROM content_saves WHERE user_id = $1 AND target_type = 'article' AND target_id = $2`,
       [req.user.id, articleId]
     );
     res.json({ saved: false });

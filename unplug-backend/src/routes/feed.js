@@ -80,9 +80,9 @@ router.get('/for-you', requireAuth, async (req, res, next) => {
          SELECT category_id FROM followed_topics WHERE user_id = $1
        ), saved_cats AS (
          SELECT DISTINCT a.category_id
-           FROM saved_articles s
-           JOIN articles a ON a.id = s.article_id
-          WHERE s.user_id = $1 AND a.category_id IS NOT NULL
+           FROM content_saves s
+           JOIN articles a ON a.id = s.target_id
+          WHERE s.user_id = $1 AND s.target_type = 'article' AND a.category_id IS NOT NULL
        )
        SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion,
               a.published_at, c.name AS category,
@@ -94,7 +94,7 @@ router.get('/for-you', requireAuth, async (req, res, next) => {
          FROM articles a
          LEFT JOIN categories c ON c.id = a.category_id
         WHERE a.status = 'approved'
-          AND a.id NOT IN (SELECT article_id FROM saved_articles WHERE user_id = $1)
+          AND a.id NOT IN (SELECT target_id FROM content_saves WHERE user_id = $1 AND target_type = 'article')
         ORDER BY score DESC, a.published_at DESC NULLS LAST, a.id DESC
         LIMIT $2`,
       [req.user.id, limit]
