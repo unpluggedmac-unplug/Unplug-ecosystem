@@ -548,6 +548,59 @@ router.patch('/admin/streak-tiers/:code', requireRole('admin'), async (req, res,
   }
 });
 
+// -- Trust & anti-cheat (Stage O) --
+
+// GET /participation/admin/trust-flags — members with a below-100 trust
+// score (i.e. flagged at least once), most recently flagged first, plus
+// the moderation_actions log entries for each auto-flag so an admin can
+// see exactly what tripped it.
+router.get('/admin/trust-flags', requireRole('admin'), async (req, res, next) => {
+  try {
+    const flagged = await pool.query(
+      `SELECT ts.user_id, ts.score, ts.flags, ts.last_flag_at,
+              COALESCE(dp.display_name, SPLIT_PART(u.email, '@', 1)) AS display_name
+         FROM trust_scores ts
+         JOIN users u ON u.id = ts.user_id
+         LEFT JOIN profiles dp ON dp.user_id = u.id AND dp.status = 'approved'
+        WHERE ts.score < 100
+        ORDER BY ts.last_flag_at DESC`
+    );
+    const log = await pool.query(
+      `SELECT target_user_id, action_type, reason, points_affected, created_at
+         FROM moderation_actions
+        WHERE action_type LIKE 'auto_flag_%'
+        ORDER BY created_at DESC LIMIT 50`
+    );
+    res.json({ flagged: flagged.rows, log: log.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /participation/admin/trust-flags/:userId/reset — the escape hatch
+// for a false positive: resets to a clean 100, clears the flag count.
+// Logged as its own moderation_actions row (admin_user_id set this time,
+// distinguishing a human reversal from the automatic flag it undoes).
+router.post('/admin/trust-flags/:userId/reset', requireRole('admin'), async (req, res, next) => {
+  try {
+    const userId = asInt(req.params.userId);
+    if (!userId) return res.status(400).json({ error: 'A valid userId is required.' });
+    const result = await pool.query(
+      `UPDATE trust_scores SET score = 100.00, flags = 0, warnings = 0, updated_at = now() WHERE user_id = $1 RETURNING user_id`,
+      [userId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'No trust score record for that user.' });
+    await pool.query(
+      `INSERT INTO moderation_actions (target_user_id, admin_user_id, action_type, reason, points_affected)
+       VALUES ($1, $2, 'trust_score_reset', $3, 0)`,
+      [userId, req.user.id, req.body.reason || 'Reset by admin']
+    );
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // -- Missions (daily + weekly) --
 
 // GET /participation/admin/missions?type=daily|weekly — full list including
