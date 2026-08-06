@@ -110,6 +110,61 @@ router.get('/:targetType/:targetId/mine', requireAuth, async (req, res, next) =>
   }
 });
 
+// GET /interactions/:targetType/batch-stats?ids=1,2,3 — public counts for
+// many items in one call, so a grid of cards (gallery, marketplace, news)
+// doesn't fire one /stats request per card.
+router.get('/:targetType/batch-stats', async (req, res, next) => {
+  try {
+    const targetType = req.params.targetType;
+    if (!TARGET_TYPES.includes(targetType)) {
+      return res.status(400).json({ error: `targetType must be one of: ${TARGET_TYPES.join(', ')}` });
+    }
+    const ids = String(req.query.ids || '').split(',').map((s) => s.trim()).filter(Boolean).map(Number).filter(Number.isInteger);
+    if (!ids.length) return res.json({ stats: {} });
+    const result = await pool.query(
+      `SELECT t.id AS target_id, s.likes, s.dislikes, s.comments, s.saves
+         FROM unnest($1::int[]) AS t(id)
+         CROSS JOIN LATERAL get_content_stats($2, t.id) AS s`,
+      [ids, targetType]
+    );
+    const stats = {};
+    result.rows.forEach((r) => { stats[r.target_id] = { likes: r.likes, dislikes: r.dislikes, comments: r.comments, saves: r.saves }; });
+    res.json({ stats });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /interactions/:targetType/batch-mine?ids=1,2,3 — the signed-in
+// member's own reaction/save state across many items in one call.
+router.get('/:targetType/batch-mine', requireAuth, async (req, res, next) => {
+  try {
+    const targetType = req.params.targetType;
+    if (!TARGET_TYPES.includes(targetType)) {
+      return res.status(400).json({ error: `targetType must be one of: ${TARGET_TYPES.join(', ')}` });
+    }
+    const ids = String(req.query.ids || '').split(',').map((s) => s.trim()).filter(Boolean).map(Number).filter(Number.isInteger);
+    if (!ids.length) return res.json({ mine: {} });
+    const [reactions, saves] = await Promise.all([
+      pool.query(
+        'SELECT target_id, reaction FROM content_reactions WHERE user_id = $1 AND target_type = $2 AND target_id = ANY($3::int[])',
+        [req.user.id, targetType, ids]
+      ),
+      pool.query(
+        'SELECT target_id FROM content_saves WHERE user_id = $1 AND target_type = $2 AND target_id = ANY($3::int[])',
+        [req.user.id, targetType, ids]
+      ),
+    ]);
+    const mine = {};
+    ids.forEach((id) => { mine[id] = { reaction: null, saved: false }; });
+    reactions.rows.forEach((r) => { mine[r.target_id].reaction = r.reaction; });
+    saves.rows.forEach((r) => { mine[r.target_id].saved = true; });
+    res.json({ mine });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /interactions/:targetType/:targetId/react — body { reaction: 'like'|'dislike' }.
 // Upserts, so switching from dislike to like (or vice versa) is one call,
 // never both active at once by construction (single row, UNIQUE(user,

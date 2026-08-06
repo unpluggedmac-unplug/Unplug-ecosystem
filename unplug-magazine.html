@@ -1068,6 +1068,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .int-btn:disabled{ opacity:0.6; cursor:default; }
 .int-static{ display:inline-flex; align-items:center; gap:6px; font-size:13.5px; color:var(--slate); padding:6px 4px; }
 .int-count{ font-variant-numeric:tabular-nums; }
+.int-bar-compact .interaction-bar{ gap:4px; margin:8px 0 0; }
+.int-bar-compact .int-btn{ padding:3px 8px; font-size:11.5px; }
+.int-bar-compact .int-static{ font-size:11.5px; padding:3px 2px; }
 /* Wrapper so a card's share row can sit OUTSIDE its <a>, while the card
    itself still stretches to fill the grid cell. */
 .card-shell{ display:flex; flex-direction:column; gap:10px; }
@@ -3722,7 +3725,7 @@ function newsCardHtml(article) {
   const thumbImg = coverImgTag(article.banner_image_url, article.title);
   // The share row sits OUTSIDE the card anchor — nesting links inside an <a>
   // is invalid and would also trigger the card's navigation handler.
-  return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb">${thumbImg}</div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}</div>`;
+  return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb">${thumbImg}</div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}<div class="int-bar-compact" id="news-int-${article.id}"></div></div>`;
 }
 
 // Share buttons (WhatsApp / Facebook / X / native / copy) used on the article
@@ -4470,6 +4473,33 @@ async function renderInteractionBar(containerId, targetType, targetId) {
   }
 }
 
+// Batch variant for grids (gallery/marketplace/news/homepage cards) — one
+// stats call and one mine call for the whole visible page, instead of one
+// pair per card. Reuses paintInteractionBar for the actual rendering, so a
+// post-click refresh (single item) still goes through renderInteractionBar
+// above unchanged.
+async function renderInteractionBarsBatch(targetType, pairs) {
+  if (!pairs.length) return;
+  const ids = pairs.map((p) => p.id).join(',');
+  try {
+    const [statsData, mineData] = await Promise.all([
+      api(`/interactions/${targetType}/batch-stats?ids=${ids}`),
+      UnplugAPI.getToken()
+        ? api(`/interactions/${targetType}/batch-mine?ids=${ids}`).catch(() => ({ mine: {} }))
+        : Promise.resolve({ mine: {} }),
+    ]);
+    pairs.forEach(({ id, containerId }) => {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const stats = statsData.stats[id] || { likes: 0, dislikes: 0, comments: 0, saves: 0 };
+      const mine = mineData.mine[id] || { reaction: null, saved: false };
+      paintInteractionBar(container, targetType, id, stats, mine);
+    });
+  } catch (err) {
+    // Stats are a nice-to-have on top of the content itself — fail silently.
+  }
+}
+
 function paintInteractionBar(container, targetType, targetId, stats, mine) {
   container.innerHTML = `
     <div class="interaction-bar" role="group" aria-label="Reactions">
@@ -4823,6 +4853,7 @@ async function loadNews(reset) {
       grid.innerHTML = '<div class="dir-empty-state">No stories in this category yet — check back soon.</div>';
     } else {
       grid.insertAdjacentHTML('beforeend', data.articles.map(newsCardHtml).join(''));
+      renderInteractionBarsBatch('article', data.articles.map((a) => ({ id: a.id, containerId: `news-int-${a.id}` })));
     }
     loadMoreBtn.style.display = data.pagination.page < data.pagination.totalPages ? 'inline-flex' : 'none';
   } catch (err) {
@@ -4873,14 +4904,14 @@ function galleryItemHtml(image, index) {
   const href = galleryLinkHref(image);
   const tag = href ? 'a' : 'div';
   const linkAttrs = href ? ` href="${escapeHtml(href)}"${/^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener"' : ''}` : '';
-  return `<${tag} class="gallery-item"${linkAttrs}>
+  return `<div class="gallery-item-shell"><${tag} class="gallery-item"${linkAttrs}>
     ${img}
     <div class="gallery-overlay">
       ${title ? `<span class="gallery-title">${title}</span>` : ''}
       ${caption ? `<span class="gallery-cap">${caption}</span>` : ''}
       ${supplied}
     </div>
-  </${tag}>`;
+  </${tag}><div class="int-bar-compact" id="gallery-int-${image.id}"></div></div>`;
 }
 
 async function loadGallery(reset) {
@@ -4900,6 +4931,7 @@ async function loadGallery(reset) {
       grid.innerHTML = '<div class="dir-empty-state">No photos yet — check back soon, or be the first to submit one.</div>';
     } else {
       grid.insertAdjacentHTML('beforeend', data.images.map((img, i) => galleryItemHtml(img, startIndex + i)).join(''));
+      renderInteractionBarsBatch('gallery_image', data.images.map((img) => ({ id: img.id, containerId: `gallery-int-${img.id}` })));
     }
     loadMoreBtn.style.display = data.pagination.page < data.pagination.totalPages ? 'inline-flex' : 'none';
   } catch (err) {
@@ -5275,9 +5307,11 @@ document.addEventListener('click', (e) => {
 });
 
 // Share links live inside clickable cards, so stop the card's own navigation
-// handler from firing when someone taps a share icon.
+// handler from firing when someone taps a share icon. The compact
+// interaction bar on grid cards (gallery/marketplace/news/home) is the same
+// situation — a Like/Save tap must not also navigate the card away.
 document.addEventListener('click', (e) => {
-  if (e.target.closest('.share-row a')) e.stopPropagation();
+  if (e.target.closest('.share-row a') || e.target.closest('.int-bar-compact')) e.stopPropagation();
 }, true);
 
 // Branded default cover shown whenever a content item has no cover image, so a
@@ -5299,7 +5333,8 @@ function coverImgTag(url, alt) {
   return `<img src="${src}" alt="${escapeHtml(alt || '')}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';">`;
 }
 
-function homeStoryCardHtml(article) {
+function homeStoryCardHtml(article, idPrefix) {
+  const prefix = idPrefix || 'home';
   const title = escapeHtml(article.title);
   const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
@@ -5313,6 +5348,7 @@ function homeStoryCardHtml(article) {
         <span class="story-meta">${readMinutes(article.body)} min read${category ? ' · ' + category : ''}</span>
       ${kicker}
 ${shareRow(absUrl('?p=article&id=' + article.id), article.title)}
+<div class="int-bar-compact" id="${prefix}-int-${article.id}"></div>
 </article>`;
 }
 
@@ -5336,7 +5372,8 @@ async function loadHighlightedArticles() {
       }).catch(() => null))
     );
     const valid = articles.filter(Boolean);
-    el.innerHTML = valid.length ? valid.map(homeStoryCardHtml).join('') : '<div class="dir-empty-state">No highlighted stories right now.</div>';
+    el.innerHTML = valid.length ? valid.map((a) => homeStoryCardHtml(a, 'hl')).join('') : '<div class="dir-empty-state">No highlighted stories right now.</div>';
+    renderInteractionBarsBatch('article', valid.map((a) => ({ id: a.id, containerId: `hl-int-${a.id}` })));
   } catch (err) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
   }
@@ -5350,8 +5387,9 @@ async function loadNewStories() {
     // pending / rejected can't appear here.
     const data = await api('/articles?page=1&limit=6');
     el.innerHTML = data.articles.length
-      ? data.articles.map(homeStoryCardHtml).join('')
+      ? data.articles.map((a) => homeStoryCardHtml(a, 'ns')).join('')
       : '<div class="dir-empty-state">No stories yet — check back soon.</div>';
+    renderInteractionBarsBatch('article', data.articles.map((a) => ({ id: a.id, containerId: `ns-int-${a.id}` })));
   } catch (err) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
   }
@@ -5559,6 +5597,7 @@ function marketplaceCardHtml(listing) {
         <h4>${name}</h4>
         ${headline ? `<p>${headline}</p>` : ''}
         <div class="market-contact">${contactParts.join('')}</div>
+        <div class="int-bar-compact" id="market-int-${listing.id}"></div>
       </div>
     </div>`;
 }
@@ -5571,6 +5610,7 @@ async function loadMarketplace() {
     el.innerHTML = data.listings.length
       ? data.listings.map(marketplaceCardHtml).join('')
       : '<div class="dir-empty-state">No businesses on the marketplace right now.</div>';
+    renderInteractionBarsBatch('marketplace_listing', data.listings.map((l) => ({ id: l.id, containerId: `market-int-${l.id}` })));
   } catch (err) {
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load the marketplace right now.</div>';
   }
@@ -7207,8 +7247,10 @@ function openEventModal(ev) {
      ${ev.entrance_fee ? `<p style="font-size:14px; margin-bottom:8px;"><strong>Entrance:</strong> ${escapeHtml(ev.entrance_fee)}</p>` : ''}
      ${ev.description ? `<p style="font-size:14px; line-height:1.6; color:var(--ink); margin-bottom:12px;">${escapeHtml(ev.description)}</p>` : ''}
      ${ev.contact_details ? `<p style="font-size:13.5px; color:var(--slate); margin-bottom:6px;"><strong>Contact:</strong> ${escapeHtml(ev.contact_details)}</p>` : ''}
-     ${ev.event_link ? `<a href="${escapeHtml(ev.event_link)}" target="_blank" rel="noopener" class="btn btn-solid" style="margin-top:6px;">More info / tickets →</a>` : ''}`;
+     ${ev.event_link ? `<a href="${escapeHtml(ev.event_link)}" target="_blank" rel="noopener" class="btn btn-solid" style="margin-top:6px;">More info / tickets →</a>` : ''}
+     <div id="eventInteractions"></div>`;
   modal.classList.add('open');
+  renderInteractionBar('eventInteractions', 'event', ev.id);
 }
 
 function setupCalendarEvents() {
