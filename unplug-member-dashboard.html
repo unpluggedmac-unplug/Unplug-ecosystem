@@ -313,6 +313,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div><strong id="unplugPassportCount">0 / 0</strong> passport stamps</div>
         </div>
         <div id="unplugStreakNextTier" style="margin-top:8px; font-size:12.5px; color:var(--slate);"></div>
+        <button class="btn btn-line" id="shareStatusBtn" type="button" style="width:auto; margin-top:12px; padding:7px 16px; font-size:12.5px;">Share my status →</button>
       </div>
 
       <div class="card">
@@ -617,6 +618,24 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Social Sharing Cards (Stage N) — a branded canvas card generated
+     client-side for gamification moments (status, achievements). No
+     server-side image rendering exists in this stack, so this draws
+     directly onto a <canvas>, offering a PNG download plus WhatsApp/X/
+     Facebook links (or the native share sheet with the image attached,
+     where the browser supports sharing files). -->
+<div id="shareCardOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--cream); border-radius:10px; padding:20px; max-width:420px; width:100%; text-align:center;">
+    <canvas id="shareCardCanvas" width="1200" height="630" style="width:100%; height:auto; border-radius:8px; border:1px solid var(--paper-line);"></canvas>
+    <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; justify-content:center;">
+      <button class="btn btn-solid" id="shareCardDownloadBtn" type="button" style="width:auto; padding:9px 16px;">Download PNG</button>
+      <button class="btn btn-line" id="shareCardNativeBtn" type="button" style="width:auto; padding:9px 16px; display:none;">Share…</button>
+      <a class="btn btn-line" id="shareCardWaBtn" target="_blank" rel="noopener" style="width:auto; padding:9px 16px;">WhatsApp</a>
+      <button class="btn btn-line" id="shareCardCloseBtn" type="button" style="width:auto; padding:9px 16px;">Close</button>
+    </div>
+  </div>
+</div>
 
 <script src="image-upload.js"></script>
 <script>
@@ -2213,6 +2232,11 @@ async function loadMyUnplug() {
     document.getElementById('unplugStatusSince').textContent = status && status.achieved_at
       ? 'Since ' + msDate(status.achieved_at) : '';
     document.getElementById('unplugScore').textContent = (data.score && data.score.unplug_score) || 0;
+    CURRENT_STATUS_FOR_SHARE = {
+      emoji: status ? status.emoji : '🌱',
+      label: status ? status.label : 'Explorer',
+      score: (data.score && data.score.unplug_score) || 0,
+    };
 
     const next = data.nextStatus;
     document.getElementById('unplugNextStatus').textContent = next
@@ -2286,8 +2310,14 @@ async function loadMyUnplug() {
         <div style="text-align:center; padding:10px 6px; border:1px solid var(--paper-line); border-radius:6px;">
           <div style="font-size:24px;">${a.emoji}</div>
           <div style="font-size:11.5px; font-weight:600; margin-top:4px;">${escapeHtmlM(a.label)}</div>
+          <button class="share-ach-btn" type="button" data-emoji="${escapeAttrM(a.emoji)}" data-label="${escapeAttrM(a.label)}" style="border:none; background:none; color:var(--red); font-size:11px; cursor:pointer; margin-top:4px; padding:0;">Share →</button>
         </div>`).join('')}</div>`
       : '<p class="sub" style="margin:0;">No achievements yet — participate and they\'ll start unlocking.</p>';
+    document.querySelectorAll('.share-ach-btn').forEach((btn) => {
+      btn.addEventListener('click', () => openShareCard({
+        emoji: btn.dataset.emoji, title: btn.dataset.label, subtitle: 'Achievement unlocked on Unplug', footer: 'unplugnews.com',
+      }));
+    });
 
     // Passport
     document.getElementById('unplugPassport').innerHTML = (data.passport || []).map((p) => `
@@ -2529,6 +2559,103 @@ async function loadReadingList(){
     content.innerHTML=''; content.appendChild(grid);
   } catch (err){ content.innerHTML='<div class="empty-state">Could not load: '+err.message+'</div>'; }
 }
+
+// ---------------------------------------------------------------------------
+// Social Sharing Cards (Stage N) — draws a branded 1200x630 card onto a
+// <canvas> for a gamification moment (status, achievement, streak tier).
+// Pure client-side: no backend image-rendering service exists in this
+// stack, and canvas + toBlob() covers download and native-share needs
+// without one.
+// ---------------------------------------------------------------------------
+let CURRENT_STATUS_FOR_SHARE = null;
+
+function openShareCard({ emoji, title, subtitle, footer }) {
+  const canvas = document.getElementById('shareCardCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#721415');
+  grad.addColorStop(1, '#d20709');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font = '140px sans-serif';
+  ctx.fillText(emoji || '🏆', W / 2, 280);
+
+  ctx.font = '700 56px Georgia, serif';
+  wrapCanvasText(ctx, title || '', W / 2, 380, W - 160, 64);
+
+  ctx.font = '32px sans-serif';
+  ctx.globalAlpha = 0.9;
+  ctx.fillText(subtitle || '', W / 2, 470);
+  ctx.globalAlpha = 1;
+
+  ctx.font = '600 26px sans-serif';
+  ctx.fillText((footer || 'unplugnews.com').toUpperCase(), W / 2, H - 50);
+
+  const waText = encodeURIComponent(`${emoji || ''} ${title || ''} — ${subtitle || ''} on Unplug! unplugnews.com`);
+  document.getElementById('shareCardWaBtn').href = `https://wa.me/?text=${waText}`;
+
+  const overlay = document.getElementById('shareCardOverlay');
+  overlay.style.display = 'flex';
+
+  const downloadBtn = document.getElementById('shareCardDownloadBtn');
+  downloadBtn.onclick = () => {
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'unplug-share.png';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  };
+
+  const nativeBtn = document.getElementById('shareCardNativeBtn');
+  if (navigator.share && navigator.canShare) {
+    canvas.toBlob((blob) => {
+      const file = new File([blob], 'unplug-share.png', { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        nativeBtn.style.display = 'inline-block';
+        nativeBtn.onclick = () => navigator.share({ files: [file], title, text: subtitle }).catch(() => {});
+      }
+    });
+  } else {
+    nativeBtn.style.display = 'none';
+  }
+
+  document.getElementById('shareCardCloseBtn').onclick = () => { overlay.style.display = 'none'; };
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '';
+  let lineY = y;
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, lineY);
+      line = word;
+      lineY += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  ctx.fillText(line, x, lineY);
+}
+
+document.getElementById('shareStatusBtn').addEventListener('click', () => {
+  if (!CURRENT_STATUS_FOR_SHARE) return;
+  openShareCard({
+    emoji: CURRENT_STATUS_FOR_SHARE.emoji,
+    title: CURRENT_STATUS_FOR_SHARE.label,
+    subtitle: `${CURRENT_STATUS_FOR_SHARE.score} points on Unplug`,
+    footer: 'unplugnews.com',
+  });
+});
 </script>
 
 <script src="accessibility.js" defer></script>
