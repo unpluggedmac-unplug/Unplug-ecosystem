@@ -258,6 +258,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink active" data-ms="profile"><span>👤</span> Profile</button>
       <button class="ms-navlink" data-ms="unplug"><span>🔌</span> My Unplug</button>
       <button class="ms-navlink" data-ms="leaderboard"><span>🏆</span> Leaderboard</button>
+      <button class="ms-navlink" data-ms="myanalytics"><span>📊</span> My Analytics</button>
       <button class="ms-navlink" data-ms="services"><span>🧩</span> Services</button>
       <button class="ms-navlink" data-ms="content"><span>📄</span> Content</button>
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
@@ -372,6 +373,26 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
         </div>
         <div id="leaderboardBody"><div class="loading-state">Loading…</div></div>
+      </div>
+    </section>
+
+    <section class="ms-section section-hidden" data-ms-section="myanalytics">
+      <div class="card">
+        <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h2 style="margin:0;">My Analytics</h2>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-line myan-range-btn" data-range="7" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">7 days</button>
+            <button class="btn btn-line myan-range-btn active" data-range="30" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">30 days</button>
+            <button class="btn btn-line myan-range-btn" data-range="90" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">90 days</button>
+          </div>
+        </div>
+        <div id="myAnalyticsSummary" style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;"></div>
+        <h3 style="font-size:14px; margin-bottom:8px;">Points earned per day</h3>
+        <div id="myAnalyticsPointsChart" style="margin-bottom:20px;"></div>
+        <h3 style="font-size:14px; margin-bottom:8px;">Follower growth</h3>
+        <div id="myAnalyticsFollowerChart" style="margin-bottom:20px;"></div>
+        <h3 style="font-size:14px; margin-bottom:8px;">Recognition received, by type</h3>
+        <div id="myAnalyticsRecognition"></div>
       </div>
     </section>
 
@@ -1024,6 +1045,7 @@ function enterMemberDashboard(user){
   loadMyUnplug();
   loadCredits();
   loadLeaderboard();
+  loadMyAnalytics();
   if (CURRENT_USER && CURRENT_USER.role === 'consultant') {
     document.getElementById('msMyReferralsNav').classList.remove('section-hidden');
     loadMyReferrals();
@@ -2726,6 +2748,67 @@ async function loadLeaderboard() {
       : '<p class="sub" style="margin:0;">No leaderboard data yet — be the first to earn points!</p>';
   } catch (err) {
     el.innerHTML = `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(err.message || 'please try again shortly.')}</p>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// My Analytics (Members/Community System Phase 6) — the private dashboard,
+// GET /profile-analytics/me/private. Always the signed-in member's own
+// data; there is no userId parameter to pass, by design.
+// ---------------------------------------------------------------------------
+let MYAN_RANGE = 30;
+
+document.querySelectorAll('.myan-range-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.myan-range-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    MYAN_RANGE = Number(btn.dataset.range);
+    loadMyAnalytics();
+  });
+});
+
+function myAnalyticsDayBars(rows, valueKey, color) {
+  if (!rows.length) return '<p class="sub" style="margin:0;">No activity in this range yet.</p>';
+  const max = Math.max(...rows.map((r) => r[valueKey]), 1);
+  return `<div style="display:flex; align-items:flex-end; gap:3px; height:100px; overflow-x:auto;">
+    ${rows.map((r) => {
+      const pct = Math.max(4, Math.round((r[valueKey] / max) * 100));
+      const label = new Date(r.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      return `<div style="flex:0 0 18px; display:flex; flex-direction:column; align-items:center; gap:3px;" title="${r[valueKey]} on ${label}">
+        <div style="width:100%; height:${pct}%; background:${color}; border-radius:2px 2px 0 0; min-height:2px;"></div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function loadMyAnalytics() {
+  const summaryEl = document.getElementById('myAnalyticsSummary');
+  const pointsEl = document.getElementById('myAnalyticsPointsChart');
+  const followerEl = document.getElementById('myAnalyticsFollowerChart');
+  const recognitionEl = document.getElementById('myAnalyticsRecognition');
+  summaryEl.innerHTML = '<div class="loading-state">Loading…</div>';
+  pointsEl.innerHTML = '';
+  followerEl.innerHTML = '';
+  recognitionEl.innerHTML = '';
+  try {
+    const data = await api(`/profile-analytics/me/private?range=${MYAN_RANGE}`);
+    const stat = (label, value) => `<div><div style="font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:var(--red);">${value}</div><div style="font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em;">${label}</div></div>`;
+    summaryEl.innerHTML =
+      stat('Unplug Score', data.unplug_score) +
+      stat('Rank', data.current_ranking ? '#' + data.current_ranking : '—') +
+      stat('Followers', data.followers) +
+      stat('Following', data.following) +
+      stat('Streak', data.current_streak_days + 'd');
+
+    pointsEl.innerHTML = myAnalyticsDayBars(data.dailyPoints, 'points', 'var(--red)');
+    followerEl.innerHTML = myAnalyticsDayBars(data.followerGrowth, 'new_followers', 'var(--ink)');
+
+    const rec = data.recognitionBreakdown || [];
+    recognitionEl.innerHTML = rec.length
+      ? rec.map((r) => `<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--paper-line); font-size:13px;"><span>${escapeHtmlM(r.recognition_type)}</span><strong>${r.n}</strong></div>`).join('')
+      : '<p class="sub" style="margin:0;">No recognition received yet.</p>';
+  } catch (err) {
+    summaryEl.innerHTML = `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(err.message || 'please try again shortly.')}</p>`;
   }
 }
 

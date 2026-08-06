@@ -3454,6 +3454,7 @@ function profileDetailHtml(profile, socials, gallery) {
         ${showExtras && profile.quote ? `<p class="profile-quote">"${escapeHtml(profile.quote)}"</p>` : ''}
         <div id="profileFollowBar" style="margin-top:12px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;" data-user-id="${profile.user_id}"></div>
         <div id="profileInteractions" data-profile-id="${profile.id}"></div>
+        <div id="profileCommunityStats" style="margin-top:14px;"></div>
       </div>
     </div>
     <section style="margin-top:32px;">
@@ -3648,6 +3649,7 @@ async function loadProfileDetail(slug) {
     loadProfileReviews(data.profile);
     loadProfileFollowBar(data.profile.user_id);
     renderInteractionBar('profileInteractions', 'profile', data.profile.id);
+    loadProfileCommunityStats(data.profile.user_id);
     // Business status badge — fetched separately since it's not part of the
     // profile row itself (business_status_history, Stage I). Fails silently:
     // a listing with no status yet (not promoted, or not a business) simply
@@ -4587,6 +4589,31 @@ async function loadProfileFollowBar(profileUserId) {
         }
       });
     }
+  } catch (err) {
+    el.innerHTML = '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public profile community analytics (Members/Community System Phase 6) —
+// the subset of GET /profile-analytics/:userId/public worth surfacing at
+// a glance on the profile page itself. The fuller breakdown (every field
+// the endpoint returns) belongs on the member's own private dashboard,
+// not duplicated here.
+// ---------------------------------------------------------------------------
+async function loadProfileCommunityStats(profileUserId) {
+  const el = document.getElementById('profileCommunityStats');
+  if (!el || !profileUserId) return;
+  try {
+    const s = await api(`/profile-analytics/${profileUserId}/public`);
+    const stat = (label, value) => `<div style="text-align:center; min-width:70px;"><div style="font-family:'Playfair Display',serif; font-size:19px; font-weight:700;">${value}</div><div style="font-size:10.5px; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em;">${label}</div></div>`;
+    el.innerHTML = `<div style="display:flex; gap:20px; flex-wrap:wrap; padding-top:10px; border-top:1px solid var(--paper-line);">
+      ${stat('Rank', s.current_ranking ? '#' + s.current_ranking : '—')}
+      ${stat('Achievements', s.achievements_earned)}
+      ${stat('Recognition', s.recognition_received)}
+      ${stat('Streak', s.current_streak_days + 'd')}
+      ${stat('Reviews', s.profile_reviews)}
+    </div>`;
   } catch (err) {
     el.innerHTML = '';
   }
