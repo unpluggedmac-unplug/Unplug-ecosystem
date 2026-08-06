@@ -55,6 +55,17 @@ body{ min-height:100vh; }
     <button class="btn btn-solid" id="loginBtn">Sign In</button>
   </div>
 
+  <!-- Shown when this page is reached with no recognised checkout mode at
+       all — e.g. a bare/bookmarked link, or a special-mode link whose id/
+       type params got dropped. Listing a Directory profile is its own
+       distinct service and must never be the silent default for "some
+       payment happened to land here" — see enterCheckout() below. -->
+  <div class="card section-hidden" id="noServiceCard">
+    <h2>Nothing to check out</h2>
+    <p class="sub">This checkout link doesn't specify what you're paying for. Head back to the site and choose a service — Directory listing, Top 10 bulk votes, or an edition download — and you'll be brought straight back here with everything filled in.</p>
+    <a class="btn btn-solid" href="unplug-magazine.html" style="display:inline-block; text-decoration:none; text-align:center;">Back to Unplug</a>
+  </div>
+
   <!-- STEP 1: choose a Directory package -->
   <div class="card section-hidden" id="packageCard">
     <div class="step-label">Step 2</div>
@@ -239,6 +250,14 @@ const EDITION_MODE = CHECKOUT_PARAMS.get('type') === 'edition_download' && CHECK
 // arrives with one already; someone who was just given a code and came here
 // directly did not, and enters it on this page instead.
 const VOTE_BUNDLE_MODE = CHECKOUT_PARAMS.get('type') === 'vote_bundle';
+// Directory package purchase — its own distinct service, reached either
+// via an explicit type=directory_package or (for backward compatibility
+// with existing links) the ptype/tier preselection params below. This is
+// checked explicitly, same as the two modes above, rather than being
+// whatever "nothing else matched" falls through to — a bare visit to this
+// page must never silently start selling a Directory listing.
+const DIRECTORY_MODE = CHECKOUT_PARAMS.get('type') === 'directory_package'
+  || CHECKOUT_PARAMS.has('ptype') || CHECKOUT_PARAMS.has('tier');
 
 // Package preselection from the public site's Directory page,
 // e.g. unplug-checkout.html?ptype=business&tier=pro
@@ -386,7 +405,11 @@ function enterCheckout(user){
   document.getElementById('loginCard').classList.add('section-hidden');
   if (EDITION_MODE) { enterEditionCheckout(); return; }
   if (VOTE_BUNDLE_MODE) { enterVoteBundleCheckout(); return; }
-  document.getElementById('packageCard').classList.remove('section-hidden');
+  if (DIRECTORY_MODE) { document.getElementById('packageCard').classList.remove('section-hidden'); return; }
+  // No recognised mode at all — do NOT default to selling a Directory
+  // package. That step only belongs to people who actually came here to
+  // list a profile.
+  document.getElementById('noServiceCard').classList.remove('section-hidden');
 }
 
 // Edition-download checkout: no package/profile step — fetch the edition
