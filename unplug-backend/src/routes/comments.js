@@ -9,6 +9,17 @@ const router = express.Router();
 
 const MAX_COMMENT_LENGTH = 2000;
 const VALID_REACTIONS = ['like', 'love', 'clap', 'insightful'];
+// Members, Profile Social Interaction & Community System Phase 2 —
+// comments generalised from articles-only to every content type the
+// universal interaction engine (Phase 1) already covers.
+const TARGET_TYPES = ['article', 'profile', 'gallery_image', 'event', 'marketplace_listing'];
+const TARGET_TABLE = {
+  article: 'articles',
+  profile: 'profiles',
+  gallery_image: 'gallery_images',
+  event: 'events',
+  marketplace_listing: 'marketplace_listings',
+};
 
 // Email addresses are never exposed publicly — readers see the part before
 // the @ as a display name. Members who set a display name on a profile get
@@ -21,13 +32,20 @@ const PUBLIC_AUTHOR_SQL = `
     split_part(u.email, '@', 1)
   ) AS author`;
 
-// GET /comments/article/:articleId — public. Approved comments only, with
-// reaction tallies, oldest first so a thread reads top to bottom.
-router.get('/article/:articleId', async (req, res, next) => {
+// GET /comments/:targetType/:targetId — public. Approved comments only,
+// with reaction tallies, oldest first so a thread reads top to bottom.
+// The URL shape (e.g. /comments/article/12) is unchanged from before
+// this generalisation — 'article' was always the first path segment, it
+// just used to be hardcoded rather than validated against a list.
+router.get('/:targetType/:targetId', async (req, res, next) => {
   try {
-    const articleId = Number(req.params.articleId);
-    if (!Number.isInteger(articleId)) {
-      return res.status(400).json({ error: 'A valid article id is required.' });
+    const { targetType } = req.params;
+    const targetId = Number(req.params.targetId);
+    if (!TARGET_TYPES.includes(targetType)) {
+      return res.status(400).json({ error: `targetType must be one of: ${TARGET_TYPES.join(', ')}` });
+    }
+    if (!Number.isInteger(targetId)) {
+      return res.status(400).json({ error: 'A valid id is required.' });
     }
     const result = await pool.query(
       `SELECT c.id, c.body, c.created_at, ${PUBLIC_AUTHOR_SQL},
@@ -35,13 +53,13 @@ router.get('/article/:articleId', async (req, res, next) => {
               COUNT(r.user_id) FILTER (WHERE r.reaction = 'love')       AS love_count,
               COUNT(r.user_id) FILTER (WHERE r.reaction = 'clap')       AS clap_count,
               COUNT(r.user_id) FILTER (WHERE r.reaction = 'insightful') AS insightful_count
-         FROM article_comments c
+         FROM content_comments c
          JOIN users u ON u.id = c.user_id
-         LEFT JOIN article_comment_reactions r ON r.comment_id = c.id
-        WHERE c.article_id = $1 AND c.status = 'approved'
+         LEFT JOIN content_comment_reactions r ON r.comment_id = c.id
+        WHERE c.target_type = $1 AND c.target_id = $2 AND c.status = 'approved'
         GROUP BY c.id, c.user_id, u.email
         ORDER BY c.created_at ASC`,
-      [articleId]
+      [targetType, targetId]
     );
     res.json({ comments: result.rows });
   } catch (err) {
@@ -49,13 +67,18 @@ router.get('/article/:articleId', async (req, res, next) => {
   }
 });
 
-// POST /comments/article/:articleId — members only. Lands in the moderation
-// queue; we tell the commenter that plainly rather than implying it's live.
-router.post('/article/:articleId', requireAuth, publicSubmitLimiter, honeypot, async (req, res, next) => {
+// POST /comments/:targetType/:targetId — members only. Lands in the
+// moderation queue; we tell the commenter that plainly rather than
+// implying it's live.
+router.post('/:targetType/:targetId', requireAuth, publicSubmitLimiter, honeypot, async (req, res, next) => {
   try {
-    const articleId = Number(req.params.articleId);
-    if (!Number.isInteger(articleId)) {
-      return res.status(400).json({ error: 'A valid article id is required.' });
+    const { targetType } = req.params;
+    const targetId = Number(req.params.targetId);
+    if (!TARGET_TYPES.includes(targetType)) {
+      return res.status(400).json({ error: `targetType must be one of: ${TARGET_TYPES.join(', ')}` });
+    }
+    if (!Number.isInteger(targetId)) {
+      return res.status(400).json({ error: 'A valid id is required.' });
     }
     const body = (req.body.body || '').trim();
     if (!body) {
@@ -64,14 +87,14 @@ router.post('/article/:articleId', requireAuth, publicSubmitLimiter, honeypot, a
     if (body.length > MAX_COMMENT_LENGTH) {
       return res.status(400).json({ error: `Comments are limited to ${MAX_COMMENT_LENGTH} characters.` });
     }
-    const article = await pool.query('SELECT 1 FROM articles WHERE id = $1', [articleId]);
-    if (article.rowCount === 0) {
-      return res.status(404).json({ error: 'That article no longer exists.' });
+    const target = await pool.query(`SELECT 1 FROM ${TARGET_TABLE[targetType]} WHERE id = $1`, [targetId]);
+    if (target.rowCount === 0) {
+      return res.status(404).json({ error: 'That item no longer exists.' });
     }
     const result = await pool.query(
-      `INSERT INTO article_comments (article_id, user_id, body)
-       VALUES ($1, $2, $3) RETURNING id, created_at`,
-      [articleId, req.user.id, body]
+      `INSERT INTO content_comments (target_type, target_id, user_id, body)
+       VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
+      [targetType, targetId, req.user.id, body]
     );
     res.status(201).json({
       comment: result.rows[0],
@@ -96,25 +119,25 @@ router.post('/:id/react', requireAuth, async (req, res, next) => {
     }
     // Only approved comments are reactable — nothing in the queue is public.
     const comment = await pool.query(
-      "SELECT 1 FROM article_comments WHERE id = $1 AND status = 'approved'",
+      "SELECT 1 FROM content_comments WHERE id = $1 AND status = 'approved'",
       [commentId]
     );
     if (comment.rowCount === 0) {
       return res.status(404).json({ error: 'That comment is not available.' });
     }
     const existing = await pool.query(
-      'SELECT reaction FROM article_comment_reactions WHERE comment_id = $1 AND user_id = $2',
+      'SELECT reaction FROM content_comment_reactions WHERE comment_id = $1 AND user_id = $2',
       [commentId, req.user.id]
     );
     if (existing.rowCount > 0 && existing.rows[0].reaction === reaction) {
       await pool.query(
-        'DELETE FROM article_comment_reactions WHERE comment_id = $1 AND user_id = $2',
+        'DELETE FROM content_comment_reactions WHERE comment_id = $1 AND user_id = $2',
         [commentId, req.user.id]
       );
       return res.json({ reaction: null });
     }
     await pool.query(
-      `INSERT INTO article_comment_reactions (comment_id, user_id, reaction)
+      `INSERT INTO content_comment_reactions (comment_id, user_id, reaction)
        VALUES ($1, $2, $3)
        ON CONFLICT (comment_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction`,
       [commentId, req.user.id, reaction]
@@ -125,16 +148,16 @@ router.post('/:id/react', requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /comments/pending — admin moderation queue, oldest first so nothing
-// waits indefinitely behind newer comments.
+// GET /comments/pending — admin moderation queue across every content
+// type, oldest first so nothing waits indefinitely behind newer comments.
 router.get('/pending', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT c.id, c.body, c.created_at, c.article_id, a.title AS article_title,
+      `SELECT c.id, c.body, c.created_at, c.target_type, c.target_id,
+              get_target_title(c.target_type, c.target_id) AS target_title,
               u.email AS author_email, ${PUBLIC_AUTHOR_SQL}
-         FROM article_comments c
+         FROM content_comments c
          JOIN users u ON u.id = c.user_id
-         JOIN articles a ON a.id = c.article_id
         WHERE c.status = 'pending'
         ORDER BY c.created_at ASC`
     );
@@ -156,7 +179,7 @@ router.patch('/:id/status', requireRole('admin'), async (req, res, next) => {
       return res.status(400).json({ error: "Status must be 'approved' or 'rejected'." });
     }
     const result = await pool.query(
-      `UPDATE article_comments SET status = $1, reviewed_at = now()
+      `UPDATE content_comments SET status = $1, reviewed_at = now()
         WHERE id = $2 RETURNING id, status`,
       [status, commentId]
     );
@@ -178,14 +201,14 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     if (!Number.isInteger(commentId)) {
       return res.status(400).json({ error: 'A valid comment id is required.' });
     }
-    const owner = await pool.query('SELECT user_id FROM article_comments WHERE id = $1', [commentId]);
+    const owner = await pool.query('SELECT user_id FROM content_comments WHERE id = $1', [commentId]);
     if (owner.rowCount === 0) {
       return res.status(404).json({ error: 'That comment no longer exists.' });
     }
     if (owner.rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'You can only remove your own comments.' });
     }
-    await pool.query('DELETE FROM article_comments WHERE id = $1', [commentId]);
+    await pool.query('DELETE FROM content_comments WHERE id = $1', [commentId]);
     res.json({ deleted: true });
   } catch (err) {
     next(err);

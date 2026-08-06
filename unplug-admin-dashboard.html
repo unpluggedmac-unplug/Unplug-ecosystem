@@ -3613,9 +3613,10 @@ async function loadPendingComments() {
     table.innerHTML = '<tr><th>Comment</th><th>By</th><th>On</th><th>When</th><th></th></tr>';
     list.forEach((c) => {
       const tr = document.createElement('tr');
+      const targetLabel = `${escapeHtmlAdmin(c.target_title || ('#' + c.target_id))} <span style="font-size:10.5px; color:var(--slate);">(${escapeHtmlAdmin(c.target_type)})</span>`;
       tr.innerHTML = `<td style="max-width:340px;">${escapeHtmlAdmin(c.body)}</td>`
         + `<td>${escapeHtmlAdmin(c.author || '')}<br><span style="font-size:10.5px; color:var(--slate);">${escapeHtmlAdmin(c.author_email || '')}</span></td>`
-        + `<td><a href="unplug-magazine.html?p=article&id=${c.article_id}" target="_blank" rel="noopener">${escapeHtmlAdmin(c.article_title || '')}</a></td>`
+        + `<td>${c.target_type === 'article' ? `<a href="unplug-magazine.html?p=article&id=${c.target_id}" target="_blank" rel="noopener">${targetLabel}</a>` : targetLabel}</td>`
         + `<td>${new Date(c.created_at).toLocaleDateString()}</td>`
         + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
       tr.querySelector('.approve').addEventListener('click', async () => {

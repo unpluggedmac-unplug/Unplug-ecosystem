@@ -1098,7 +1098,7 @@ router.get('/overview', requireRole('admin'), async (req, res, next) => {
       pool.query(`SELECT COUNT(*)::int AS n FROM gallery_images WHERE status = 'pending'`),
       pool.query(`SELECT COUNT(*)::int AS n FROM profile_claims WHERE status = 'pending'`),
       pool.query(`SELECT COUNT(*)::int AS n FROM profile_reviews WHERE status = 'pending'`),
-      pool.query(`SELECT COUNT(*)::int AS n FROM article_comments WHERE status = 'pending'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM content_comments WHERE status = 'pending'`),
       pool.query(`SELECT COUNT(*)::int AS n FROM page_views WHERE viewed_at >= now() - interval '7 days'`),
       pool.query(`SELECT COUNT(*)::int AS n FROM admin_notifications WHERE read = false`),
     ]);

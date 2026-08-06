@@ -2,7 +2,7 @@
 // real PostgreSQL.
 //
 // This endpoint aggregates counts from a dozen different tables
-// (profile_claims, profile_reviews, article_comments, gallery_images, ...),
+// (profile_claims, profile_reviews, content_comments, gallery_images, ...),
 // several of which have names that don't match their public-facing concept
 // ("reviews" -> profile_reviews, gallery photos have no title column, only
 // caption). A syntax check cannot catch a wrong table or column name — only
@@ -90,8 +90,8 @@ before(async () => {
                     VALUES (1, 2, 'pending')`);
   await pool.query(`INSERT INTO profile_reviews (profile_id, user_id, rating, status)
                     VALUES (1, 2, 5, 'pending')`);
-  await pool.query(`INSERT INTO article_comments (article_id, user_id, body, status)
-                    VALUES (1, 2, 'nice piece', 'pending')`);
+  await pool.query(`INSERT INTO content_comments (target_type, target_id, user_id, body, status)
+                    VALUES ('article', 1, 2, 'nice piece', 'pending')`);
   await pool.query(`INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, status)
                     VALUES (2, 95.00, 'eft', 'OVERVIEWREF1', 'article_publish', 1, 'pending')`);
 }, { timeout: 120000 });
@@ -117,7 +117,7 @@ test('totals count only approved/published content, per type', async () => {
   assert.equal(body.totals.gallery, 1, 'a pending photo was counted as approved');
 });
 
-test('pending counts read the real tables — profile_claims, profile_reviews, article_comments', async () => {
+test('pending counts read the real tables — profile_claims, profile_reviews, content_comments', async () => {
   // This is the assertion that would have caught the wrong table names
   // ('listing_claims', 'reviews', 'comments') before they ever reached a
   // deploy: those queries would either 500 outright or (worse) silently
