@@ -297,6 +297,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="unplugsponsors">Sponsor Campaigns</a>
         <a data-section="unplugmissions">Missions</a>
         <a data-section="unplugbizstatus">Business Status</a>
+        <a data-section="unplugpointvalues">Point Values</a>
+        <a data-section="unplugmemberstatus">Member Status</a>
       </div>
     </div>
 
@@ -1227,6 +1229,28 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- POINT VALUES (participation_actions rule engine) -->
+    <div class="admin-section" id="section-unplugpointvalues">
+      <div class="main-head"><div><h1>Point Values</h1><p>Every action that earns points on the site, editable here — no deploy needed. Disabling an action stops it earning points immediately without deleting its history. Limits are per member; leave blank for no limit.</p></div></div>
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-body" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <strong style="margin-right:6px;">Category:</strong>
+          <select id="pointValuesCategory" style="padding:8px;"><option value="">All</option></select>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-body" id="pointValuesBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- MEMBER STATUS LADDER -->
+    <div class="admin-section" id="section-unplugmemberstatus">
+      <div class="main-head"><div><h1>Member Status</h1><p>The member status ladder (Explorer through Hall of Fame). Members are auto-promoted based on their Unplug Score, days since joining, and qualified active months. Hall of Fame is admin-granted only — award it from the Member Scores section.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="memberStatusBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
       <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
@@ -1800,6 +1824,8 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
     if (section === 'unplugmissions') loadUnplugMissions();
     if (section === 'unplugbizstatus') loadUnplugBizStatus();
+    if (section === 'unplugpointvalues') loadUnplugPointValues();
+    if (section === 'unplugmemberstatus') loadUnplugMemberStatus();
   });
 });
 
@@ -5870,6 +5896,127 @@ document.getElementById('bizGrantBtn').addEventListener('click', async () => {
     msgEl.textContent = err.message;
   }
 });
+
+// ---------------------------------------------------------------------------
+// Point Values (Stage J) — the participation_actions rule engine. No
+// create/delete: every code is referenced by name from application code,
+// so this panel tunes numbers on existing actions, it doesn't add new ones.
+// ---------------------------------------------------------------------------
+let UNPLUG_ACTIONS = [];
+let UNPLUG_ACTIONS_CATEGORY_WIRED = false;
+
+async function loadUnplugPointValues() {
+  const body = document.getElementById('pointValuesBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const categorySelect = document.getElementById('pointValuesCategory');
+    const category = categorySelect.value;
+    const data = await api('/participation/admin/actions' + (category ? `?category=${encodeURIComponent(category)}` : ''));
+    UNPLUG_ACTIONS = data.actions || [];
+
+    if (!UNPLUG_ACTIONS_CATEGORY_WIRED) {
+      const cats = [...new Set(UNPLUG_ACTIONS.map((a) => a.category_code))];
+      categorySelect.innerHTML = '<option value="">All</option>' + cats.map((c) => `<option value="${c}">${c}</option>`).join('');
+      categorySelect.addEventListener('change', loadUnplugPointValues);
+      UNPLUG_ACTIONS_CATEGORY_WIRED = true;
+    }
+
+    if (!UNPLUG_ACTIONS.length) {
+      body.innerHTML = '<div class="empty-state">No actions found.</div>';
+      return;
+    }
+    body.innerHTML = UNPLUG_ACTIONS.map((a) => `
+      <div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);">
+        <div style="font-weight:700; margin-bottom:8px;">${escapeHtmlAdmin(a.label)}
+          ${a.is_enabled ? '' : '<span style="font-weight:400; font-size:11px; color:#999; border:1px solid #ccc; padding:1px 6px; margin-left:6px;">Disabled</span>'}
+          <span style="font-weight:400; font-size:12px; color:#666; margin-left:6px;">${escapeHtmlAdmin(a.code)} · ${escapeHtmlAdmin(a.category_code)}</span>
+        </div>
+        <div class="form-row">
+          <div><label>Base points</label><input type="number" id="actBase_${a.code}" value="${a.base_points}"></div>
+          <div><label>Quality multiplier max</label><input type="number" step="0.1" id="actQual_${a.code}" value="${a.quality_multiplier_max}"></div>
+          <div><label>Daily limit</label><input type="number" id="actDaily_${a.code}" value="${a.daily_limit != null ? a.daily_limit : ''}" placeholder="none"></div>
+          <div><label>Weekly limit</label><input type="number" id="actWeekly_${a.code}" value="${a.weekly_limit != null ? a.weekly_limit : ''}" placeholder="none"></div>
+          <div><label>Monthly limit</label><input type="number" id="actMonthly_${a.code}" value="${a.monthly_limit != null ? a.monthly_limit : ''}" placeholder="none"></div>
+        </div>
+        <label style="font-size:12.5px; display:inline-flex; align-items:center; gap:6px; margin-top:4px;"><input type="checkbox" id="actEnabled_${a.code}" ${a.is_enabled ? 'checked' : ''}> Enabled</label>
+        <button class="btn btn-line" style="width:auto; padding:6px 14px; margin-top:6px; margin-left:10px;" onclick="saveUnplugAction('${a.code}')">Save</button>
+        <span id="actMsg_${a.code}" style="font-size:12px; margin-left:8px;"></span>
+      </div>`).join('');
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+async function saveUnplugAction(code) {
+  const msgEl = document.getElementById(`actMsg_${code}`);
+  const numOrNull = (id) => {
+    const v = document.getElementById(id).value;
+    return v === '' ? null : parseInt(v, 10);
+  };
+  try {
+    await api(`/participation/admin/actions/${code}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        basePoints: parseInt(document.getElementById(`actBase_${code}`).value, 10) || 0,
+        qualityMultiplierMax: parseFloat(document.getElementById(`actQual_${code}`).value) || 1,
+        dailyLimit: numOrNull(`actDaily_${code}`),
+        weeklyLimit: numOrNull(`actWeekly_${code}`),
+        monthlyLimit: numOrNull(`actMonthly_${code}`),
+        isEnabled: document.getElementById(`actEnabled_${code}`).checked,
+      }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = 'Saved.';
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Member Status ladder (Stage J) — thresholds only, same no-create/delete
+// reasoning as Business Status (Stage I): rank order is structural.
+// ---------------------------------------------------------------------------
+async function loadUnplugMemberStatus() {
+  const body = document.getElementById('memberStatusBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/participation/admin/status-levels');
+    const levels = data.statusLevels || [];
+    body.innerHTML = levels.map((lvl) => `
+      <div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);">
+        <div style="font-weight:700; margin-bottom:8px;">${lvl.emoji} ${escapeHtmlAdmin(lvl.label)} ${lvl.requires_admin_approval ? '<span style="font-weight:400; font-size:11px; color:#999; border:1px solid #ccc; padding:1px 6px; margin-left:6px;">Admin-granted only</span>' : ''}</div>
+        <div class="form-row">
+          <div><label>Min score</label><input type="number" id="msMinScore_${lvl.code}" value="${lvl.min_score}"></div>
+          <div><label>Min days since join</label><input type="number" id="msMinDays_${lvl.code}" value="${lvl.min_days_since_join}"></div>
+          <div><label>Min active months</label><input type="number" id="msMinMonths_${lvl.code}" value="${lvl.min_active_months}"></div>
+        </div>
+        <button class="btn btn-line" style="width:auto; padding:6px 14px; margin-top:6px;" onclick="saveUnplugMemberStatusLevel('${lvl.code}')">Save</button>
+        <span id="msMsg_${lvl.code}" style="font-size:12px; margin-left:8px;"></span>
+      </div>`).join('');
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+async function saveUnplugMemberStatusLevel(code) {
+  const msgEl = document.getElementById(`msMsg_${code}`);
+  try {
+    await api(`/participation/admin/status-levels/${code}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        minScore: parseInt(document.getElementById(`msMinScore_${code}`).value, 10) || 0,
+        minDaysSinceJoin: parseInt(document.getElementById(`msMinDays_${code}`).value, 10) || 0,
+        minActiveMonths: parseInt(document.getElementById(`msMinMonths_${code}`).value, 10) || 0,
+      }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = 'Saved.';
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+}
 
 async function viewUnplugCampaignReport(id) {
   const panel = document.getElementById('unplugCampaignReportPanel');

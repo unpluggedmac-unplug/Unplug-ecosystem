@@ -369,6 +369,106 @@ router.post('/notifications/read', requireAuth, async (req, res, next) => {
 // ADMIN
 // ---------------------------------------------------------------------------
 
+// -- Point values (Stage J) — the rule engine every award_points() call
+// reads from. Editing these changes point values site-wide with no
+// deploy. No create/delete: every code here is referenced by name from
+// application code (award_points() is always called with a specific
+// action_code), so adding a new one still requires a code change to
+// actually award it — this panel only tunes the numbers on existing ones.
+
+// GET /participation/admin/actions?category=<code> — full list including
+// disabled ones, optionally filtered by category for a smaller admin view.
+router.get('/admin/actions', requireRole('admin'), async (req, res, next) => {
+  try {
+    const category = req.query.category;
+    const result = await pool.query(
+      category
+        ? 'SELECT * FROM participation_actions WHERE category_code = $1 ORDER BY code ASC'
+        : 'SELECT * FROM participation_actions ORDER BY category_code ASC, code ASC',
+      category ? [category] : []
+    );
+    res.json({ actions: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /participation/admin/actions/:code — partial update.
+router.patch('/admin/actions/:code', requireRole('admin'), async (req, res, next) => {
+  try {
+    const fields = [];
+    const values = [];
+    const set = (column, value) => { values.push(value); fields.push(`${column} = $${values.length}`); };
+
+    const b = req.body;
+    if (b.basePoints !== undefined) set('base_points', b.basePoints);
+    if (b.qualityMultiplierMax !== undefined) set('quality_multiplier_max', b.qualityMultiplierMax);
+    if (b.dailyLimit !== undefined) set('daily_limit', b.dailyLimit);
+    if (b.weeklyLimit !== undefined) set('weekly_limit', b.weeklyLimit);
+    if (b.monthlyLimit !== undefined) set('monthly_limit', b.monthlyLimit);
+    if (b.cooldownMinutes !== undefined) set('cooldown_minutes', b.cooldownMinutes);
+    if (b.isEnabled !== undefined) set('is_enabled', !!b.isEnabled);
+    if (b.notes !== undefined) set('notes', b.notes);
+
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
+
+    values.push(req.params.code);
+    const result = await pool.query(
+      `UPDATE participation_actions SET ${fields.join(', ')} WHERE code = $${values.length} RETURNING code`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Action not found.' });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -- Member status ladder thresholds -- (business status has its own
+// admin/business-status-levels routes, added in Stage I, above this file's
+// business-status section)
+
+// GET /participation/admin/status-levels — full member ladder for editing
+// (distinct from the public /status-levels route, which returns the same
+// columns but is never PATCHed against).
+router.get('/admin/status-levels', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT * FROM member_status_levels ORDER BY rank_order ASC');
+    res.json({ statusLevels: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /participation/admin/status-levels/:code
+router.patch('/admin/status-levels/:code', requireRole('admin'), async (req, res, next) => {
+  try {
+    const fields = [];
+    const values = [];
+    const set = (column, value) => { values.push(value); fields.push(`${column} = $${values.length}`); };
+
+    const b = req.body;
+    if (b.label !== undefined) set('label', b.label);
+    if (b.emoji !== undefined) set('emoji', b.emoji);
+    if (b.minScore !== undefined) set('min_score', b.minScore);
+    if (b.minDaysSinceJoin !== undefined) set('min_days_since_join', b.minDaysSinceJoin);
+    if (b.minActiveMonths !== undefined) set('min_active_months', b.minActiveMonths);
+    if (b.description !== undefined) set('description', b.description);
+
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
+
+    values.push(req.params.code);
+    const result = await pool.query(
+      `UPDATE member_status_levels SET ${fields.join(', ')} WHERE code = $${values.length} RETURNING code`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Status level not found.' });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // -- Missions (daily + weekly) --
 
 // GET /participation/admin/missions?type=daily|weekly — full list including
