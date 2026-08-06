@@ -56,6 +56,7 @@ async function targetExists(targetType, targetId) {
 // carries the distinction, not a proliferation of near-duplicate types.
 async function notifyProfileOwner(actorUserId, targetType, targetId, emoji, verb) {
   if (targetType !== 'profile') return;
+  if (!(await isCommunityFeatureEnabled('notify_profile_interaction_enabled'))) return;
   const owner = await pool.query('SELECT user_id FROM profiles WHERE id = $1', [targetId]);
   if (!owner.rows.length || owner.rows[0].user_id === actorUserId) return;
   const actorName = await pool.query(

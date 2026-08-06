@@ -1337,9 +1337,31 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <!-- COMMUNITY SETTINGS (Members/Community System Phase 8) -->
     <div class="admin-section" id="section-communitysettings">
       <div class="main-head"><div><h1>Community Settings</h1><p>Switch any interaction type off site-wide without touching code. Disabling one only blocks new actions of that type — nothing already posted is hidden or deleted.</p></div></div>
-      <div class="panel">
+      <div class="panel" style="margin-bottom:20px;">
         <div class="panel-head"><h3>Interaction toggles</h3></div>
         <div class="panel-body" id="communityTogglesBody" style="padding:0;"></div>
+      </div>
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-head"><h3>Notifications & public analytics</h3></div>
+        <div class="panel-body" id="notificationTogglesBody" style="padding:0;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Moderate interactions</h3></div>
+        <div class="panel-body" style="padding:16px;">
+          <p style="font-size:12.5px; color:#666; margin-bottom:12px;">Look up every like/dislike/save on one piece of content and remove an individual one. Comments are moderated from their own approval queue and can be removed the same way once approved.</p>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;">
+            <div class="field"><label for="modTargetType">Content type</label><select id="modTargetType" style="padding:8px;">
+              <option value="article">Article</option>
+              <option value="profile">Profile</option>
+              <option value="gallery_image">Gallery image</option>
+              <option value="event">Event</option>
+              <option value="marketplace_listing">Marketplace listing</option>
+            </select></div>
+            <div class="field"><label for="modTargetId">ID</label><input id="modTargetId" type="number" style="padding:8px; width:100px;"></div>
+            <button class="btn btn-line" style="width:auto;" id="modLookupBtn">Look up</button>
+          </div>
+          <div id="modResultsBody"></div>
+        </div>
       </div>
     </div>
 
@@ -1953,7 +1975,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'unplugstreaktiers') loadUnplugStreakTiers();
     if (section === 'unplugtrust') loadUnplugTrust();
     if (section === 'unplugpanalytics') loadUnplugParticipationAnalytics(30);
-    if (section === 'communitysettings') loadCommunitySettings();
+    if (section === 'communitysettings') { loadCommunitySettings(); loadNotificationSettings(); }
     if (section === 'badges') loadBadges();
   });
 });
@@ -5327,6 +5349,7 @@ function userRowHtml(u) {
     <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
       <div style="font-weight:700;">${escapeHtmlAdmin(u.full_name || u.email)}
         ${isSelf ? '<span style="font-weight:400; font-size:11px; color:var(--red); border:1px solid var(--red); padding:1px 6px; margin-left:6px;">You</span>' : ''}
+        ${u.is_suspended ? `<span style="font-weight:400; font-size:11px; color:#fff; background:var(--red); padding:1px 6px; margin-left:6px;" title="${escapeAttrAdmin(u.suspended_reason || '')}">Suspended</span>` : ''}
       </div>
       <div style="font-size:12px; color:#666;">
         ${escapeHtmlAdmin(u.email)} · joined ${new Date(u.created_at).toLocaleDateString()} · ${escapeHtmlAdmin(ownsLabel)}
@@ -5349,10 +5372,29 @@ function userRowHtml(u) {
       <button class="approve" style="padding:9px 14px;" onclick="adjustUserCredit(${u.id})">Apply credit</button>
     </div>
     <button class="approve" style="padding:5px 12px;" onclick="saveUser(${u.id})">Save changes</button>
+    ${isSelf
+      ? `<button class="reject" disabled title="You cannot suspend the account you are signed in with." style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">${u.is_suspended ? 'Unsuspend' : 'Suspend'} account</button>`
+      : `<button class="reject" style="padding:5px 12px;" onclick="toggleSuspendUser(${u.id}, ${!!u.is_suspended})">${u.is_suspended ? 'Unsuspend' : 'Suspend'} account</button>`}
     ${deletable
       ? `<button class="reject" style="padding:5px 12px;" onclick="deleteUser(${u.id})">Delete account</button>`
       : `<button class="reject" disabled title="${escapeAttrAdmin(deleteTitle)}" style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">Delete account</button>`}
   </div>`;
+}
+
+async function toggleSuspendUser(id, currentlySuspended) {
+  const payload = { isSuspended: !currentlySuspended };
+  if (!currentlySuspended) {
+    const reason = prompt('Reason for suspending this account (shown to them if they try to sign in):');
+    if (reason === null) return; // cancelled
+    payload.suspendedReason = reason;
+  } else if (!confirm('Lift this suspension and let the account sign in again?')) {
+    return;
+  }
+  try {
+    await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    showToast(currentlySuspended ? 'Account unsuspended.' : 'Account suspended.');
+    loadUsers();
+  } catch (e) { showToast(e.message || 'Could not update.', true); }
 }
 
 async function saveUser(id) {
@@ -6420,6 +6462,81 @@ async function loadCommunitySettings() {
     body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
   }
 }
+
+// Configurable notification types + public analytics visibility
+// (092_admin_moderation.sql) — same generic settings table, different key
+// prefix, so this reuses the exact toggle pattern above rather than a new
+// component.
+const NOTIFICATION_TOGGLE_LABELS = {
+  notify_profile_interaction_enabled: 'Profile like/dislike/save/comment/review notifications',
+  notify_follow_enabled: 'Follow/unfollow notifications',
+  notify_badge_enabled: 'Badge-earned notifications',
+  public_analytics_visible: 'Public profile analytics visible site-wide',
+};
+const NOTIFICATION_TOGGLE_KEYS = Object.keys(NOTIFICATION_TOGGLE_LABELS);
+
+async function loadNotificationSettings() {
+  const body = document.getElementById('notificationTogglesBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/settings');
+    const rows = (data.settings || []).filter((s) => NOTIFICATION_TOGGLE_KEYS.includes(s.key));
+    body.innerHTML = rows.map((s) => {
+      const enabled = s.value === 'true';
+      return `<div style="padding:12px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <span style="font-weight:600;">${escapeHtmlAdmin(NOTIFICATION_TOGGLE_LABELS[s.key] || s.key)}</span>
+        <button class="btn ${enabled ? 'btn-solid' : 'btn-line'}" data-key="${s.key}" data-enabled="${enabled}" style="width:auto; padding:6px 16px; font-size:12.5px; flex-shrink:0;">${enabled ? 'Enabled' : 'Disabled'}</button>
+      </div>`;
+    }).join('');
+    body.querySelectorAll('button[data-key]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const nowEnabled = btn.dataset.enabled === 'true';
+        btn.disabled = true;
+        try {
+          await api(`/admin/settings/${btn.dataset.key}`, { method: 'PATCH', body: JSON.stringify({ value: nowEnabled ? 'false' : 'true' }) });
+          showToast(`${NOTIFICATION_TOGGLE_LABELS[btn.dataset.key] || btn.dataset.key} ${nowEnabled ? 'disabled' : 'enabled'}.`);
+          loadNotificationSettings();
+        } catch (err) {
+          btn.disabled = false;
+          showToast(err.message, true);
+        }
+      });
+    });
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+document.getElementById('modLookupBtn').addEventListener('click', async () => {
+  const targetType = document.getElementById('modTargetType').value;
+  const targetId = document.getElementById('modTargetId').value;
+  const body = document.getElementById('modResultsBody');
+  if (!targetId) { showToast('Enter an ID to look up.', true); return; }
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api(`/admin/interactions/${targetType}/${targetId}`);
+    const rows = [
+      ...data.reactions.map((r) => ({ ...r, kind: 'reaction', label: r.reaction === 'like' ? '❤️ Like' : '👎 Dislike', endpoint: `/admin/interactions/reactions/${r.id}` })),
+      ...data.saves.map((s) => ({ ...s, kind: 'save', label: '🔖 Save', endpoint: `/admin/interactions/saves/${s.id}` })),
+    ];
+    if (!rows.length) { body.innerHTML = '<div class="empty-state">No reactions or saves on this item.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Type</th><th>Member</th><th>When</th><th></th></tr>';
+    rows.forEach((r) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.label}</td><td>${escapeHtmlAdmin(r.full_name || r.email)}</td><td>${new Date(r.created_at || r.saved_at).toLocaleString()}</td><td><button class="reject">Remove</button></td>`;
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        if (!confirm(`Remove this ${r.kind}?`)) return;
+        try { await api(r.endpoint, { method: 'DELETE' }); showToast('Removed.'); document.getElementById('modLookupBtn').click(); }
+        catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = ''; body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Badges — admin-granted recognition track, distinct from auto-unlocked

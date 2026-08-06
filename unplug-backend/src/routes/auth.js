@@ -169,7 +169,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     }
 
     const result = await pool.query(
-      'SELECT id, email, role, password_hash, email_verified, full_name, member_type FROM users WHERE email = $1',
+      'SELECT id, email, role, password_hash, email_verified, full_name, member_type, is_suspended, suspended_reason FROM users WHERE email = $1',
       [email]
     );
     const user = result.rows[0];
@@ -185,6 +185,11 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     }
     if (!user.email_verified) {
       return res.status(403).json({ error: 'Please verify your email before logging in. Check your inbox for a code, or call POST /auth/resend-verification.' });
+    }
+    // Checked after the password so a suspended member never learns whether
+    // a guessed password would otherwise have worked.
+    if (user.is_suspended) {
+      return res.status(403).json({ error: user.suspended_reason ? `Your account has been suspended: ${user.suspended_reason}` : 'Your account has been suspended. Contact Unplug support for details.' });
     }
 
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, {
@@ -281,13 +286,16 @@ router.post('/magic-link/consume', async (req, res, next) => {
       return res.status(400).json({ error: 'That sign-in link has already been used or has expired. Please request a new one.' });
     }
     const userResult = await pool.query(
-      'SELECT id, email, role FROM users WHERE id = $1',
+      'SELECT id, email, role, is_suspended, suspended_reason FROM users WHERE id = $1',
       [claimed.rows[0].user_id]
     );
     if (userResult.rows.length === 0) {
       return res.status(400).json({ error: 'That account no longer exists.' });
     }
     const user = userResult.rows[0];
+    if (user.is_suspended) {
+      return res.status(403).json({ error: user.suspended_reason ? `Your account has been suspended: ${user.suspended_reason}` : 'Your account has been suspended. Contact Unplug support for details.' });
+    }
     const authToken = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,

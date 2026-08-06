@@ -4,6 +4,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
 
 const router = express.Router();
 
@@ -11,19 +12,25 @@ const router = express.Router();
 // follower — or anyone — can see this, same visibility as the profile
 // page itself). Never includes phone/email/address; see
 // get_public_profile_analytics() in 089_profile_analytics.sql for what
-// it actually returns.
+// it actually returns. Admin-configurable site-wide via
+// public_analytics_visible (092_admin_moderation.sql) — when off, returns
+// { visible: false } rather than an error, so the frontend can hide the
+// stat row cleanly instead of showing a failure state.
 router.get('/:userId/public', async (req, res, next) => {
   try {
     const userId = Number(req.params.userId);
     if (!Number.isInteger(userId)) {
       return res.status(400).json({ error: 'A valid userId is required.' });
     }
+    if (!(await isCommunityFeatureEnabled('public_analytics_visible'))) {
+      return res.json({ visible: false });
+    }
     const exists = await pool.query('SELECT 1 FROM users WHERE id = $1', [userId]);
     if (exists.rowCount === 0) {
       return res.status(404).json({ error: 'That member no longer exists.' });
     }
     const result = await pool.query('SELECT * FROM get_public_profile_analytics($1)', [userId]);
-    res.json(result.rows[0]);
+    res.json({ visible: true, ...result.rows[0] });
   } catch (err) {
     next(err);
   }

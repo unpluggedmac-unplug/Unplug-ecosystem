@@ -46,6 +46,7 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
     const offsetParamIdx = searchParams.length + 2;
     const result = await pool.query(
       `SELECT u.id, u.email, u.phone, u.role, u.created_at, u.full_name, u.member_type,
+              u.is_suspended, u.suspended_reason,
               -- Credit is a SUM of the ledger, not a stored column, so it is
               -- computed here rather than trusted from anywhere else.
               (SELECT COALESCE(SUM(amount), 0) FROM account_credits ac WHERE ac.user_id = u.id)::numeric AS credit_balance,
@@ -120,6 +121,12 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
       });
     }
 
+    // Same self-lockout protection for suspension — an admin suspending
+    // their own account would need a second admin to undo it.
+    if (b.isSuspended !== undefined && id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot suspend the account you are signed in with.' });
+    }
+
     // Sales/consultant access is deliberately a ROLE (granted here, revocable
     // later) rather than a live email-domain check on every request — see the
     // comment in 046_consultant_role.sql for why: a pure domain check would
@@ -140,12 +147,14 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     if (b.phone !== undefined) put('phone', String(b.phone).trim().slice(0, 40) || null);
     if (b.role !== undefined) put('role', b.role);
     if (b.memberType !== undefined) put('member_type', b.memberType || null);
+    if (b.isSuspended !== undefined) put('is_suspended', !!b.isSuspended);
+    if (b.suspendedReason !== undefined) put('suspended_reason', String(b.suspendedReason).trim().slice(0, 300) || null);
     if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
     vals.push(id);
     const result = await pool.query(
       `UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, email, phone, role, full_name, member_type`,
+       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason`,
       vals
     );
 
@@ -154,7 +163,7 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     const roleChanged = b.role !== undefined && b.role !== target.rows[0].role;
     logActivity(
       req.user.id,
-      roleChanged ? 'user_role_changed' : 'user_edited',
+      roleChanged ? 'user_role_changed' : b.isSuspended !== undefined ? (b.isSuspended ? 'user_suspended' : 'user_unsuspended') : 'user_edited',
       roleChanged
         ? `${target.rows[0].email} (#${id}): ${target.rows[0].role} → ${b.role}`
         : `${target.rows[0].email} (#${id})`
@@ -1516,6 +1525,73 @@ router.post('/test-email', requireRole('admin'), async (req, res, next) => {
     });
     logActivity(req.user.id, 'test_email_sent', to);
     res.json({ sent: true, to, message: `Test email sent to ${to}. If it doesn't arrive within a minute, check the spam folder.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Interaction moderation (Members/Community System, brief item 11) — an
+// admin looks up everything on one target (a reported profile, article,
+// etc.), then removes an individual reaction or save. Comments already have
+// their own admin-capable DELETE /comments/:id, so they aren't duplicated
+// here — this panel's comment list, when shown, calls that existing route.
+// ---------------------------------------------------------------------------
+const INTERACTION_TARGET_TYPES = ['article', 'profile', 'gallery_image', 'event', 'marketplace_listing'];
+
+// GET /admin/interactions/:targetType/:targetId — every reaction and save
+// on one piece of content, with who did it, for moderation review.
+router.get('/interactions/:targetType/:targetId', requireRole('admin'), async (req, res, next) => {
+  try {
+    const targetType = req.params.targetType;
+    const targetId = Number(req.params.targetId);
+    if (!INTERACTION_TARGET_TYPES.includes(targetType)) {
+      return res.status(400).json({ error: `targetType must be one of: ${INTERACTION_TARGET_TYPES.join(', ')}` });
+    }
+    if (!Number.isInteger(targetId)) {
+      return res.status(400).json({ error: 'A valid targetId is required.' });
+    }
+    const [reactions, saves] = await Promise.all([
+      pool.query(
+        `SELECT cr.id, cr.reaction, cr.created_at, u.id AS user_id, u.email, u.full_name
+           FROM content_reactions cr JOIN users u ON u.id = cr.user_id
+          WHERE cr.target_type = $1 AND cr.target_id = $2
+          ORDER BY cr.created_at DESC`,
+        [targetType, targetId]
+      ),
+      pool.query(
+        `SELECT cs.id, cs.saved_at, u.id AS user_id, u.email, u.full_name
+           FROM content_saves cs JOIN users u ON u.id = cs.user_id
+          WHERE cs.target_type = $1 AND cs.target_id = $2
+          ORDER BY cs.saved_at DESC`,
+        [targetType, targetId]
+      ),
+    ]);
+    res.json({ reactions: reactions.rows, saves: saves.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /admin/interactions/reactions/:id — remove one like/dislike.
+router.delete('/interactions/reactions/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid id is required.' });
+    await pool.query('DELETE FROM content_reactions WHERE id = $1', [id]);
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /admin/interactions/saves/:id — remove one save.
+router.delete('/interactions/saves/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid id is required.' });
+    await pool.query('DELETE FROM content_saves WHERE id = $1', [id]);
+    res.json({ deleted: true });
   } catch (err) {
     next(err);
   }
