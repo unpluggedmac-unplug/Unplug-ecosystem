@@ -326,6 +326,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="card">
+        <h2>This Month's Challenge</h2>
+        <div id="unplugMonthlyChallenge"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div class="card">
         <h2>Your Referral Link</h2>
         <p class="sub">Invite a friend — you earn points when they join, and more once they're genuinely active.</p>
         <div style="display:flex; align-items:center; gap:10px; background:var(--paper); border:1px solid var(--paper-line); border-radius:6px; padding:10px 14px;">
@@ -2251,6 +2256,20 @@ async function loadMyUnplug() {
         </div>`
       : '<p class="sub" style="margin:0;">No weekly mission assigned yet — check back soon.</p>';
 
+    // Monthly challenge
+    const mc = data.monthlyChallenge;
+    document.getElementById('unplugMonthlyChallenge').innerHTML = mc
+      ? `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0;">
+          <div>
+            <div style="font-weight:600; font-size:13.5px;">${mc.is_completed ? '✓ ' : ''}${escapeHtmlM(mc.title)}</div>
+            <div style="font-size:12px; color:var(--slate);">${escapeHtmlM(mc.description)}</div>
+            <div style="font-size:11.5px; color:var(--slate); margin-top:4px;">${Math.min(mc.progress_count, mc.target_count)} / ${mc.target_count}</div>
+          </div>
+          <div style="font-family:'Playfair Display',serif; color:var(--red); font-weight:700; white-space:nowrap; margin-left:12px;">+${mc.points_reward}</div>
+        </div>`
+      : '<p class="sub" style="margin:0;">No monthly challenge assigned yet — check back soon.</p>';
+
     // Referral link
     const refCode = data.profile ? data.profile.referral_code : null;
     const refLink = refCode ? (location.origin + location.pathname.replace(/unplug-member-dashboard\.html$/, 'unplug-magazine.html') + '?ref=' + refCode) : '—';
@@ -2288,6 +2307,7 @@ async function loadMyUnplug() {
     document.getElementById('unplugNextStatus').textContent = '';
     document.getElementById('unplugMissions').innerHTML = msg;
     document.getElementById('unplugWeeklyMission').innerHTML = msg;
+    document.getElementById('unplugMonthlyChallenge').innerHTML = msg;
     document.getElementById('unplugAchievements').innerHTML = msg;
     document.getElementById('unplugPassport').innerHTML = msg;
     document.getElementById('unplugReferralLink').textContent = '—';

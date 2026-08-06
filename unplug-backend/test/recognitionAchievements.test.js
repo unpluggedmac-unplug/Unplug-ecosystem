@@ -210,5 +210,5 @@ test('re-running every migration is idempotent — seed counts stay stable', asy
   const passport = await pool.query('SELECT COUNT(*)::INTEGER AS n FROM passport_items');
   assert.equal(passport.rows[0].n, 8);
   const missions = await pool.query('SELECT COUNT(*)::INTEGER AS n FROM missions');
-  assert.equal(missions.rows[0].n, 4); // 2 from Stage C + weekly_recognise5/weekly_vote10 from Stage H
+  assert.equal(missions.rows[0].n, 6); // 2 from Stage C + 2 weekly from Stage H + 2 challenge from Stage L
 });

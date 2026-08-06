@@ -202,8 +202,9 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
     await pool.query('SELECT ensure_member_participation_profile($1)', [userId]);
     await pool.query('SELECT assign_daily_missions($1)', [userId]);
     await pool.query('SELECT assign_weekly_mission($1)', [userId]);
+    await pool.query('SELECT assign_monthly_challenge($1)', [userId]);
 
-    const [profile, score, statusHistory, statusLevels, streak, streakTiers, achievements, passport, missions, weeklyMission, myRankings, notifications, recognitionCounts] = await Promise.all([
+    const [profile, score, statusHistory, statusLevels, streak, streakTiers, achievements, passport, missions, weeklyMission, monthlyChallenge, myRankings, notifications, recognitionCounts] = await Promise.all([
       pool.query('SELECT referral_code, show_on_leaderboard FROM member_participation_profiles WHERE user_id = $1', [userId]),
       pool.query('SELECT * FROM score_cache WHERE user_id = $1', [userId]),
       pool.query(
@@ -239,6 +240,12 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
           WHERE um.user_id = $1 AND m.mission_type = 'weekly' AND um.assigned_date = date_trunc('week', CURRENT_DATE)::DATE`,
         [userId]
       ),
+      pool.query(
+        `SELECT um.mission_code, m.title, m.description, m.points_reward, m.target_count, um.progress_count, um.is_completed, um.assigned_date
+           FROM user_missions um JOIN missions m ON m.code = um.mission_code
+          WHERE um.user_id = $1 AND m.mission_type = 'challenge' AND um.assigned_date = date_trunc('month', CURRENT_DATE)::DATE`,
+        [userId]
+      ),
       pool.query('SELECT ranking_type, rank_position, rank_movement, score_value FROM rankings WHERE user_id = $1', [userId]),
       pool.query('SELECT id, type, title, body, link_url, is_read, created_at FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [userId]),
       pool.query('SELECT * FROM recognition_counts WHERE user_id = $1', [userId]),
@@ -258,6 +265,7 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
       passport: passport.rows,
       todayMissions: missions.rows,
       weeklyMission: weeklyMission.rows[0] || null,
+      monthlyChallenge: monthlyChallenge.rows[0] || null,
       rankings: myRankings.rows,
       notifications: notifications.rows,
       recognitionCounts: recognitionCounts.rows[0] || null,
@@ -554,6 +562,23 @@ router.get('/admin/missions/weekly-current', requireRole('admin'), async (req, r
       `SELECT wr.week_start, wr.week_end, m.code, m.title
          FROM weekly_mission_rotation wr JOIN missions m ON m.code = wr.mission_code
         ORDER BY wr.week_start DESC LIMIT 12`
+    );
+    res.json({ current: current.rows[0] || null, history: history.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /participation/admin/missions/monthly-current — this month's active
+// challenge plus rotation history, same shape/reasoning as the
+// weekly-current endpoint above.
+router.get('/admin/missions/monthly-current', requireRole('admin'), async (req, res, next) => {
+  try {
+    const current = await pool.query('SELECT * FROM get_current_monthly_challenge()');
+    const history = await pool.query(
+      `SELECT mr.month_start, mr.month_end, m.code, m.title
+         FROM monthly_challenge_rotation mr JOIN missions m ON m.code = mr.mission_code
+        ORDER BY mr.month_start DESC LIMIT 12`
     );
     res.json({ current: current.rows[0] || null, history: history.rows });
   } catch (err) {
