@@ -1336,6 +1336,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button data-page="competitions" data-i18n="nav.competitions">Competitions</button>
       <button data-page="investors" data-i18n="nav.investors">Investors</button>
       <button data-page="brandplacement" data-i18n="nav.marketplace">Marketplace</button>
+      <button data-page="members" data-i18n="nav.members">Members</button>
       <button data-page="deafcommunity" data-i18n="nav.deafcommunity">Deaf Community</button>
       <button data-page="about" data-i18n="nav.about">About</button>
       <button data-page="contact" data-i18n="nav.contact">Contact</button>
@@ -2688,6 +2689,49 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </p>
     </div>
     <a href="https://vnkdigital.co.za" target="_blank" class="btn btn-solid vnk-btn">Get In Touch →</a>
+  </div>
+</main>
+
+<!-- ============ MEMBERS ============ -->
+<main class="page" id="page-members">
+  <div class="wrap" style="padding-top:56px;">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">Community</span>
+        <h1 style="font-size:clamp(28px,4vw,42px); margin:8px 0;">Members</h1>
+        <p style="color:var(--slate); max-width:60ch;">Discover the people and businesses building the Unplug community — follow the ones that inspire you.</p>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin:20px 0;">
+      <input id="membersSearch" type="search" placeholder="Search members…" style="flex:1; min-width:200px; padding:10px 14px; border:1px solid var(--paper-line); font-size:14px;">
+      <select id="membersType" style="padding:10px 14px; border:1px solid var(--paper-line); font-size:14px;">
+        <option value="">All types</option>
+        <option value="individual">Individuals</option>
+        <option value="business">Businesses</option>
+      </select>
+      <select id="membersCategory" style="padding:10px 14px; border:1px solid var(--paper-line); font-size:14px;">
+        <option value="">All categories</option>
+      </select>
+      <select id="membersProvince" style="padding:10px 14px; border:1px solid var(--paper-line); font-size:14px;">
+        <option value="">All provinces</option>
+      </select>
+    </div>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px;">
+      <button class="btn btn-line members-sort-btn active" data-sort="newest" type="button" style="width:auto; padding:8px 16px; font-size:13px;">New Members</button>
+      <button class="btn btn-line members-sort-btn" data-sort="trending" type="button" style="width:auto; padding:8px 16px; font-size:13px;">🔥 Trending</button>
+      <button class="btn btn-line members-sort-btn" data-sort="most_followed" type="button" style="width:auto; padding:8px 16px; font-size:13px;">Most Followed</button>
+      <button class="btn btn-line members-sort-btn" data-sort="highest_ranked" type="button" style="width:auto; padding:8px 16px; font-size:13px;">🏆 Highest Ranked</button>
+      <button class="btn btn-line members-sort-btn" data-sort="featured" type="button" style="width:auto; padding:8px 16px; font-size:13px;">⭐ Featured</button>
+      <button class="btn btn-line members-sort-btn" data-sort="random" type="button" style="width:auto; padding:8px 16px; font-size:13px;">🎲 Discover</button>
+    </div>
+
+    <div id="membersGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:20px;"></div>
+    <div id="membersLoadMoreWrap" style="text-align:center; margin:32px 0;">
+      <button class="btn btn-line" id="membersLoadMoreBtn" type="button" style="width:auto; padding:10px 28px; display:none;">Load more</button>
+      <div id="membersLoading" class="dir-empty-state" style="display:none;">Loading…</div>
+    </div>
   </div>
 </main>
 
@@ -6248,6 +6292,7 @@ function goToPage(pageId){
     competitions: 'Competitions — Unplug Magazine',
     investors: 'Investor Relations — Unplug Magazine',
     brandplacement: 'Marketplace — Unplug Magazine',
+    members: 'Members — Unplug Magazine',
     about: 'About Us — Unplug Magazine',
     contact: 'Contact Us — Unplug Magazine',
     privacy: 'Privacy Policy — Unplug Magazine',
@@ -6306,6 +6351,10 @@ function goToPage(pageId){
     deafCommunityLoaded = true;
     initDeafCommunity();
   }
+  if (pageId === 'members' && !membersLoaded) {
+    membersLoaded = true;
+    initMembersPage();
+  }
 }
 document.querySelectorAll('[data-page]').forEach(el => {
   el.addEventListener('click', (e) => {
@@ -6320,6 +6369,132 @@ document.getElementById('submitCta').addEventListener('click', (e) => {
   e.preventDefault();
   goToMemberDashboard();
 });
+
+// ---------------------------------------------------------------------------
+// Members page (Members/Community System Phase 5) — Instagram-Explore-style
+// grid over GET /members. Filters + sort tabs reset to page 1; "Load more"
+// appends (infinite-scroll-style pagination without a scroll listener).
+// ---------------------------------------------------------------------------
+let membersLoaded = false;
+let membersSort = 'newest';
+let membersOffset = 0;
+let membersSearchDebounce = null;
+const MEMBERS_PAGE_SIZE = 24;
+
+async function loadMembersFilters() {
+  try {
+    const [cats, provs] = await Promise.all([
+      api('/directory/categories'),
+      api('/directory/provinces'),
+    ]);
+    const catSel = document.getElementById('membersCategory');
+    catSel.innerHTML = '<option value="">All categories</option>' +
+      (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    const provSel = document.getElementById('membersProvince');
+    provSel.innerHTML = '<option value="">All provinces</option>' +
+      (provs.provinces || []).map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  } catch (err) { /* filters are a nice-to-have — the grid still works without them */ }
+}
+
+function memberCardHtml(m) {
+  const photo = m.feature_image_url
+    ? `<img src="${escapeHtml(m.feature_image_url)}" alt="" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">`
+    : '<span class="print-mark tiny"></span>';
+  return `<div class="dir-card-wrap member-card" data-user-id="${m.user_id}">
+    <a href="?p=profile&slug=${encodeURIComponent(m.slug)}" class="dir-card" style="text-decoration:none; color:inherit;">
+      <div class="dir-photo">${photo}</div>
+      <h4>${escapeHtml(m.display_name)}${m.verified ? ' <span title="Verified" style="color:var(--red);">✓</span>' : ''}</h4>
+      <p>${m.status_emoji || '🌱'} ${escapeHtml(m.status_label || 'Explorer')}${m.category ? ' · ' + escapeHtml(m.category) : ''}</p>
+      <p style="font-size:11.5px; color:var(--slate);">${m.province ? escapeHtml(m.province) + ' · ' : ''}${m.unplug_score} pts</p>
+    </a>
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px 12px;">
+      <span style="font-size:11.5px; color:var(--slate);">${m.followers} follower${m.followers === 1 ? '' : 's'} · ❤️ ${m.total_likes}</span>
+      <button class="btn btn-line member-follow-btn" type="button" data-user-id="${m.user_id}" style="width:auto; padding:5px 12px; font-size:11.5px;">+ Follow</button>
+    </div>
+  </div>`;
+}
+
+async function loadMembers(reset) {
+  const grid = document.getElementById('membersGrid');
+  const loadMoreBtn = document.getElementById('membersLoadMoreBtn');
+  const loadingEl = document.getElementById('membersLoading');
+  if (reset) { membersOffset = 0; grid.innerHTML = ''; }
+  loadingEl.style.display = '';
+  loadMoreBtn.style.display = 'none';
+  try {
+    const params = new URLSearchParams({ sort: membersSort, limit: MEMBERS_PAGE_SIZE, offset: membersOffset });
+    const search = document.getElementById('membersSearch').value.trim();
+    const type = document.getElementById('membersType').value;
+    const category = document.getElementById('membersCategory').value;
+    const province = document.getElementById('membersProvince').value;
+    if (search) params.set('search', search);
+    if (type) params.set('type', type);
+    if (category) params.set('category', category);
+    if (province) params.set('province', province);
+
+    const data = await api('/members?' + params.toString());
+    const members = data.members || [];
+    if (reset && members.length === 0) {
+      grid.innerHTML = '<div class="dir-empty-state">No members match yet — try a different filter.</div>';
+    } else {
+      grid.insertAdjacentHTML('beforeend', members.map(memberCardHtml).join(''));
+    }
+    membersOffset += members.length;
+    loadMoreBtn.style.display = members.length === MEMBERS_PAGE_SIZE ? '' : 'none';
+    wireMemberFollowButtons();
+  } catch (err) {
+    if (reset) grid.innerHTML = '<div class="dir-empty-state">Could not load members right now.</div>';
+  } finally {
+    loadingEl.style.display = 'none';
+  }
+}
+
+function wireMemberFollowButtons() {
+  document.querySelectorAll('.member-follow-btn').forEach((btn) => {
+    if (btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', async () => {
+      if (!UnplugAPI.getToken()) {
+        showToast('Sign in to follow members');
+        window.open('unplug-member-dashboard.html', '_blank', 'noopener');
+        return;
+      }
+      const userId = btn.dataset.userId;
+      const following = btn.textContent.trim() === 'Following';
+      btn.disabled = true;
+      try {
+        await api(`/follows/${userId}`, { method: following ? 'DELETE' : 'POST' });
+        btn.textContent = following ? '+ Follow' : 'Following';
+      } catch (err) {
+        showToast(err.message || 'Could not update');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function initMembersPage() {
+  loadMembersFilters();
+  loadMembers(true);
+
+  document.querySelectorAll('.members-sort-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.members-sort-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      membersSort = btn.dataset.sort;
+      loadMembers(true);
+    });
+  });
+  document.getElementById('membersSearch').addEventListener('input', () => {
+    clearTimeout(membersSearchDebounce);
+    membersSearchDebounce = setTimeout(() => loadMembers(true), 350);
+  });
+  document.getElementById('membersType').addEventListener('change', () => loadMembers(true));
+  document.getElementById('membersCategory').addEventListener('change', () => loadMembers(true));
+  document.getElementById('membersProvince').addEventListener('change', () => loadMembers(true));
+  document.getElementById('membersLoadMoreBtn').addEventListener('click', () => loadMembers(false));
+}
 
 // ---------------------------------------------------------------------------
 // Deaf Community page — learning hub, jobs board, Opportunity Passports.

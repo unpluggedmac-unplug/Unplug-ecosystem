@@ -45,6 +45,7 @@ const sitemapRoutes = require('./routes/sitemap');
 const participationRoutes = require('./routes/participation');
 const interactionRoutes = require('./routes/interactions');
 const followRoutes = require('./routes/follows');
+const memberRoutes = require('./routes/members');
 
 const app = express();
 
@@ -109,6 +110,7 @@ app.use('/', sitemapRoutes); // exposes /sitemap.xml and /robots.txt
 app.use('/participation', participationRoutes);
 app.use('/interactions', interactionRoutes);
 app.use('/follows', followRoutes);
+app.use('/members', memberRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,
