@@ -1249,6 +1249,12 @@ async function loadProfile() {
         </div>` : ''}
       ${p.status === 'awaiting_payment' ? `<p style="font-size:12.5px; color:var(--red); margin-top:12px;">Your profile is awaiting payment — use the Unplug checkout to complete it before it can be reviewed.</p>` : ''}
 
+      ${p.type === 'business' && p.status === 'approved' ? `
+      <div style="border-top:1px solid var(--paper-line); margin-top:18px; padding-top:14px;">
+        <div style="font-weight:700; font-size:14px;">Business Status</div>
+        <div id="bizStatusSelf" style="margin-top:8px;"><div class="loading-state">Loading…</div></div>
+      </div>` : ''}
+
       <div style="border-top:1px solid var(--paper-line); margin-top:18px; padding-top:14px;">
         <div style="font-weight:700; font-size:14px;">${p.type === 'business' ? 'Highlight My Business on the Homepage' : 'Highlight My Profile on the Homepage'}</div>
         <p style="font-size:12.5px; color:var(--slate); margin:4px 0 10px; line-height:1.5;">
@@ -1408,6 +1414,25 @@ async function loadProfile() {
         }
       });
     });
+
+    if (p.type === 'business' && p.status === 'approved') {
+      const bizEl = document.getElementById('bizStatusSelf');
+      api(`/participation/business-status/${p.id}`).then((bs) => {
+        if (!bizEl) return;
+        const s = bs.status;
+        const m = bs.metrics;
+        bizEl.innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:24px;">${s ? s.emoji : '🆕'}</span>
+            <div>
+              <div style="font-weight:600; font-size:13.5px;">${s ? escapeAttrM(s.label) : 'Not yet ranked'}</div>
+              <div style="font-size:11.5px; color:var(--slate);">${m.reviews_count} review${m.reviews_count === 1 ? '' : 's'} · ${Number(m.avg_rating).toFixed(1)}★ avg · ${m.gallery_count} gallery photo${m.gallery_count === 1 ? '' : 's'} · listed ${m.days_listed} day${m.days_listed === 1 ? '' : 's'}</div>
+            </div>
+          </div>`;
+      }).catch(() => {
+        if (bizEl) bizEl.innerHTML = '<p class="sub" style="margin:0;">Could not load business status.</p>';
+      });
+    }
   } catch (err) {
     content.innerHTML = `<div class="empty-state">${err.message === 'No profile found for this account yet.' ? 'You have not created a Directory profile yet — do that through the Unplug checkout.' : 'Could not load: ' + err.message}</div>`;
   }

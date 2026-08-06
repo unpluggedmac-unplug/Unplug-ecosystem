@@ -448,6 +448,8 @@ router.patch('/profiles/:id/approve', requireRole('admin'), async (req, res, nex
       [credits.article, credits.event, credits.arena, credits.gallery, profile.id]
     );
     await logActivity(req.user.id, 'profile_approved', `Profile #${req.params.id} — ${profile.display_name}`);
+    // No-op for non-business profiles — see check_and_update_business_status().
+    pool.query('SELECT check_and_update_business_status($1)', [profile.id]).catch(() => {});
     res.json({ profile: credited.rows[0] });
   } catch (err) {
     next(err);
@@ -642,7 +644,11 @@ router.patch('/gallery/:id/approve', requireRole('admin'), async (req, res, next
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Image not found.' });
     }
-    res.json({ image: result.rows[0] });
+    const image = result.rows[0];
+    if (image.owner_type === 'profile') {
+      pool.query('SELECT check_and_update_business_status($1)', [image.owner_id]).catch(() => {});
+    }
+    res.json({ image });
   } catch (err) {
     next(err);
   }

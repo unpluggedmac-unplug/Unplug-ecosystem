@@ -3377,6 +3377,7 @@ function profileDetailHtml(profile, socials, gallery) {
         <span class="tier-pill">${escapeHtml(TIER_LABELS[tier] || tier)}</span>
         ${profile.verified ? '<span class="tier-pill" style="background:var(--red); color:#fff; margin-left:6px;">✓ Verified</span>' : ''}
         ${profile.deaf_owned_verified ? '<span class="tier-pill deaf-owned-badge" style="margin-left:6px;">🤟 Deaf-Owned Verified</span>' : ''}
+        ${profile.type === 'business' ? '<span id="bizStatusBadge"></span>' : ''}
         <h1 style="font-size:clamp(28px,4vw,42px); margin:10px 0 4px;">${escapeHtml(profile.display_name)}</h1>
         <p style="color:var(--red); font-weight:600; text-transform:uppercase; letter-spacing:0.03em; font-size:13px;">${escapeHtml(profile.category || '')}</p>
         ${profile.locationLabel ? `<p style="color:var(--slate); font-size:13.5px; margin-top:6px;">📍 ${escapeHtml(profile.locationLabel)}
@@ -3574,6 +3575,18 @@ async function loadProfileDetail(slug) {
     container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery)
       + '<div class="reviews-wrap" id="profileReviews"></div>';
     loadProfileReviews(data.profile);
+    // Business status badge — fetched separately since it's not part of the
+    // profile row itself (business_status_history, Stage I). Fails silently:
+    // a listing with no status yet (not promoted, or not a business) simply
+    // shows no badge rather than an error.
+    if (data.profile.type === 'business') {
+      api('/participation/business-status/' + data.profile.id).then((bs) => {
+        const el = document.getElementById('bizStatusBadge');
+        if (el && bs.status) {
+          el.outerHTML = `<span class="tier-pill" style="background:var(--ink); color:#fff; margin-left:6px;" title="${escapeHtml(bs.status.label)}">${bs.status.emoji} ${escapeHtml(bs.status.label)}</span>`;
+        }
+      }).catch(() => {});
+    }
     // Deep-link this profile (shareable/indexable URL + its own title/desc).
     const q = '?p=profile&slug=' + encodeURIComponent(slug);
     history.replaceState({ p: 'profile', slug }, '', q);

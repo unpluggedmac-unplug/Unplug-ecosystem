@@ -142,11 +142,14 @@ router.patch('/:id/status', requireRole('admin'), async (req, res, next) => {
       return res.status(400).json({ error: "Status must be 'approved' or 'rejected'." });
     }
     const result = await pool.query(
-      'UPDATE profile_reviews SET status = $1, reviewed_at = now() WHERE id = $2 RETURNING id, status',
+      'UPDATE profile_reviews SET status = $1, reviewed_at = now() WHERE id = $2 RETURNING id, status, profile_id',
       [status, reviewId]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'That review no longer exists.' });
     logActivity(req.user.id, 'review_' + status, `review ${reviewId}`);
+    if (status === 'approved') {
+      pool.query('SELECT check_and_update_business_status($1)', [result.rows[0].profile_id]).catch(() => {});
+    }
     res.json({ review: result.rows[0] });
   } catch (err) {
     next(err);

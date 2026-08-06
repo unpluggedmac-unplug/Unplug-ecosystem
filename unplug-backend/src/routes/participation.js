@@ -35,6 +35,42 @@ router.get('/status-levels', async (req, res, next) => {
   }
 });
 
+// GET /participation/business-status-levels — the business status ladder.
+router.get('/business-status-levels', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      'SELECT code, label, emoji, rank_order, min_reviews, min_avg_rating, min_gallery_images, min_days_listed, description FROM business_status_levels ORDER BY rank_order ASC'
+    );
+    res.json({ statusLevels: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /participation/business-status/:profileId — current status + metrics
+// for one Directory listing, so a business's status badge can be shown on
+// its public profile page and on its own self-service dashboard. Returns
+// null status for non-business profiles or ones not yet promoted, rather
+// than 404ing — a listing legitimately has no status until it's approved.
+router.get('/business-status/:profileId', async (req, res, next) => {
+  try {
+    const profileId = asInt(req.params.profileId);
+    if (!profileId) return res.status(400).json({ error: 'A valid profileId is required.' });
+    const [status, metrics] = await Promise.all([
+      pool.query(
+        `SELECT sl.code, sl.label, sl.emoji, sl.rank_order, bsh.achieved_at
+           FROM business_status_history bsh JOIN business_status_levels sl ON sl.code = bsh.status_code
+          WHERE bsh.profile_id = $1 AND bsh.is_active_status = TRUE`,
+        [profileId]
+      ),
+      pool.query('SELECT * FROM get_business_metrics($1)', [profileId]),
+    ]);
+    res.json({ status: status.rows[0] || null, metrics: metrics.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /participation/recognition-types — the 11 recognition badges.
 router.get('/recognition-types', async (req, res, next) => {
   try {
@@ -429,6 +465,88 @@ router.patch('/admin/missions/:code', requireRole('admin'), async (req, res, nex
     res.status(204).end();
   } catch (err) {
     if (err.code === '23503') return res.status(400).json({ error: `actionCode "${req.body.actionCode}" does not exist.` });
+    next(err);
+  }
+});
+
+// GET /participation/admin/business-status-levels — full ladder for the
+// admin config screen (same list the public endpoint returns, but this is
+// the one PATCHed against, kept separate so the public shape can't be
+// accidentally opened up for writes later).
+router.get('/admin/business-status-levels', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT * FROM business_status_levels ORDER BY rank_order ASC');
+    res.json({ statusLevels: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /participation/admin/business-status-levels/:code — edit a tier's
+// thresholds. No create/delete: the five tiers are structural (rank order
+// matters and gaps would break the "next tier up" query), so admins tune
+// the numbers rather than add or remove rungs.
+router.patch('/admin/business-status-levels/:code', requireRole('admin'), async (req, res, next) => {
+  try {
+    const fields = [];
+    const values = [];
+    const set = (column, value) => { values.push(value); fields.push(`${column} = $${values.length}`); };
+
+    const b = req.body;
+    if (b.label !== undefined) set('label', b.label);
+    if (b.emoji !== undefined) set('emoji', b.emoji);
+    if (b.minReviews !== undefined) set('min_reviews', b.minReviews);
+    if (b.minAvgRating !== undefined) set('min_avg_rating', b.minAvgRating);
+    if (b.minGalleryImages !== undefined) set('min_gallery_images', b.minGalleryImages);
+    if (b.minDaysListed !== undefined) set('min_days_listed', b.minDaysListed);
+    if (b.description !== undefined) set('description', b.description);
+
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
+
+    values.push(req.params.code);
+    const result = await pool.query(
+      `UPDATE business_status_levels SET ${fields.join(', ')} WHERE code = $${values.length} RETURNING code`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Status level not found.' });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /participation/admin/business-status/:profileId/grant — manually
+// grant a tier (used for business_hall_of_fame, which requires_admin_approval
+// = TRUE and so is never auto-promoted into). Mirrors admin_award_points()'s
+// role as the escape hatch for anything the algorithm won't do on its own.
+router.post('/admin/business-status/:profileId/grant', requireRole('admin'), async (req, res, next) => {
+  try {
+    const profileId = asInt(req.params.profileId);
+    const { statusCode } = req.body;
+    if (!profileId || !statusCode) return res.status(400).json({ error: 'profileId and statusCode are required.' });
+
+    const level = await pool.query('SELECT * FROM business_status_levels WHERE code = $1', [statusCode]);
+    if (!level.rows.length) return res.status(400).json({ error: `Unknown status code "${statusCode}".` });
+    const owner = await pool.query('SELECT user_id FROM profiles WHERE id = $1 AND type = $2', [profileId, 'business']);
+    if (!owner.rows.length) return res.status(404).json({ error: 'Business profile not found.' });
+
+    const metrics = await pool.query('SELECT * FROM get_business_metrics($1)', [profileId]);
+    const m = metrics.rows[0];
+    await pool.query('UPDATE business_status_history SET is_active_status = FALSE WHERE profile_id = $1 AND is_active_status = TRUE', [profileId]);
+    await pool.query(
+      `INSERT INTO business_status_history (profile_id, status_code, previous_status, reviews_at_time, avg_rating_at_time, gallery_at_time, days_listed_at_time, granted_by, notes, is_active_status)
+       VALUES ($1, $2, (SELECT status_code FROM business_status_history WHERE profile_id = $1 ORDER BY achieved_at DESC LIMIT 1), $3, $4, $5, $6, $7, $8, TRUE)`,
+      [profileId, statusCode, m.reviews_count, m.avg_rating, m.gallery_count, m.days_listed, req.user.id, req.body.notes || null]
+    );
+    if (owner.rows[0].user_id) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, type, title, body, link_url)
+         VALUES ($1, 'status_change', $2, $3, '/unplug-member-dashboard.html')`,
+        [owner.rows[0].user_id, `Your business reached ${level.rows[0].emoji} ${level.rows[0].label}!`, `Your Directory listing's standing has levelled up.`]
+      );
+    }
+    res.status(204).end();
+  } catch (err) {
     next(err);
   }
 });

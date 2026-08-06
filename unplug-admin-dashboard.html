@@ -296,6 +296,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="unplugmembers">Member Scores</a>
         <a data-section="unplugsponsors">Sponsor Campaigns</a>
         <a data-section="unplugmissions">Missions</a>
+        <a data-section="unplugbizstatus">Business Status</a>
       </div>
     </div>
 
@@ -1206,6 +1207,26 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- BUSINESS STATUS LADDER -->
+    <div class="admin-section" id="section-unplugbizstatus">
+      <div class="main-head"><div><h1>Business Status</h1><p>Directory business listings are promoted automatically through these five tiers based on approved reviews, average rating, approved gallery photos, and how long they've been listed. Edit the thresholds below — no deploy needed. The top tier (Business Hall of Fame) is never awarded automatically — grant it by hand below using the profile's ID (visible on its row under Directory Profiles).</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Tiers</h3></div>
+        <div class="panel-body" id="bizStatusLevelsBody" style="padding:0;"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Grant a tier manually</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label for="bizGrantProfileId">Profile ID</label><input id="bizGrantProfileId" type="number" placeholder="e.g. 42"></div>
+            <div><label for="bizGrantCode">Tier</label><select id="bizGrantCode" style="padding:8px; width:100%;"></select></div>
+          </div>
+          <button class="approve" id="bizGrantBtn" style="padding:9px 16px;">Grant</button>
+          <div id="bizGrantMsg" style="margin-top:8px; font-size:13px;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
       <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
@@ -1778,6 +1799,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
     if (section === 'unplugmissions') loadUnplugMissions();
+    if (section === 'unplugbizstatus') loadUnplugBizStatus();
   });
 });
 
@@ -5772,6 +5794,82 @@ async function toggleUnplugMissionEnabled(code, makeEnabled) {
     showToast(err.message, true);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Business Status (Stage I) — five fixed tiers, thresholds only (no
+// create/delete — see the migration's reasoning: rank order gaps would
+// break the "next tier up" query the DB function relies on).
+// ---------------------------------------------------------------------------
+let UNPLUG_BIZ_LEVELS = [];
+
+async function loadUnplugBizStatus() {
+  const body = document.getElementById('bizStatusLevelsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/participation/admin/business-status-levels');
+    UNPLUG_BIZ_LEVELS = data.statusLevels || [];
+    body.innerHTML = UNPLUG_BIZ_LEVELS.map((lvl) => `
+      <div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);">
+        <div style="font-weight:700; margin-bottom:8px;">${lvl.emoji} ${escapeHtmlAdmin(lvl.label)} ${lvl.requires_admin_approval ? '<span style="font-weight:400; font-size:11px; color:#999; border:1px solid #ccc; padding:1px 6px; margin-left:6px;">Admin-granted only</span>' : ''}</div>
+        <div class="form-row">
+          <div><label>Min reviews</label><input type="number" id="bizMinReviews_${lvl.code}" value="${lvl.min_reviews}"></div>
+          <div><label>Min avg rating</label><input type="number" step="0.1" min="0" max="5" id="bizMinRating_${lvl.code}" value="${lvl.min_avg_rating}"></div>
+          <div><label>Min gallery photos</label><input type="number" id="bizMinGallery_${lvl.code}" value="${lvl.min_gallery_images}"></div>
+          <div><label>Min days listed</label><input type="number" id="bizMinDays_${lvl.code}" value="${lvl.min_days_listed}"></div>
+        </div>
+        <button class="btn btn-line" style="width:auto; padding:6px 14px; margin-top:6px;" onclick="saveUnplugBizLevel('${lvl.code}')">Save</button>
+        <span id="bizLevelMsg_${lvl.code}" style="font-size:12px; margin-left:8px;"></span>
+      </div>`).join('');
+
+    const select = document.getElementById('bizGrantCode');
+    select.innerHTML = UNPLUG_BIZ_LEVELS.map((lvl) => `<option value="${lvl.code}">${lvl.emoji} ${escapeHtmlAdmin(lvl.label)}</option>`).join('');
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+async function saveUnplugBizLevel(code) {
+  const msgEl = document.getElementById(`bizLevelMsg_${code}`);
+  try {
+    await api(`/participation/admin/business-status-levels/${code}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        minReviews: parseInt(document.getElementById(`bizMinReviews_${code}`).value, 10) || 0,
+        minAvgRating: parseFloat(document.getElementById(`bizMinRating_${code}`).value) || 0,
+        minGalleryImages: parseInt(document.getElementById(`bizMinGallery_${code}`).value, 10) || 0,
+        minDaysListed: parseInt(document.getElementById(`bizMinDays_${code}`).value, 10) || 0,
+      }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = 'Saved.';
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+}
+
+document.getElementById('bizGrantBtn').addEventListener('click', async () => {
+  const profileId = parseInt(document.getElementById('bizGrantProfileId').value, 10);
+  const statusCode = document.getElementById('bizGrantCode').value;
+  const msgEl = document.getElementById('bizGrantMsg');
+  if (!profileId) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'A valid profile ID is required.';
+    return;
+  }
+  try {
+    await api(`/participation/admin/business-status/${profileId}/grant`, {
+      method: 'POST',
+      body: JSON.stringify({ statusCode }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = 'Granted.';
+    document.getElementById('bizGrantProfileId').value = '';
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+});
 
 async function viewUnplugCampaignReport(id) {
   const panel = document.getElementById('unplugCampaignReportPanel');

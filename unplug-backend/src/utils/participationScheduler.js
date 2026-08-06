@@ -20,9 +20,14 @@ async function rotateWeeklyMission() {
   await pool.query('SELECT rotate_weekly_mission()');
 }
 
+async function syncBusinessStatuses() {
+  await pool.query('SELECT sync_all_business_statuses()');
+}
+
 const RANKINGS_INTERVAL_MS = 6 * 60 * 60 * 1000; // every 6 hours
 const HOMEPAGE_INTERVAL_MS = 60 * 60 * 1000; // hourly — cheap to re-run, and picks up a new day promptly even if the instance was asleep at midnight
 const WEEKLY_MISSION_INTERVAL_MS = 60 * 60 * 1000; // hourly — rotate_weekly_mission() is a no-op once this week's pick exists, so this just catches the Monday boundary promptly even through sleep/restarts
+const BUSINESS_STATUS_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily — the only promotions this catches that review/gallery approval don't are tenure-based (min_days_listed), which only ever changes once a day
 
 function start() {
   setInterval(() => {
@@ -43,6 +48,12 @@ function start() {
       .catch((err) => console.error('[participation] weekly mission rotation failed:', err.message));
   }, WEEKLY_MISSION_INTERVAL_MS);
 
+  setInterval(() => {
+    syncBusinessStatuses()
+      .then(() => console.log('[participation] business statuses synced'))
+      .catch((err) => console.error('[participation] business status sync failed:', err.message));
+  }, BUSINESS_STATUS_INTERVAL_MS);
+
   // Run once shortly after boot too, same reasoning as the birthday
   // check: a restart during the day shouldn't mean stale rankings until
   // the next scheduled mark.
@@ -56,7 +67,10 @@ function start() {
     rotateWeeklyMission()
       .then(() => console.log('[participation] startup weekly mission check done'))
       .catch((err) => console.error('[participation] startup weekly mission rotation failed:', err.message));
+    syncBusinessStatuses()
+      .then(() => console.log('[participation] startup business status sync done'))
+      .catch((err) => console.error('[participation] startup business status sync failed:', err.message));
   }, 25000);
 }
 
-module.exports = { start, recalculateRankings, refreshDailyHomepage, rotateWeeklyMission };
+module.exports = { start, recalculateRankings, refreshDailyHomepage, rotateWeeklyMission, syncBusinessStatuses };
