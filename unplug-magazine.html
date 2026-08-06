@@ -3408,6 +3408,8 @@ function profileDetailHtml(profile, socials, gallery) {
         ${profile.locationLabel ? `<p style="color:var(--slate); font-size:13.5px; margin-top:6px;">📍 ${escapeHtml(profile.locationLabel)}
           ${(profile.suburb || profile.city) ? ` · <a href="?p=directory&view=map" style="color:var(--red);">View on Map</a>` : ''}</p>` : ''}
         ${showExtras && profile.quote ? `<p class="profile-quote">"${escapeHtml(profile.quote)}"</p>` : ''}
+        <div id="profileFollowBar" style="margin-top:12px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;" data-user-id="${profile.user_id}"></div>
+        <div id="profileInteractions" data-profile-id="${profile.id}"></div>
       </div>
     </div>
     <section style="margin-top:32px;">
@@ -3600,6 +3602,8 @@ async function loadProfileDetail(slug) {
     container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery)
       + '<div class="reviews-wrap" id="profileReviews"></div>';
     loadProfileReviews(data.profile);
+    loadProfileFollowBar(data.profile.user_id);
+    renderInteractionBar('profileInteractions', 'profile', data.profile.id);
     // Business status badge — fetched separately since it's not part of the
     // profile row itself (business_status_history, Stage I). Fails silently:
     // a listing with no status yet (not promoted, or not a business) simply
@@ -4483,6 +4487,64 @@ async function handleInteractionSave(container, targetType, targetId) {
   } catch (err) {
     container.querySelectorAll('.int-btn').forEach((b) => { b.disabled = false; });
     showToast(err.message || 'Could not update');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Follow / Unfollow (Members/Community System Phase 4) — a Follow button
+// plus follower/following counts on a public profile page. Own-profile
+// visits show counts only (no Follow button — following yourself isn't
+// meaningful, same reasoning as self-recognition being blocked).
+// ---------------------------------------------------------------------------
+async function loadProfileFollowBar(profileUserId) {
+  const el = document.getElementById('profileFollowBar');
+  if (!el || !profileUserId) return;
+  try {
+    const counts = await api(`/follows/${profileUserId}/counts`);
+    let isOwnProfile = false;
+    let following = false;
+    if (UnplugAPI.getToken()) {
+      // /auth/me is the established "who am I" call elsewhere in this
+      // codebase (member dashboard's session restore) — no separate
+      // decoded-token/current-user helper exists in unplug-shared.js.
+      try {
+        const me = await api('/auth/me');
+        isOwnProfile = me && me.user && Number(me.user.id) === Number(profileUserId);
+      } catch (e) { /* not fatal — treat as not-own-profile */ }
+      if (!isOwnProfile) {
+        try {
+          const mine = await api(`/follows/${profileUserId}/mine`);
+          following = mine.following;
+        } catch (e) { /* leave following=false — button still works, just starts unpressed */ }
+      }
+    }
+
+    const countsHtml = `<span style="font-size:13.5px; color:var(--slate);"><strong style="color:var(--ink);">${counts.followers}</strong> follower${counts.followers === 1 ? '' : 's'} · <strong style="color:var(--ink);">${counts.following}</strong> following</span>`;
+    el.innerHTML = isOwnProfile
+      ? countsHtml
+      : `<button class="btn ${following ? 'btn-line' : 'btn-solid'}" id="followToggleBtn" type="button" style="width:auto; padding:8px 20px;">${following ? 'Following' : '+ Follow'}</button>${countsHtml}`;
+
+    const btn = document.getElementById('followToggleBtn');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        if (!UnplugAPI.getToken()) {
+          showToast('Sign in to follow members');
+          window.open('unplug-member-dashboard.html', '_blank', 'noopener');
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await api(`/follows/${profileUserId}`, { method: following ? 'DELETE' : 'POST' });
+          following = !following;
+          await loadProfileFollowBar(profileUserId); // re-fetch counts, same correctness-over-guessing pattern as the interaction bar
+        } catch (err) {
+          btn.disabled = false;
+          showToast(err.message || 'Could not update');
+        }
+      });
+    }
+  } catch (err) {
+    el.innerHTML = '';
   }
 }
 
