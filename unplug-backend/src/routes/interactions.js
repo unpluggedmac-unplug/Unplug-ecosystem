@@ -46,6 +46,31 @@ async function targetExists(targetType, targetId) {
   return result.rowCount > 0;
 }
 
+// Members/Community System Phase 7 — profile-interaction notifications.
+// Only profile targets notify (an article/gallery/event/marketplace like
+// has no "owner" in the same personal sense this brief means), and never
+// when the actor is the profile's own owner. One shared 'profile_interaction'
+// notification type covers like/dislike/save/comment/review, same as
+// 'status_change' already covers both promotion and demotion — title text
+// carries the distinction, not a proliferation of near-duplicate types.
+async function notifyProfileOwner(actorUserId, targetType, targetId, emoji, verb) {
+  if (targetType !== 'profile') return;
+  const owner = await pool.query('SELECT user_id FROM profiles WHERE id = $1', [targetId]);
+  if (!owner.rows.length || owner.rows[0].user_id === actorUserId) return;
+  const actorName = await pool.query(
+    `SELECT COALESCE(pr.display_name, SPLIT_PART(u.email, '@', 1)) AS name
+       FROM users u LEFT JOIN profiles pr ON pr.user_id = u.id
+      WHERE u.id = $1`,
+    [actorUserId]
+  );
+  const name = actorName.rows[0] ? actorName.rows[0].name : 'Someone';
+  await pool.query(
+    `INSERT INTO notifications (user_id, type, title, body, link_url)
+     VALUES ($1, 'profile_interaction', $2, $3, '/unplug-member-dashboard.html')`,
+    [owner.rows[0].user_id, `${emoji} Profile activity`, `${name} ${verb} your profile.`]
+  );
+}
+
 // GET /interactions/:targetType/:targetId/stats — public counts, no auth.
 router.get('/:targetType/:targetId/stats', async (req, res, next) => {
   try {
@@ -99,12 +124,22 @@ router.post('/:targetType/:targetId/react', requireAuth, async (req, res, next) 
     if (!(await targetExists(target.targetType, target.targetId))) {
       return res.status(404).json({ error: 'That item no longer exists.' });
     }
+    // Checked before the upsert so a notification only fires on a
+    // genuinely new reaction — a member toggling like<->dislike back and
+    // forth on the same profile must not spam its owner every time.
+    const existing = await pool.query(
+      'SELECT 1 FROM content_reactions WHERE user_id = $1 AND target_type = $2 AND target_id = $3',
+      [req.user.id, target.targetType, target.targetId]
+    );
     await pool.query(
       `INSERT INTO content_reactions (user_id, target_type, target_id, reaction)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (user_id, target_type, target_id) DO UPDATE SET reaction = $4, updated_at = now()`,
       [req.user.id, target.targetType, target.targetId, reaction]
     );
+    if (existing.rowCount === 0) {
+      try { await notifyProfileOwner(req.user.id, target.targetType, target.targetId, reaction === 'like' ? '❤️' : '👎', reaction + 'd'); } catch (e) { /* notification failure must never block the reaction itself */ }
+    }
     res.status(201).json({ reaction });
   } catch (err) {
     next(err);
@@ -136,11 +171,14 @@ router.post('/:targetType/:targetId/save', requireAuth, async (req, res, next) =
     if (!(await targetExists(target.targetType, target.targetId))) {
       return res.status(404).json({ error: 'That item no longer exists.' });
     }
-    await pool.query(
+    const inserted = await pool.query(
       `INSERT INTO content_saves (user_id, target_type, target_id) VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, target_type, target_id) DO NOTHING`,
+       ON CONFLICT (user_id, target_type, target_id) DO NOTHING RETURNING 1`,
       [req.user.id, target.targetType, target.targetId]
     );
+    if (inserted.rowCount > 0) {
+      try { await notifyProfileOwner(req.user.id, target.targetType, target.targetId, '🔖', 'saved'); } catch (e) { /* notification failure must never block the save itself */ }
+    }
     res.status(201).json({ saved: true });
   } catch (err) {
     next(err);
@@ -181,4 +219,9 @@ router.get('/saved/:targetType', requireAuth, async (req, res, next) => {
   }
 });
 
+// Attached to the router function itself (not a separate export shape)
+// so app.js's existing `app.use('/interactions', require('./interactions'))`
+// keeps working unchanged, while comments.js/reviews.js can still pull in
+// notifyProfileOwner via `const { notifyProfileOwner } = require('./interactions')`.
+router.notifyProfileOwner = notifyProfileOwner;
 module.exports = router;

@@ -4,6 +4,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
+const { notifyProfileOwner } = require('./interactions');
 
 const router = express.Router();
 
@@ -142,13 +143,14 @@ router.patch('/:id/status', requireRole('admin'), async (req, res, next) => {
       return res.status(400).json({ error: "Status must be 'approved' or 'rejected'." });
     }
     const result = await pool.query(
-      'UPDATE profile_reviews SET status = $1, reviewed_at = now() WHERE id = $2 RETURNING id, status, profile_id',
+      'UPDATE profile_reviews SET status = $1, reviewed_at = now() WHERE id = $2 RETURNING id, status, profile_id, user_id',
       [status, reviewId]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'That review no longer exists.' });
     logActivity(req.user.id, 'review_' + status, `review ${reviewId}`);
     if (status === 'approved') {
       pool.query('SELECT check_and_update_business_status($1)', [result.rows[0].profile_id]).catch(() => {});
+      try { await notifyProfileOwner(result.rows[0].user_id, 'profile', result.rows[0].profile_id, '⭐', 'reviewed'); } catch (e) { /* notification failure must never block approval */ }
     }
     res.json({ review: result.rows[0] });
   } catch (err) {

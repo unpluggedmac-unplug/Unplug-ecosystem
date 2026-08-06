@@ -4,6 +4,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
+const { notifyProfileOwner } = require('./interactions');
 
 const router = express.Router();
 
@@ -180,13 +181,20 @@ router.patch('/:id/status', requireRole('admin'), async (req, res, next) => {
     }
     const result = await pool.query(
       `UPDATE content_comments SET status = $1, reviewed_at = now()
-        WHERE id = $2 RETURNING id, status`,
+        WHERE id = $2 RETURNING id, status, user_id, target_type, target_id`,
       [status, commentId]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'That comment no longer exists.' });
     }
     logActivity(req.user.id, 'comment_' + status, `comment ${commentId}`);
+    // A comment only became real (publicly visible) just now — that's the
+    // moment to notify a profile owner, not at submission, when it might
+    // still be rejected.
+    if (status === 'approved') {
+      const c = result.rows[0];
+      try { await notifyProfileOwner(c.user_id, c.target_type, c.target_id, '💬', 'commented on'); } catch (e) { /* notification failure must never block approval */ }
+    }
     res.json({ comment: result.rows[0] });
   } catch (err) {
     next(err);
