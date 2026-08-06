@@ -68,7 +68,7 @@ test('recalculate_all_rankings ranks members by score, highest first', async () 
 
   const ranks = await pool.query(
     `SELECT user_id, rank_position, score_value FROM rankings
-      WHERE ranking_type = 'overall' AND user_id IN ($1, $2) ORDER BY rank_position ASC`,
+      WHERE ranking_type = 'overall' AND period_type = 'lifetime' AND user_id IN ($1, $2) ORDER BY rank_position ASC`,
     [low, high]
   );
   assert.equal(ranks.rows[0].user_id, high);
@@ -89,7 +89,7 @@ test('a second recalculation records rank_movement against the first', async () 
   await pool.query('SELECT recalculate_all_rankings()');
 
   const climberRank = await pool.query(
-    `SELECT rank_position, rank_movement FROM rankings WHERE ranking_type = 'overall' AND user_id = $1`,
+    `SELECT rank_position, rank_movement FROM rankings WHERE ranking_type = 'overall' AND period_type = 'lifetime' AND user_id = $1`,
     [climber]
   );
   // climber should now be ranked ABOVE stayer (lower rank_position number) and moved up (positive movement)

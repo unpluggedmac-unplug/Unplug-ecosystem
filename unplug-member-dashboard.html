@@ -257,6 +257,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="ms-brand">My Account</div>
       <button class="ms-navlink active" data-ms="profile"><span>👤</span> Profile</button>
       <button class="ms-navlink" data-ms="unplug"><span>🔌</span> My Unplug</button>
+      <button class="ms-navlink" data-ms="leaderboard"><span>🏆</span> Leaderboard</button>
       <button class="ms-navlink" data-ms="services"><span>🧩</span> Services</button>
       <button class="ms-navlink" data-ms="content"><span>📄</span> Content</button>
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
@@ -349,6 +350,28 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="card">
         <h2>Unplug Passport</h2>
         <div id="unplugPassport" style="display:flex; flex-wrap:wrap; gap:10px;"><div class="loading-state">Loading…</div></div>
+      </div>
+    </section>
+
+    <section class="ms-section section-hidden" data-ms-section="leaderboard">
+      <div class="card">
+        <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h2 style="margin:0;">Leaderboard</h2>
+          <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-line lb-type-btn active" data-lbtype="overall" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">Overall</button>
+              <button class="btn btn-line lb-type-btn" data-lbtype="momentum" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">Momentum</button>
+              <button class="btn btn-line lb-type-btn" data-lbtype="recognition" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">Recognition</button>
+              <button class="btn btn-line lb-type-btn" data-lbtype="contribution" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">Contribution</button>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-line lb-period-btn active" data-lbperiod="lifetime" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">All-time</button>
+              <button class="btn btn-line lb-period-btn" data-lbperiod="monthly" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">This month</button>
+              <button class="btn btn-line lb-period-btn" data-lbperiod="weekly" type="button" style="width:auto; padding:6px 12px; font-size:12.5px;">This week</button>
+            </div>
+          </div>
+        </div>
+        <div id="leaderboardBody"><div class="loading-state">Loading…</div></div>
       </div>
     </section>
 
@@ -1000,6 +1023,7 @@ function enterMemberDashboard(user){
   loadMyPayments();
   loadMyUnplug();
   loadCredits();
+  loadLeaderboard();
   if (CURRENT_USER && CURRENT_USER.role === 'consultant') {
     document.getElementById('msMyReferralsNav').classList.remove('section-hidden');
     loadMyReferrals();
@@ -2645,6 +2669,64 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
     }
   }
   ctx.fillText(line, x, lineY);
+}
+
+// ---------------------------------------------------------------------------
+// Leaderboard (Stage Q) — 4 types x 3 periods, backed by
+// GET /participation/leaderboard?type=&period=. The lifetime endpoint has
+// existed since Stage D but nothing member-facing ever called it.
+// ---------------------------------------------------------------------------
+let LB_TYPE = 'overall';
+let LB_PERIOD = 'lifetime';
+
+document.querySelectorAll('.lb-type-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lb-type-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    LB_TYPE = btn.dataset.lbtype;
+    // Momentum has no weekly/monthly view (see 084_leaderboard_periods.sql)
+    // — force back to all-time so the UI never asks the API for a
+    // combination it can't serve.
+    if (LB_TYPE === 'momentum' && LB_PERIOD !== 'lifetime') {
+      LB_PERIOD = 'lifetime';
+      document.querySelectorAll('.lb-period-btn').forEach((b) => b.classList.toggle('active', b.dataset.lbperiod === 'lifetime'));
+    }
+    loadLeaderboard();
+  });
+});
+document.querySelectorAll('.lb-period-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (LB_TYPE === 'momentum' && btn.dataset.lbperiod !== 'lifetime') return;
+    document.querySelectorAll('.lb-period-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    LB_PERIOD = btn.dataset.lbperiod;
+    loadLeaderboard();
+  });
+});
+
+async function loadLeaderboard() {
+  const el = document.getElementById('leaderboardBody');
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api(`/participation/leaderboard?type=${LB_TYPE}&period=${LB_PERIOD}&limit=25`);
+    const rows = data.leaderboard || [];
+    el.innerHTML = rows.length
+      ? `<div>${rows.map((r) => `
+        <div style="display:flex; align-items:center; gap:12px; padding:9px 4px; border-bottom:1px solid var(--paper-line);">
+          <div style="width:28px; text-align:center; font-weight:700; color:${r.rank_position <= 3 ? 'var(--red)' : 'var(--slate)'};">${r.rank_position}</div>
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:13.5px;">${escapeHtmlM(r.display_name)}</div>
+            <div style="font-size:11.5px; color:var(--slate);">${r.status_emoji || '🌱'} ${escapeHtmlM(r.status_label || 'Explorer')}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-family:'Playfair Display',serif; font-weight:700; color:var(--red);">${r.score_value}</div>
+            ${r.rank_movement ? `<div style="font-size:11px; color:${r.rank_movement > 0 ? 'var(--green)' : 'var(--red)'};">${r.rank_movement > 0 ? '▲' : '▼'} ${Math.abs(r.rank_movement)}</div>` : ''}
+          </div>
+        </div>`).join('')}</div>`
+      : '<p class="sub" style="margin:0;">No leaderboard data yet — be the first to earn points!</p>';
+  } catch (err) {
+    el.innerHTML = `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(err.message || 'please try again shortly.')}</p>`;
+  }
 }
 
 document.getElementById('shareStatusBtn').addEventListener('click', () => {

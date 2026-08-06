@@ -111,15 +111,30 @@ router.get('/recognition-types', async (req, res, next) => {
   }
 });
 
-// GET /participation/leaderboard?type=overall|momentum|recognition|contribution&limit=&offset=
+// GET /participation/leaderboard?type=overall|momentum|recognition|contribution&period=lifetime|weekly|monthly&limit=&offset=
+// period defaults to lifetime (unchanged behaviour for existing
+// callers). momentum has no weekly/monthly view — it's already a
+// recent-activity measure, see 084_leaderboard_periods.sql — so a
+// period request for momentum silently falls back to lifetime rather
+// than erroring.
 router.get('/leaderboard', async (req, res, next) => {
   try {
     const type = ['overall', 'momentum', 'recognition', 'contribution'].includes(req.query.type)
       ? req.query.type : 'overall';
+    let period = ['lifetime', 'weekly', 'monthly'].includes(req.query.period) ? req.query.period : 'lifetime';
+    if (type === 'momentum') period = 'lifetime';
     const limit = Math.min(asInt(req.query.limit) || 50, 100);
     const offset = Math.max(asInt(req.query.offset) || 0, 0);
-    const result = await pool.query('SELECT * FROM get_leaderboard($1, $2, $3)', [type, limit, offset]);
-    res.json({ leaderboard: result.rows, type, limit, offset });
+
+    const periodValue = period === 'lifetime'
+      ? 'all-time'
+      : (await pool.query('SELECT get_current_period_value($1) AS v', [period])).rows[0].v;
+
+    const result = await pool.query(
+      'SELECT * FROM get_leaderboard($1, $2, $3, $4, $5)',
+      [type, limit, offset, period, periodValue]
+    );
+    res.json({ leaderboard: result.rows, type, period, limit, offset });
   } catch (err) {
     next(err);
   }
@@ -262,7 +277,11 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
           WHERE um.user_id = $1 AND m.mission_type = 'challenge' AND um.assigned_date = date_trunc('month', CURRENT_DATE)::DATE`,
         [userId]
       ),
-      pool.query('SELECT ranking_type, rank_position, rank_movement, score_value FROM rankings WHERE user_id = $1', [userId]),
+      // Lifetime only — Stage Q added weekly/monthly rows to this same
+      // table, so an unscoped query here would now return up to 3x as
+      // many rows per ranking_type. "My Rankings" on the dashboard has
+      // always meant the all-time standing.
+      pool.query(`SELECT ranking_type, rank_position, rank_movement, score_value FROM rankings WHERE user_id = $1 AND period_type = 'lifetime'`, [userId]),
       pool.query('SELECT id, type, title, body, link_url, is_read, created_at FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [userId]),
       pool.query('SELECT * FROM recognition_counts WHERE user_id = $1', [userId]),
     ]);
