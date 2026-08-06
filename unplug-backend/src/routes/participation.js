@@ -71,6 +71,18 @@ router.get('/business-status/:profileId', async (req, res, next) => {
   }
 });
 
+// GET /participation/streak-tiers — the 7 streak milestones.
+router.get('/streak-tiers', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      'SELECT code, label, emoji, min_days, bonus_points, description FROM streak_tiers ORDER BY min_days ASC'
+    );
+    res.json({ streakTiers: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /participation/recognition-types — the 11 recognition badges.
 router.get('/recognition-types', async (req, res, next) => {
   try {
@@ -191,7 +203,7 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
     await pool.query('SELECT assign_daily_missions($1)', [userId]);
     await pool.query('SELECT assign_weekly_mission($1)', [userId]);
 
-    const [profile, score, statusHistory, statusLevels, streak, achievements, passport, missions, weeklyMission, myRankings, notifications, recognitionCounts] = await Promise.all([
+    const [profile, score, statusHistory, statusLevels, streak, streakTiers, achievements, passport, missions, weeklyMission, myRankings, notifications, recognitionCounts] = await Promise.all([
       pool.query('SELECT referral_code, show_on_leaderboard FROM member_participation_profiles WHERE user_id = $1', [userId]),
       pool.query('SELECT * FROM score_cache WHERE user_id = $1', [userId]),
       pool.query(
@@ -201,7 +213,8 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
         [userId]
       ),
       pool.query('SELECT code, label, emoji, rank_order, min_score, min_days_since_join, min_active_months FROM member_status_levels ORDER BY rank_order ASC'),
-      pool.query('SELECT current_streak_days, longest_streak_days FROM user_streaks WHERE user_id = $1', [userId]),
+      pool.query('SELECT current_streak_days, longest_streak_days, highest_tier_code FROM user_streaks WHERE user_id = $1', [userId]),
+      pool.query('SELECT code, label, emoji, min_days, bonus_points FROM streak_tiers ORDER BY min_days ASC'),
       pool.query(
         `SELECT a.code, a.label, a.description, a.emoji, a.points_reward, ua.earned_at
            FROM user_achievements ua JOIN achievements a ON a.code = ua.achievement_code
@@ -239,7 +252,8 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
       score: score.rows[0] || null,
       currentStatus: statusHistory.rows[0] || null,
       nextStatus,
-      streak: streak.rows[0] || { current_streak_days: 0, longest_streak_days: 0 },
+      streak: streak.rows[0] || { current_streak_days: 0, longest_streak_days: 0, highest_tier_code: null },
+      streakTiers: streakTiers.rows,
       achievements: achievements.rows,
       passport: passport.rows,
       todayMissions: missions.rows,
@@ -465,6 +479,47 @@ router.patch('/admin/status-levels/:code', requireRole('admin'), async (req, res
     if (!result.rows.length) return res.status(404).json({ error: 'Status level not found.' });
     res.status(204).end();
   } catch (err) {
+    next(err);
+  }
+});
+
+// -- Streak tiers --
+
+// GET /participation/admin/streak-tiers
+router.get('/admin/streak-tiers', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT * FROM streak_tiers ORDER BY min_days ASC');
+    res.json({ streakTiers: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /participation/admin/streak-tiers/:code
+router.patch('/admin/streak-tiers/:code', requireRole('admin'), async (req, res, next) => {
+  try {
+    const fields = [];
+    const values = [];
+    const set = (column, value) => { values.push(value); fields.push(`${column} = $${values.length}`); };
+
+    const b = req.body;
+    if (b.label !== undefined) set('label', b.label);
+    if (b.emoji !== undefined) set('emoji', b.emoji);
+    if (b.minDays !== undefined) set('min_days', b.minDays);
+    if (b.bonusPoints !== undefined) set('bonus_points', b.bonusPoints);
+    if (b.description !== undefined) set('description', b.description);
+
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
+
+    values.push(req.params.code);
+    const result = await pool.query(
+      `UPDATE streak_tiers SET ${fields.join(', ')} WHERE code = $${values.length} RETURNING code`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Streak tier not found.' });
+    res.status(204).end();
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: `Another tier already uses ${req.body.minDays} days — each tier needs a distinct day count.` });
     next(err);
   }
 });

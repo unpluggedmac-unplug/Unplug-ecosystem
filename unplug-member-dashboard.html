@@ -312,6 +312,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div><strong id="unplugAchCount">0</strong> achievements</div>
           <div><strong id="unplugPassportCount">0 / 0</strong> passport stamps</div>
         </div>
+        <div id="unplugStreakNextTier" style="margin-top:8px; font-size:12.5px; color:var(--slate);"></div>
       </div>
 
       <div class="card">
@@ -2214,6 +2215,11 @@ async function loadMyUnplug() {
       : 'You have reached the top of the status ladder.';
 
     document.getElementById('unplugStreak').textContent = (data.streak && data.streak.current_streak_days) || 0;
+    const currentStreakDays = (data.streak && data.streak.current_streak_days) || 0;
+    const nextTier = (data.streakTiers || []).find((t) => t.min_days > currentStreakDays);
+    document.getElementById('unplugStreakNextTier').textContent = nextTier
+      ? `${nextTier.min_days - currentStreakDays} more day${nextTier.min_days - currentStreakDays === 1 ? '' : 's'} to reach ${nextTier.emoji} ${nextTier.label} (+${nextTier.bonus_points} pts)`
+      : ((data.streakTiers || []).length ? 'You\'ve reached the top streak tier!' : '');
     document.getElementById('unplugAchCount').textContent = (data.achievements || []).length;
     const earnedPassport = (data.passport || []).filter((p) => p.earned).length;
     document.getElementById('unplugPassportCount').textContent = `${earnedPassport} / ${(data.passport || []).length}`;
@@ -2286,6 +2292,7 @@ async function loadMyUnplug() {
     document.getElementById('unplugPassport').innerHTML = msg;
     document.getElementById('unplugReferralLink').textContent = '—';
     document.getElementById('unplugReferralStats').textContent = '';
+    document.getElementById('unplugStreakNextTier').textContent = '';
   }
 }
 

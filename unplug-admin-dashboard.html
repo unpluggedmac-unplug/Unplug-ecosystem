@@ -299,6 +299,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="unplugbizstatus">Business Status</a>
         <a data-section="unplugpointvalues">Point Values</a>
         <a data-section="unplugmemberstatus">Member Status</a>
+        <a data-section="unplugstreaktiers">Streak Tiers</a>
       </div>
     </div>
 
@@ -1251,6 +1252,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- STREAK TIERS -->
+    <div class="admin-section" id="section-unplugstreaktiers">
+      <div class="main-head"><div><h1>Streak Tiers</h1><p>Members build a streak by completing at least one daily/weekly mission each day. Crossing a tier's day count pays a one-time bonus and resets when the streak breaks. Each tier needs a distinct day count.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" id="streakTiersBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
       <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
@@ -1826,6 +1835,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'unplugbizstatus') loadUnplugBizStatus();
     if (section === 'unplugpointvalues') loadUnplugPointValues();
     if (section === 'unplugmemberstatus') loadUnplugMemberStatus();
+    if (section === 'unplugstreaktiers') loadUnplugStreakTiers();
   });
 });
 
@@ -6008,6 +6018,49 @@ async function saveUnplugMemberStatusLevel(code) {
         minScore: parseInt(document.getElementById(`msMinScore_${code}`).value, 10) || 0,
         minDaysSinceJoin: parseInt(document.getElementById(`msMinDays_${code}`).value, 10) || 0,
         minActiveMonths: parseInt(document.getElementById(`msMinMonths_${code}`).value, 10) || 0,
+      }),
+    });
+    msgEl.style.color = 'green';
+    msgEl.textContent = 'Saved.';
+  } catch (err) {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = err.message;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Streak Tiers (Stage K) — thresholds + bonus points only, same
+// no-create/delete reasoning as the other ladders.
+// ---------------------------------------------------------------------------
+async function loadUnplugStreakTiers() {
+  const body = document.getElementById('streakTiersBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/participation/admin/streak-tiers');
+    const tiers = data.streakTiers || [];
+    body.innerHTML = tiers.map((t) => `
+      <div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);">
+        <div style="font-weight:700; margin-bottom:8px;">${t.emoji} ${escapeHtmlAdmin(t.label)}</div>
+        <div class="form-row">
+          <div><label>Days required</label><input type="number" id="stMinDays_${t.code}" value="${t.min_days}"></div>
+          <div><label>Bonus points</label><input type="number" id="stBonus_${t.code}" value="${t.bonus_points}"></div>
+        </div>
+        <button class="btn btn-line" style="width:auto; padding:6px 14px; margin-top:6px;" onclick="saveUnplugStreakTier('${t.code}')">Save</button>
+        <span id="stMsg_${t.code}" style="font-size:12px; margin-left:8px;"></span>
+      </div>`).join('');
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+async function saveUnplugStreakTier(code) {
+  const msgEl = document.getElementById(`stMsg_${code}`);
+  try {
+    await api(`/participation/admin/streak-tiers/${code}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        minDays: parseInt(document.getElementById(`stMinDays_${code}`).value, 10) || 0,
+        bonusPoints: parseInt(document.getElementById(`stBonus_${code}`).value, 10) || 0,
       }),
     });
     msgEl.style.color = 'green';
