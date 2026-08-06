@@ -1058,6 +1058,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .cmt-form textarea:focus{ outline:2px solid var(--red); outline-offset:1px; }
 .cmt-actions{ display:flex; align-items:center; gap:14px; margin-top:10px; flex-wrap:wrap; }
 .cmt-note{ font-size:12px; color:var(--slate); }
+/* Universal interaction bar (like/dislike/comment-count/save) — same
+   visual language as comment reactions above, reused across every
+   content type (article/profile/gallery image/event/marketplace). */
+.interaction-bar{ display:flex; align-items:center; gap:8px; margin:14px 0; flex-wrap:wrap; }
+.int-btn{ display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--paper-line); border-radius:100px; padding:6px 13px; font-size:13.5px; cursor:pointer; color:var(--ink); }
+.int-btn:hover{ border-color:var(--red); }
+.int-btn.on{ border-color:var(--red); background:rgba(210,7,9,0.06); }
+.int-btn:disabled{ opacity:0.6; cursor:default; }
+.int-static{ display:inline-flex; align-items:center; gap:6px; font-size:13.5px; color:var(--slate); padding:6px 4px; }
+.int-count{ font-variant-numeric:tabular-nums; }
 /* Wrapper so a card's share row can sit OUTSIDE its <a>, while the card
    itself still stretches to fill the grid cell. */
 .card-shell{ display:flex; flex-direction:column; gap:10px; }
@@ -3823,6 +3833,7 @@ function initArticleReader(a, id, shareUrl) {
   loadRelatedStories(a, id);
   loadPoll(id);
   loadComments(id);
+  renderInteractionBar('articleInteractions', 'article', id);
 }
 
 // ---------------------------------------------------------------------------
@@ -4383,6 +4394,98 @@ function commentHtml(c) {
   </article>`;
 }
 
+// ---------------------------------------------------------------------------
+// Universal interaction bar (Members/Community System Phase 3) — one
+// reusable renderer for like/dislike/comment-count/save across every
+// content type the backend engine covers (article/profile/gallery_image/
+// event/marketplace_listing). A card or detail page just needs an empty
+// container with an id and a call to renderInteractionBar(containerId,
+// targetType, targetId).
+// ---------------------------------------------------------------------------
+async function renderInteractionBar(containerId, targetType, targetId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  try {
+    const [stats, mine] = await Promise.all([
+      api(`/interactions/${targetType}/${targetId}/stats`),
+      UnplugAPI.getToken()
+        ? api(`/interactions/${targetType}/${targetId}/mine`).catch(() => ({ reaction: null, saved: false }))
+        : Promise.resolve({ reaction: null, saved: false }),
+    ]);
+    paintInteractionBar(container, targetType, targetId, stats, mine);
+  } catch (err) {
+    // Stats are a nice-to-have on top of the content itself — fail
+    // silently rather than showing an error box under every card.
+    container.innerHTML = '';
+  }
+}
+
+function paintInteractionBar(container, targetType, targetId, stats, mine) {
+  container.innerHTML = `
+    <div class="interaction-bar" role="group" aria-label="Reactions">
+      <button class="int-btn${mine.reaction === 'like' ? ' on' : ''}" data-int-action="like" type="button" aria-pressed="${mine.reaction === 'like'}">
+        <span aria-hidden="true">❤️</span><span class="int-count">${stats.likes}</span>
+      </button>
+      <button class="int-btn${mine.reaction === 'dislike' ? ' on' : ''}" data-int-action="dislike" type="button" aria-pressed="${mine.reaction === 'dislike'}">
+        <span aria-hidden="true">👎</span><span class="int-count">${stats.dislikes}</span>
+      </button>
+      <span class="int-static"><span aria-hidden="true">💬</span><span class="int-count">${stats.comments}</span></span>
+      <button class="int-btn${mine.saved ? ' on' : ''}" data-int-action="save" type="button" aria-pressed="${mine.saved}">
+        <span aria-hidden="true">🔖</span><span class="int-count">${stats.saves}</span>
+      </button>
+    </div>`;
+
+  ['like', 'dislike'].forEach((reaction) => {
+    container.querySelector(`[data-int-action="${reaction}"]`).addEventListener('click', () =>
+      handleInteractionReact(container, targetType, targetId, reaction));
+  });
+  container.querySelector('[data-int-action="save"]').addEventListener('click', () =>
+    handleInteractionSave(container, targetType, targetId));
+}
+
+async function handleInteractionReact(container, targetType, targetId, reaction) {
+  if (!UnplugAPI.getToken()) {
+    showToast('Sign in to react');
+    window.open('unplug-member-dashboard.html', '_blank', 'noopener');
+    return;
+  }
+  const btn = container.querySelector(`[data-int-action="${reaction}"]`);
+  const wasActive = btn.classList.contains('on');
+  container.querySelectorAll('.int-btn').forEach((b) => { b.disabled = true; });
+  try {
+    if (wasActive) {
+      await api(`/interactions/${targetType}/${targetId}/react`, { method: 'DELETE' });
+    } else {
+      await api(`/interactions/${targetType}/${targetId}/react`, { method: 'POST', body: JSON.stringify({ reaction }) });
+    }
+    // Re-fetch rather than adjust locally — switching between like and
+    // dislike moves two counts at once, same reasoning as comment
+    // reactions above: guessing client-side would drift out of sync.
+    await renderInteractionBar(container.id, targetType, targetId);
+  } catch (err) {
+    container.querySelectorAll('.int-btn').forEach((b) => { b.disabled = false; });
+    showToast(err.message || 'Could not update');
+  }
+}
+
+async function handleInteractionSave(container, targetType, targetId) {
+  if (!UnplugAPI.getToken()) {
+    showToast('Sign in to save');
+    window.open('unplug-member-dashboard.html', '_blank', 'noopener');
+    return;
+  }
+  const btn = container.querySelector('[data-int-action="save"]');
+  const wasSaved = btn.classList.contains('on');
+  container.querySelectorAll('.int-btn').forEach((b) => { b.disabled = true; });
+  try {
+    await api(`/interactions/${targetType}/${targetId}/save`, { method: wasSaved ? 'DELETE' : 'POST' });
+    await renderInteractionBar(container.id, targetType, targetId);
+  } catch (err) {
+    container.querySelectorAll('.int-btn').forEach((b) => { b.disabled = false; });
+    showToast(err.message || 'Could not update');
+  }
+}
+
 async function loadComments(articleId) {
   const wrap = document.getElementById('articleComments');
   if (!wrap) return;
@@ -4501,6 +4604,7 @@ async function loadArticleDetail(id) {
         ${dateStr ? `<span>${dateStr}</span>` : ''}
         <span>·</span><span>${readMinutes(a.body)} min read</span>
       </div>
+      <div id="articleInteractions"></div>
       <div class="reader-toolbar" role="toolbar" aria-label="Reading options">
         <button id="rdListen" type="button">▶ Listen</button>
         <select id="rdRate" aria-label="Reading speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select>
