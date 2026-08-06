@@ -770,11 +770,16 @@ router.post('/top10/publish', requireRole('admin'), async (req, res, next) => {
 // /hall-of-fame path so it doesn't collide with /competitions/:slug.
 // ---------------------------------------------------------------------------
 
-// GET /hall-of-fame — public, newest year first.
+// GET /hall-of-fame — public, newest year first. The admin dashboard's
+// Hall of Fame management UI reuses this same route rather than a
+// separate admin-only one, so linked_user_id (a plain internal id, not
+// contact information) is included here too — the win itself also shows
+// under the winner's real profile via get_public_profile_analytics()
+// (competitions_won).
 router.get('/hall-of-fame', async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, year, name, title, photo_url, description
+      `SELECT id, year, name, title, photo_url, description, linked_user_id
        FROM hall_of_fame ORDER BY year DESC NULLS LAST, created_at DESC`
     );
     res.json({ winners: result.rows });
@@ -783,16 +788,20 @@ router.get('/hall-of-fame', async (req, res, next) => {
   }
 });
 
-// POST /hall-of-fame — admin adds a past winner.
+// POST /hall-of-fame — admin adds a past winner. linkedUserId is
+// optional — existing/typical entries stay text-only (a name typed in),
+// same as before this was added; an admin sets it only when they know
+// which real account the win belongs to.
 router.post('/hall-of-fame', requireRole('admin'), async (req, res, next) => {
   try {
-    const { year, name, title, photoUrl, description } = req.body;
+    const { year, name, title, photoUrl, description, linkedUserId } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required.' });
     const result = await pool.query(
-      `INSERT INTO hall_of_fame (year, name, title, photo_url, description)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO hall_of_fame (year, name, title, photo_url, description, linked_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [year ? parseInt(year, 10) : null, name.trim(), (title || '').trim() || null,
-       (photoUrl || '').trim() || null, (description || '').trim() || null]
+       (photoUrl || '').trim() || null, (description || '').trim() || null,
+       linkedUserId ? parseInt(linkedUserId, 10) : null]
     );
     res.status(201).json({ winner: result.rows[0] });
   } catch (err) {
@@ -804,13 +813,13 @@ router.post('/hall-of-fame', requireRole('admin'), async (req, res, next) => {
 // correct a typo was to delete the entry and retype it, which loses the row.
 router.patch('/hall-of-fame/:id', requireRole('admin'), async (req, res, next) => {
   try {
-    const map = { year: 'year', name: 'name', title: 'title', photoUrl: 'photo_url', description: 'description' };
+    const map = { year: 'year', name: 'name', title: 'title', photoUrl: 'photo_url', description: 'description', linkedUserId: 'linked_user_id' };
     const sets = [];
     const values = [];
     for (const [bodyKey, column] of Object.entries(map)) {
       if (req.body[bodyKey] !== undefined) {
         const raw = req.body[bodyKey];
-        values.push(bodyKey === 'year'
+        values.push((bodyKey === 'year' || bodyKey === 'linkedUserId')
           ? (raw ? parseInt(raw, 10) : null)
           : (String(raw || '').trim() || null));
         sets.push(`${column} = $${values.length}`);

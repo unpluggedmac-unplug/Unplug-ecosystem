@@ -303,6 +303,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="unplugtrust">Trust & Anti-Cheat</a>
         <a data-section="unplugpanalytics">Participation Analytics</a>
         <a data-section="communitysettings">Community Settings</a>
+        <a data-section="badges">Badges</a>
       </div>
     </div>
 
@@ -514,6 +515,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
           <div class="field" style="margin-top:12px;"><label>Photo</label><div id="hofPhotoUpload"></div></div>
           <div class="field"><label for="hofDesc">Description</label><textarea id="hofDesc" rows="2"></textarea></div>
+          <div class="field"><label for="hofLinkedUserId">Link to member (optional)</label><select id="hofLinkedUserId" style="padding:8px; width:100%;"><option value="">Not linked — this remains a text-only entry</option></select></div>
           <button class="btn btn-solid" style="width:auto;" id="addHofBtn">Add Winner</button>
         </div>
       </div>
@@ -1341,6 +1343,38 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- BADGES (Members/Community System — admin-granted recognition track,
+         distinct from auto-unlocked Achievements) -->
+    <div class="admin-section" id="section-badges">
+      <div class="main-head"><div><h1>Badges</h1><p>A separate, admin-granted recognition track — distinct from auto-unlocked Achievements. Create badge types here, then award them to individual members.</p></div></div>
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-head"><h3 id="badgeFormTitle">Create a badge</h3></div>
+        <div class="panel-body">
+          <input type="hidden" id="badgeEditCode">
+          <div style="display:flex; gap:14px; flex-wrap:wrap;">
+            <div class="field"><label for="badgeCode">Code (unique, no spaces)</label><input id="badgeCode" placeholder="e.g. rising_star"></div>
+            <div class="field"><label for="badgeEmoji">Emoji</label><input id="badgeEmoji" placeholder="🏅" style="width:70px;"></div>
+          </div>
+          <div class="field"><label for="badgeLabel">Label *</label><input id="badgeLabel" placeholder="e.g. Rising Star"></div>
+          <div class="field"><label for="badgeDescription">Description *</label><textarea id="badgeDescription" rows="2"></textarea></div>
+          <div class="field"><label for="badgeCategory">Category</label><input id="badgeCategory" placeholder="general"></div>
+          <button class="btn btn-solid" style="width:auto;" id="createBadgeBtn">Create Badge</button>
+        </div>
+      </div>
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-head"><h3>Award a badge</h3></div>
+        <div class="panel-body">
+          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="field"><label for="badgeAwardBadge">Badge</label><select id="badgeAwardBadge" style="padding:8px;"></select></div>
+            <div class="field"><label for="badgeAwardUser">Member</label><select id="badgeAwardUser" style="padding:8px;"><option value="">Loading members…</option></select></div>
+            <div class="field" style="flex:1; min-width:180px;"><label for="badgeAwardReason">Reason (optional)</label><input id="badgeAwardReason" placeholder="e.g. Community MVP this quarter"></div>
+            <button class="btn btn-solid" style="width:auto;" id="awardBadgeBtn">Award</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel"><div class="panel-head"><h3>Badge types</h3></div><div class="panel-body" id="badgesBody" style="padding:0;"></div></div>
+    </div>
+
     <!-- HIGHLIGHTED ARTICLES -->
     <div class="admin-section" id="section-highlights">
       <div class="main-head"><div><h1>Highlights</h1><p>Editorially feature an <strong>article</strong> or a <strong>Directory profile</strong> on the homepage — free, no payment portal. Pick what to highlight, the dates it should run, the display order, and an optional image that overrides its own for this spot. Leaving the end date open runs it until you deactivate it.</p></div></div>
@@ -1892,7 +1926,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'deafjobs') loadDeafJobs();
     if (section === 'deafpassports') loadDeafPassports();
     if (section === 'sitesettings') loadSiteSettings();
-    if (section === 'halloffame') loadHallOfFame();
+    if (section === 'halloffame') { loadHallOfFame(); populateHofUserPicker(); }
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payments') { loadPendingEft(); loadAllPayments(); }
     if (section === 'users') loadUsers();
@@ -1920,6 +1954,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'unplugtrust') loadUnplugTrust();
     if (section === 'unplugpanalytics') loadUnplugParticipationAnalytics(30);
     if (section === 'communitysettings') loadCommunitySettings();
+    if (section === 'badges') loadBadges();
   });
 });
 
@@ -4899,6 +4934,25 @@ async function loadEdcalDates() {
 // Null when adding, an id when the form was loaded from an existing entry.
 let HOF_EDITING_ID = null;
 
+// The "Link to member" select is populated once per admin session — existing
+// hall_of_fame rows stay unlinked (NULL) unless an admin explicitly picks a
+// member here, per the "apart from the ones already" instruction.
+let _hofUsersLoaded = false;
+async function populateHofUserPicker() {
+  if (_hofUsersLoaded) return;
+  const select = document.getElementById('hofLinkedUserId');
+  select.innerHTML = '<option value="">Loading members…</option>';
+  try {
+    const data = await api('/admin/users?limit=500&offset=0');
+    const users = data.users || [];
+    select.innerHTML = '<option value="">Not linked — this remains a text-only entry</option>'
+      + users.map((u) => `<option value="${u.id}">${escapeHtmlAdmin(u.full_name || u.email)}</option>`).join('');
+    _hofUsersLoaded = true;
+  } catch (err) {
+    select.innerHTML = '<option value="">Could not load members — leave unlinked</option>';
+  }
+}
+
 document.getElementById('addHofBtn').addEventListener('click', async () => {
   const name = document.getElementById('hofName').value.trim();
   if (!name) { showToast('Name is required.', true); return; }
@@ -4908,6 +4962,7 @@ document.getElementById('addHofBtn').addEventListener('click', async () => {
     title: document.getElementById('hofTitle').value.trim() || undefined,
     photoUrl: UnplugUpload.valueOf(document.getElementById('hofPhotoUpload')) || undefined,
     description: document.getElementById('hofDesc').value.trim() || undefined,
+    linkedUserId: document.getElementById('hofLinkedUserId').value || undefined,
   };
   try {
     if (HOF_EDITING_ID) {
@@ -4921,6 +4976,7 @@ document.getElementById('addHofBtn').addEventListener('click', async () => {
     document.getElementById('addHofBtn').textContent = 'Add Winner';
     ['hofYear', 'hofName', 'hofTitle', 'hofDesc'].forEach((id) => document.getElementById(id).value = '');
     document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', '');
+    document.getElementById('hofLinkedUserId').value = '';
     loadHallOfFame();
   } catch (err) { showToast(err.message, true); }
 });
@@ -4942,12 +4998,14 @@ async function loadHallOfFame() {
         + `<td><div class="row-actions"><button class="approve">Edit</button><button class="reject">Delete</button></div></td>`;
       // Editing loads the entry back into the form above, so a typo can be
       // corrected without deleting and retyping the whole record.
-      tr.querySelector('.approve').addEventListener('click', () => {
+      tr.querySelector('.approve').addEventListener('click', async () => {
         document.getElementById('hofYear').value = w.year || '';
         document.getElementById('hofName').value = w.name || '';
         document.getElementById('hofTitle').value = w.title || '';
         document.getElementById('hofDesc').value = w.description || '';
         document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', w.photo_url || '');
+        await populateHofUserPicker();
+        document.getElementById('hofLinkedUserId').value = w.linked_user_id || '';
         HOF_EDITING_ID = w.id;
         document.getElementById('addHofBtn').textContent = 'Save Changes';
         showToast('Loaded for editing — change what you need and save.');
@@ -6362,6 +6420,126 @@ async function loadCommunitySettings() {
     body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Badges — admin-granted recognition track, distinct from auto-unlocked
+// Achievements. Backed by /badges/admin/* (091_badges_and_hof_linking.sql).
+// ---------------------------------------------------------------------------
+let _badgeUsersLoaded = false;
+async function populateBadgeUserPicker() {
+  if (_badgeUsersLoaded) return;
+  const select = document.getElementById('badgeAwardUser');
+  select.innerHTML = '<option value="">Loading members…</option>';
+  try {
+    const data = await api('/admin/users?limit=500&offset=0');
+    const users = data.users || [];
+    select.innerHTML = users.map((u) => `<option value="${u.id}">${escapeHtmlAdmin(u.full_name || u.email)}</option>`).join('');
+    _badgeUsersLoaded = true;
+  } catch (err) {
+    select.innerHTML = '<option value="">Could not load members</option>';
+  }
+}
+
+async function loadBadges() {
+  populateBadgeUserPicker();
+  const body = document.getElementById('badgesBody');
+  const awardSelect = document.getElementById('badgeAwardBadge');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/badges/admin/all');
+    const badges = data.badges || [];
+    awardSelect.innerHTML = badges.map((b) => `<option value="${b.code}">${b.emoji} ${escapeHtmlAdmin(b.label)}</option>`).join('');
+    if (!badges.length) { body.innerHTML = '<div class="empty-state">No badge types yet — create one above.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th></th><th>Label</th><th>Category</th><th>Status</th><th></th></tr>';
+    badges.forEach((b) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="font-size:20px;">${b.emoji}</td>`
+        + `<td><strong>${escapeHtmlAdmin(b.label)}</strong><br><span style="font-size:11.5px; color:#666;">${escapeHtmlAdmin(b.description)}</span></td>`
+        + `<td>${escapeHtmlAdmin(b.category)}</td>`
+        + `<td>${b.is_enabled ? 'Enabled' : 'Disabled'}</td>`
+        + `<td><div class="row-actions"><button class="approve">Edit</button><button class="reject">${b.is_enabled ? 'Disable' : 'Enable'}</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', () => {
+        document.getElementById('badgeEditCode').value = b.code;
+        document.getElementById('badgeCode').value = b.code;
+        document.getElementById('badgeCode').disabled = true;
+        document.getElementById('badgeEmoji').value = b.emoji;
+        document.getElementById('badgeLabel').value = b.label;
+        document.getElementById('badgeDescription').value = b.description;
+        document.getElementById('badgeCategory').value = b.category;
+        document.getElementById('createBadgeBtn').textContent = 'Save Changes';
+        document.getElementById('badgeFormTitle').textContent = `Edit "${b.label}"`;
+        document.getElementById('badgeCode').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        try {
+          await api(`/badges/admin/${b.code}`, { method: 'PATCH', body: JSON.stringify({ isEnabled: !b.is_enabled }) });
+          showToast(`${b.label} ${b.is_enabled ? 'disabled' : 'enabled'}.`);
+          loadBadges();
+        } catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = ''; body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+document.getElementById('createBadgeBtn').addEventListener('click', async () => {
+  const editCode = document.getElementById('badgeEditCode').value;
+  const label = document.getElementById('badgeLabel').value.trim();
+  const description = document.getElementById('badgeDescription').value.trim();
+  if (!label || !description) { showToast('Label and description are required.', true); return; }
+  try {
+    if (editCode) {
+      await api(`/badges/admin/${editCode}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          label,
+          description,
+          emoji: document.getElementById('badgeEmoji').value.trim() || undefined,
+          category: document.getElementById('badgeCategory').value.trim() || undefined,
+        }),
+      });
+      showToast('Badge updated.');
+    } else {
+      const code = document.getElementById('badgeCode').value.trim();
+      if (!code) { showToast('Code is required.', true); return; }
+      await api('/badges/admin', {
+        method: 'POST',
+        body: JSON.stringify({
+          code,
+          label,
+          description,
+          emoji: document.getElementById('badgeEmoji').value.trim() || '🏅',
+          category: document.getElementById('badgeCategory').value.trim() || 'general',
+        }),
+      });
+      showToast('Badge created.');
+    }
+    document.getElementById('badgeEditCode').value = '';
+    document.getElementById('badgeCode').disabled = false;
+    ['badgeCode', 'badgeEmoji', 'badgeLabel', 'badgeDescription', 'badgeCategory'].forEach((id) => document.getElementById(id).value = '');
+    document.getElementById('createBadgeBtn').textContent = 'Create Badge';
+    document.getElementById('badgeFormTitle').textContent = 'Create a badge';
+    loadBadges();
+  } catch (err) { showToast(err.message, true); }
+});
+
+document.getElementById('awardBadgeBtn').addEventListener('click', async () => {
+  const code = document.getElementById('badgeAwardBadge').value;
+  const userId = document.getElementById('badgeAwardUser').value;
+  if (!code || !userId) { showToast('Pick a badge and a member.', true); return; }
+  try {
+    const result = await api(`/badges/admin/${code}/award`, {
+      method: 'POST',
+      body: JSON.stringify({ userId, reason: document.getElementById('badgeAwardReason').value.trim() || undefined }),
+    });
+    showToast(result.awarded ? 'Badge awarded.' : 'That member already has this badge.');
+    document.getElementById('badgeAwardReason').value = '';
+  } catch (err) { showToast(err.message, true); }
+});
 
 async function viewUnplugCampaignReport(id) {
   const panel = document.getElementById('unplugCampaignReportPanel');
