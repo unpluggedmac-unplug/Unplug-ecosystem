@@ -159,6 +159,13 @@ router.post('/:id/purchase', publicSubmitLimiter, async (req, res, next) => {
     if (!isValidEmail(email)) {
       return res.status(400).json({ error: 'Enter a valid email address — your download is linked to it.' });
     }
+    // MANDATORY Terms & Conditions gate — enforced server-side, same rule
+    // POST /payments/initiate applies to every other paid service. This
+    // route is its own bespoke purchase flow (not payments.js), so it
+    // needs its own copy of the same check rather than inheriting it.
+    if (req.body.termsAccepted !== true) {
+      return res.status(400).json({ error: 'You must read and accept the current Unplug Terms & Conditions and Cancellation, Refund & Account Credit Policy before checkout.' });
+    }
     const method = req.body.method === 'eft' ? 'eft' : 'online';
     const amount = Number(edition.rows[0].download_price);
     const reference = await generateReference();

@@ -44,7 +44,7 @@ async function req(method, urlPath, { token, body } = {}) {
 
 // Buys an edition by EFT and returns { reference, purchaseId }.
 async function buyByEft(email) {
-  const r = await req('POST', `/editions/${editionId}/purchase`, { body: { email, method: 'eft' } });
+  const r = await req('POST', `/editions/${editionId}/purchase`, { body: { email, method: 'eft', termsAccepted: true } });
   assert.equal(r.status, 201, 'purchase failed: ' + JSON.stringify(r.body));
   return r.body;
 }
@@ -135,10 +135,24 @@ test('reference codes are unique across purchases', async () => {
 
 test('the price comes from the edition, not from the request', async () => {
   const r = await req('POST', `/editions/${editionId}/purchase`, {
-    body: { email: 'cheap@test.com', method: 'eft', amount: 1, price: 1, downloadPrice: 1 },
+    body: { email: 'cheap@test.com', method: 'eft', amount: 1, price: 1, downloadPrice: 1, termsAccepted: true },
   });
   const row = await pool.query('SELECT amount FROM edition_purchases WHERE id = $1', [r.body.purchaseId]);
   assert.equal(Number(row.rows[0].amount), 50, 'a posted amount overrode the real price');
+});
+
+test('a purchase is refused without accepting the Terms & Conditions — mandatory, no exceptions', async () => {
+  const missing = await req('POST', `/editions/${editionId}/purchase`, { body: { email: 'noterms@test.com', method: 'eft' } });
+  assert.equal(missing.status, 400);
+  assert.match(missing.body.error, /Terms/);
+
+  const falseValue = await req('POST', `/editions/${editionId}/purchase`, { body: { email: 'noterms@test.com', method: 'eft', termsAccepted: false } });
+  assert.equal(falseValue.status, 400);
+
+  // No purchase row should exist for this email — rejection must happen
+  // before the row is created, not after.
+  const rows = await pool.query(`SELECT 1 FROM edition_purchases WHERE customer_email = 'noterms@test.com'`);
+  assert.equal(rows.rows.length, 0);
 });
 
 test('an unpublished edition cannot be bought', async () => {
@@ -311,7 +325,7 @@ test('a failed transfer does NOT consume the customer download', async () => {
     `INSERT INTO editions (issue_number, title, pdf_url, status, publication_date)
      VALUES (500, 'Broken File', 'http://127.0.0.1:1/missing.pdf', 'published', '2026-08-01') RETURNING id`
   );
-  const buy = await req('POST', `/editions/${broken.rows[0].id}/purchase`, { body: { email: 'broken@test.com', method: 'eft' } });
+  const buy = await req('POST', `/editions/${broken.rows[0].id}/purchase`, { body: { email: 'broken@test.com', method: 'eft', termsAccepted: true } });
   await approve(buy.body.purchaseId);
   const claim = await req('POST', '/editions/download/claim', { body: { email: 'broken@test.com', reference: buy.body.reference } });
 
@@ -357,12 +371,12 @@ test('a member sees their own edition purchases, guest ones included', async () 
                     VALUES (5, 'member@test.com', 'x', 'member') ON CONFLICT DO NOTHING`);
   // Bought while signed in.
   const asMember = await req('POST', `/editions/${editionId}/purchase`, {
-    token: memberToken, body: { email: 'member@test.com', method: 'eft' },
+    token: memberToken, body: { email: 'member@test.com', method: 'eft', termsAccepted: true },
   });
   assert.equal(asMember.status, 201, 'signed-in purchase failed: ' + JSON.stringify(asMember.body));
   // Bought as a guest, with the same email, before registering.
   const asGuest = await req('POST', `/editions/${editionId}/purchase`, {
-    body: { email: 'MEMBER@TEST.COM', method: 'eft' },
+    body: { email: 'MEMBER@TEST.COM', method: 'eft', termsAccepted: true },
   });
   assert.equal(asGuest.status, 201, 'guest purchase failed: ' + JSON.stringify(asGuest.body));
 
@@ -449,7 +463,7 @@ test('setup: a second edition with separate view/download files', async () => {
 });
 
 test('the paid download serves download_pdf_url, not the free View Online file', async () => {
-  const purchase = await req('POST', `/editions/${dualFileEditionId}/purchase`, { body: { email: 'dualfile@test.com', method: 'eft' } });
+  const purchase = await req('POST', `/editions/${dualFileEditionId}/purchase`, { body: { email: 'dualfile@test.com', method: 'eft', termsAccepted: true } });
   assert.equal(purchase.status, 201);
   await approve(purchase.body.purchaseId);
   const claim = await req('POST', '/editions/download/claim', { body: { email: 'dualfile@test.com', reference: purchase.body.reference } });
@@ -473,7 +487,7 @@ test('an edition with no separate download_pdf_url still downloads (falls back t
   );
   const noDownloadFileEditionId = ed.rows[0].id;
 
-  const purchase = await req('POST', `/editions/${noDownloadFileEditionId}/purchase`, { body: { email: 'fallback@test.com', method: 'eft' } });
+  const purchase = await req('POST', `/editions/${noDownloadFileEditionId}/purchase`, { body: { email: 'fallback@test.com', method: 'eft', termsAccepted: true } });
   assert.equal(purchase.status, 201);
   await approve(purchase.body.purchaseId);
   const claim = await req('POST', '/editions/download/claim', { body: { email: 'fallback@test.com', reference: purchase.body.reference } });

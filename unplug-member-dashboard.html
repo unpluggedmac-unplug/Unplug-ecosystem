@@ -431,6 +431,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field"><label for="svcArtDuration">Duration</label><select id="svcArtDuration"><option value="">Loading…</option></select></div>
         </div>
         <div id="svcArtError" class="error-banner" style="display:none;"></div>
+        <label class="tc-row" style="margin:8px 0;"><input type="checkbox" id="svcArtTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
         <button class="btn btn-solid" id="svcArtBtn" style="width:auto;">Continue to Checkout</button>
         <div class="instructions-box section-hidden" id="svcArtResult" style="margin-top:12px;"></div>
       </div>
@@ -443,6 +444,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field"><label>Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="svcProfStart" type="date"></div>
         </div>
         <div id="svcProfError" class="error-banner" style="display:none;"></div>
+        <label class="tc-row" style="margin:8px 0;"><input type="checkbox" id="svcProfTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
         <button class="btn btn-solid" id="svcProfBtn" style="width:auto;">Continue to Checkout</button>
         <div class="instructions-box section-hidden" id="svcProfResult" style="margin-top:12px;"></div>
       </div>
@@ -1074,7 +1076,7 @@ function enterMemberDashboard(user){
       targetType: 'article',
       targetId: Number(document.getElementById('svcArtPick').value),
       durationDays: Number(document.getElementById('svcArtDuration').value),
-      errorEl: 'svcArtError', resultEl: 'svcArtResult', btn: 'svcArtBtn',
+      errorEl: 'svcArtError', resultEl: 'svcArtResult', btn: 'svcArtBtn', termsChkId: 'svcArtTermsChk',
     }));
   }
   const profBtn = document.getElementById('svcProfBtn');
@@ -1085,7 +1087,7 @@ function enterMemberDashboard(user){
       targetId: MY_PROFILE_ID,
       durationDays: Number(document.getElementById('svcProfDuration').value),
       requestedStartDate: document.getElementById('svcProfStart').value || undefined,
-      errorEl: 'svcProfError', resultEl: 'svcProfResult', btn: 'svcProfBtn',
+      errorEl: 'svcProfError', resultEl: 'svcProfResult', btn: 'svcProfBtn', termsChkId: 'svcProfTermsChk',
     }));
   }
 }
@@ -1211,13 +1213,22 @@ async function loadHighlightServices() {
   ps.min = today; ps.value = today;
 }
 
-// Shared buy routine for both highlight services.
-async function buyHighlight({ targetType, targetId, durationDays, requestedStartDate, errorEl, resultEl, btn }) {
+// Shared buy routine for both highlight services. termsChkId is a real,
+// unchecked-by-default checkbox in the calling form — MANDATORY per the
+// site-wide Terms & Conditions gate, same rule every other payment portal
+// enforces. Checked here rather than trusted from the caller, so a future
+// call site can't accidentally skip it.
+async function buyHighlight({ targetType, targetId, durationDays, requestedStartDate, errorEl, resultEl, btn, termsChkId }) {
   const err = document.getElementById(errorEl);
   const box = document.getElementById(resultEl);
   err.style.display = 'none';
   if (!targetId) { err.textContent = 'Nothing selected to highlight.'; err.style.display = 'block'; return; }
   if (!durationDays) { err.textContent = 'Choose a duration.'; err.style.display = 'block'; return; }
+  if (!document.getElementById(termsChkId).checked) {
+    err.textContent = 'You must accept the Terms and Conditions before you can proceed with payment.';
+    err.style.display = 'block';
+    return;
+  }
   const b = document.getElementById(btn);
   b.disabled = true; b.textContent = 'Processing…';
   try {
@@ -1329,7 +1340,10 @@ async function loadProfile() {
         <div class="tier-upgrade-row">
           <span style="font-size:13px;">Upgrade to:</span>
           ${higherTiers.map((t) => `<button class="btn btn-solid upgrade-btn" data-tier="${t}" style="width:auto;">${t.charAt(0).toUpperCase() + t.slice(1)} (R250 fee)</button>`).join('')}
-        </div>` : ''}
+        </div>
+        <div id="upgradeError" class="error-banner" style="display:none; margin-top:6px;"></div>
+        <label class="tc-row" style="margin:8px 0;"><input type="checkbox" id="upgradeTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+        <div id="upgradeResult" class="instructions-box section-hidden" style="margin-top:10px;"></div>` : ''}
       ${p.status === 'awaiting_payment' ? `<p style="font-size:12.5px; color:var(--red); margin-top:12px;">Your profile is awaiting payment — use the Unplug checkout to complete it before it can be reviewed.</p>` : ''}
 
       ${p.type === 'business' && p.status === 'approved' ? `
@@ -1350,6 +1364,7 @@ async function loadProfile() {
           </div>
           <div class="field"><label for="hlPayMethod">Payment Method</label><select id="hlPayMethod"><option value="eft" selected>Manual EFT</option></select></div>
           <div id="hlBuyError" class="error-banner" style="display:none;"></div>
+          <label class="tc-row" style="margin:8px 0;"><input type="checkbox" id="hlTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
           <button class="btn btn-solid" id="hlBuyBtn" style="width:auto;">Continue to Payment</button>
           <div class="instructions-box section-hidden" id="hlBuyResult" style="margin-top:14px;"></div>
         `}
@@ -1446,6 +1461,11 @@ async function loadProfile() {
         err.style.display = 'none';
         const durationDays = Number(pkgSel.value);
         if (!durationDays) { err.textContent = 'Choose a highlight package.'; err.style.display = 'block'; return; }
+        if (!document.getElementById('hlTermsChk').checked) {
+          err.textContent = 'You must accept the Terms and Conditions before you can proceed with payment.';
+          err.style.display = 'block';
+          return;
+        }
         const btn = document.getElementById('hlBuyBtn');
         btn.disabled = true; btn.textContent = 'Processing…';
         try {
@@ -1486,14 +1506,50 @@ async function loadProfile() {
 
     document.querySelectorAll('.upgrade-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
+        const err = document.getElementById('upgradeError');
+        const box = document.getElementById('upgradeResult');
+        err.style.display = 'none';
+        // MANDATORY Terms & Conditions gate — this button used to create the
+        // upgrade request and stop, leaving the member with no way to
+        // actually pay for it. Fixed alongside adding the gate, since both
+        // are the same "finish the payment step properly" fix.
+        if (!document.getElementById('upgradeTermsChk').checked) {
+          err.textContent = 'You must accept the Terms and Conditions before you can proceed with payment.';
+          err.style.display = 'block';
+          return;
+        }
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = 'Processing…';
         try {
-          const result = await api(`/profiles/${p.id}/upgrade`, {
+          const created = await api(`/profiles/${p.id}/upgrade`, {
             method: 'POST',
             body: JSON.stringify({ toTier: btn.dataset.tier }),
           });
-          showToast(result.message);
-        } catch (err) {
-          showToast(err.message, true);
+          const pay = await api('/payments/initiate', { method: 'POST', body: JSON.stringify({
+            linkedType: 'profile_upgrade', linkedId: created.upgrade.id, method: 'eft',
+            termsAccepted: true, termsVersion: SUBMIT_TERMS_VERSION, useCredit: false,
+          }) });
+          box.classList.remove('section-hidden');
+          if (pay.paidInFull) {
+            box.innerHTML = `<strong>Upgrade paid in full by your Unplug Credit.</strong><br><br>${pay.message || ''}` + refNotice(pay.payment.gateway_reference);
+          } else if (pay.instructions) {
+            const i = pay.instructions;
+            box.innerHTML = `<strong>Upgrade reserved.</strong> Pay via EFT using the details below — your tier changes once payment clears.<br><br>
+              <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
+              ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
+              <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br><br>
+              ${i.note}` + refNotice(i.reference);
+          } else {
+            box.innerHTML = `<strong>Upgrade reserved.</strong> ${pay.note || ''}`;
+          }
+          showToast('Upgrade reserved — complete payment to activate it.');
+        } catch (e) {
+          err.textContent = e.message || 'Could not start the upgrade.';
+          err.style.display = 'block';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
         }
       });
     });
