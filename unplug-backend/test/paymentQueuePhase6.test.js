@@ -354,6 +354,70 @@ test('an unknown source is rejected rather than being interpolated into SQL', as
 });
 
 // ---------------------------------------------------------------------------
+// Rejecting a cart order
+// ---------------------------------------------------------------------------
+
+test('an admin can reject a pending order, and every item in it is marked failed', async () => {
+  const admin = await makeUser('admin');
+  const user = await makeUser();
+  const order = await makeOrder(user);
+
+  const { status, body } = await req('PATCH', `/orders/admin/${order.id}/reject`, { token: tokenFor(admin, 'admin') });
+  assert.equal(status, 200);
+  assert.equal(body.creditReturned, 0);
+
+  const after = await pool.query(`SELECT status FROM orders WHERE id = $1`, [order.id]);
+  assert.equal(after.rows[0].status, 'failed');
+  const items = await pool.query(`SELECT status FROM payments WHERE order_id = $1`, [order.id]);
+  assert.ok(items.rows.length > 0);
+  assert.ok(items.rows.every((r) => r.status === 'failed'), 'every item in the order should be failed too');
+});
+
+test('rejecting an order RETURNS any account credit that was spent on it', async () => {
+  // The costly case: the customer paid with credit, so rejecting without
+  // refunding would take real money and deliver nothing.
+  const admin = await makeUser('admin');
+  const user = await makeUser();
+  await pool.query(
+    `INSERT INTO account_credits (user_id, amount, reason, note) VALUES ($1, 200, 'admin_adjustment', 'test grant')`,
+    [user]
+  );
+  const order = await makeOrder(user);
+  // Mirror what checkout does: spend R150 of that credit against this order.
+  await pool.query(
+    `INSERT INTO account_credits (user_id, amount, reason, note) VALUES ($1, -150, 'spent_at_checkout', $2)`,
+    [user, `Applied to order ${order.reference}`]
+  );
+  await pool.query(`UPDATE orders SET credit_used = 150 WHERE id = $1`, [order.id]);
+
+  const balanceBefore = await pool.query(`SELECT COALESCE(SUM(amount),0)::numeric AS b FROM account_credits WHERE user_id = $1`, [user]);
+  assert.equal(Number(balanceBefore.rows[0].b), 50);
+
+  const { status, body } = await req('PATCH', `/orders/admin/${order.id}/reject`, { token: tokenFor(admin, 'admin') });
+  assert.equal(status, 200);
+  assert.equal(body.creditReturned, 150);
+
+  const balanceAfter = await pool.query(`SELECT COALESCE(SUM(amount),0)::numeric AS b FROM account_credits WHERE user_id = $1`, [user]);
+  assert.equal(Number(balanceAfter.rows[0].b), 200, 'the spent credit should be back');
+});
+
+test('an already-confirmed order cannot be rejected — its services have already been delivered', async () => {
+  const admin = await makeUser('admin');
+  const user = await makeUser();
+  const order = await makeOrder(user, { status: 'confirmed' });
+  const { status, body } = await req('PATCH', `/orders/admin/${order.id}/reject`, { token: tokenFor(admin, 'admin') });
+  assert.equal(status, 400);
+  assert.match(body.error, /already been confirmed/);
+});
+
+test('rejecting an order is admin-only', async () => {
+  const user = await makeUser();
+  const order = await makeOrder(user);
+  const { status } = await req('PATCH', `/orders/admin/${order.id}/reject`, { token: tokenFor(user) });
+  assert.equal(status, 403);
+});
+
+// ---------------------------------------------------------------------------
 // Generated documents
 // ---------------------------------------------------------------------------
 

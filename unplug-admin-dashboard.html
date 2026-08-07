@@ -2047,10 +2047,7 @@ async function loadPaymentQueue() {
       const unpaid = it.status === 'pending' || it.status === 'awaiting_payment';
       const acts = [];
       if (unpaid) acts.push(`<button class="btn btn-line pq-act" data-act="approve" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">Approve</button>`);
-      // Orders have no reject endpoint of their own (unlike payments and
-      // vote bundles), so that button is not offered for them rather than
-      // wired to something that would 404.
-      if (unpaid && it.source !== 'order') acts.push(`<button class="btn btn-line pq-act" data-act="reject" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">Reject</button>`);
+      if (unpaid) acts.push(`<button class="btn btn-line pq-act" data-act="reject" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">Reject</button>`);
       if (it.popUrl) acts.push(`<button class="btn btn-line pq-act" data-act="proof" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">View POP</button>`);
       acts.push(`<button class="btn btn-line pq-act" data-act="invoice" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">${it.invoiceUrl ? 'Re-issue' : 'Invoice'}</button>`);
       acts.push(`<button class="btn btn-line pq-act" data-act="receipt" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">Receipt</button>`);
@@ -2100,9 +2097,16 @@ document.addEventListener('click', async (e) => {
       showToast('Approved and applied.');
       loadPaymentQueue();
     } else if (act === 'reject') {
+      let msg = 'Marked as rejected.';
       if (source === 'payment') await api(`/payments/admin/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'failed' }) });
-      else await api(`/admin/vote-bundles/${id}/reject`, { method: 'PATCH' });
-      showToast('Marked as rejected.');
+      else if (source === 'order') {
+        // Rejecting an order returns any account credit spent on it, so the
+        // exact wording from the server is worth showing rather than a
+        // generic "rejected" — it tells the admin money moved.
+        const r = await api(`/orders/admin/${id}/reject`, { method: 'PATCH' });
+        msg = r.message || msg;
+      } else await api(`/admin/vote-bundles/${id}/reject`, { method: 'PATCH' });
+      showToast(msg);
       loadPaymentQueue();
     } else if (act === 'proof') {
       // The proof lives in private storage, so it needs the admin's token —

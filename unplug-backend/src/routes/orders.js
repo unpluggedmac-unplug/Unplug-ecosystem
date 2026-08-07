@@ -386,6 +386,68 @@ router.patch('/admin/:id/confirm-eft', requireRole('admin'), async (req, res, ne
   }
 });
 
+// PATCH /orders/admin/:id/reject — the counterpart to confirm-eft above, for
+// when the EFT never arrives or the order should not go ahead.
+//
+// Only a PENDING order can be rejected. A confirmed one has already had every
+// item's applyPaymentEffect run (articles published, banners scheduled, votes
+// allocated), and undoing that generically is not something this endpoint can
+// honestly claim to do — those need the per-item reversal paths instead.
+//
+// Any account credit spent on the order is put back. spendCredit() wrote a
+// negative ledger row at checkout, so without this the customer would have
+// paid real credit and received nothing — the single most costly thing this
+// endpoint could get wrong. The voucher is deliberately NOT auto-reinstated:
+// voucher usage limits are tracked separately, and silently handing back a
+// single-use code is a decision for an admin, not a side effect of rejecting.
+router.patch('/admin/:id/reject', requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [req.params.id]);
+    if (found.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+    const order = found.rows[0];
+    if (order.status !== 'pending') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: order.status === 'confirmed'
+          ? 'This order has already been confirmed and its services applied — it cannot be rejected. Reverse the individual items instead.'
+          : `Order is already ${order.status}.`,
+      });
+    }
+
+    await client.query(`UPDATE payments SET status = 'failed' WHERE order_id = $1`, [order.id]);
+    await client.query(`UPDATE orders SET status = 'failed' WHERE id = $1`, [order.id]);
+
+    const creditUsed = Number(order.credit_used) || 0;
+    if (creditUsed > 0) {
+      await client.query(
+        `INSERT INTO account_credits (user_id, amount, reason, note, created_by)
+         VALUES ($1, $2, 'cancelled_service', $3, $4)`,
+        [order.user_id, creditUsed, `Order ${order.reference} rejected — credit returned`, req.user.id]
+      );
+    }
+    await client.query('COMMIT');
+
+    logActivity(req.user.id, 'order_rejected',
+      `Order ${order.reference} rejected${creditUsed > 0 ? ` — R${creditUsed.toFixed(2)} credit returned` : ''}`);
+    res.json({
+      message: creditUsed > 0
+        ? `Order rejected. R${creditUsed.toFixed(2)} of account credit has been returned to the customer.`
+        : 'Order rejected.',
+      creditReturned: creditUsed,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // GET /orders/admin/all — the admin queue for this portal specifically. A
 // fuller cross-portal search/filter view is Phase 6's job; this is what
 // makes the cart functionally complete on its own in the meantime.
