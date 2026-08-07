@@ -518,7 +518,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
         <div class="field"><label for="evt-venue">Venue</label><input id="evt-venue"></div>
         <div class="field"><label for="evt-fee">Entrance Fee (what attendees pay, e.g. "R50" or "Free")</label><input id="evt-fee" placeholder="Free"></div>
-        <div class="field"><label>Feature Image <span style="font-weight:400; opacity:0.7;">— 800 × 1200px (2:3 portrait)</span></label><div id="evt-image-upload"></div></div>
+        <div class="field"><label>Feature Image <span style="font-weight:400; opacity:0.7;">— 1600 × 900px (16:9 landscape)</span></label><div id="evt-image-upload"></div></div>
         <div class="field"><label for="evt-contact">Contact Details (shown on the event)</label><input id="evt-contact" placeholder="e.g. 082 000 0000 / email"></div>
         <div class="field"><label for="evt-link">Event Link (tickets / more info)</label><input id="evt-link" placeholder="https://..."></div>
         <div class="field"><label for="evt-desc">Description</label><textarea id="evt-desc" rows="3"></textarea></div>
@@ -544,7 +544,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <!-- Marketplace fields -->
       <div id="fields-marketplace" class="section-hidden">
         <div class="field"><label for="mkt-business">Business Name (first-time advertisers only)</label><input id="mkt-business"></div>
-        <div class="field"><label>Poster Image <span style="font-weight:400; opacity:0.7;">— 1080 × 1350px (4:5)</span></label><div id="mkt-poster-upload"></div></div>
+        <div class="field"><label>Poster Image <span style="font-weight:400; opacity:0.7;">— 1600 × 900px (16:9 landscape)</span></label><div id="mkt-poster-upload"></div></div>
         <div class="field"><label for="mkt-headline">Headline</label><input id="mkt-headline"></div>
         <div class="field"><label for="mkt-start">Requested Start Date (optional — defaults to today)</label><input id="mkt-start" type="date"></div>
       </div>
@@ -2067,9 +2067,14 @@ function artCollectLinks() {
 // the crop step (image-upload.js) applies automatically. These used to be
 // plain "paste a URL" inputs; a pasted URL points at someone else's server
 // and can vanish or change, which is exactly what A4 removed everywhere else.
+// Ratios match how each image actually gets displayed publicly (checked
+// against the real CSS/rendering, not just the field's own label — the
+// event and marketplace labels used to claim a PORTRAIT ratio while their
+// actual display (.cal-thumb, .market-poster) is landscape object-fit:cover,
+// which would have cropped the top and bottom off most uploaded photos.
 function evtEnsureImageField() {
   const el = document.getElementById('evt-image-upload');
-  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('evtImage', '', '', { w: 800, h: 1200, label: '2:3 portrait' });
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('evtImage', '', '', { w: 1600, h: 900, label: '16:9 landscape' });
 }
 function galEnsureImageFields() {
   [1, 2, 3].forEach((i) => {
@@ -2079,7 +2084,7 @@ function galEnsureImageFields() {
 }
 function mktEnsurePosterField() {
   const el = document.getElementById('mkt-poster-upload');
-  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('mktPoster', '', '', { w: 1080, h: 1350, label: '4:5 portrait' });
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('mktPoster', '', '', { w: 1600, h: 900, label: '16:9 landscape' });
 }
 function ensureAllSubmitImageFields() {
   artEnsureCoverField();
