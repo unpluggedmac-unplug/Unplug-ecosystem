@@ -346,11 +346,54 @@ document.getElementById('payBtn').addEventListener('click', async () => {
       <b>Account Number:</b> ${i.accountNumber}<br>
       <b>Branch Code:</b> ${i.branchCode}<br>
       <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>
-      ${i.note}`;
+      ${i.note}
+      <div id="popUploadBlock" data-reference="${i.reference}" style="margin-top:14px; border-top:1px dashed var(--paper-line); padding-top:12px;">
+        <div style="font-weight:700; font-size:13px;">Already paid? Upload your proof of payment</div>
+        <p style="font-size:12px; color:var(--slate); margin:4px 0 8px;">Optional — a screenshot or PDF from your banking app. It isn't required, but it helps us confirm your votes sooner.</p>
+        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" id="popUploadInput" style="font-size:12px;">
+        <div id="popUploadStatus" style="font-size:12px; margin-top:6px; min-height:16px;"></div>
+      </div>`;
   } catch (err) {
     showError('paymentError', err.message || 'Could not start this purchase — please try again.');
   } finally {
     btn.disabled = false; btn.textContent = 'Complete Order';
+  }
+});
+
+// Proof-of-payment upload. Delegated because the block above only exists
+// once an order has been created. This portal has no login at all, so the
+// reference is the credential — PATCH /vote-bundles/:reference/proof
+// accepts it for exactly that reason (see routes/competitions.js).
+document.addEventListener('change', async (e) => {
+  const input = e.target.closest('#popUploadInput');
+  if (!input || !input.files || !input.files[0]) return;
+  const block = document.getElementById('popUploadBlock');
+  const statusEl = document.getElementById('popUploadStatus');
+  const file = input.files[0];
+  statusEl.textContent = 'Uploading…';
+  statusEl.style.color = 'var(--slate)';
+  try {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    // No Content-Type header: the browser must set the multipart boundary.
+    const uploadRes = await fetch(API_BASE + '/uploads/proof', { method: 'POST', body: form });
+    const uploaded = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok) throw new Error(uploaded.error || 'Upload failed.');
+
+    const patchRes = await fetch(`${API_BASE}/vote-bundles/${encodeURIComponent(block.dataset.reference)}/proof`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: uploaded.url }),
+    });
+    const patched = await patchRes.json().catch(() => ({}));
+    if (!patchRes.ok) throw new Error(patched.error || 'Could not attach that file.');
+
+    statusEl.textContent = 'Proof of payment received — thank you. Our team will verify it shortly.';
+    statusEl.style.color = 'green';
+    input.disabled = true;
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.style.color = 'var(--red)';
   }
 });
 

@@ -268,6 +268,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <div class="nav-group" data-group="payments">
       <button type="button" class="nav-group-head"><span>Payment Management</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
+        <a data-section="payqueue">All Payments (Unified)</a>
         <a data-section="payments">Payments (EFT)</a>
         <a data-section="pricing">Service Pricing</a>
         <a data-section="vouchers">Vouchers</a>
@@ -549,6 +550,43 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
 
     <!-- PAYMENTS (EFT) -->
+    <!-- Unified cross-portal payment queue (Payment Portal Phase 6). Merges
+         standalone payments, cart orders and anonymous Bulk Votes bundles
+         into one searchable list. Approve/Reject route back to each
+         portal's own existing endpoint rather than a new parallel one. -->
+    <div class="admin-section" id="section-payqueue">
+      <div class="main-head"><div><h1>All Payments</h1><p>Every payment across all three portals in one place — Services, Cart Orders and Bulk Votes. Search by reference, customer or contestant.</p></div></div>
+      <div class="panel">
+        <div class="panel-body">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+            <div style="flex:2; min-width:180px;"><label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:4px;">Search</label><input id="pqSearch" placeholder="Reference, email, name or entry code" style="width:100%; padding:8px 10px; border:1px solid var(--paper-line); font-size:13px;"></div>
+            <div style="flex:1; min-width:120px;"><label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:4px;">Portal</label>
+              <select id="pqSource" style="width:100%; padding:8px 10px; border:1px solid var(--paper-line); font-size:13px;">
+                <option value="">All portals</option>
+                <option value="payment">Services</option>
+                <option value="order">Cart Orders</option>
+                <option value="vote_bundle">Bulk Votes</option>
+              </select></div>
+            <div style="flex:1; min-width:120px;"><label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:4px;">Status</label>
+              <select id="pqStatus" style="width:100%; padding:8px 10px; border:1px solid var(--paper-line); font-size:13px;">
+                <option value="">Any status</option>
+                <option value="pending">Awaiting payment</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="rejected">Rejected</option>
+                <option value="reversed">Reversed</option>
+                <option value="failed">Failed</option>
+              </select></div>
+            <div style="flex:1; min-width:120px;"><label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:4px;">From</label><input id="pqFrom" type="date" style="width:100%; padding:8px 10px; border:1px solid var(--paper-line); font-size:13px;"></div>
+            <div style="flex:1; min-width:120px;"><label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:4px;">To</label><input id="pqTo" type="date" style="width:100%; padding:8px 10px; border:1px solid var(--paper-line); font-size:13px;"></div>
+            <button class="btn btn-line" id="pqRefresh" style="width:auto;">Search</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-body" id="pqBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <div class="admin-section" id="section-payments">
       <div class="main-head"><div><h1>Payments — Manual EFT</h1><p>Confirm after checking your bank statement. PayFast and Ozow confirm automatically via webhook and won't appear here.</p></div></div>
       <div class="panel">
@@ -1947,6 +1985,152 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 // Sidebar section switching
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Unified payment queue (Payment Portal Phase 6). Reads GET
+// /admin/payment-queue, which merges the three portals server-side.
+//
+// Approve/Reject deliberately call each portal's OWN existing endpoint
+// rather than a new unified one — those are the routes that already know
+// how to apply a payment's real effects (publish the article, allocate the
+// votes, and so on) and are already covered by their own tests.
+// ---------------------------------------------------------------------------
+const PQ_SOURCE_LABELS = { payment: 'Services', order: 'Cart Order', vote_bundle: 'Bulk Votes' };
+
+function pqStatusColour(status) {
+  if (status === 'confirmed') return 'var(--green)';
+  if (status === 'rejected' || status === 'failed' || status === 'reversed') return 'var(--red)';
+  return '#a15c00'; // pending / awaiting_payment
+}
+
+// The three portals genuinely store different words for the same state
+// ('pending' vs 'awaiting_payment'); this is display only, so the raw value
+// is never what an admin has to read.
+const PQ_STATUS_LABELS = {
+  pending: 'Awaiting payment', awaiting_payment: 'Awaiting payment',
+  confirmed: 'Confirmed', rejected: 'Rejected', reversed: 'Reversed', failed: 'Failed',
+};
+
+async function loadPaymentQueue() {
+  const body = document.getElementById('pqBody');
+  if (!body) return;
+  body.innerHTML = '<div style="padding:16px; font-size:13px; color:var(--slate);">Loading…</div>';
+  const params = new URLSearchParams();
+  const q = document.getElementById('pqSearch').value.trim();
+  const source = document.getElementById('pqSource').value;
+  const status = document.getElementById('pqStatus').value;
+  const from = document.getElementById('pqFrom').value;
+  const to = document.getElementById('pqTo').value;
+  if (q) params.set('q', q);
+  if (source) params.set('source', source);
+  if (status) params.set('status', status);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+
+  try {
+    const data = await api('/admin/payment-queue?' + params.toString());
+    const items = data.items || [];
+    if (items.length === 0) {
+      body.innerHTML = '<div style="padding:16px; font-size:13px; color:var(--slate);">No payments match those filters.</div>';
+      return;
+    }
+    body.innerHTML = `<table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+      <tr>
+        <th style="text-align:left; padding:9px 10px; border-bottom:2px solid var(--ink); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Portal</th>
+        <th style="text-align:left; padding:9px 10px; border-bottom:2px solid var(--ink); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Reference</th>
+        <th style="text-align:left; padding:9px 10px; border-bottom:2px solid var(--ink); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Customer</th>
+        <th style="text-align:left; padding:9px 10px; border-bottom:2px solid var(--ink); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Service</th>
+        <th style="text-align:left; padding:9px 10px; border-bottom:2px solid var(--ink); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Amount</th>
+        <th style="text-align:left; padding:9px 10px; border-bottom:2px solid var(--ink); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Status</th>
+        <th style="text-align:left; padding:9px 10px; border-bottom:2px solid var(--ink); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Date</th>
+        <th style="text-align:left; padding:9px 10px; border-bottom:2px solid var(--ink); font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);">Actions</th>
+      </tr>` + items.map((it) => {
+      const unpaid = it.status === 'pending' || it.status === 'awaiting_payment';
+      const acts = [];
+      if (unpaid) acts.push(`<button class="btn btn-line pq-act" data-act="approve" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">Approve</button>`);
+      // Orders have no reject endpoint of their own (unlike payments and
+      // vote bundles), so that button is not offered for them rather than
+      // wired to something that would 404.
+      if (unpaid && it.source !== 'order') acts.push(`<button class="btn btn-line pq-act" data-act="reject" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">Reject</button>`);
+      if (it.popUrl) acts.push(`<button class="btn btn-line pq-act" data-act="proof" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">View POP</button>`);
+      acts.push(`<button class="btn btn-line pq-act" data-act="invoice" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">${it.invoiceUrl ? 'Re-issue' : 'Invoice'}</button>`);
+      acts.push(`<button class="btn btn-line pq-act" data-act="receipt" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">Receipt</button>`);
+      if (it.customerEmail) acts.push(`<button class="btn btn-line pq-act" data-act="email" data-source="${it.source}" data-id="${it.id}" style="width:auto; padding:4px 9px; font-size:11px;">Email</button>`);
+      const links = [];
+      if (it.invoiceUrl) links.push(`<a href="${escapeHtmlAdmin(it.invoiceUrl)}" target="_blank" rel="noopener" style="font-size:11px;">invoice&nbsp;PDF</a>`);
+      if (it.receiptUrl) links.push(`<a href="${escapeHtmlAdmin(it.receiptUrl)}" target="_blank" rel="noopener" style="font-size:11px;">receipt&nbsp;PDF</a>`);
+      return `<tr>
+        <td style="padding:10px; border-bottom:1px solid var(--paper-line);">${PQ_SOURCE_LABELS[it.source] || it.source}</td>
+        <td style="padding:10px; border-bottom:1px solid var(--paper-line); font-family:'Courier New',monospace;">${escapeHtmlAdmin(it.reference)}</td>
+        <td style="padding:10px; border-bottom:1px solid var(--paper-line);">${escapeHtmlAdmin(it.customerName || '—')}${it.customerEmail ? `<br><span style="color:var(--slate); font-size:11px;">${escapeHtmlAdmin(it.customerEmail)}</span>` : ''}</td>
+        <td style="padding:10px; border-bottom:1px solid var(--paper-line);">${escapeHtmlAdmin(it.serviceLabel)}</td>
+        <td style="padding:10px; border-bottom:1px solid var(--paper-line);">R${Number(it.amount).toFixed(2)}</td>
+        <td style="padding:10px; border-bottom:1px solid var(--paper-line); font-weight:700; color:${pqStatusColour(it.status)};">${escapeHtmlAdmin(PQ_STATUS_LABELS[it.status] || it.status)}</td>
+        <td style="padding:10px; border-bottom:1px solid var(--paper-line);">${it.createdAt ? new Date(it.createdAt).toLocaleDateString('en-ZA') : '—'}</td>
+        <td style="padding:10px; border-bottom:1px solid var(--paper-line);"><div style="display:flex; gap:4px; flex-wrap:wrap;">${acts.join('')}</div>${links.length ? `<div style="margin-top:4px; display:flex; gap:8px;">${links.join('')}</div>` : ''}</td>
+      </tr>`;
+    }).join('') + '</table>';
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; font-size:13px; color:var(--red);">Could not load: ${escapeHtmlAdmin(e.message)}</div>`;
+  }
+}
+
+['pqRefresh'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('click', loadPaymentQueue);
+});
+['pqSearch'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadPaymentQueue(); });
+});
+['pqSource', 'pqStatus', 'pqFrom', 'pqTo'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', loadPaymentQueue);
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.pq-act');
+  if (!btn) return;
+  const { act, source, id } = btn.dataset;
+  btn.disabled = true;
+  try {
+    if (act === 'approve') {
+      if (source === 'payment') await api(`/payments/${id}/confirm-eft`, { method: 'PATCH' });
+      else if (source === 'order') await api(`/orders/admin/${id}/confirm-eft`, { method: 'PATCH' });
+      else await api(`/admin/vote-bundles/${id}/approve`, { method: 'PATCH' });
+      showToast('Approved and applied.');
+      loadPaymentQueue();
+    } else if (act === 'reject') {
+      if (source === 'payment') await api(`/payments/admin/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'failed' }) });
+      else await api(`/admin/vote-bundles/${id}/reject`, { method: 'PATCH' });
+      showToast('Marked as rejected.');
+      loadPaymentQueue();
+    } else if (act === 'proof') {
+      // The proof lives in private storage, so it needs the admin's token —
+      // a plain link or <img src> would come back 401. Fetch it as a blob
+      // and hand the browser an object URL instead.
+      const res = await fetch(`${API_BASE}/admin/payment-queue/${source}/${id}/proof`, {
+        headers: { Authorization: 'Bearer ' + AUTH_TOKEN },
+      });
+      if (!res.ok) throw new Error('Could not load that proof of payment.');
+      const blob = await res.blob();
+      window.open(URL.createObjectURL(blob), '_blank');
+    } else if (act === 'invoice' || act === 'receipt') {
+      const r = await api(`/admin/payment-queue/${source}/${id}/generate-${act}`, { method: 'POST' });
+      showToast(`${act === 'invoice' ? 'Invoice' : 'Receipt'} generated.`);
+      window.open(r.url, '_blank');
+      loadPaymentQueue();
+    } else if (act === 'email') {
+      const note = prompt('Anything to add to the email? (optional)') || '';
+      const r = await api(`/admin/payment-queue/${source}/${id}/email`, { method: 'POST', body: JSON.stringify({ note }) });
+      showToast(r.message);
+    }
+  } catch (err) {
+    showToast(err.message || 'That did not work.', true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 document.querySelectorAll('[data-section]').forEach((link) => {
   link.addEventListener('click', () => {
     document.querySelectorAll('[data-section]').forEach((l) => l.classList.remove('active'));
@@ -1978,6 +2162,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'sitesettings') loadSiteSettings();
     if (section === 'halloffame') { loadHallOfFame(); populateHofUserPicker(); }
     if (section === 'birthdays') loadBirthdays();
+    if (section === 'payqueue') loadPaymentQueue();
     if (section === 'payments') { loadPendingEft(); loadAllPayments(); }
     if (section === 'users') loadUsers();
     if (section === 'consultants') loadConsultants();

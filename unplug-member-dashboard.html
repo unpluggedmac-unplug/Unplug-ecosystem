@@ -1300,6 +1300,58 @@ function refNotice(reference) {
   </div>`;
 }
 
+// Proof-of-payment upload, offered right where the EFT details are shown —
+// the moment someone has actually made the transfer is the moment they have
+// the screenshot. Optional throughout: EFT works exactly as before without
+// it, so this is framed as "speeds up approval", never as a requirement.
+//
+// `source` is 'payments' or 'orders' and matches the PATCH route it will
+// call; the file itself goes to POST /uploads/proof first (private storage).
+function popUploadBlock(source, id) {
+  return `<div class="pop-upload" data-source="${escapeAttrM(source)}" data-id="${escapeAttrM(id)}" style="margin-top:14px; border-top:1px dashed var(--paper-line); padding-top:12px;">
+    <div style="font-weight:700; font-size:13px;">Already paid? Upload your proof of payment</div>
+    <p style="font-size:12px; color:var(--slate); margin:4px 0 8px;">Optional — a screenshot or PDF from your banking app. It isn't required, but it helps us confirm your payment sooner.</p>
+    <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="pop-upload-input" style="font-size:12px;">
+    <div class="pop-upload-status" style="font-size:12px; margin-top:6px; min-height:16px;"></div>
+  </div>`;
+}
+
+// One delegated listener covers every proof-upload block, including ones
+// added to the page later (each result box is rendered after a payment is
+// created, so none of them exist at load time).
+document.addEventListener('change', async (e) => {
+  const input = e.target.closest('.pop-upload-input');
+  if (!input || !input.files || !input.files[0]) return;
+  const block = input.closest('.pop-upload');
+  const statusEl = block.querySelector('.pop-upload-status');
+  const file = input.files[0];
+  statusEl.textContent = 'Uploading…';
+  statusEl.style.color = 'var(--slate)';
+  try {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    // No Content-Type header: the browser must set the multipart boundary.
+    const uploadRes = await fetch(API_BASE + '/uploads/proof', {
+      method: 'POST',
+      headers: AUTH_TOKEN ? { Authorization: 'Bearer ' + AUTH_TOKEN } : {},
+      body: form,
+    });
+    const uploaded = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok) throw new Error(uploaded.error || 'Upload failed.');
+
+    await api(`/${block.dataset.source}/${block.dataset.id}/proof`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url: uploaded.url }),
+    });
+    statusEl.textContent = 'Proof of payment received — thank you. Our team will verify it shortly.';
+    statusEl.style.color = 'green';
+    input.disabled = true;
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.style.color = 'var(--red)';
+  }
+});
+
 // Escapes a value for use inside a double-quoted HTML attribute. escapeHtmlM
 // goes through textContent, which does NOT escape quotes — fine for element
 // text, unsafe for value="…" where a quote would break out of the attribute.
@@ -2775,7 +2827,7 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
         <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
         ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
         <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br><br>
-        ${i.note}` + refNotice(i.reference);
+        ${i.note}` + refNotice(i.reference) + popUploadBlock('payments', payment.payment.id);
     } else {
       resultBox.innerHTML = `<strong>${label} created.</strong> ${payment.note}<br><br>
         <a href="${payment.redirectUrl}" target="_blank">${payment.redirectUrl}</a>`;
@@ -2983,7 +3035,7 @@ document.getElementById('cartPayBtn').addEventListener('click', async () => {
         <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
         ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
         <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br><br>
-        ${i.note}` + refNotice(i.reference);
+        ${i.note}` + refNotice(i.reference) + popUploadBlock('orders', order.order.id);
     } else {
       resultBox.innerHTML = `<strong>Order created.</strong> ${order.note}<br><br><a href="${order.redirectUrl}" target="_blank">${order.redirectUrl}</a>`;
     }
