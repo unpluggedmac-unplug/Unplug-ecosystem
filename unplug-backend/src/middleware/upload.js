@@ -53,4 +53,23 @@ const uploadPdf = multer({
   limits: { fileSize: MAX_PDF_SIZE_BYTES },
 });
 
-module.exports = { upload, uploadPdf, UPLOAD_DIR, MAX_PDF_SIZE_BYTES };
+// Proof of payment (bank app screenshot or an emailed PDF confirmation) —
+// unlike the image uploader above, a PDF is a completely normal thing for
+// this one specifically to receive.
+const ALLOWED_PROOF_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const MAX_PROOF_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+function proofFileFilter(req, file, cb) {
+  if (!ALLOWED_PROOF_MIME_TYPES.includes(file.mimetype)) {
+    return cb(new Error(`File type ${file.mimetype} is not allowed. Upload a JPEG, PNG, WEBP or PDF.`));
+  }
+  cb(null, true);
+}
+
+const uploadProof = multer({
+  storage,
+  fileFilter: proofFileFilter,
+  limits: { fileSize: MAX_PROOF_SIZE_BYTES },
+});
+
+module.exports = { upload, uploadPdf, uploadProof, UPLOAD_DIR, MAX_PDF_SIZE_BYTES, MAX_PROOF_SIZE_BYTES };

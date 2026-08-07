@@ -1,6 +1,6 @@
 const express = require('express');
 const fs = require('fs');
-const { upload, uploadPdf, MAX_PDF_SIZE_BYTES } = require('../middleware/upload');
+const { upload, uploadPdf, uploadProof, MAX_PDF_SIZE_BYTES, MAX_PROOF_SIZE_BYTES } = require('../middleware/upload');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
@@ -75,6 +75,80 @@ async function uploadToSupabasePrivate(file) {
   fs.unlink(file.path, () => {});
   return `${SUPABASE_URL}/storage/v1/object/${SUPABASE_PRIVATE_BUCKET}/${objectPath}`;
 }
+
+// Uploads an already-in-memory Buffer (as opposed to uploadToSupabase above,
+// which reads a multer-saved temp file) straight to the PUBLIC bucket, and
+// returns its public URL. Written for the invoice/receipt PDFs the admin
+// payment queue generates on the fly (routes/adminPaymentQueue.js) — there's
+// no local file for those, just bytes already held in memory, and unlike a
+// proof-of-payment upload an invoice/receipt is fine to be a plain public
+// link (it's what WE billed, not a bank statement).
+async function uploadBufferToSupabase(buffer, filename, mimetype) {
+  const objectPath = `${Date.now()}-${filename}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${objectPath}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      apikey: SUPABASE_SERVICE_KEY,
+      'Content-Type': mimetype || 'application/octet-stream',
+      'x-upsert': 'true',
+    },
+    body: buffer,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Supabase Storage upload failed (${res.status}): ${detail}`);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${objectPath}`;
+}
+
+// Fetches a file back out of the private bucket with the service-role key —
+// the same credentials uploadToSupabasePrivate used to put it there. Reused
+// by GET /admin/payment-queue/:source/:id/proof (see routes/adminPaymentQueue.js)
+// so an admin can actually view a proof-of-payment upload; exported the same
+// way notifyProfileOwner is in interactions.js, so it doesn't need its own file.
+async function fetchFromSupabasePrivate(url) {
+  return fetch(url, {
+    headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, apikey: SUPABASE_SERVICE_KEY },
+  });
+}
+
+// POST /uploads/proof — proof of payment for an EFT. Deliberately NOT behind
+// requireAuth: the standalone Bulk Votes portal (095_vote_bundle_standalone_
+// portal.sql) has no login at all, and this same endpoint has to work for an
+// anonymous vote-bundle buyer too. Uploading bytes is harmless on its own;
+// what actually needs authorising is ATTACHING the resulting URL to a real
+// payment/order/vote-bundle, which each do their own auth-or-reference check
+// (PATCH /payments/:id/proof, /orders/:id/proof, /vote-bundles/:reference/proof).
+//
+// Goes to the PRIVATE bucket, not the public one images use: a bank screenshot
+// can show the account's balance and other transactions, which is materially
+// more sensitive than a magazine photo — same reasoning as the private edition
+// download PDF (094_edition_download_pdf.sql), reusing that existing bucket
+// and upload function rather than inventing a second private-storage path.
+router.post('/proof', (req, res) => {
+  if (!supabasePrivateConfigured) {
+    return res.status(400).json({ error: 'File storage is not configured on this server yet — proof of payment cannot be uploaded right now. Please contact us instead.' });
+  }
+  uploadProof.single('file')(req, res, async (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? `That file is too large. The maximum is ${Math.round(MAX_PROOF_SIZE_BYTES / (1024 * 1024))}MB.`
+        : err.message;
+      return res.status(400).json({ error: msg });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file was uploaded (expected multipart field "file").' });
+    }
+    try {
+      const url = await uploadToSupabasePrivate(req.file);
+      res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size });
+    } catch (e) {
+      console.error('Supabase Storage proof upload failed:', e.message);
+      res.status(502).json({ error: 'Could not save that file. Please try again.' });
+    }
+  });
+});
 
 // POST /uploads — member uploads a single image, gets back a URL to use as
 // imageUrl / posterImageUrl / photoUrl in any of the other endpoints. Every
@@ -189,5 +263,13 @@ router.post('/', requireAuth, (req, res) => {
     });
   });
 });
+
+// Reused by routes/adminPaymentQueue.js: viewing a proof-of-payment upload
+// (fetchFromSupabasePrivate), storing a generated invoice/receipt PDF
+// (uploadBufferToSupabase), and knowing whether that's even possible right
+// now (supabaseConfigured) — all without duplicating this file's storage logic.
+router.fetchFromSupabasePrivate = fetchFromSupabasePrivate;
+router.uploadBufferToSupabase = uploadBufferToSupabase;
+router.supabaseConfigured = supabaseConfigured;
 
 module.exports = router;

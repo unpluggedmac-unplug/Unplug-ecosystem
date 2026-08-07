@@ -694,6 +694,7 @@ router.get('/mine', requireAuth, async (req, res, next) => {
     const rows = await pool.query(
       `SELECT id, gateway_reference, linked_type, linked_id, amount, credit_used,
               voucher_discount, voucher_code, order_total, method, status,
+              pop_url, invoice_url, receipt_url,
               created_at, confirmed_at
          FROM payments
         WHERE user_id = $1
@@ -727,6 +728,25 @@ router.get('/mine', requireAuth, async (req, res, next) => {
       };
     });
     res.json({ payments });
+  } catch (err) { next(err); }
+});
+
+// PATCH /payments/:id/proof — attaches a proof-of-payment URL (already
+// uploaded via POST /uploads/proof) to the payer's own payment. Optional —
+// EFT works the same without it — but speeds up admin approval. Overwrites
+// any previous upload rather than keeping a history: only the latest proof
+// matters for review, and the old file simply becomes unreferenced.
+router.patch('/:id/proof', requireAuth, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const url = String(req.body.url || '').trim();
+    if (!url) return res.status(400).json({ error: 'A file URL is required — upload via POST /uploads/proof first.' });
+    const result = await pool.query(
+      `UPDATE payments SET pop_url = $1 WHERE id = $2 AND user_id = $3 RETURNING id, pop_url`,
+      [url, id, req.user.id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Payment not found.' });
+    res.json({ payment: result.rows[0], message: 'Proof of payment attached — thank you.' });
   } catch (err) { next(err); }
 });
 

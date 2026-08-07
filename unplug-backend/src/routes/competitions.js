@@ -769,6 +769,27 @@ router.get('/vote-bundles/status/:reference', async (req, res, next) => {
   }
 });
 
+// PATCH /vote-bundles/:reference/proof — attaches a proof-of-payment URL
+// (already uploaded via POST /uploads/proof) to a vote bundle. Deliberately
+// NOT behind requireAuth, matching GET /vote-bundles/status/:reference right
+// above: this whole portal has no login, so the reference — shown to the
+// buyer once, right after purchase — IS the credential, the same way it
+// already is for checking status.
+router.patch('/vote-bundles/:reference/proof', async (req, res, next) => {
+  try {
+    const url = String(req.body.url || '').trim();
+    if (!url) return res.status(400).json({ error: 'A file URL is required — upload via POST /uploads/proof first.' });
+    const result = await pool.query(
+      `UPDATE vote_bundles SET pop_url = $1 WHERE reference = $2 RETURNING id, pop_url`,
+      [url, String(req.params.reference || '').trim().toUpperCase()]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'No purchase found for that reference.' });
+    res.json({ bundle: result.rows[0], message: 'Proof of payment attached — thank you.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /top10/enter — member pays R100 to submit their own profile for
 // Top 10 consideration. This is separate from the admin-curated
 // top10_rankings table — an approved entry just means the admin can

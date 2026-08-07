@@ -340,6 +340,27 @@ router.get('/:id', requireAuth, async (req, res, next) => {
   }
 });
 
+// PATCH /orders/:id/proof — attaches a proof-of-payment URL (already
+// uploaded via POST /uploads/proof) to the payer's own order. See the
+// matching route in payments.js for the full reasoning — same shape here,
+// one row per order rather than per cart item since it was one bank
+// transfer for the whole cart.
+router.patch('/:id/proof', requireAuth, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const url = String(req.body.url || '').trim();
+    if (!url) return res.status(400).json({ error: 'A file URL is required — upload via POST /uploads/proof first.' });
+    const result = await pool.query(
+      `UPDATE orders SET pop_url = $1 WHERE id = $2 AND user_id = $3 RETURNING id, pop_url`,
+      [url, id, req.user.id]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Order not found.' });
+    res.json({ order: result.rows[0], message: 'Proof of payment attached — thank you.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PATCH /orders/admin/:id/confirm-eft — admin-only, mirrors PATCH
 // /payments/:id/confirm-eft but confirms every item in the order as one
 // action, since it was one bank transfer for the whole cart.
