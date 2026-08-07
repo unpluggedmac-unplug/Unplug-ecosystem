@@ -71,6 +71,9 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .art-section label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin:10px 0 4px; }
 .art-section input, .art-section textarea{ width:100%; border:1px solid var(--paper-line); padding:9px 12px; font-size:14px; font-family:inherit; background:#fff; }
 
+.progress-track{ height:8px; background:var(--paper-line); border-radius:4px; overflow:hidden; margin-top:6px; }
+.progress-fill{ height:100%; background:var(--red); width:0%; transition:width .25s ease; }
+
 .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
 .btn-solid{ background:var(--red); color:#fff; border-color:var(--red); }
 .btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
@@ -511,6 +514,23 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <option value="marketplace">Marketplace Poster — R500 for 30 days</option>
           <option value="ad_banner">Page Banner — R300 / R550 / R1000 (7 / 14 / 28 days)</option>
         </select>
+      </div>
+
+      <!-- Draft recovery — offered once per type per page load when a saved
+           draft is found; ignored entirely once restored or discarded. -->
+      <div class="error-banner" id="draftRecoveryBanner" style="display:none; background:#fff6e6; border-color:#f0d9a8; color:#a15c00;">
+        <span id="draftRecoveryText"></span>
+        <button type="button" class="btn btn-line" id="draftRestoreBtn" style="width:auto; margin-left:10px; padding:4px 10px; font-size:11px;">Restore Draft</button>
+        <button type="button" class="btn btn-line" id="draftDiscardBtn" style="width:auto; margin-left:6px; padding:4px 10px; font-size:11px;">Discard</button>
+      </div>
+
+      <div class="field" id="submitProgressWrap">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <label style="margin:0;">Progress</label>
+          <span id="draftSaveStatus" style="font-size:11px; color:var(--slate);"></span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="submitProgressFill"></div></div>
+        <p id="submitProgressLabel" style="font-size:11.5px; color:var(--slate); margin-top:4px;"></p>
       </div>
 
       <!-- Article fields -->
@@ -2068,7 +2088,7 @@ function artEnsureCoverField() {
   if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('cover', '', '', { w: 1920, h: 1080, label: '16:9 landscape' });
 }
 
-function artAddGallerySlot() {
+function artAddGallerySlot(value) {
   const wrap = document.getElementById('art-gallery-upload');
   if (wrap.children.length >= ART_MAX_GALLERY) {
     showToast(`You can add up to ${ART_MAX_GALLERY} images besides the cover.`);
@@ -2077,7 +2097,7 @@ function artAddGallerySlot() {
   const row = document.createElement('div');
   row.className = 'art-gallery-row';
   row.style.cssText = 'display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;';
-  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', '', '', { w: 1200, h: 900, label: '4:3 landscape' })}</div>`;
+  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', value || '', '', { w: 1200, h: 900, label: '4:3 landscape' })}</div>`;
   const remove = document.createElement('button');
   remove.type = 'button';
   remove.className = 'btn btn-line';
@@ -2088,13 +2108,15 @@ function artAddGallerySlot() {
   wrap.appendChild(row);
 }
 
-function artAddLinkRow() {
+function artAddLinkRow(link) {
   const wrap = document.getElementById('art-links');
   const row = document.createElement('div');
   row.className = 'art-link-row';
   row.style.cssText = 'display:flex; gap:8px; margin-bottom:8px;';
-  row.innerHTML = `<input class="art-link-label" placeholder="Label, e.g. Instagram" style="flex:1;">
-    <input class="art-link-url" placeholder="https://…" style="flex:2;">`;
+  const safeLabel = String((link && link.label) || '').replace(/"/g, '&quot;');
+  const safeUrl = String((link && link.url) || '').replace(/"/g, '&quot;');
+  row.innerHTML = `<input class="art-link-label" placeholder="Label, e.g. Instagram" style="flex:1;" value="${safeLabel}">
+    <input class="art-link-url" placeholder="https://…" style="flex:2;" value="${safeUrl}">`;
   const remove = document.createElement('button');
   remove.type = 'button';
   remove.className = 'btn btn-line';
@@ -2220,6 +2242,14 @@ function mktEnsurePosterField() {
   const el = document.getElementById('mkt-poster-upload');
   if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('mktPoster', '', '', { w: 1600, h: 900, label: '16:9 landscape' });
 }
+// Which types' draft-recovery banner has already been offered this page
+// load — declared here (not down by maybeOfferDraftRecovery, where it
+// reads more naturally) because ensureAllSubmitImageFields() below calls
+// that function immediately, and a `const` declared later in the script
+// is in the temporal dead zone until its own line actually runs — that
+// eager call would throw before ever reaching it.
+const DRAFT_PROMPTED_TYPES = new Set();
+
 function ensureAllSubmitImageFields() {
   artEnsureCoverField();
   evtEnsureImageField();
@@ -2228,12 +2258,17 @@ function ensureAllSubmitImageFields() {
   renderEvtPreview();
   renderMktPreview();
   renderAbPreview();
+  renderSubmitProgress();
+  maybeOfferDraftRecovery();
 }
 
-document.getElementById('art-add-image').addEventListener('click', artAddGallerySlot);
+// Explicit no-arg calls: artAddGallerySlot/artAddLinkRow now take an
+// optional prefill value (for draft restore), and addEventListener would
+// otherwise pass the click Event itself as that argument.
+document.getElementById('art-add-image').addEventListener('click', () => artAddGallerySlot());
 ensureAllSubmitImageFields();
 document.getElementById('submitType').addEventListener('change', ensureAllSubmitImageFields);
-document.getElementById('art-add-link').addEventListener('click', artAddLinkRow);
+document.getElementById('art-add-link').addEventListener('click', () => artAddLinkRow());
 
 // ---------------------------------------------------------------------------
 // Live preview cards — Event, Marketplace, Page Banner. Mirror the real
@@ -2479,6 +2514,217 @@ async function setupBannerFields() {
   updateSubmitOrderDetails();
 }
 
+// ---------------------------------------------------------------------------
+// Draft auto-save, recovery and progress — Payment Portal Redevelopment
+// Phase 5. Scoped to the Submit & Pay entry form specifically, not the cart
+// checkout (mostly a read-only summary + a voucher code — little typed
+// content there to lose). Namespaced per signed-in user so a draft never
+// leaks across accounts on a shared browser.
+// ---------------------------------------------------------------------------
+function draftStorageKey(type) {
+  const uid = (CURRENT_USER && CURRENT_USER.id) || 'anon';
+  return `unplug_draft_${uid}_${type}`;
+}
+
+// Reads every plain input/textarea/select with an id directly inside the
+// active field-set, plus every single-instance image field (identified by
+// an id containing "-upload"). Articles additionally have dynamically added
+// gallery/links/sections rows, which have no ids of their own and so reuse
+// the collectors already built for the real submit payload.
+function collectDraftForType(type) {
+  const container = document.getElementById('fields-' + type);
+  if (!container) return null;
+  const data = { fields: {}, images: {} };
+  container.querySelectorAll('input[id], textarea[id], select[id]').forEach((el) => {
+    if (el.type === 'file') return;
+    data.fields[el.id] = el.value;
+  });
+  container.querySelectorAll('[id*="-upload"]').forEach((host) => {
+    const val = UnplugUpload.valueOf(host);
+    if (val) data.images[host.id] = val;
+  });
+  if (type === 'article') {
+    data.gallery = artCollectGallery();
+    data.links = artCollectLinks();
+    data.sections = artCollectSections();
+  }
+  return data;
+}
+
+// A draft only counts as worth saving/offering once it has something in it —
+// otherwise every fresh visit to an empty form would "save" and then offer
+// to "restore" nothing.
+function draftHasContent(data) {
+  if (!data) return false;
+  if (Object.values(data.fields || {}).some((v) => String(v || '').trim())) return true;
+  if (Object.keys(data.images || {}).length) return true;
+  if ((data.gallery || []).length || (data.links || []).length) return true;
+  if ((data.sections || []).some((s) => s.subHeading || s.paragraph || s.imageUrl)) return true;
+  return false;
+}
+
+function setUploadFieldValue(hostId, url) {
+  const host = document.getElementById(hostId);
+  const widget = host && host.querySelector('.img-upload');
+  if (!widget || !url) return;
+  const hidden = widget.querySelector('.img-upload-url');
+  const preview = widget.querySelector('.img-upload-preview');
+  hidden.value = url;
+  preview.src = url;
+  preview.hidden = false;
+}
+
+function restoreDraftForType(type, data) {
+  if (!data) return;
+  Object.keys(data.fields || {}).forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = data.fields[id];
+  });
+  Object.keys(data.images || {}).forEach((hostId) => setUploadFieldValue(hostId, data.images[hostId]));
+  if (type === 'article') {
+    (data.gallery || []).forEach((url) => artAddGallerySlot(url));
+    (data.links || []).forEach((link) => artAddLinkRow(link));
+    const wrap = document.getElementById('artSections');
+    (data.sections || []).forEach((s) => {
+      wrap.insertAdjacentHTML('beforeend', artSectionHtml(wrap.children.length, {
+        sub_heading: s.subHeading, paragraph: s.paragraph, image_url: s.imageUrl, image_note: s.imageNote,
+      }));
+    });
+    artRenumber();
+  }
+  // Restoring values directly doesn't fire input/change on its own — the
+  // price box, previews and progress bar need an explicit nudge to catch up.
+  updateSubmitOrderDetails();
+  renderEvtPreview(); renderMktPreview(); renderAbPreview();
+  renderSubmitProgress();
+}
+
+function saveDraftNow() {
+  const type = document.getElementById('submitType').value;
+  const servicesSection = document.querySelector('.ms-section[data-ms-section="services"]');
+  if (!servicesSection || servicesSection.classList.contains('section-hidden')) return;
+  // A pending recovery offer for this exact type means the form is still
+  // sitting empty, waiting on the user's Restore/Discard — autosave running
+  // in that window would see "no content" and wipe the very draft it's
+  // offering, before they ever got to click Restore.
+  const banner = document.getElementById('draftRecoveryBanner');
+  if (banner && banner.style.display === 'block' && banner.dataset.type === type) return;
+  const data = collectDraftForType(type);
+  const statusEl = document.getElementById('draftSaveStatus');
+  if (!draftHasContent(data)) {
+    localStorage.removeItem(draftStorageKey(type));
+    if (statusEl) statusEl.textContent = '';
+    return;
+  }
+  localStorage.setItem(draftStorageKey(type), JSON.stringify({ savedAt: Date.now(), data }));
+  if (statusEl) statusEl.textContent = 'Draft saved ' + new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+}
+
+function clearDraft(type) {
+  localStorage.removeItem(draftStorageKey(type));
+  const statusEl = document.getElementById('draftSaveStatus');
+  if (statusEl) statusEl.textContent = '';
+}
+
+function maybeOfferDraftRecovery() {
+  const type = document.getElementById('submitType').value;
+  const banner = document.getElementById('draftRecoveryBanner');
+  if (!banner) return;
+  if (DRAFT_PROMPTED_TYPES.has(type)) { banner.style.display = 'none'; return; }
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(draftStorageKey(type)) || 'null'); } catch (e) {}
+  if (!saved || !draftHasContent(saved.data)) { banner.style.display = 'none'; return; }
+  DRAFT_PROMPTED_TYPES.add(type);
+  const when = saved.savedAt
+    ? new Date(saved.savedAt).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : 'earlier';
+  document.getElementById('draftRecoveryText').textContent = `You have an unsaved draft from ${when}.`;
+  banner.style.display = 'block';
+  banner.dataset.type = type;
+}
+
+document.getElementById('draftRestoreBtn').addEventListener('click', () => {
+  const banner = document.getElementById('draftRecoveryBanner');
+  const type = banner.dataset.type;
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(draftStorageKey(type)) || 'null'); } catch (e) {}
+  banner.style.display = 'none';
+  if (saved) restoreDraftForType(type, saved.data);
+  showToast('Draft restored.');
+});
+document.getElementById('draftDiscardBtn').addEventListener('click', () => {
+  const banner = document.getElementById('draftRecoveryBanner');
+  clearDraft(banner.dataset.type);
+  banner.style.display = 'none';
+});
+
+setInterval(saveDraftNow, 30000);
+
+// ---------------------------------------------------------------------------
+// Progress — how much of the CURRENT type's real requirements (the same
+// ones createSubmission() enforces below) are filled in, so 100% reliably
+// means "this will submit successfully," not just "most fields have
+// something in them."
+// ---------------------------------------------------------------------------
+function submitProgressChecklist(type) {
+  const has = (id) => !!(document.getElementById(id) && document.getElementById(id).value.trim());
+  const hasImg = (hostId) => !!UnplugUpload.valueOf(document.getElementById(hostId));
+  switch (type) {
+    case 'article':
+      return [has('art-title'), has('art-body'), hasImg('art-cover-upload')];
+    case 'event':
+      return [has('evt-name'), !!document.getElementById('evt-date').value, hasImg('evt-image-upload')];
+    case 'gallery':
+      return [[1, 2, 3].some((i) => hasImg(`gal-image-upload-${i}`))];
+    case 'top10':
+      return [true];
+    case 'marketplace':
+      return [hasImg('mkt-poster-upload'), has('mkt-headline')];
+    case 'ad_banner':
+      return [!!document.getElementById('ab-placement').value, !!document.getElementById('ab-duration').value, hasImg('ab-image-upload')];
+    default:
+      return [];
+  }
+}
+
+function renderSubmitProgress() {
+  const type = document.getElementById('submitType').value;
+  const checklist = submitProgressChecklist(type);
+  const fill = document.getElementById('submitProgressFill');
+  const label = document.getElementById('submitProgressLabel');
+  if (!fill || !label || checklist.length === 0) {
+    if (fill) fill.style.width = '0%';
+    if (label) label.textContent = '';
+    return;
+  }
+  const done = checklist.filter(Boolean).length;
+  const pct = Math.round((done / checklist.length) * 100);
+  fill.style.width = pct + '%';
+  label.textContent = pct === 100 ? 'Ready to submit.' : `${done} of ${checklist.length} required item${checklist.length === 1 ? '' : 's'} complete.`;
+}
+
+// A genuine edit is treated as an implicit "I'm writing fresh, not
+// restoring" — the recovery banner would otherwise sit there indefinitely
+// once the member has clearly moved past it. restoreDraftForType() never
+// triggers this: it fills fields directly (no dispatched input/change) and
+// the Restore button already hides the banner itself before calling it.
+function dismissDraftBannerOnEdit() {
+  const banner = document.getElementById('draftRecoveryBanner');
+  if (banner && banner.style.display === 'block' && banner.dataset.type === document.getElementById('submitType').value) {
+    banner.style.display = 'none';
+  }
+}
+
+['article', 'event', 'gallery', 'top10', 'marketplace', 'ad_banner'].forEach((t) => {
+  const el = document.getElementById('fields-' + t);
+  if (!el) return;
+  el.addEventListener('input', renderSubmitProgress);
+  el.addEventListener('change', renderSubmitProgress);
+  el.addEventListener('img-upload:done', renderSubmitProgress);
+  el.addEventListener('input', dismissDraftBannerOnEdit);
+  el.addEventListener('change', dismissDraftBannerOnEdit);
+});
+
 document.getElementById('submitAndPayBtn').addEventListener('click', async () => {
   hideSubmitError();
   if (!document.getElementById('submitTermsChk').checked) {
@@ -2492,6 +2738,7 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
 
   try {
     const { linkedType, linkedId, label, needsPayment, message } = await createSubmission(type);
+    clearDraft(type); // real record now exists; stop offering to "restore" it
     const resultBox = document.getElementById('submitResultBox');
     resultBox.classList.remove('section-hidden');
 
@@ -2592,6 +2839,7 @@ document.getElementById('submitAddToCartBtn').addEventListener('click', async ()
   btn.disabled = true; btn.textContent = 'Adding…';
   try {
     const { linkedType, linkedId, label, needsPayment, message } = await createSubmission(type);
+    clearDraft(type); // real record now exists; stop offering to "restore" it
     if (!needsPayment) {
       showToast(`${label} submitted — no payment needed, so there's nothing to add to a cart.`);
       loadMemberContent(); loadReadingList();

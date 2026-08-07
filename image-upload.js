@@ -367,6 +367,38 @@
     }
   });
 
+  // Drag & drop — feeds the exact same handleFileChosen() the file picker
+  // uses, so a dropped file gets the same validation, crop step and upload
+  // as one chosen via "Choose File". The whole widget (not just the file
+  // input, which drag events don't fire reliably on) is the drop target.
+  document.addEventListener('dragover', (e) => {
+    const widget = e.target.closest('.img-upload');
+    if (!widget) return;
+    e.preventDefault(); // required for 'drop' to fire at all
+    widget.style.outline = '2px dashed #d20709';
+    widget.style.outlineOffset = '2px';
+  });
+  document.addEventListener('dragleave', (e) => {
+    const widget = e.target.closest('.img-upload');
+    if (!widget) return;
+    // A dragleave fires when moving between a widget's own child elements
+    // too, not just when actually leaving it — relatedTarget still being
+    // inside the widget means the drag is still over it, so this is only
+    // a real "left" when relatedTarget is null/outside.
+    if (widget.contains(e.relatedTarget)) return;
+    widget.style.outline = '';
+    widget.style.outlineOffset = '';
+  });
+  document.addEventListener('drop', (e) => {
+    const widget = e.target.closest('.img-upload');
+    if (!widget) return;
+    e.preventDefault();
+    widget.style.outline = '';
+    widget.style.outlineOffset = '';
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) handleFileChosen(file, widget);
+  });
+
   // "Re-crop this image" — re-opens the cropper on the CURRENTLY uploaded
   // image (fetched back as a blob) rather than requiring a fresh file
   // pick, for the common case of "the crop just needs nudging."
