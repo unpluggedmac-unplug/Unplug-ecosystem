@@ -33,6 +33,33 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 @media(max-width:560px){ .field-row{ grid-template-columns:1fr; } }
 
+/* Live preview cards — Event / Marketplace / Page Banner. Mirror the real
+   public classes (.cal-card / .market-poster in unplug-magazine.html)
+   closely enough that what a member sees here is what they'll actually
+   get, not just a decorative mockup. Namespaced svc- so nothing here can
+   collide with a same-named class on the public site. */
+.svc-preview-card{ border:1px solid var(--paper-line); background:var(--paper); border-radius:4px; padding:16px; max-width:340px; }
+.svc-preview-empty{ font-size:12.5px; color:var(--slate); }
+
+.svc-cal-card{ background:#fff; border:1px solid var(--paper-line); }
+.svc-cal-thumb{ width:100%; height:150px; overflow:hidden; background:linear-gradient(135deg,var(--paper),#e3d8c2); }
+.svc-cal-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.svc-cal-body{ padding:14px; }
+.svc-cal-date{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:var(--red); }
+.svc-cal-name{ font-family:'Playfair Display',serif; font-size:16px; font-weight:700; margin:4px 0; }
+.svc-cal-meta{ font-size:12px; color:var(--slate); line-height:1.5; }
+
+.svc-market-card{ background:#fff; border:1px solid var(--paper-line); }
+.svc-market-poster{ aspect-ratio:16/9; background:linear-gradient(135deg,var(--paper),#e3d8c2); background-size:cover; background-position:center; display:flex; align-items:flex-end; padding:12px; }
+.svc-market-tag{ color:#fff; font-weight:700; font-size:14px; text-shadow:0 1px 4px rgba(0,0,0,0.6); }
+.svc-market-body{ padding:12px 14px; }
+.svc-market-body h4{ font-size:14.5px; margin-bottom:2px; }
+.svc-market-body p{ font-size:12px; color:var(--slate); }
+
+.svc-ab-frame{ background:#fff; border:1px solid var(--paper-line); padding:8px; display:flex; align-items:center; justify-content:center; min-height:70px; }
+.svc-ab-frame img{ max-width:100%; max-height:120px; object-fit:contain; display:block; }
+.svc-ab-cta{ display:inline-block; margin-top:8px; background:var(--red); color:#fff; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:6px 14px; }
+
 .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
 .btn-solid{ background:var(--red); color:#fff; border-color:var(--red); }
 .btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
@@ -523,6 +550,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field"><label for="evt-link">Event Link (tickets / more info)</label><input id="evt-link" placeholder="https://..."></div>
         <div class="field"><label for="evt-desc">Description</label><textarea id="evt-desc" rows="3"></textarea></div>
         <div class="field"><label for="evt-display-start">Calendar Promotion Start Date (optional)</label><input id="evt-display-start" type="date"></div>
+        <div class="field">
+          <label>Live Preview <span style="font-weight:400; opacity:0.7;">— how this looks on the Events calendar</span></label>
+          <div class="svc-preview-card" id="evt-preview"></div>
+        </div>
       </div>
 
       <!-- Gallery fields -->
@@ -547,6 +578,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field"><label>Poster Image <span style="font-weight:400; opacity:0.7;">— 1600 × 900px (16:9 landscape)</span></label><div id="mkt-poster-upload"></div></div>
         <div class="field"><label for="mkt-headline">Headline</label><input id="mkt-headline"></div>
         <div class="field"><label for="mkt-start">Requested Start Date (optional — defaults to today)</label><input id="mkt-start" type="date"></div>
+        <div class="field">
+          <label>Live Preview <span style="font-weight:400; opacity:0.7;">— how this looks in the Marketplace</span></label>
+          <div class="svc-preview-card" id="mkt-preview"></div>
+        </div>
       </div>
 
       <!-- Advertising banner fields -->
@@ -560,6 +595,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field"><label for="ab-name">Advertiser / banner name (optional)</label><input id="ab-name" placeholder="e.g. ABC Investments"></div>
         <div class="field"><label for="ab-cta">CTA button text (optional)</label><input id="ab-cta" maxlength="40" placeholder="e.g. Learn More"></div>
         <p style="font-size:12px; color:var(--slate);">After payment your banner goes to our team for approval, then runs on your chosen page for the selected dates.</p>
+        <div class="field">
+          <label>Live Preview <span style="font-weight:400; opacity:0.7;">— approximate; actual size depends on the placement chosen</span></label>
+          <div class="svc-preview-card" id="ab-preview"></div>
+        </div>
       </div>
 
       <!-- What's being bought — type, what it includes, price — shown right
@@ -2091,12 +2130,94 @@ function ensureAllSubmitImageFields() {
   evtEnsureImageField();
   galEnsureImageFields();
   mktEnsurePosterField();
+  renderEvtPreview();
+  renderMktPreview();
+  renderAbPreview();
 }
 
 document.getElementById('art-add-image').addEventListener('click', artAddGallerySlot);
 ensureAllSubmitImageFields();
 document.getElementById('submitType').addEventListener('change', ensureAllSubmitImageFields);
 document.getElementById('art-add-link').addEventListener('click', artAddLinkRow);
+
+// ---------------------------------------------------------------------------
+// Live preview cards — Event, Marketplace, Page Banner. Mirror the real
+// public markup (see .cal-card / .market-poster / ad-banner rendering in
+// unplug-magazine.html) so what's shown here is an honest preview, not a
+// generic mockup. Re-rendered on every keystroke/upload via delegated
+// listeners on each field-set container, rather than wiring each input
+// individually.
+// ---------------------------------------------------------------------------
+function renderEvtPreview() {
+  const el = document.getElementById('evt-preview');
+  if (!el) return;
+  const name = document.getElementById('evt-name').value.trim();
+  const dateVal = document.getElementById('evt-date').value;
+  const venue = document.getElementById('evt-venue').value.trim();
+  const fee = document.getElementById('evt-fee').value.trim();
+  const img = UnplugUpload.valueOf(document.getElementById('evt-image-upload'));
+  if (!name && !dateVal && !img) {
+    el.innerHTML = '<div class="svc-preview-empty">Fill in the fields above to see a preview.</div>';
+    return;
+  }
+  const dateStr = dateVal
+    ? new Date(dateVal + 'T00:00:00').toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+    : 'Date TBC';
+  const metaParts = [venue ? '📍 ' + escapeAttrM(venue) : '', fee ? escapeAttrM(fee) : ''].filter(Boolean);
+  el.innerHTML = `<div class="svc-cal-card">
+    <div class="svc-cal-thumb">${img ? `<img src="${escapeAttrM(img)}" alt="">` : ''}</div>
+    <div class="svc-cal-body">
+      <div class="svc-cal-date">${escapeAttrM(dateStr)}</div>
+      <div class="svc-cal-name">${escapeAttrM(name || 'Your event name')}</div>
+      <div class="svc-cal-meta">${metaParts.join(' · ')}</div>
+    </div>
+  </div>`;
+}
+document.getElementById('fields-event').addEventListener('input', renderEvtPreview);
+document.getElementById('fields-event').addEventListener('change', renderEvtPreview);
+document.getElementById('fields-event').addEventListener('img-upload:done', renderEvtPreview);
+
+function renderMktPreview() {
+  const el = document.getElementById('mkt-preview');
+  if (!el) return;
+  const business = document.getElementById('mkt-business').value.trim();
+  const headline = document.getElementById('mkt-headline').value.trim();
+  const img = UnplugUpload.valueOf(document.getElementById('mkt-poster-upload'));
+  if (!business && !headline && !img) {
+    el.innerHTML = '<div class="svc-preview-empty">Fill in the fields above to see a preview.</div>';
+    return;
+  }
+  const displayName = business || 'Your Business Name';
+  const posterStyle = img ? `background-image:url('${escapeAttrM(img)}');` : '';
+  el.innerHTML = `<div class="svc-market-card">
+    <div class="svc-market-poster" style="${posterStyle}">
+      <div class="svc-market-tag">${escapeAttrM(displayName)}</div>
+    </div>
+    <div class="svc-market-body">
+      <h4>${escapeAttrM(displayName)}</h4>
+      ${headline ? `<p>${escapeAttrM(headline)}</p>` : ''}
+    </div>
+  </div>`;
+}
+document.getElementById('fields-marketplace').addEventListener('input', renderMktPreview);
+document.getElementById('fields-marketplace').addEventListener('change', renderMktPreview);
+document.getElementById('fields-marketplace').addEventListener('img-upload:done', renderMktPreview);
+
+function renderAbPreview() {
+  const el = document.getElementById('ab-preview');
+  if (!el) return;
+  const img = UnplugUpload.valueOf(document.getElementById('ab-image-upload'));
+  const cta = document.getElementById('ab-cta').value.trim();
+  if (!img && !cta) {
+    el.innerHTML = '<div class="svc-preview-empty">Upload a banner image above to see a preview.</div>';
+    return;
+  }
+  el.innerHTML = `<div class="svc-ab-frame">${img ? `<img src="${escapeAttrM(img)}" alt="">` : '<span class="svc-preview-empty">No image yet</span>'}</div>`
+    + (cta ? `<div class="svc-ab-cta">${escapeAttrM(cta)}</div>` : '');
+}
+document.getElementById('fields-ad_banner').addEventListener('input', renderAbPreview);
+document.getElementById('fields-ad_banner').addEventListener('change', renderAbPreview);
+document.getElementById('fields-ad_banner').addEventListener('img-upload:done', renderAbPreview);
 
 async function createSubmission(type) {
   if (type === 'article') {
