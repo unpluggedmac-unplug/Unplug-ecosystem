@@ -619,9 +619,97 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <p id="submitTermsHint" style="font-size:11.5px; color:var(--slate); margin:2px 0 0;">Open the Terms &amp; Conditions above to enable this checkbox.</p>
       </div>
 
-      <button class="btn btn-solid" id="submitAndPayBtn" disabled>Create &amp; Pay</button>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-solid" id="submitAndPayBtn" disabled style="flex:1; min-width:160px;">Create &amp; Pay Now</button>
+        <button class="btn btn-line" id="submitAddToCartBtn" style="flex:1; min-width:160px;">Add to Cart</button>
+      </div>
+      <p style="font-size:11.5px; color:var(--slate); margin-top:6px;">Buying more than one service? Add each to your cart below and pay for all of them together in one order.</p>
 
       <div class="instructions-box section-hidden" id="submitResultBox" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- CART (Payment Portal Redevelopment Phase 3) — every "Add to Cart"
+         click above lands here. Each item was already created for real
+         (createSubmission() ran exactly as it does for Create & Pay Now);
+         the cart only defers PAYING for it, so removing an item here does
+         not delete the underlying submission — it just won't be part of
+         this particular order (it still shows up, unpaid, under Content). -->
+    <div class="card section-hidden" id="cartCard" style="margin-top:20px;">
+      <h2>Your Cart</h2>
+      <p class="sub">Everything here is paid for together, in one order with one reference.</p>
+      <div id="cartItemsList"></div>
+      <div style="display:flex; justify-content:space-between; font-weight:700; font-size:15px; padding-top:10px; margin-top:10px; border-top:1px solid var(--paper-line);">
+        <span>Subtotal</span><span id="cartSubtotal">R0.00</span>
+      </div>
+      <button class="btn btn-solid" id="cartCheckoutBtn" style="margin-top:14px;">Checkout Cart</button>
+    </div>
+
+    <!-- CART CHECKOUT — Steps 5-10: summary, office contact, voucher &
+         credit, two-step verification, payment method. -->
+    <div class="card section-hidden" id="cartCheckoutCard" style="margin-top:20px;">
+      <h2>Checkout</h2>
+
+      <div id="cartCheckoutItems" style="margin-bottom:14px;"></div>
+
+      <div id="cartOrderSummary" style="border:1px solid var(--paper-line); border-radius:6px; padding:12px 14px; margin-bottom:16px; font-size:13.5px;">
+        <div style="font-weight:700; margin-bottom:8px;">Order summary</div>
+        <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><span id="cartSumSubtotal">—</span></div>
+        <div style="display:flex; justify-content:space-between; color:var(--red);" class="section-hidden" id="cartSumVoucherRow"><span>Voucher</span><span id="cartSumVoucher">—</span></div>
+        <div style="display:flex; justify-content:space-between; color:var(--red);" class="section-hidden" id="cartSumCreditRow"><span>Account credit</span><span id="cartSumCredit">—</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:15px; font-weight:700; margin-top:8px; padding-top:8px; border-top:1px dashed var(--paper-line);"><span>Total to pay</span><span id="cartSumPay">—</span></div>
+      </div>
+
+      <!-- STEP 6 — Office Contact Details, display only. -->
+      <div style="background:var(--paper); border:1px solid var(--paper-line); border-radius:6px; padding:12px 14px; margin-bottom:16px; font-size:13px; line-height:1.6;">
+        <div style="font-weight:700; margin-bottom:4px;">Unplug Magazine — Office Contact Details</div>
+        <div>Email: accounts@unplugnews.com</div>
+        <div>For enquiries about this order only — this does not change anything you've entered above.</div>
+      </div>
+
+      <div class="field">
+        <label>Voucher code (optional)</label>
+        <div style="display:flex; gap:8px; align-items:flex-start;">
+          <input id="cartVoucher" placeholder="e.g. UNPLUG2026" style="flex:1;">
+          <button class="btn btn-line" type="button" id="cartApplyVoucherBtn" style="width:auto; white-space:nowrap;">Apply</button>
+        </div>
+        <p id="cartVoucherNote" style="font-size:11.5px; margin:4px 0 0;"></p>
+      </div>
+
+      <div class="field section-hidden" id="cartCreditSection" style="background:#faf7f2; border:1px solid var(--paper-line); padding:10px; border-radius:6px;">
+        <label style="margin-bottom:4px;">Your Unplug Credit</label>
+        <div style="font-size:13.5px;">Available: <b id="cartCreditAvailable">R0.00</b></div>
+        <label class="tc-row" style="margin-top:6px;"><input type="checkbox" id="cartUseCredit"> <span>Use my Unplug Credit toward this order</span></label>
+      </div>
+
+      <div class="field">
+        <label for="cartPaymentMethod">Payment Method</label>
+        <select id="cartPaymentMethod">
+          <option value="eft" selected>Manual EFT</option>
+          <option value="payfast" disabled>PayFast — coming soon</option>
+          <option value="ozow" disabled>Ozow — coming soon</option>
+        </select>
+      </div>
+
+      <!-- STEP 9 — TWO SEPARATE mandatory checkboxes. Reviewing the order
+           and accepting the Terms are not the same act, so one checkbox
+           can never silently stand in for the other. -->
+      <div class="field" style="border-top:1px solid var(--paper-line); padding-top:10px;">
+        <label class="tc-row"><input type="checkbox" id="cartInfoConfirmChk"> <span>I confirm all information in this order is correct.</span></label>
+      </div>
+      <div class="field" id="cartTermsGate">
+        <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" class="cartViewTerms" style="font-weight:600; text-decoration:underline; margin-right:14px;">VIEW TERMS &amp; CONDITIONS</a>
+        <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" class="cartViewTerms" style="font-weight:600; text-decoration:underline;">VIEW CANCELLATION, REFUND &amp; ACCOUNT CREDIT POLICY</a>
+        <label class="tc-row" id="cartTermsRow" style="margin-top:8px; opacity:0.5;"><input type="checkbox" id="cartTermsChk" disabled> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+        <p id="cartTermsHint" style="font-size:11.5px; color:var(--slate); margin:2px 0 0;">Open the Terms &amp; Conditions above to enable this checkbox.</p>
+      </div>
+
+      <div class="error-banner" id="cartCheckoutError" style="display:none;"></div>
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button class="btn btn-line" id="cartBackBtn" style="flex:1;">Back to Cart</button>
+        <button class="btn btn-solid" id="cartPayBtn" disabled style="flex:2;">Complete Order</button>
+      </div>
+
+      <div class="instructions-box section-hidden" id="cartResultBox" style="margin-top:16px;"></div>
     </div>
 
     </section>
@@ -2210,6 +2298,215 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
     updateSubmitOrderDetails();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Cart (Payment Portal Redevelopment Phase 3) — buy several services in
+// one order instead of one at a time. "Add to Cart" runs the exact same
+// createSubmission(type) Create & Pay Now already uses — the underlying
+// article/event/highlight/etc is created for real either way. The cart
+// only defers PAYING for it: /orders/initiate (not /payments/initiate)
+// handles the actual checkout, once, for everything in it.
+// ---------------------------------------------------------------------------
+let CART = JSON.parse(localStorage.getItem('unplug_cart') || '[]');
+function saveCart() { localStorage.setItem('unplug_cart', JSON.stringify(CART)); }
+
+async function renderCart() {
+  const card = document.getElementById('cartCard');
+  if (CART.length === 0) { card.classList.add('section-hidden'); return; }
+  card.classList.remove('section-hidden');
+  document.getElementById('cartItemsList').innerHTML = CART.map((item, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--paper-line);">
+      <span style="font-size:13.5px;">${escapeHtmlM(item.label)}</span>
+      <button class="btn btn-line" type="button" style="width:auto; padding:4px 10px; font-size:11.5px;" onclick="removeFromCart(${i})">Remove</button>
+    </div>`).join('');
+  // The authoritative subtotal — same resolveAmount() the eventual order
+  // will use, not a client-guessed number.
+  try {
+    const q = await api('/orders/quote', { method: 'POST', body: JSON.stringify({
+      items: CART.map((i) => ({ linkedType: i.linkedType, linkedId: i.linkedId })),
+    }) });
+    document.getElementById('cartSubtotal').textContent = 'R' + Number(q.subtotal).toFixed(2);
+  } catch (e) {
+    document.getElementById('cartSubtotal').textContent = '—';
+  }
+}
+
+function removeFromCart(index) {
+  CART.splice(index, 1);
+  saveCart();
+  renderCart();
+}
+
+document.getElementById('submitAddToCartBtn').addEventListener('click', async () => {
+  hideSubmitError();
+  const type = document.getElementById('submitType').value;
+  const btn = document.getElementById('submitAddToCartBtn');
+  btn.disabled = true; btn.textContent = 'Adding…';
+  try {
+    const { linkedType, linkedId, label, needsPayment, message } = await createSubmission(type);
+    if (!needsPayment) {
+      showToast(`${label} submitted — no payment needed, so there's nothing to add to a cart.`);
+      loadMemberContent(); loadReadingList();
+      return;
+    }
+    CART.push({ linkedType, linkedId, label });
+    saveCart();
+    renderCart();
+    document.getElementById('cartCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    showToast(`${label} added to your cart.`);
+  } catch (err) {
+    showSubmitError(err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add to Cart';
+  }
+});
+
+// ---- Cart checkout: summary, voucher, credit, two-step verification ----
+let CART_TERMS_VERSION = '';
+let CART_APPLIED_VOUCHER = null;
+let CART_QUOTE = null;
+
+document.getElementById('cartCheckoutBtn').addEventListener('click', async () => {
+  document.getElementById('cartCard').classList.add('section-hidden');
+  document.getElementById('cartCheckoutCard').classList.remove('section-hidden');
+  document.getElementById('cartCheckoutItems').innerHTML = CART.map((item) =>
+    `<div style="font-size:13px; padding:4px 0;">• ${escapeHtmlM(item.label)}</div>`).join('');
+  document.getElementById('cartInfoConfirmChk').checked = false;
+  document.getElementById('cartTermsChk').checked = false;
+  document.getElementById('cartTermsChk').disabled = true;
+  document.getElementById('cartTermsRow').style.opacity = '0.5';
+  document.getElementById('cartTermsHint').textContent = 'Open the Terms & Conditions above to enable this checkbox.';
+  document.getElementById('cartPayBtn').disabled = true;
+  CART_APPLIED_VOUCHER = null;
+  document.getElementById('cartVoucher').value = '';
+  document.getElementById('cartVoucherNote').textContent = '';
+  try { const tv = await api('/payments/terms-version'); CART_TERMS_VERSION = tv.version; } catch (e) {}
+  await refreshCartQuote();
+});
+
+document.getElementById('cartBackBtn').addEventListener('click', () => {
+  document.getElementById('cartCheckoutCard').classList.add('section-hidden');
+  document.getElementById('cartCard').classList.remove('section-hidden');
+});
+
+async function refreshCartQuote() {
+  try {
+    CART_QUOTE = await api('/orders/quote', { method: 'POST', body: JSON.stringify({
+      items: CART.map((i) => ({ linkedType: i.linkedType, linkedId: i.linkedId })),
+      voucherCode: CART_APPLIED_VOUCHER || undefined,
+      useCredit: document.getElementById('cartUseCredit').checked,
+    }) });
+    document.getElementById('cartSumSubtotal').textContent = 'R' + Number(CART_QUOTE.subtotal).toFixed(2);
+    const voucherRow = document.getElementById('cartSumVoucherRow');
+    if (CART_QUOTE.voucherDiscount > 0) {
+      voucherRow.classList.remove('section-hidden');
+      document.getElementById('cartSumVoucher').textContent = '-R' + Number(CART_QUOTE.voucherDiscount).toFixed(2);
+    } else voucherRow.classList.add('section-hidden');
+    if (CART_QUOTE.creditBalance > 0) {
+      document.getElementById('cartCreditSection').classList.remove('section-hidden');
+      document.getElementById('cartCreditAvailable').textContent = 'R' + Number(CART_QUOTE.creditBalance).toFixed(2);
+    }
+    const creditRow = document.getElementById('cartSumCreditRow');
+    if (CART_QUOTE.creditApplied > 0) {
+      creditRow.classList.remove('section-hidden');
+      document.getElementById('cartSumCredit').textContent = '-R' + Number(CART_QUOTE.creditApplied).toFixed(2);
+    } else creditRow.classList.add('section-hidden');
+    document.getElementById('cartSumPay').textContent = 'R' + Number(CART_QUOTE.total).toFixed(2);
+    document.getElementById('cartPayBtn').textContent = CART_QUOTE.total === 0 ? 'Complete Order (Paid by Credit)' : 'Complete Order';
+  } catch (e) {
+    showCartCheckoutError(e.message || 'Could not price this order.');
+  }
+}
+
+document.getElementById('cartApplyVoucherBtn').addEventListener('click', async () => {
+  const code = document.getElementById('cartVoucher').value.trim();
+  const note = document.getElementById('cartVoucherNote');
+  note.style.color = '';
+  if (!code) { note.textContent = ''; CART_APPLIED_VOUCHER = null; await refreshCartQuote(); return; }
+  CART_APPLIED_VOUCHER = code;
+  await refreshCartQuote();
+  if (CART_QUOTE && CART_QUOTE.voucherError) {
+    note.style.color = 'var(--red)'; note.textContent = CART_QUOTE.voucherError;
+    CART_APPLIED_VOUCHER = null;
+  } else if (CART_QUOTE && CART_QUOTE.voucherDiscount > 0) {
+    note.style.color = '#1f7a34'; note.textContent = `Voucher applied — R${Number(CART_QUOTE.voucherDiscount).toFixed(2)} off.`;
+  }
+});
+document.getElementById('cartUseCredit').addEventListener('change', refreshCartQuote);
+
+document.querySelectorAll('.cartViewTerms').forEach((a) => a.addEventListener('click', () => {
+  document.getElementById('cartTermsChk').disabled = false;
+  document.getElementById('cartTermsRow').style.opacity = '1';
+  document.getElementById('cartTermsHint').textContent = 'You can now tick the box to confirm you have read and agree.';
+}));
+function updateCartPayBtnState() {
+  document.getElementById('cartPayBtn').disabled =
+    !document.getElementById('cartInfoConfirmChk').checked || !document.getElementById('cartTermsChk').checked;
+}
+document.getElementById('cartInfoConfirmChk').addEventListener('change', updateCartPayBtnState);
+document.getElementById('cartTermsChk').addEventListener('change', updateCartPayBtnState);
+
+function showCartCheckoutError(msg) {
+  const el = document.getElementById('cartCheckoutError');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideCartCheckoutError() {
+  document.getElementById('cartCheckoutError').style.display = 'none';
+}
+
+document.getElementById('cartPayBtn').addEventListener('click', async () => {
+  hideCartCheckoutError();
+  if (!document.getElementById('cartInfoConfirmChk').checked) {
+    showCartCheckoutError('You must confirm that all information in this order is correct before continuing.');
+    return;
+  }
+  if (!document.getElementById('cartTermsChk').checked) {
+    showCartCheckoutError('You must accept the Terms and Conditions before you can proceed with payment.');
+    return;
+  }
+  const btn = document.getElementById('cartPayBtn');
+  btn.disabled = true; btn.textContent = 'Processing…';
+  try {
+    const method = document.getElementById('cartPaymentMethod').value;
+    const order = await api('/orders/initiate', { method: 'POST', body: JSON.stringify({
+      items: CART.map((i) => ({ linkedType: i.linkedType, linkedId: i.linkedId })),
+      method,
+      infoConfirmed: true,
+      termsAccepted: true,
+      useCredit: document.getElementById('cartUseCredit').checked,
+      voucherCode: CART_APPLIED_VOUCHER || undefined,
+    }) });
+
+    const resultBox = document.getElementById('cartResultBox');
+    resultBox.classList.remove('section-hidden');
+    if (order.paidInFull) {
+      resultBox.innerHTML = `<strong>Order complete — paid in full by your Unplug Credit.</strong><br><br>${order.message || ''}` + refNotice(order.order.reference);
+    } else if (method === 'eft') {
+      const i = order.instructions;
+      resultBox.innerHTML = `<strong>Order created — ${CART.length} service${CART.length === 1 ? '' : 's'}.</strong> Pay via EFT using the details below — one payment covers everything.<br><br>
+        <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
+        ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
+        <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br><br>
+        ${i.note}` + refNotice(i.reference);
+    } else {
+      resultBox.innerHTML = `<strong>Order created.</strong> ${order.note}<br><br><a href="${order.redirectUrl}" target="_blank">${order.redirectUrl}</a>`;
+    }
+
+    CART = [];
+    saveCart();
+    document.getElementById('cartCheckoutItems').innerHTML = '';
+    document.getElementById('cartCheckoutCard').querySelectorAll('.field, #cartOrderSummary, #cartCheckoutItems').forEach((el) => el.style.display = 'none');
+    showToast('Order placed — see payment details below.');
+    loadMemberContent(); loadReadingList();
+  } catch (err) {
+    showCartCheckoutError(err.message || 'Could not place this order.');
+  } finally {
+    btn.disabled = false;
+    if (btn.textContent === 'Processing…') btn.textContent = 'Complete Order';
+  }
+});
+
+renderCart();
 </script>
 <script>
 // ===========================================================================

@@ -48,6 +48,7 @@ const followRoutes = require('./routes/follows');
 const memberRoutes = require('./routes/members');
 const profileAnalyticsRoutes = require('./routes/profileAnalytics');
 const badgeRoutes = require('./routes/badges');
+const orderRoutes = require('./routes/orders');
 
 const app = express();
 
@@ -115,6 +116,7 @@ app.use('/follows', followRoutes);
 app.use('/members', memberRoutes);
 app.use('/profile-analytics', profileAnalyticsRoutes);
 app.use('/badges', badgeRoutes);
+app.use('/orders', orderRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,

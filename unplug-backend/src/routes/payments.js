@@ -1051,4 +1051,18 @@ router.get('/pending-eft', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// Attached to the router function itself (not a separate export shape) so
+// app.js's existing `app.use('/payments', require('./payments'))` keeps
+// working unchanged, while orders.js (Payment Portal Redevelopment Phase 3
+// — the multi-service cart) can reuse the exact same per-service pricing,
+// voucher and "what actually happens once paid" logic rather than
+// re-implementing an 11-branch (now 12, with vote_bundle excluded — see
+// 095) copy that could drift from this one. Same pattern already used by
+// interactions.js's notifyProfileOwner.
+router.resolveAmount = resolveAmount;
+router.applyVoucher = applyVoucher;
+router.recordVoucherRedemption = recordVoucherRedemption;
+router.applyPaymentEffect = applyPaymentEffect;
+router.TERMS_VERSION = TERMS_VERSION;
+
 module.exports = router;
