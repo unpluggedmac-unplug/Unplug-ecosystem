@@ -60,6 +60,17 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .svc-ab-frame img{ max-width:100%; max-height:120px; object-fit:contain; display:block; }
 .svc-ab-cta{ display:inline-block; margin-top:8px; background:var(--red); color:#fff; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:6px 14px; }
 
+/* Article Story Builder — unlimited reorderable sections. */
+.art-section{ border:1px solid var(--paper-line); background:#fff; padding:16px; margin-bottom:14px; }
+.art-section-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:10px; }
+.art-section-head strong{ font-size:11px; letter-spacing:0.08em; color:var(--slate); text-transform:uppercase; }
+.art-section-actions{ display:flex; align-items:center; gap:4px; }
+.art-section-move, .art-section-remove{ background:none; border:1px solid var(--paper-line); cursor:pointer; font-size:13px; line-height:1; padding:5px 9px; color:var(--ink); }
+.art-section-move:disabled{ opacity:0.3; cursor:not-allowed; }
+.art-section-remove{ color:var(--red); border-color:transparent; font-size:15px; }
+.art-section label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin:10px 0 4px; }
+.art-section input, .art-section textarea{ width:100%; border:1px solid var(--paper-line); padding:9px 12px; font-size:14px; font-family:inherit; background:#fff; }
+
 .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
 .btn-solid{ background:var(--red); color:#fff; border-color:var(--red); }
 .btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
@@ -520,6 +531,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:6px;">Social media or anything else you'd like readers to visit.</span>
           <div id="art-links"></div>
           <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="art-add-link">+ Add a link</button>
+        </div>
+        <div class="field">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+            <label style="margin:0;">Sections (optional)</label>
+            <button type="button" class="btn btn-line" style="width:auto;" id="art-add-section">+ Add section</button>
+          </div>
+          <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:8px;">Break your story into parts, each with its own sub heading, paragraph and picture. Reorder with the arrows. Leave any field blank if you don't need it.</span>
+          <div id="artSections"></div>
         </div>
         <div class="field"><label for="art-emotion">Emotion (optional)</label>
           <select id="art-emotion">
@@ -2101,6 +2120,82 @@ function artCollectLinks() {
     .filter((l) => l.url);
 }
 
+// Story Builder — unlimited reorderable sections, each with its own sub
+// heading, paragraph and optional picture. No ratio hint on the section
+// image: articles display it at its natural size (.art-figure img is
+// height:auto, uncropped), unlike every other image field on this form,
+// so forcing a crop here would be wrong rather than helpful.
+function artSectionHtml(index, data) {
+  const d = data || {};
+  return `<div class="art-section" data-index="${index}">
+    <div class="art-section-head">
+      <strong>Section ${index + 1}</strong>
+      <div class="art-section-actions">
+        <button type="button" class="art-section-move" data-dir="up" title="Move up" aria-label="Move section ${index + 1} up">↑</button>
+        <button type="button" class="art-section-move" data-dir="down" title="Move down" aria-label="Move section ${index + 1} down">↓</button>
+        <button type="button" class="art-section-remove" title="Remove this section" aria-label="Remove section ${index + 1}">🗑</button>
+      </div>
+    </div>
+    <label>Sub heading</label>
+    <input class="art-sec-heading" value="${(d.sub_heading || '').replace(/"/g, '&quot;')}" placeholder="e.g. Why this matters">
+    <label>Paragraph</label>
+    <textarea class="art-sec-para" rows="4" placeholder="Write this part of the story…">${d.paragraph || ''}</textarea>
+    <label>Picture (optional)</label>
+    <div class="art-sec-image">${UnplugUpload.fieldHtml('sectionImage', d.image_url || '')}</div>
+    <label>Note by the picture (optional)</label>
+    <input class="art-sec-note" value="${(d.image_note || '').replace(/"/g, '&quot;')}" placeholder="Caption or credit">
+  </div>`;
+}
+
+// Numbers and up/down-disabled state are positional, so both are
+// recalculated after every add, remove or move rather than tracked separately.
+function artRenumber() {
+  const sections = document.querySelectorAll('#artSections .art-section');
+  sections.forEach((el, i) => {
+    el.setAttribute('data-index', i);
+    el.querySelector('.art-section-head strong').textContent = `Section ${i + 1}`;
+    el.querySelector('.art-section-move[data-dir="up"]').disabled = i === 0;
+    el.querySelector('.art-section-move[data-dir="down"]').disabled = i === sections.length - 1;
+  });
+}
+
+function artCollectSections() {
+  return [...document.querySelectorAll('#artSections .art-section')].map((el) => ({
+    subHeading: el.querySelector('.art-sec-heading').value.trim(),
+    paragraph: el.querySelector('.art-sec-para').value.trim(),
+    imageUrl: UnplugUpload.valueOf(el.querySelector('.art-sec-image')),
+    imageNote: el.querySelector('.art-sec-note').value.trim(),
+  }));
+}
+
+document.getElementById('art-add-section').addEventListener('click', () => {
+  const wrap = document.getElementById('artSections');
+  wrap.insertAdjacentHTML('beforeend', artSectionHtml(wrap.children.length, null));
+  artRenumber();
+});
+
+// Delegated: remove deletes the row; move relocates the existing DOM node
+// (not a re-render from collected values), so an already-uploaded section
+// image survives the reorder untouched.
+document.getElementById('artSections').addEventListener('click', (e) => {
+  const removeBtn = e.target.closest('.art-section-remove');
+  if (removeBtn) {
+    removeBtn.closest('.art-section').remove();
+    artRenumber();
+    return;
+  }
+  const moveBtn = e.target.closest('.art-section-move');
+  if (moveBtn && !moveBtn.disabled) {
+    const section = moveBtn.closest('.art-section');
+    if (moveBtn.dataset.dir === 'up' && section.previousElementSibling) {
+      section.parentNode.insertBefore(section, section.previousElementSibling);
+    } else if (moveBtn.dataset.dir === 'down' && section.nextElementSibling) {
+      section.parentNode.insertBefore(section.nextElementSibling, section);
+    }
+    artRenumber();
+  }
+});
+
 // Event, gallery and marketplace images — same UnplugUpload widget as the
 // article cover, each with the ratio already promised in its own label so
 // the crop step (image-upload.js) applies automatically. These used to be
@@ -2235,6 +2330,7 @@ async function createSubmission(type) {
         bannerImageUrl: UnplugUpload.valueOf(document.getElementById('art-cover-upload')) || undefined,
         galleryImages: artCollectGallery(),
         links: artCollectLinks(),
+        sections: artCollectSections(),
         emotion: document.getElementById('art-emotion').value || undefined,
       }),
     });
