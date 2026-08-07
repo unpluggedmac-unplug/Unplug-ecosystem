@@ -163,21 +163,22 @@ router.get('/competitions/admin/all', requireRole('admin'), async (req, res, nex
   try {
     const result = await pool.query(
       `SELECT c.id, c.name, c.slug, c.description, c.opens_at, c.closes_at,
-              c.status, c.entry_fee, c.created_at,
+              c.status, c.entry_fee, c.daily_voting, c.created_at,
               COUNT(ce.id)::int AS entry_count,
               COUNT(ce.id) FILTER (WHERE ce.status <> 'awaiting_payment')::int AS paid_entry_count
          FROM competitions c
          LEFT JOIN competition_entries ce ON ce.competition_id = c.id
-        WHERE c.slug <> ALL($1::text[])
         GROUP BY c.id
-        ORDER BY c.closes_at DESC`,
-      [MANAGED_ELSEWHERE_SLUGS]
+        ORDER BY c.closes_at DESC`
     );
     res.json({
       competitions: result.rows.map((r) => ({
         ...r,
         entryFee: Number(r.entry_fee),
         builtIn: BUILT_IN_SLUGS.includes(r.slug),
+        // Its entries and rankings are managed on their own admin screens;
+        // this flag lets the editor show that rather than imply otherwise.
+        managedElsewhere: MANAGED_ELSEWHERE_SLUGS.includes(r.slug),
       })),
     });
   } catch (err) {
@@ -217,6 +218,27 @@ router.patch('/competitions/:id', requireRole('admin'), async (req, res, next) =
       return res.status(400).json({ error: 'Entry fee must be zero or more.' });
     }
 
+    // Voting rules are part of what entrants and voters were promised, so
+    // they cannot be changed once voting has started. Turning daily voting
+    // OFF mid-run is the worse direction — every vote already cast on a day
+    // stays counted while new ones become one-per-person, so two voters end
+    // up under different rules in the same competition — but ON is no fairer
+    // to whoever already voted under the old rule. Allowed freely until the
+    // first vote lands.
+    if (b.dailyVoting !== undefined && !!b.dailyVoting !== existing.rows[0].daily_voting) {
+      const voted = await pool.query(
+        `SELECT 1 FROM votes v
+           JOIN competition_entries ce ON ce.id = v.entry_id
+          WHERE ce.competition_id = $1 LIMIT 1`,
+        [id]
+      );
+      if (voted.rowCount > 0) {
+        return res.status(409).json({
+          error: 'Voting has already started for this competition, so the voting rule cannot be changed. Doing so would put early and late voters under different rules.',
+        });
+      }
+    }
+
     // Only touch the fields actually sent, so a form that omits one can't blank it.
     const sets = [];
     const vals = [];
@@ -227,6 +249,7 @@ router.patch('/competitions/:id', requireRole('admin'), async (req, res, next) =
     if (b.closesAt !== undefined) put('closes_at', b.closesAt);
     if (b.status !== undefined) put('status', b.status);
     if (b.entryFee !== undefined) put('entry_fee', Number(b.entryFee));
+    if (b.dailyVoting !== undefined) put('daily_voting', !!b.dailyVoting);
     if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
     vals.push(id);

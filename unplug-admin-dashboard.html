@@ -1419,6 +1419,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field"><label for="badgeLabel">Label *</label><input id="badgeLabel" placeholder="e.g. Rising Star"></div>
           <div class="field"><label for="badgeDescription">Description *</label><textarea id="badgeDescription" rows="2"></textarea></div>
           <div class="field"><label for="badgeCategory">Category</label><input id="badgeCategory" placeholder="general"></div>
+          <div class="field">
+            <label>Period <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional. Set this only if the badge itself is for one month (e.g. "August 2026 Top 10"). Leave blank for an ongoing badge and pick the month when you award it.</span></label>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <select id="badgeMonth" style="padding:8px; max-width:170px;"></select>
+              <input id="badgeYear" type="number" min="2000" max="2100" placeholder="Year" style="max-width:120px;">
+            </div>
+          </div>
           <button class="btn btn-solid" style="width:auto;" id="createBadgeBtn">Create Badge</button>
         </div>
       </div>
@@ -1428,6 +1435,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
             <div class="field"><label for="badgeAwardBadge">Badge</label><select id="badgeAwardBadge" style="padding:8px;"></select></div>
             <div class="field"><label for="badgeAwardUser">Member</label><select id="badgeAwardUser" style="padding:8px;"><option value="">Loading members…</option></select></div>
+            <div class="field"><label for="badgeAwardMonth">Month</label><select id="badgeAwardMonth" style="padding:8px; max-width:170px;"></select></div>
+            <div class="field"><label for="badgeAwardYear">Year</label><input id="badgeAwardYear" type="number" min="2000" max="2100" placeholder="Year" style="max-width:110px;"></div>
             <div class="field" style="flex:1; min-width:180px;"><label for="badgeAwardReason">Reason (optional)</label><input id="badgeAwardReason" placeholder="e.g. Community MVP this quarter"></div>
             <button class="btn btn-solid" style="width:auto;" id="awardBadgeBtn">Award</button>
           </div>
@@ -6786,12 +6795,16 @@ async function loadBadges() {
     awardSelect.innerHTML = badges.map((b) => `<option value="${b.code}">${b.emoji} ${escapeHtmlAdmin(b.label)}</option>`).join('');
     if (!badges.length) { body.innerHTML = '<div class="empty-state">No badge types yet — create one above.</div>'; return; }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th></th><th>Label</th><th>Category</th><th>Status</th><th></th></tr>';
+    table.innerHTML = '<tr><th></th><th>Label</th><th>Category</th><th>Period</th><th>Status</th><th></th></tr>';
     badges.forEach((b) => {
       const tr = document.createElement('tr');
+      const period = b.award_month && b.award_year
+        ? `${BADGE_MONTHS[b.award_month - 1]} ${b.award_year}`
+        : '<span style="color:#999;">Ongoing</span>';
       tr.innerHTML = `<td style="font-size:20px;">${b.emoji}</td>`
         + `<td><strong>${escapeHtmlAdmin(b.label)}</strong><br><span style="font-size:11.5px; color:#666;">${escapeHtmlAdmin(b.description)}</span></td>`
         + `<td>${escapeHtmlAdmin(b.category)}</td>`
+        + `<td style="font-size:12px;">${period}</td>`
         + `<td>${b.is_enabled ? 'Enabled' : 'Disabled'}</td>`
         + `<td><div class="row-actions"><button class="approve">Edit</button><button class="reject">${b.is_enabled ? 'Disable' : 'Enable'}</button></div></td>`;
       tr.querySelector('.approve').addEventListener('click', () => {
@@ -6802,6 +6815,8 @@ async function loadBadges() {
         document.getElementById('badgeLabel').value = b.label;
         document.getElementById('badgeDescription').value = b.description;
         document.getElementById('badgeCategory').value = b.category;
+        document.getElementById('badgeMonth').value = b.award_month || '';
+        document.getElementById('badgeYear').value = b.award_year || '';
         document.getElementById('createBadgeBtn').textContent = 'Save Changes';
         document.getElementById('badgeFormTitle').textContent = `Edit "${b.label}"`;
         document.getElementById('badgeCode').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -6821,11 +6836,37 @@ async function loadBadges() {
   }
 }
 
+// Month/year are a pair everywhere they appear — the backend rejects one
+// without the other, so the UI checks it first and says so in plain words
+// rather than surfacing a validation error after a round trip.
+const BADGE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+function fillMonthSelect(id) {
+  const el = document.getElementById(id);
+  if (!el || el.options.length) return;
+  el.innerHTML = '<option value="">— none —</option>'
+    + BADGE_MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
+}
+fillMonthSelect('badgeMonth');
+fillMonthSelect('badgeAwardMonth');
+
+// Returns {awardMonth, awardYear} to send, or null if the pair is half-filled.
+function badgePeriodFrom(monthId, yearId) {
+  const month = document.getElementById(monthId).value;
+  const year = document.getElementById(yearId).value.trim();
+  if (!month && !year) return { awardMonth: '', awardYear: '' };
+  if (!month || !year) return null;
+  return { awardMonth: Number(month), awardYear: Number(year) };
+}
+
 document.getElementById('createBadgeBtn').addEventListener('click', async () => {
   const editCode = document.getElementById('badgeEditCode').value;
   const label = document.getElementById('badgeLabel').value.trim();
   const description = document.getElementById('badgeDescription').value.trim();
   if (!label || !description) { showToast('Label and description are required.', true); return; }
+  const period = badgePeriodFrom('badgeMonth', 'badgeYear');
+  if (!period) { showToast('Set both a month and a year for the period, or leave both blank.', true); return; }
   try {
     if (editCode) {
       await api(`/badges/admin/${editCode}`, {
@@ -6835,6 +6876,10 @@ document.getElementById('createBadgeBtn').addEventListener('click', async () => 
           description,
           emoji: document.getElementById('badgeEmoji').value.trim() || undefined,
           category: document.getElementById('badgeCategory').value.trim() || undefined,
+          // Always sent on edit, so clearing both fields genuinely clears the
+          // period rather than silently leaving the old one in place.
+          awardMonth: period.awardMonth,
+          awardYear: period.awardYear,
         }),
       });
       showToast('Badge updated.');
@@ -6849,13 +6894,15 @@ document.getElementById('createBadgeBtn').addEventListener('click', async () => 
           description,
           emoji: document.getElementById('badgeEmoji').value.trim() || '🏅',
           category: document.getElementById('badgeCategory').value.trim() || 'general',
+          awardMonth: period.awardMonth,
+          awardYear: period.awardYear,
         }),
       });
       showToast('Badge created.');
     }
     document.getElementById('badgeEditCode').value = '';
     document.getElementById('badgeCode').disabled = false;
-    ['badgeCode', 'badgeEmoji', 'badgeLabel', 'badgeDescription', 'badgeCategory'].forEach((id) => document.getElementById(id).value = '');
+    ['badgeCode', 'badgeEmoji', 'badgeLabel', 'badgeDescription', 'badgeCategory', 'badgeMonth', 'badgeYear'].forEach((id) => document.getElementById(id).value = '');
     document.getElementById('createBadgeBtn').textContent = 'Create Badge';
     document.getElementById('badgeFormTitle').textContent = 'Create a badge';
     loadBadges();
@@ -6866,12 +6913,25 @@ document.getElementById('awardBadgeBtn').addEventListener('click', async () => {
   const code = document.getElementById('badgeAwardBadge').value;
   const userId = document.getElementById('badgeAwardUser').value;
   if (!code || !userId) { showToast('Pick a badge and a member.', true); return; }
+  const period = badgePeriodFrom('badgeAwardMonth', 'badgeAwardYear');
+  if (!period) { showToast('Set both a month and a year, or leave both blank.', true); return; }
   try {
     const result = await api(`/badges/admin/${code}/award`, {
       method: 'POST',
-      body: JSON.stringify({ userId, reason: document.getElementById('badgeAwardReason').value.trim() || undefined }),
+      body: JSON.stringify({
+        userId,
+        reason: document.getElementById('badgeAwardReason').value.trim() || undefined,
+        awardMonth: period.awardMonth,
+        awardYear: period.awardYear,
+      }),
     });
-    showToast(result.awarded ? 'Badge awarded.' : 'That member already has this badge.');
+    // "already has" is only the whole story for an undated badge; with a
+    // period it means they already have it FOR THAT MONTH, which is a
+    // different thing an admin may well want to correct.
+    const already = period.awardMonth
+      ? `That member already has this badge for ${BADGE_MONTHS[period.awardMonth - 1]} ${period.awardYear}.`
+      : 'That member already has this badge.';
+    showToast(result.awarded ? 'Badge awarded.' : already);
     document.getElementById('badgeAwardReason').value = '';
   } catch (err) { showToast(err.message, true); }
 });
