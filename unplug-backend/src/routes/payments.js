@@ -392,28 +392,26 @@ async function applyPaymentEffect(payment) {
     const bundleResult = await pool.query('SELECT * FROM vote_bundles WHERE id = $1', [payment.linked_id]);
     if (bundleResult.rows.length > 0) {
       const bundle = bundleResult.rows[0];
-      // Upsert rather than plain insert: if this voter/session already cast
-      // their one free vote for this entry, that row already exists (the
-      // unique indexes in 005_competitions.sql enforce one row per voter
-      // per entry) — so a bundle purchase must ADD to its bundle_size,
-      // not fail as a duplicate.
-      if (bundle.buyer_user_id) {
-        await pool.query(
-          `INSERT INTO votes (entry_id, voter_user_id, bundle_size, payment_id)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (entry_id, voter_user_id) WHERE voter_user_id IS NOT NULL
-           DO UPDATE SET bundle_size = votes.bundle_size + EXCLUDED.bundle_size, payment_id = EXCLUDED.payment_id`,
-          [bundle.entry_id, bundle.buyer_user_id, bundle.vote_count, payment.id]
-        );
-      } else {
-        await pool.query(
-          `INSERT INTO votes (entry_id, session_id, bundle_size, payment_id)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (entry_id, session_id) WHERE voter_user_id IS NULL
-           DO UPDATE SET bundle_size = votes.bundle_size + EXCLUDED.bundle_size, payment_id = EXCLUDED.payment_id`,
-          [bundle.entry_id, bundle.session_id, bundle.vote_count, payment.id]
-        );
-      }
+      // A plain insert into the bundle's own votes row. This used to be an
+      // upsert that merged into the buyer's existing free-vote row, because
+      // the old one-row-per-voter indexes made a duplicate impossible to
+      // insert. 098_daily_voting.sql replaced those indexes, so the old
+      // ON CONFLICT clauses no longer match any index at all — Postgres
+      // rejects such a statement outright, which would have failed every
+      // online paid vote. Paid rows are excluded from the new uniqueness
+      // indexes, so they need no conflict handling.
+      await pool.query(
+        `INSERT INTO votes (entry_id, voter_user_id, session_id, bundle_size, payment_id, vote_bundle_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          bundle.entry_id,
+          bundle.buyer_user_id || null,
+          bundle.buyer_user_id ? null : bundle.session_id,
+          bundle.vote_count,
+          payment.id,
+          bundle.id,
+        ]
+      );
       await pool.query(`UPDATE vote_bundles SET status = 'confirmed' WHERE id = $1`, [bundle.id]);
     }
   }

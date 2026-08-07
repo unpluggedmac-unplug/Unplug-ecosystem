@@ -40,10 +40,16 @@ CREATE TABLE IF NOT EXISTS votes (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (voter_user_id IS NOT NULL OR session_id IS NOT NULL)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_votes_unique_user
-  ON votes (entry_id, voter_user_id) WHERE voter_user_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_votes_unique_session
-  ON votes (entry_id, session_id) WHERE voter_user_id IS NULL;
+-- The two UNIQUE indexes that used to be created here (idx_votes_unique_user
+-- and idx_votes_unique_session, one vote per voter per entry for ever) now
+-- live in 098_daily_voting.sql, which replaced them with four that also
+-- express "one vote per day" for competitions that allow it.
+--
+-- They cannot be recreated here. Every migration re-runs on every deploy, so
+-- this file would rebuild the old index moments before 098 drops it again —
+-- and the moment a voter has legitimately voted on two different days, that
+-- rebuild fails on duplicate keys and takes the whole deploy's migration run
+-- down with it. Caught by the idempotency test in test/dailyVoting.test.js.
 CREATE INDEX IF NOT EXISTS idx_votes_entry ON votes (entry_id);
 
 -- Current period only — no historical archive, per the locked Blueprint

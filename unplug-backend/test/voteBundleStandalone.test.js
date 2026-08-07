@@ -202,8 +202,16 @@ test('admin reject leaves no votes allocated; admin reverse removes votes an app
 
   const reverse = await req('POST', `/admin/vote-bundles/${bundleId}/reverse`, { token: tokenFor(admin, 'admin') });
   assert.equal(reverse.status, 200);
-  const afterReverse = await pool.query(`SELECT bundle_size FROM votes WHERE entry_id = $1 AND session_id = 'sess_reverse'`, [entry.id]);
-  assert.equal(afterReverse.rows[0].bundle_size, 0);
+  // Asserts the OUTCOME (no votes left for this buyer) rather than the
+  // mechanism. Reversal used to zero the bundle_size of a shared row; since
+  // 098_daily_voting.sql a bundle owns its row and reversal deletes it, so
+  // checking for a surviving row holding 0 would test how it happens rather
+  // than that it happened. The sum is what every caller actually reads.
+  const afterReverse = await pool.query(
+    `SELECT COALESCE(SUM(bundle_size), 0)::int AS n FROM votes WHERE entry_id = $1 AND session_id = 'sess_reverse'`,
+    [entry.id]
+  );
+  assert.equal(afterReverse.rows[0].n, 0);
 });
 
 test('GET /admin/vote-bundles searches by contestant name, reference and entry code, and filters by status', async () => {

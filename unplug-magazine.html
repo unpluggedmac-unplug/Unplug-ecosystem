@@ -4995,8 +4995,21 @@ function guestSessionId() {
   return id;
 }
 
+// The Top 10 allows one vote per day, so the "already voted" marker is
+// keyed by DAY as well as competition — yesterday's key is simply not read
+// today, which is what lets the button come back without anything having to
+// expire or be cleaned up. The date is the voter's local one; the server
+// keys off South African time and is the actual authority, so the two can
+// disagree by a few hours for a voter abroad. That costs at worst one
+// rejected click with a clear message, whereas trusting only the server
+// would mean no instant feedback at all.
+function top10Today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function votedEntryKey() {
-  return 'unplug_top10_voted_entry_' + top10CompetitionId;
+  return 'unplug_top10_voted_entry_' + top10CompetitionId + '_' + top10Today();
 }
 
 // Generates a clean, distinct placeholder avatar per person from their
@@ -5145,8 +5158,8 @@ function renderPoll(sorted){
         <div class="poll-bar" style="width:${pct}%"></div>
         <span class="poll-pct">${p.vote_count} votes</span>
       </div>
-      <button class="btn btn-line poll-vote-btn" onclick="castVote(${p.id})" ${votedEntryId ? 'disabled' : ''} style="${voted?'background:var(--red);color:#fff;border-color:var(--red);':''}">
-        ${voted?'✓ Voted':'Vote'}
+      <button class="btn btn-line poll-vote-btn" onclick="castVote(${p.id})" ${votedEntryId ? 'disabled' : ''} title="${votedEntryId ? 'You can vote again tomorrow' : 'One vote per day'}" style="${voted?'background:var(--red);color:#fff;border-color:var(--red);':''}">
+        ${voted?'✓ Voted today':'Vote'}
       </button>
       ${p.entry_code ? `
       <div style="flex-basis:100%;">
@@ -5181,7 +5194,10 @@ async function castVote(entryId){
   } catch (err) {
     if (err.message && err.message.includes('already voted')) {
       localStorage.setItem(votedEntryKey(), String(entryId));
-      showToast('You\'ve already voted in this Top 10.', true);
+      // The server distinguishes "today" from "ever" — pass its wording
+      // through rather than flattening both to a permanent-sounding
+      // "you've already voted", which would be wrong for a daily vote.
+      showToast(err.message, true);
       renderAll();
     } else {
       showToast(err.message, true);

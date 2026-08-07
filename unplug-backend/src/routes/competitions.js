@@ -568,25 +568,47 @@ router.post('/entries/:id/vote', async (req, res, next) => {
       return res.status(400).json({ error: 'sessionId is required for guest votes.' });
     }
 
+    // The competition's own rule decides whether this vote is day-scoped.
+    // Read from the entry rather than assumed, so the Arena keeps one vote
+    // per person while the Top 10 allows one a day (098_daily_voting.sql).
     const entryCheck = await pool.query(
-      `SELECT ce.id FROM competition_entries ce WHERE ce.id = $1 AND ce.status = 'approved'`,
+      `SELECT ce.id, c.daily_voting
+         FROM competition_entries ce
+         JOIN competitions c ON c.id = ce.competition_id
+        WHERE ce.id = $1 AND ce.status = 'approved'`,
       [req.params.id]
     );
     if (entryCheck.rows.length === 0) {
       return res.status(404).json({ error: 'Entry not found or not open for voting.' });
     }
+    const dailyVoting = entryCheck.rows[0].daily_voting === true;
 
+    // NULL vote_day = "once ever"; a date = "once on that date". The date is
+    // South African rather than the server's UTC, so the day rolls over at
+    // local midnight instead of 02:00 SAST.
     const result = await pool.query(
-      `INSERT INTO votes (entry_id, voter_user_id, session_id, bundle_size)
-       VALUES ($1, $2, $3, 1)
+      `INSERT INTO votes (entry_id, voter_user_id, session_id, bundle_size, vote_day)
+       VALUES ($1, $2, $3, 1,
+               CASE WHEN $4::boolean
+                    THEN (now() AT TIME ZONE 'Africa/Johannesburg')::date
+                    ELSE NULL END)
        RETURNING *`,
-      [req.params.id, req.user ? req.user.id : null, req.user ? null : sessionId]
+      [req.params.id, req.user ? req.user.id : null, req.user ? null : sessionId, dailyVoting]
     );
 
-    res.status(201).json({ vote: result.rows[0] });
+    res.status(201).json({ vote: result.rows[0], dailyVoting });
   } catch (err) {
     if (err.code === '23505') { // unique_violation
-      return res.status(409).json({ error: 'You have already voted for this entry.' });
+      // Two different rules, so two different messages — "you have already
+      // voted" would read as final on a competition the voter can in fact
+      // return to tomorrow.
+      const daily = /daily/.test(err.constraint || '');
+      return res.status(409).json({
+        error: daily
+          ? 'You have already voted for this entry today. You can vote again tomorrow.'
+          : 'You have already voted for this entry.',
+        votedToday: daily,
+      });
     }
     next(err);
   }
@@ -998,12 +1020,13 @@ router.get('/admin/vote-bundles', requireRole('admin'), async (req, res, next) =
 });
 
 // PATCH /admin/vote-bundles/:id/approve — confirms EFT payment and
-// allocates the votes. Same upsert-merge shape applyPaymentEffect used for
-// the online path in payments.js (bundle_size adds onto any existing free
-// vote by the same voter/session for this entry — the UNIQUE indexes on
-// votes(entry_id, voter_user_id) / (entry_id, session_id) mean a second
-// row per voter is not possible, so merging is the only option, not a
-// choice made here).
+// allocates the votes as their own votes row (see the insert below).
+//
+// This used to merge into the buyer's existing free-vote row, because the
+// old one-row-per-voter unique indexes left nowhere else to put them. Daily
+// voting removed that limitation and made merging actively wrong, so the
+// bundle now stands on its own. Totals are unaffected either way: every
+// caller sums bundle_size rather than reading a stored counter.
 router.patch('/admin/vote-bundles/:id/approve', requireRole('admin'), async (req, res, next) => {
   try {
     const bundle = await pool.query(`SELECT * FROM vote_bundles WHERE id = $1`, [req.params.id]);
@@ -1013,23 +1036,17 @@ router.patch('/admin/vote-bundles/:id/approve', requireRole('admin'), async (req
       return res.status(400).json({ error: `This bundle is already ${b.status}.` });
     }
 
-    if (b.buyer_user_id) {
-      await pool.query(
-        `INSERT INTO votes (entry_id, voter_user_id, bundle_size)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (entry_id, voter_user_id) WHERE voter_user_id IS NOT NULL
-         DO UPDATE SET bundle_size = votes.bundle_size + EXCLUDED.bundle_size`,
-        [b.entry_id, b.buyer_user_id, b.vote_count]
-      );
-    } else {
-      await pool.query(
-        `INSERT INTO votes (entry_id, session_id, bundle_size)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (entry_id, session_id) WHERE voter_user_id IS NULL
-         DO UPDATE SET bundle_size = votes.bundle_size + EXCLUDED.bundle_size`,
-        [b.entry_id, b.session_id, b.vote_count]
-      );
-    }
+    // The bundle gets its OWN votes row, tagged with vote_bundle_id, rather
+    // than being merged into the buyer's free-vote row. Under daily voting a
+    // voter has one row PER DAY, so there is no single row left to merge
+    // into — and a dedicated row is what lets reverse below subtract exactly
+    // this bundle instead of guessing. Paid rows are excluded from the
+    // uniqueness indexes (098_daily_voting.sql), so no ON CONFLICT is needed.
+    await pool.query(
+      `INSERT INTO votes (entry_id, voter_user_id, session_id, bundle_size, vote_bundle_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [b.entry_id, b.buyer_user_id || null, b.buyer_user_id ? null : b.session_id, b.vote_count, b.id]
+    );
 
     const updated = await pool.query(
       `UPDATE vote_bundles SET status = 'confirmed', confirmed_at = now() WHERE id = $1 RETURNING *`,
@@ -1060,11 +1077,11 @@ router.patch('/admin/vote-bundles/:id/reject', requireRole('admin'), async (req,
 });
 
 // POST /admin/vote-bundles/:id/reverse — undoes a mistaken/fraudulent
-// approval. Subtracts this bundle's vote_count back out of the merged
-// votes row, floored at zero — the same "best effort" precision the merge
-// design already accepts (a voter's free vote and any bundles all share
-// one row, so reversing one bundle can't be perfectly isolated from the
-// others down to the exact vote, only the total).
+// approval. Now exact for anything approved since 098_daily_voting.sql: the
+// bundle owns its votes row, so removing that row removes precisely this
+// bundle's votes and nothing else. Older merged bundles still fall back to
+// subtraction, which stays "best effort" for the reason the merge design
+// always had — a voter's free vote and their bundles shared one row.
 router.post('/admin/vote-bundles/:id/reverse', requireRole('admin'), async (req, res, next) => {
   try {
     const bundle = await pool.query(`SELECT * FROM vote_bundles WHERE id = $1`, [req.params.id]);
@@ -1074,16 +1091,29 @@ router.post('/admin/vote-bundles/:id/reverse', requireRole('admin'), async (req,
       return res.status(400).json({ error: 'Only a confirmed bundle has votes to reverse.' });
     }
 
-    if (b.buyer_user_id) {
-      await pool.query(
-        `UPDATE votes SET bundle_size = GREATEST(bundle_size - $1, 0) WHERE entry_id = $2 AND voter_user_id = $3`,
-        [b.vote_count, b.entry_id, b.buyer_user_id]
-      );
-    } else {
-      await pool.query(
-        `UPDATE votes SET bundle_size = GREATEST(bundle_size - $1, 0) WHERE entry_id = $2 AND session_id = $3`,
-        [b.vote_count, b.entry_id, b.session_id]
-      );
+    // Bundles approved since 098_daily_voting.sql own their votes row, so the
+    // reversal is exact: delete that row and precisely this bundle's votes go.
+    const owned = await pool.query(`DELETE FROM votes WHERE vote_bundle_id = $1 RETURNING id`, [b.id]);
+
+    // Bundles approved BEFORE that migration were merged into the buyer's
+    // single free-vote row, so they must still be unwound by subtraction.
+    // Safe to scope by voter here precisely because the old schema allowed
+    // only one such row per voter per entry — the very constraint that made
+    // merging necessary also makes this WHERE unambiguous for that old data.
+    if (owned.rowCount === 0) {
+      if (b.buyer_user_id) {
+        await pool.query(
+          `UPDATE votes SET bundle_size = GREATEST(bundle_size - $1, 0)
+            WHERE entry_id = $2 AND voter_user_id = $3 AND vote_bundle_id IS NULL AND vote_day IS NULL`,
+          [b.vote_count, b.entry_id, b.buyer_user_id]
+        );
+      } else {
+        await pool.query(
+          `UPDATE votes SET bundle_size = GREATEST(bundle_size - $1, 0)
+            WHERE entry_id = $2 AND session_id = $3 AND vote_bundle_id IS NULL AND vote_day IS NULL`,
+          [b.vote_count, b.entry_id, b.session_id]
+        );
+      }
     }
 
     const updated = await pool.query(`UPDATE vote_bundles SET status = 'reversed' WHERE id = $1 RETURNING *`, [req.params.id]);
