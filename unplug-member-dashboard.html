@@ -518,7 +518,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
         <div class="field"><label for="evt-venue">Venue</label><input id="evt-venue"></div>
         <div class="field"><label for="evt-fee">Entrance Fee (what attendees pay, e.g. "R50" or "Free")</label><input id="evt-fee" placeholder="Free"></div>
-        <div class="field"><label>Feature Image URL <span style="font-weight:400; opacity:0.7;">— 800 × 1200px (2:3 portrait)</span></label><input id="evt-image" placeholder="https://..."></div>
+        <div class="field"><label>Feature Image <span style="font-weight:400; opacity:0.7;">— 800 × 1200px (2:3 portrait)</span></label><div id="evt-image-upload"></div></div>
         <div class="field"><label for="evt-contact">Contact Details (shown on the event)</label><input id="evt-contact" placeholder="e.g. 082 000 0000 / email"></div>
         <div class="field"><label for="evt-link">Event Link (tickets / more info)</label><input id="evt-link" placeholder="https://..."></div>
         <div class="field"><label for="evt-desc">Description</label><textarea id="evt-desc" rows="3"></textarea></div>
@@ -527,12 +527,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
       <!-- Gallery fields -->
       <div id="fields-gallery" class="section-hidden">
-        <p class="sub" style="margin-top:0;">Provide up to 3 image URLs (upload elsewhere and paste the links here).</p>
-        <div class="field"><label for="gal-url-1">Image 1 URL</label><input id="gal-url-1"></div>
+        <p class="sub" style="margin-top:0;">Upload up to 3 images — 1080 × 1350px (4:5 portrait) works best.</p>
+        <div class="field"><label>Image 1</label><div id="gal-image-upload-1"></div></div>
         <div class="field"><label for="gal-cap-1">Caption 1 (optional)</label><input id="gal-cap-1"></div>
-        <div class="field"><label for="gal-url-2">Image 2 URL (optional)</label><input id="gal-url-2"></div>
+        <div class="field"><label>Image 2 (optional)</label><div id="gal-image-upload-2"></div></div>
         <div class="field"><label for="gal-cap-2">Caption 2 (optional)</label><input id="gal-cap-2"></div>
-        <div class="field"><label for="gal-url-3">Image 3 URL (optional)</label><input id="gal-url-3"></div>
+        <div class="field"><label>Image 3 (optional)</label><div id="gal-image-upload-3"></div></div>
         <div class="field"><label for="gal-cap-3">Caption 3 (optional)</label><input id="gal-cap-3"></div>
       </div>
 
@@ -544,7 +544,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <!-- Marketplace fields -->
       <div id="fields-marketplace" class="section-hidden">
         <div class="field"><label for="mkt-business">Business Name (first-time advertisers only)</label><input id="mkt-business"></div>
-        <div class="field"><label>Poster Image URL <span style="font-weight:400; opacity:0.7;">— 1080 × 1350px (4:5)</span></label><input id="mkt-poster"></div>
+        <div class="field"><label>Poster Image <span style="font-weight:400; opacity:0.7;">— 1080 × 1350px (4:5)</span></label><div id="mkt-poster-upload"></div></div>
         <div class="field"><label for="mkt-headline">Headline</label><input id="mkt-headline"></div>
         <div class="field"><label for="mkt-start">Requested Start Date (optional — defaults to today)</label><input id="mkt-start" type="date"></div>
       </div>
@@ -2007,7 +2007,7 @@ const ART_MAX_GALLERY = 5;
 
 function artEnsureCoverField() {
   const el = document.getElementById('art-cover-upload');
-  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('cover', '');
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('cover', '', '', { w: 1920, h: 1080, label: '16:9 landscape' });
 }
 
 function artAddGallerySlot() {
@@ -2019,7 +2019,7 @@ function artAddGallerySlot() {
   const row = document.createElement('div');
   row.className = 'art-gallery-row';
   row.style.cssText = 'display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;';
-  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', '')}</div>`;
+  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', '', '', { w: 1200, h: 900, label: '4:3 landscape' })}</div>`;
   const remove = document.createElement('button');
   remove.type = 'button';
   remove.className = 'btn btn-line';
@@ -2062,9 +2062,35 @@ function artCollectLinks() {
     .filter((l) => l.url);
 }
 
+// Event, gallery and marketplace images — same UnplugUpload widget as the
+// article cover, each with the ratio already promised in its own label so
+// the crop step (image-upload.js) applies automatically. These used to be
+// plain "paste a URL" inputs; a pasted URL points at someone else's server
+// and can vanish or change, which is exactly what A4 removed everywhere else.
+function evtEnsureImageField() {
+  const el = document.getElementById('evt-image-upload');
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('evtImage', '', '', { w: 800, h: 1200, label: '2:3 portrait' });
+}
+function galEnsureImageFields() {
+  [1, 2, 3].forEach((i) => {
+    const el = document.getElementById(`gal-image-upload-${i}`);
+    if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml(`galImage${i}`, '', '', { w: 1080, h: 1350, label: '4:5 portrait' });
+  });
+}
+function mktEnsurePosterField() {
+  const el = document.getElementById('mkt-poster-upload');
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('mktPoster', '', '', { w: 1080, h: 1350, label: '4:5 portrait' });
+}
+function ensureAllSubmitImageFields() {
+  artEnsureCoverField();
+  evtEnsureImageField();
+  galEnsureImageFields();
+  mktEnsurePosterField();
+}
+
 document.getElementById('art-add-image').addEventListener('click', artAddGallerySlot);
-artEnsureCoverField();
-document.getElementById('submitType').addEventListener('change', artEnsureCoverField);
+ensureAllSubmitImageFields();
+document.getElementById('submitType').addEventListener('change', ensureAllSubmitImageFields);
 document.getElementById('art-add-link').addEventListener('click', artAddLinkRow);
 
 async function createSubmission(type) {
@@ -2107,7 +2133,7 @@ async function createSubmission(type) {
         startTime: document.getElementById('evt-start-time').value || undefined,
         endTime: document.getElementById('evt-end-time').value || undefined,
         entranceFee: document.getElementById('evt-fee').value.trim() || undefined,
-        imageUrl: document.getElementById('evt-image').value.trim() || undefined,
+        imageUrl: UnplugUpload.valueOf(document.getElementById('evt-image-upload')) || undefined,
         contactDetails: document.getElementById('evt-contact').value.trim() || undefined,
         eventLink: document.getElementById('evt-link').value.trim() || undefined,
       }),
@@ -2122,11 +2148,11 @@ async function createSubmission(type) {
   if (type === 'gallery') {
     const images = [1, 2, 3]
       .map((i) => ({
-        imageUrl: document.getElementById(`gal-url-${i}`).value.trim(),
+        imageUrl: UnplugUpload.valueOf(document.getElementById(`gal-image-upload-${i}`)),
         caption: document.getElementById(`gal-cap-${i}`).value.trim() || undefined,
       }))
       .filter((img) => img.imageUrl);
-    if (images.length === 0) throw new Error('At least one image URL is required.');
+    if (images.length === 0) throw new Error('At least one image is required.');
     const data = await api('/gallery', {
       method: 'POST',
       body: JSON.stringify({ images, ownerType: MY_PROFILE_ID ? 'profile' : undefined, ownerId: MY_PROFILE_ID || undefined }),
@@ -2145,8 +2171,8 @@ async function createSubmission(type) {
   }
 
   if (type === 'marketplace') {
-    const posterImageUrl = document.getElementById('mkt-poster').value.trim();
-    if (!posterImageUrl) throw new Error('Poster image URL is required.');
+    const posterImageUrl = UnplugUpload.valueOf(document.getElementById('mkt-poster-upload'));
+    if (!posterImageUrl) throw new Error('Poster image is required.');
     const data = await api('/marketplace/listings', {
       method: 'POST',
       body: JSON.stringify({
@@ -2216,7 +2242,7 @@ let _bannerFieldsReady = false;
 async function setupBannerFields() {
   if (_bannerFieldsReady) return;
   _bannerFieldsReady = true;
-  document.getElementById('ab-image-upload').innerHTML = UnplugUpload.fieldHtml('abImage', '');
+  document.getElementById('ab-image-upload').innerHTML = UnplugUpload.fieldHtml('abImage', '', '', { w: 1920, h: 600, label: '16:5 landscape' });
   document.getElementById('ab-mimage-upload').innerHTML = UnplugUpload.fieldHtml('abMImage', '');
   try {
     const o = await api('/ad-banners/options');
