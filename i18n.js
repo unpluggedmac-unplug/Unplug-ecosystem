@@ -25,9 +25,11 @@ const I18N = {
     'nav.investors': 'Investors',
     'nav.marketplace': 'Marketplace',
     'nav.deafcommunity': 'Deaf Community',
+    'nav.members': 'Members',
     'nav.about': 'About',
     'nav.contact': 'Contact',
     'nav.refunds': 'Terms & Policies',
+    'directory.packages.title': 'Directory Packages',
     'ui.search': 'Search',
     'ui.readMore': 'Read more',
     'ui.viewAll': 'View all',
@@ -65,9 +67,11 @@ const I18N = {
     'nav.investors': 'Beleggers',
     'nav.marketplace': 'Markplein',
     'nav.deafcommunity': 'Dowe Gemeenskap',
+    'nav.members': 'Lede',
     'nav.about': 'Oor Ons',
     'nav.contact': 'Kontak',
     'nav.refunds': 'Bepalings & Beleide',
+    'directory.packages.title': 'Gidspakkette',
     'ui.search': 'Soek',
     'ui.readMore': 'Lees meer',
     'ui.viewAll': 'Sien alles',
@@ -105,9 +109,11 @@ const I18N = {
     'nav.investors': 'Abatyali-mali',
     'nav.marketplace': 'Indawo Yentengiso',
     'nav.deafcommunity': 'Uluntu Olusithulu',
+    'nav.members': 'Amalungu',
     'nav.about': 'Ngathi',
     'nav.contact': 'Qhagamshelana',
     'nav.refunds': 'Imimiselo & Imigaqo-nkqubo',
+    'directory.packages.title': 'Iiphakheji Zoluhlu',
     'ui.search': 'Khangela',
     'ui.readMore': 'Funda ngokugqithisileyo',
     'ui.viewAll': 'Jonga konke',
@@ -145,9 +151,11 @@ const I18N = {
     'nav.investors': 'Abatshalizimali',
     'nav.marketplace': 'Indawo Yokuthengisa',
     'nav.deafcommunity': 'Umphakathi Wezithulu',
+    'nav.members': 'Amalungu',
     'nav.about': 'Mayelana Nathi',
     'nav.contact': 'Xhumana Nathi',
     'nav.refunds': 'Imigomo & Izinqubomgomo',
+    'directory.packages.title': 'Amaphakheji Ohlu',
     'ui.search': 'Sesha',
     'ui.readMore': 'Funda kabanzi',
     'ui.viewAll': 'Buka konke',
@@ -194,6 +202,20 @@ function t(key, lang) {
   return (I18N[code] && I18N[code][key]) || I18N.en[key] || key;
 }
 
+// Whether a key is actually translated anywhere, as opposed to t() having
+// fallen through to returning the key itself.
+//
+// This distinction matters because applyLanguage() below writes into
+// elements that ALREADY contain correct English in the markup. Without this
+// check, a key that nobody added to the dictionary doesn't degrade to the
+// English in the HTML — it actively replaces it with the raw dotted key, so
+// the nav reads "NAV.MEMBERS" instead of "Members". That is strictly worse
+// than doing nothing, and it fails silently in every language at once.
+function hasTranslation(key, lang) {
+  const code = lang || currentLang();
+  return Boolean((I18N[code] && I18N[code][key]) || I18N.en[key]);
+}
+
 // Applies the active language to anything tagged data-i18n. Elements keep
 // their original English as the markup default, so the page is readable even
 // if this script fails to load.
@@ -206,11 +228,17 @@ function applyLanguage(lang) {
     // page loaded, which is worse than that one heading staying in the
     // language it was written in.
     if (el.hasAttribute('data-cms-applied')) return;
-    const value = t(el.getAttribute('data-i18n'), code);
+    const key = el.getAttribute('data-i18n');
+    // Untranslated key: leave the English already in the markup. See
+    // hasTranslation() above for why this is not merely a nicety.
+    if (!hasTranslation(key, code)) return;
+    const value = t(key, code);
     if (value) el.textContent = value;
   });
   document.querySelectorAll('[data-i18n-aria]').forEach((el) => {
-    const value = t(el.getAttribute('data-i18n-aria'), code);
+    const key = el.getAttribute('data-i18n-aria');
+    if (!hasTranslation(key, code)) return;
+    const value = t(key, code);
     if (value) el.setAttribute('aria-label', value);
   });
   const picker = document.getElementById('langPicker');
