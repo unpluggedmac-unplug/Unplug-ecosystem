@@ -5234,7 +5234,9 @@ function voteBundleTierSummary() {
 }
 
 function buyVotesFor(entryId) {
-  window.location.href = 'unplug-checkout.html?type=vote_bundle&id=' + entryId;
+  // Its own standalone, anonymous portal — see 095_vote_bundle_standalone_portal.sql
+  // for why this is deliberately not unplug-checkout.html.
+  window.location.href = 'unplug-vote.html?id=' + entryId;
 }
 
 // ---------------------------------------------------------------------------

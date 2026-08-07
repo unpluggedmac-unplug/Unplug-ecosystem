@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unplug — Top 10 Bulk Votes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="unplug-shared.css">
+<style>
+body{ min-height:100vh; }
+
+.topbar{ background:var(--black); color:#fff; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.topbar .word{ font-family:'Playfair Display',serif; font-weight:700; color:var(--red); font-size:17px; }
+.topbar .status{ font-size:11.5px; color:#cfcac0; }
+
+.wrap{ max-width:640px; margin:0 auto; padding:40px 24px; }
+.card{ background:var(--cream); border:1px solid var(--paper-line); padding:32px; margin-bottom:24px; }
+.card h2{ font-size:20px; font-weight:700; margin-bottom:6px; }
+.card p.sub{ font-size:13px; color:var(--slate); margin-bottom:20px; }
+.card .btn{ width:100%; padding:12px 22px; font-size:12.5px; }
+
+.step-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--red); font-weight:700; margin-bottom:8px; }
+
+.find-tabs{ display:flex; gap:8px; margin-bottom:16px; }
+.find-tab{ flex:1; padding:10px; text-align:center; font-size:12.5px; font-weight:600; border:1px solid var(--paper-line); cursor:pointer; background:none; color:var(--ink); }
+.find-tab.active{ border-color:var(--red); background:rgba(210,7,9,0.05); color:var(--red); }
+
+.search-result{ display:flex; align-items:center; gap:12px; padding:10px; border:1px solid var(--paper-line); border-radius:6px; cursor:pointer; margin-bottom:8px; }
+.search-result:hover{ border-color:var(--red); }
+.search-result img{ width:44px; height:44px; border-radius:50%; object-fit:cover; background:var(--paper); flex-shrink:0; }
+.search-result .name{ font-weight:700; font-size:13.5px; }
+.search-result .meta{ font-size:11.5px; color:var(--slate); }
+
+.entry-resolved{ display:flex; align-items:center; gap:14px; background:var(--paper); border:1px solid var(--paper-line); border-radius:6px; padding:14px 16px; margin-bottom:16px; }
+.entry-resolved img{ width:64px; height:64px; border-radius:50%; object-fit:cover; background:#fff; flex-shrink:0; }
+.entry-resolved .competition{ font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); }
+.entry-resolved .name{ font-weight:700; font-size:16px; margin-top:2px; }
+.entry-resolved .meta{ font-size:12px; color:var(--slate); margin-top:2px; }
+
+.tier-options{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:4px; }
+@media(max-width:560px){ .tier-options{ grid-template-columns:1fr; } }
+.tier-option{ border:1px solid var(--paper-line); padding:14px; text-align:center; cursor:pointer; }
+.tier-option.selected{ border-color:var(--red); background:rgba(210,7,9,0.05); }
+.tier-option .name{ font-weight:700; font-size:14px; }
+.tier-option .price{ font-family:'Playfair Display',serif; color:var(--red); font-size:20px; font-weight:700; margin-top:4px; }
+
+.error-banner{ display:none; background:#fdeceb; border:1px solid #f3c6c3; color:var(--red); padding:10px 12px; border-radius:6px; font-size:12.5px; margin-bottom:10px; }
+.error-banner.show{ display:block; }
+.success-banner{ display:none; background:#eaf6ec; border:1px solid #bfe3c5; color:#1f7a34; padding:10px 12px; border-radius:6px; font-size:13px; margin-bottom:14px; }
+.success-banner.show{ display:block; }
+.ref{ font-family:monospace; font-weight:700; letter-spacing:0.06em; }
+.section-hidden{ display:none; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="word">Unplug — Top 10 Bulk Votes</div>
+  <div class="status">No account needed — anyone can vote</div>
+</div>
+
+<div class="wrap">
+
+  <!-- STEP 1: find the contestant — search by name OR by entry code.
+       Deliberately no login card anywhere on this page: this portal is
+       fully separate from every other Unplug checkout and works for a
+       first-time, anonymous visitor end to end. See
+       095_vote_bundle_standalone_portal.sql for why. -->
+  <div class="card" id="findCard">
+    <div class="step-label">Step 1</div>
+    <h2>Find who you're voting for</h2>
+    <p class="sub">Search by name, or enter the Entry Code shown next to their name on the Top 10 page.</p>
+
+    <div class="find-tabs">
+      <button class="find-tab active" id="tabSearch" type="button">Search by Name</button>
+      <button class="find-tab" id="tabCode" type="button">Enter Entry Code</button>
+    </div>
+
+    <div id="findBySearch">
+      <input id="searchInput" placeholder="Type a name…" autocomplete="off">
+      <div class="error-banner" id="searchError"></div>
+      <div id="searchResults" style="margin-top:12px;"></div>
+    </div>
+
+    <div id="findByCode" class="section-hidden">
+      <input id="codeInput" placeholder="e.g. 0004821037" maxlength="10" inputmode="numeric" style="font-family:monospace; letter-spacing:0.06em;">
+      <div class="error-banner" id="codeError"></div>
+      <button class="btn btn-solid" id="codeSubmitBtn" style="margin-top:10px;">Find Entry</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: contestant confirmed + choose a vote package -->
+  <div class="card section-hidden" id="tierCard">
+    <div class="step-label">Step 2</div>
+    <h2>Choose how many votes</h2>
+    <div class="entry-resolved" id="entryResolved">
+      <img id="entryPhoto" src="" alt="">
+      <div>
+        <div class="competition" id="entryCompetition"></div>
+        <div class="name" id="entryName"></div>
+        <div class="meta" id="entryMeta"></div>
+      </div>
+    </div>
+    <div class="tier-options" id="tierOptions"></div>
+    <br>
+    <div class="error-banner" id="tierError"></div>
+    <button class="btn btn-line" id="changeEntryBtn" type="button" style="margin-bottom:10px;">Choose someone else</button>
+    <button class="btn btn-solid" id="tierContinueBtn" disabled>Continue to Payment</button>
+  </div>
+
+  <!-- STEP 3: order summary + mandatory Terms gate + EFT payment.
+       No voucher, no account credit, no referral question, no login —
+       "No additional personal details required" per the brief. -->
+  <div class="card section-hidden" id="paymentCard">
+    <div class="step-label">Step 3</div>
+    <h2>Payment</h2>
+    <div id="orderDetails" style="background:var(--paper); border:1px solid var(--paper-line); border-radius:6px; padding:14px 16px; margin-bottom:16px;">
+      <div id="orderDetailsType" style="font-weight:700; font-size:15px;"></div>
+      <div id="orderDetailsDesc" style="font-size:13.5px; color:var(--slate); margin-top:4px; line-height:1.5;"></div>
+      <div id="orderDetailsPrice" style="font-family:'Playfair Display',serif; color:var(--red); font-size:20px; font-weight:700; margin-top:8px;"></div>
+    </div>
+    <div class="error-banner" id="paymentError"></div>
+
+    <div class="field">
+      <label>Payment Method</label>
+      <select id="paymentMethod">
+        <option value="eft" selected>Manual EFT</option>
+        <option value="payfast" disabled>PayFast — coming soon</option>
+        <option value="ozow" disabled>Ozow — coming soon</option>
+      </select>
+      <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT — you'll get bank details and a reference to pay against.</p>
+    </div>
+
+    <!-- MANDATORY TERMS & CONDITIONS GATE — unchecked by default, blocks
+         Continue until manually ticked. Same rule, same wording, as every
+         other payment portal on the site — no exceptions. -->
+    <div class="field" id="termsGate" style="border-top:1px solid var(--paper-line); padding-top:12px;">
+      <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" class="btn btn-line viewTermsLink" style="display:inline-block; margin:0 6px 6px 0;">VIEW TERMS &amp; CONDITIONS</a>
+      <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" class="btn btn-line viewTermsLink" style="display:inline-block; margin:0 6px 6px 0;">VIEW CANCELLATION, REFUND &amp; ACCOUNT CREDIT POLICY</a>
+      <label class="tc-row" id="termsAcceptRow" style="margin-top:8px; opacity:0.5; display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="termsAcceptChk" disabled style="margin-top:2px;">
+        <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span>
+      </label>
+      <p id="termsHint" style="font-size:12px; color:var(--slate); margin:4px 0 0;">Open the Terms &amp; Conditions above to enable this checkbox.</p>
+    </div>
+
+    <button class="btn btn-solid" id="payBtn" disabled style="margin-top:14px;">Complete Order</button>
+  </div>
+
+  <!-- STEP 4: result -->
+  <div class="card section-hidden" id="resultCard">
+    <div class="step-label">Step 4</div>
+    <h2>Payment Initiated</h2>
+    <div class="success-banner" id="resultSuccess"></div>
+    <div class="instructions-box" id="resultInstructions" style="font-size:13.5px; line-height:1.7;"></div>
+    <a href="unplug-magazine.html?p=top10" class="btn btn-line" style="display:block; text-align:center; margin-top:16px;">Back to Top 10</a>
+  </div>
+
+</div>
+
+<script src="unplug-shared.js"></script>
+<script>
+const api = UnplugAPI.api;
+function showError(id, message) { const el = document.getElementById(id); el.textContent = message; el.classList.add('show'); }
+function hideError(id) { document.getElementById(id).classList.remove('show'); }
+
+// A persistent anonymous identity for this browser — the SAME mechanism
+// the free-vote buttons on the Top 10 page already use (session_id),
+// reused here so a bulk-vote purchase and a free vote from the same
+// visitor merge onto one votes row rather than the unique constraint
+// rejecting a second one.
+function getSessionId() {
+  let id = localStorage.getItem('unplug_vote_session');
+  if (!id) {
+    id = 'sess_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(36).slice(2));
+    localStorage.setItem('unplug_vote_session', id);
+  }
+  return id;
+}
+
+const PLACEHOLDER_AVATAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%23e3d8c2"/><circle cx="50" cy="38" r="18" fill="%23a89f8e"/><path d="M20 90c0-20 14-32 30-32s30 12 30 32" fill="%23a89f8e"/></svg>'
+);
+
+let RESOLVED_ENTRY = null;
+let SELECTED_TIER = null;
+
+// ---------------------------------------------------------------------------
+// Step 1: find the contestant
+// ---------------------------------------------------------------------------
+document.getElementById('tabSearch').addEventListener('click', () => {
+  document.getElementById('tabSearch').classList.add('active');
+  document.getElementById('tabCode').classList.remove('active');
+  document.getElementById('findBySearch').classList.remove('section-hidden');
+  document.getElementById('findByCode').classList.add('section-hidden');
+});
+document.getElementById('tabCode').addEventListener('click', () => {
+  document.getElementById('tabCode').classList.add('active');
+  document.getElementById('tabSearch').classList.remove('active');
+  document.getElementById('findByCode').classList.remove('section-hidden');
+  document.getElementById('findBySearch').classList.add('section-hidden');
+});
+
+let searchDebounce = null;
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  hideError('searchError');
+  clearTimeout(searchDebounce);
+  const q = e.target.value.trim();
+  const results = document.getElementById('searchResults');
+  if (q.length < 2) { results.innerHTML = ''; return; }
+  searchDebounce = setTimeout(async () => {
+    try {
+      const data = await api('/entries/search?q=' + encodeURIComponent(q) + '&competitionSlug=top-10');
+      results.innerHTML = (data.entries || []).map((entry, i) => `
+        <div class="search-result" data-idx="${i}">
+          <img src="${entry.image_url || PLACEHOLDER_AVATAR}" alt="" onerror="this.src='${PLACEHOLDER_AVATAR}'">
+          <div>
+            <div class="name">${entry.display_name}</div>
+            <div class="meta">${entry.category || 'Top 10'} · ${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</div>
+          </div>
+        </div>`).join('') || '<p class="sub" style="margin:0;">No one found — try a different spelling, or use their Entry Code instead.</p>';
+      results.querySelectorAll('.search-result').forEach((el) => {
+        el.addEventListener('click', () => resolveEntry(data.entries[Number(el.dataset.idx)]));
+      });
+    } catch (err) {
+      showError('searchError', err.message || 'Search failed — please try again.');
+    }
+  }, 300);
+});
+
+document.getElementById('codeSubmitBtn').addEventListener('click', async () => {
+  hideError('codeError');
+  const code = document.getElementById('codeInput').value.trim();
+  if (!/^[0-9]{10}$/.test(code)) {
+    showError('codeError', 'Enter the full 10-digit Entry Code exactly as shown on the Top 10 page.');
+    return;
+  }
+  const btn = document.getElementById('codeSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Finding…';
+  try {
+    const data = await api('/entries/by-code/' + encodeURIComponent(code));
+    resolveEntry(data.entry);
+  } catch (err) {
+    showError('codeError', err.message || 'No approved entry matches that code.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Find Entry';
+  }
+});
+
+function resolveEntry(entry) {
+  RESOLVED_ENTRY = entry;
+  document.getElementById('findCard').classList.add('section-hidden');
+  document.getElementById('tierCard').classList.remove('section-hidden');
+  document.getElementById('entryPhoto').src = entry.image_url || PLACEHOLDER_AVATAR;
+  document.getElementById('entryPhoto').onerror = function () { this.src = PLACEHOLDER_AVATAR; };
+  document.getElementById('entryCompetition').textContent = entry.competition_name;
+  document.getElementById('entryName').textContent = entry.display_name;
+  document.getElementById('entryMeta').textContent = `${entry.category ? entry.category + ' · ' : ''}${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'} so far · Entry Code ${entry.entry_code}`;
+  loadTierOptions();
+}
+
+document.getElementById('changeEntryBtn').addEventListener('click', () => {
+  RESOLVED_ENTRY = null;
+  SELECTED_TIER = null;
+  document.getElementById('tierCard').classList.add('section-hidden');
+  document.getElementById('findCard').classList.remove('section-hidden');
+});
+
+// ---------------------------------------------------------------------------
+// Step 2: vote package tiers
+// ---------------------------------------------------------------------------
+async function loadTierOptions() {
+  const wrap = document.getElementById('tierOptions');
+  wrap.innerHTML = '<div class="sub">Loading…</div>';
+  try {
+    const data = await api('/vote-bundle-tiers');
+    wrap.innerHTML = (data.tiers || []).map((t) => `
+      <div class="tier-option" data-votes="${t.votes}" data-price="${t.price}">
+        <div class="name">${t.votes} votes</div>
+        <div class="price">R${Number(t.price).toFixed(0)}</div>
+      </div>`).join('');
+    wrap.querySelectorAll('.tier-option').forEach((el) => {
+      el.addEventListener('click', () => {
+        wrap.querySelectorAll('.tier-option').forEach((o) => o.classList.remove('selected'));
+        el.classList.add('selected');
+        SELECTED_TIER = { votes: Number(el.dataset.votes), price: Number(el.dataset.price) };
+        document.getElementById('tierContinueBtn').disabled = false;
+      });
+    });
+  } catch (err) {
+    wrap.innerHTML = '<div class="sub">Could not load vote packages — please try again shortly.</div>';
+  }
+}
+
+document.getElementById('tierContinueBtn').addEventListener('click', () => {
+  hideError('tierError');
+  if (!RESOLVED_ENTRY || !SELECTED_TIER) return;
+  document.getElementById('orderDetailsType').textContent = `Bulk Votes — ${RESOLVED_ENTRY.display_name}`;
+  document.getElementById('orderDetailsDesc').textContent = `${SELECTED_TIER.votes} extra votes for entry code ${RESOLVED_ENTRY.entry_code}.`;
+  document.getElementById('orderDetailsPrice').textContent = 'R' + SELECTED_TIER.price.toFixed(0);
+  document.getElementById('tierCard').classList.add('section-hidden');
+  document.getElementById('paymentCard').classList.remove('section-hidden');
+});
+
+// ---------------------------------------------------------------------------
+// Step 3: Terms gate + payment
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.viewTermsLink').forEach((a) => a.addEventListener('click', () => {
+  const acc = document.getElementById('termsAcceptChk');
+  acc.disabled = false;
+  document.getElementById('termsAcceptRow').style.opacity = '1';
+  document.getElementById('termsHint').textContent = 'You can now tick the box to confirm you have read and agree.';
+}));
+document.getElementById('termsAcceptChk').addEventListener('change', (e) => {
+  document.getElementById('payBtn').disabled = !e.target.checked;
+});
+
+document.getElementById('payBtn').addEventListener('click', async () => {
+  hideError('paymentError');
+  if (!document.getElementById('termsAcceptChk').checked) {
+    showError('paymentError', 'You must accept the Terms and Conditions before you can proceed with payment.');
+    return;
+  }
+  const btn = document.getElementById('payBtn');
+  btn.disabled = true; btn.textContent = 'Processing…';
+  try {
+    const data = await api(`/entries/${RESOLVED_ENTRY.id}/vote-bundle`, {
+      method: 'POST',
+      body: JSON.stringify({
+        votes: SELECTED_TIER.votes,
+        sessionId: getSessionId(),
+        termsAccepted: true,
+      }),
+    });
+    document.getElementById('paymentCard').classList.add('section-hidden');
+    document.getElementById('resultCard').classList.remove('section-hidden');
+    document.getElementById('resultSuccess').classList.add('show');
+    document.getElementById('resultSuccess').textContent = 'Payment request created — pay via EFT using the details below.';
+    const i = data.instructions;
+    document.getElementById('resultInstructions').innerHTML = `
+      <b>Bank:</b> ${i.bank}<br>
+      <b>Account Name:</b> ${i.accountName}<br>
+      ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
+      <b>Account Number:</b> ${i.accountNumber}<br>
+      <b>Branch Code:</b> ${i.branchCode}<br>
+      <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>
+      ${i.note}`;
+  } catch (err) {
+    showError('paymentError', err.message || 'Could not start this purchase — please try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Complete Order';
+  }
+});
+
+// A direct link with ?id=<entryId> (from the Top 10 page's "Buy more
+// votes" button) skips straight past the search/code step.
+const PARAMS = new URLSearchParams(window.location.search);
+const directId = PARAMS.get('id');
+if (directId) {
+  api('/entries/' + encodeURIComponent(directId)).then(resolveEntry).catch(() => {
+    // Fall through to the normal find-by-search/code screen — a bad or
+    // stale id is not a dead end, just a slightly longer path.
+  });
+}
+</script>
+<script src="accessibility.js" defer></script>
+</body>
+</html>

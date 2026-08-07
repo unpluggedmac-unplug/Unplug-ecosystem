@@ -253,6 +253,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button type="button" class="nav-group-head"><span>Competition Management</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
         <a data-section="competitions">Competitions</a>
+        <a data-section="votebundles">Bulk Votes</a>
       </div>
     </div>
 
@@ -1671,6 +1672,31 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="compBody" style="padding:0;">Loading…</div>
       </div>
     </div>
+
+    <!-- BULK VOTES (Payment Portal Redevelopment Phase 2) — its own
+         standalone admin queue, independent of /payments admin, matching
+         the standalone EFT flow this portal uses on the public side. -->
+    <div class="admin-section" id="section-votebundles">
+      <div class="main-head"><div><h1>Bulk Votes</h1><p>Approve an EFT to add the votes to the leaderboard, reject one that never paid, or reverse a mistaken approval. Fully separate from the main Payments queue — Bulk Votes is its own portal end to end.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Search & filter</h3></div>
+        <div class="panel-body" style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+          <div class="field" style="flex:1; min-width:200px;"><label for="vbSearch">Contestant, reference or entry code</label><input id="vbSearch" placeholder="Search…"></div>
+          <div class="field"><label for="vbStatusFilter">Status</label><select id="vbStatusFilter">
+            <option value="">All</option>
+            <option value="awaiting_payment">Awaiting payment</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="rejected">Rejected</option>
+            <option value="reversed">Reversed</option>
+          </select></div>
+          <button class="btn btn-line" id="vbSearchBtn" style="width:auto;">Search</button>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Bulk vote purchases</h3></div>
+        <div class="panel-body" id="vbBody" style="padding:0;">Loading…</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1942,6 +1968,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'gallerymgmt') loadGalleryAdmin();
     if (section === 'pricing') loadServicePricing();
     if (section === 'competitions') loadCompetitions();
+    if (section === 'votebundles') loadVoteBundlesAdmin();
     if (section === 'editions') loadEditionsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
@@ -7706,6 +7733,70 @@ function compDateInputValue(ts) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+// ---------------------------------------------------------------------------
+// Bulk Votes admin (Payment Portal Redevelopment Phase 2) — its own
+// standalone queue, separate from the /payments admin section.
+// ---------------------------------------------------------------------------
+const VB_STATUS_LABEL = {
+  awaiting_payment: 'Awaiting payment', confirmed: 'Confirmed', rejected: 'Rejected', reversed: 'Reversed',
+};
+
+async function loadVoteBundlesAdmin() {
+  const body = document.getElementById('vbBody');
+  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  try {
+    const params = new URLSearchParams();
+    const q = document.getElementById('vbSearch').value.trim();
+    const status = document.getElementById('vbStatusFilter').value;
+    if (q) params.set('q', q);
+    if (status) params.set('status', status);
+    const d = await api('/admin/vote-bundles?' + params.toString());
+    const rows = d.bundles || [];
+    if (!rows.length) { body.innerHTML = '<div style="padding:16px; color:#666;">No bulk vote purchases match.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Contestant</th><th>Votes</th><th>Price</th><th>Reference</th><th>Buyer</th><th>Status</th><th>When</th><th></th></tr>';
+    rows.forEach((b) => {
+      const tr = document.createElement('tr');
+      const buyer = b.buyer_email || (b.session_id ? 'Guest' : '—');
+      let actions = '';
+      if (b.status === 'awaiting_payment') {
+        actions = `<div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div>`;
+      } else if (b.status === 'confirmed') {
+        actions = `<button class="reject">Reverse</button>`;
+      }
+      tr.innerHTML = `<td>${escapeHtmlAdmin(b.contestant_name || '')} <span style="color:#999; font-size:11px;">${escapeHtmlAdmin(b.entry_code || '')}</span></td>
+        <td>${b.vote_count}</td><td>R${Number(b.price).toFixed(2)}</td>
+        <td style="font-family:monospace;">${escapeHtmlAdmin(b.reference || '—')}</td>
+        <td>${escapeHtmlAdmin(buyer)}</td>
+        <td>${VB_STATUS_LABEL[b.status] || b.status}</td>
+        <td>${new Date(b.created_at).toLocaleDateString()}</td>
+        <td>${actions}</td>`;
+      const approveBtn = tr.querySelector('.approve');
+      if (approveBtn) approveBtn.addEventListener('click', async () => {
+        try { const r = await api(`/admin/vote-bundles/${b.id}/approve`, { method: 'PATCH' }); showToast(r.message || 'Approved.'); loadVoteBundlesAdmin(); }
+        catch (e) { showToast(e.message, true); }
+      });
+      const rejectBtn = tr.querySelector('.reject');
+      if (rejectBtn) rejectBtn.addEventListener('click', async () => {
+        const isReverse = b.status === 'confirmed';
+        if (!confirm(isReverse ? `Reverse ${b.vote_count} votes from ${b.contestant_name}?` : 'Reject this purchase?')) return;
+        try {
+          const r = isReverse
+            ? await api(`/admin/vote-bundles/${b.id}/reverse`, { method: 'POST' })
+            : await api(`/admin/vote-bundles/${b.id}/reject`, { method: 'PATCH' });
+          showToast(r.message || 'Done.');
+          loadVoteBundlesAdmin();
+        } catch (e) { showToast(e.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = ''; body.appendChild(table);
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load bulk vote purchases.')}</div>`;
+  }
+}
+document.getElementById('vbSearchBtn').addEventListener('click', loadVoteBundlesAdmin);
 
 async function loadCompetitions() {
   const body = document.getElementById('compBody');
