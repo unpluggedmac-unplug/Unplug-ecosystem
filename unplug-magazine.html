@@ -948,6 +948,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
    and object-fit:cover crops rather than distorts anything slightly off-ratio. */
 .cms-block-img{ overflow:hidden; aspect-ratio:16/9; }
 .cms-block-img img{ display:block; width:100%; height:100%; object-fit:cover; }
+/* Orientation is per block (102_page_block_portrait_links.sql). Landscape is
+   the class-less default so existing blocks are untouched. */
+.cms-block-img-portrait{ aspect-ratio:3/4; }
+.cms-block-img-square{ aspect-ratio:1/1; }
+.cms-block-imglink{ display:block; height:100%; }
+/* A linked image should look linked on hover, and must show a focus ring for
+   keyboard users — it is a real anchor, so this is the only styling needed. */
+.cms-block-imglink img{ transition:transform .3s ease, opacity .2s ease; }
+.cms-block-imglink:hover img{ transform:scale(1.03); opacity:0.92; }
+.cms-block-imglink:focus-visible{ outline:3px solid var(--red); outline-offset:3px; }
+.cms-block-hint{ font-size:12.5px; color:var(--slate); margin:7px 0 0; font-style:italic; }
 .cms-block-text{ padding:26px 28px; }
 .cms-block-text h2{ font-size:clamp(20px,2.6vw,30px); font-weight:600; line-height:1.25; margin:8px 0 10px; }
 .cms-block-text p{ color:var(--slate); font-size:14.5px; line-height:1.65; }
@@ -1178,7 +1189,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .market-contact{ display:flex; flex-direction:column; gap:6px; font-size:12.5px; color:var(--ink); border-top:1px solid var(--paper-line); padding-top:12px; }
 .market-contact a{ color:var(--red); font-weight:600; }
 .brand-ad-card{ border:2px dashed var(--paper-line); padding:0; display:flex; flex-direction:column; }
-.brand-ad-preview{ aspect-ratio:4/3; background:linear-gradient(135deg,var(--paper),#e3d8c2); display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--slate); font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+.brand-ad-preview{ aspect-ratio:4/3; background:linear-gradient(135deg,var(--paper),#e3d8c2); display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--slate); font-weight:600; text-transform:uppercase; letter-spacing:0.04em; text-align:center; }
+/* A placement with a real uploaded image (101_marketplace_placements.sql)
+   fills the same frame the grey spec placeholder used, so swapping one for
+   the other never changes the grid. */
+.brand-ad-preview-img{ padding:0; overflow:hidden; }
+.brand-ad-preview-img img{ display:block; width:100%; height:100%; object-fit:cover; }
 .brand-ad-info{ padding:16px; border-top:1px solid var(--paper-line); }
 .brand-ad-info h4{ font-size:15px; font-weight:700; margin-bottom:4px; }
 .brand-ad-info p{ font-size:12px; color:var(--slate); margin-bottom:10px; }
@@ -2535,8 +2551,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
   <div class="divider wrap"><div class="line"></div><span class="print-mark"></span><div class="line"></div></div>
 
+  <!-- The cards below are the built-in fallback. loadMarketplacePlacements()
+       replaces them with the admin-managed versions (real images and all)
+       once /marketplace/placements responds; if that call fails the page
+       keeps showing exactly what it always did. -->
   <section class="wrap" style="padding-top:0;">
-    <div class="brand-ad-grid">
+    <div class="brand-ad-grid" id="brandAdGrid">
       <div class="brand-ad-card">
         <div class="brand-ad-preview">Homepage Hero Banner<br>1240×200</div>
         <div class="brand-ad-info">
@@ -3938,12 +3958,54 @@ function setConsent(choice) {
 // the CMS is empty or unreachable, every page keeps its built-in wording —
 // the site never depends on the database to be readable.
 // ---------------------------------------------------------------------------
+// The default wording when an admin turns the hint on without writing their
+// own. "Click" alone is wrong on a phone, and a bare "clickable" says nothing
+// about where it goes — this covers both input methods in plain language.
+const CMS_CLICK_HINT_DEFAULT = 'Click or tap the image to open the link';
+
+// Off-site links open in a new tab so a reader mid-article does not lose their
+// place; same-site ones stay put.
+function isExternalUrl(url) {
+  return /^https?:\/\//i.test(String(url || '')) && !String(url).includes(location.host);
+}
+
+// Only http(s), mailto, tel and same-page/relative links are allowed through.
+// These URLs are typed by an admin into a CMS field and then rendered into an
+// href, so a `javascript:` value would run for every reader of the page.
+function safeLinkUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|mailto:|tel:)/i.test(raw)) return raw;
+  if (/^[/#?]/.test(raw)) return raw;      // relative or in-page
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return ''; // any other scheme: refuse
+  return raw;                               // bare path like "unplug-magazine.html"
+}
+
 function cmsBlockHtml(b) {
-  const img = b.image_url
-    ? `<div class="cms-block-img"><img src="${escapeHtml(b.image_url)}" alt="${escapeHtml(b.title || '')}" loading="lazy" decoding="async"></div>`
-    : '';
-  const btn = (b.button_label && b.button_url)
-    ? `<a class="btn btn-solid cms-block-btn" href="${escapeHtml(b.button_url)}">${escapeHtml(b.button_label)}</a>`
+  const orientation = ['portrait', 'square'].includes(b.orientation) ? b.orientation : 'landscape';
+  let img = '';
+  if (b.image_url) {
+    const tag = `<img src="${escapeHtml(b.image_url)}" alt="${escapeHtml(b.title || '')}" loading="lazy" decoding="async">`;
+    // A linked image is a real anchor, not a click handler on a div: it gets
+    // keyboard focus, a middle-click, and "open in new tab" for free, none of
+    // which a JS-only version would have.
+    const link = safeLinkUrl(b.image_link_url);
+    const inner = link
+      ? `<a href="${escapeHtml(link)}" class="cms-block-imglink"${isExternalUrl(link) ? ' target="_blank" rel="noopener"' : ''}>${tag}</a>`
+      : tag;
+    // Shown only when the image actually links somewhere — a hint pointing at
+    // nothing would be worse than no hint. Keyed off the SANITISED link, so a
+    // rejected URL takes its hint with it.
+    const hint = (b.show_click_hint && link)
+      ? `<p class="cms-block-hint">${escapeHtml(b.click_hint_text || CMS_CLICK_HINT_DEFAULT)}</p>`
+      : '';
+    img = `<div class="cms-block-imgwrap"><div class="cms-block-img cms-block-img-${orientation}">${inner}</div>${hint}</div>`;
+  }
+  // Same sanitising as the image link: this href is admin-entered too, and
+  // was previously interpolated raw.
+  const btnUrl = safeLinkUrl(b.button_url);
+  const btn = (b.button_label && btnUrl)
+    ? `<a class="btn btn-solid cms-block-btn" href="${escapeHtml(btnUrl)}">${escapeHtml(b.button_label)}</a>`
     : '';
   return `<section class="cms-block">
     ${img}
@@ -3954,6 +4016,48 @@ function cmsBlockHtml(b) {
       ${btn}
     </div>
   </section>`;
+}
+
+// The Marketplace rate card, from 101_marketplace_placements.sql. Replaces
+// the hardcoded fallback cards in the page only once real data arrives, so a
+// failed call leaves the built-in ones showing rather than an empty section.
+let _placementsLoaded = false;
+async function loadMarketplacePlacements() {
+  const grid = document.getElementById('brandAdGrid');
+  if (!grid || _placementsLoaded) return;
+  let placements;
+  try {
+    const data = await api('/marketplace/placements');
+    placements = data.placements || [];
+  } catch (err) {
+    return; // keep the built-in cards
+  }
+  if (!placements.length) return; // ditto — never blank the section
+  _placementsLoaded = true;
+
+  grid.innerHTML = placements.map((p) => {
+    // A real uploaded image when there is one, otherwise the same grey
+    // spec placeholder the page has always used.
+    const preview = p.image_url
+      ? `<div class="brand-ad-preview brand-ad-preview-img"><img src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.title)}" loading="lazy" decoding="async"></div>`
+      : `<div class="brand-ad-preview"${p.is_featured ? ' style="background:linear-gradient(135deg,#1a0000,#3a0808); color:var(--red); font-size:14px; font-weight:700;"' : ''}>${escapeHtml(p.title)}${p.spec_label ? `<br>${escapeHtml(p.spec_label)}` : ''}</div>`;
+    // An internal page id keeps the SPA navigation; anything URL-shaped
+    // becomes a real link.
+    const target = String(p.button_target || 'contact');
+    const isUrl = /^(https?:\/\/|\/|mailto:|tel:)/i.test(target);
+    const safeTarget = safeLinkUrl(target);
+    const btn = isUrl && safeTarget
+      ? `<a class="btn btn-solid" style="font-size:11px; padding:10px 18px;${p.is_featured ? ' background:var(--red); border-color:var(--red);' : ''}" href="${escapeHtml(safeTarget)}"${isExternalUrl(safeTarget) ? ' target="_blank" rel="noopener"' : ''}>${escapeHtml(p.button_label || 'Get In Contact')}</a>`
+      : `<button class="btn btn-solid" style="font-size:11px; padding:10px 18px;${p.is_featured ? ' background:var(--red); border-color:var(--red);' : ''}" data-page="${escapeHtml(target)}">${escapeHtml(p.button_label || 'Get In Contact')}</button>`;
+    return `<div class="brand-ad-card"${p.is_featured ? ' style="border-color:var(--red); border-width:2px;"' : ''}>
+      ${preview}
+      <div class="brand-ad-info">
+        <h4${p.is_featured ? ' style="color:var(--red);"' : ''}>${escapeHtml(p.title)}</h4>
+        ${p.description ? `<p>${escapeHtml(p.description)}</p>` : ''}
+        ${btn}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function applyPageCms() {
@@ -6440,6 +6544,10 @@ function goToPage(pageId){
     marketplaceLoaded = true;
     loadMarketplace();
   }
+  // Separate from marketplaceLoaded above: that guards the member listings
+  // further down the page, this the admin-managed rate card at the top. They
+  // are different data with their own load states.
+  if (pageId === 'brandplacement') loadMarketplacePlacements();
   if (pageId === 'editions' && !editionsLoaded) {
     editionsLoaded = true;
     loadEditions(true);

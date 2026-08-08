@@ -143,10 +143,22 @@ router.post('/admin/:code/award', requireRole('admin'), async (req, res, next) =
     }
     const period = parsePeriod(req.body.awardMonth, req.body.awardYear);
     if (!period) return res.status(400).json({ error: PERIOD_ERROR });
+
+    // Checked here so that a FALSE from award_badge means one thing only:
+    // they already have it. The function returns FALSE for an unknown code
+    // too, and the two used to be indistinguishable to the caller.
+    const badge = await pool.query('SELECT code, is_enabled FROM badges WHERE code = $1', [req.params.code]);
+    if (!badge.rows.length) return res.status(404).json({ error: 'Badge not found.' });
+
     const result = await pool.query('SELECT award_badge($1, $2, $3, $4, $5, $6) AS awarded', [
       userId, req.params.code, req.user.id, req.body.reason || null, period.month, period.year,
     ]);
-    res.json({ awarded: result.rows[0].awarded });
+    res.json({
+      awarded: result.rows[0].awarded,
+      // A disabled badge is still awardable on purpose, but the admin should
+      // know it is not in the public "obtainable badges" list.
+      badgeDisabled: badge.rows[0].is_enabled === false,
+    });
   } catch (err) {
     next(err);
   }

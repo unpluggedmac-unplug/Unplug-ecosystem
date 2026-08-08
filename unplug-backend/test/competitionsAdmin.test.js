@@ -125,17 +125,27 @@ test('the admin list includes every status, not just open ones', async () => {
   assert.ok(adm.body.competitions.some((c) => c.slug === 'hidden-draft'), 'the draft is missing from the admin list');
 });
 
-test('the Top 10 is NOT listed as a competition — it is a separate thing', async () => {
-  // The Top 10 only lives in the competitions table because it reuses the
-  // voting machinery. It has its own page and its own admin screen, and its
-  // page renders neither a closing date nor an entry fee, so it must not
-  // appear in an editor whose whole job is changing those.
+test('the Top 10 IS listed, but flagged as managed elsewhere', async () => {
+  // This deliberately reverses an earlier decision to hide the Top 10 from
+  // this list entirely. It was hidden because its page renders neither a
+  // closing date nor an entry fee, so an editor whose job is changing those
+  // would be misleading — a real concern, and still true.
+  //
+  // What changed is that the competition row now carries a setting that DOES
+  // apply to the Top 10: daily_voting (098_daily_voting.sql). Hiding the row
+  // would leave that unreachable. So the row is listed and carries
+  // managedElsewhere, and the admin UI uses that flag to show only the
+  // settings that mean something for it — which addresses the original
+  // objection rather than ignoring it.
   const { body } = await req('GET', '/competitions/admin/all', { token: adminToken });
-  assert.ok(
-    !body.competitions.some((c) => c.slug === 'top-10'),
-    'the Top 10 is being presented as an editable competition'
-  );
-  assert.ok(body.competitions.some((c) => c.slug === 'the-arena'), 'real competitions should still be listed');
+  const top10 = body.competitions.find((c) => c.slug === 'top-10');
+  assert.ok(top10, 'the Top 10 should be reachable so its voting rule can be set');
+  assert.equal(top10.managedElsewhere, true, 'it must be marked as managed elsewhere');
+  assert.equal(top10.daily_voting, true);
+
+  const arena = body.competitions.find((c) => c.slug === 'the-arena');
+  assert.ok(arena, 'real competitions should still be listed');
+  assert.equal(arena.managedElsewhere, false, 'a normal competition is fully editable here');
 });
 
 test('the Top 10 is still in the public list, which the Publish screen depends on', async () => {

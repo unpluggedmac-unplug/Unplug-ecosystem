@@ -280,6 +280,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="nav-group-items">
         <a data-section="sitesettings">Site Settings</a>
         <a data-section="pagecms">Page Content</a>
+        <a data-section="placements">Marketplace Placements</a>
       </div>
     </div>
 
@@ -788,6 +789,30 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div><label for="cmsBlockBtnLabel">Button label</label><input id="cmsBlockBtnLabel" placeholder="Read more"></div>
             <div><label for="cmsBlockBtnUrl">Button link</label><input id="cmsBlockBtnUrl" placeholder="https://…"></div>
           </div>
+          <div class="form-row">
+            <div>
+              <label for="cmsBlockOrientation">Image shape</label>
+              <select id="cmsBlockOrientation" style="padding:8px;">
+                <option value="landscape">Landscape (16:9)</option>
+                <option value="portrait">Portrait (3:4)</option>
+                <option value="square">Square (1:1)</option>
+              </select>
+            </div>
+            <div style="grid-column:2/-1;">
+              <label for="cmsBlockImageLink">Image link <span style="font-weight:400; color:var(--slate);">— optional. Makes the image itself clickable.</span></label>
+              <input id="cmsBlockImageLink" placeholder="https://… or another page">
+            </div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-1;">
+              <label class="tc-row" style="text-transform:none; letter-spacing:0; font-size:13px;">
+                <input type="checkbox" id="cmsBlockShowHint">
+                <span>Show a note under the image telling readers it can be clicked <span style="color:var(--slate);">— only appears if an image link is set above</span></span>
+              </label>
+              <input id="cmsBlockHintText" placeholder="Click or tap the image to open the link" style="margin-top:6px;">
+              <span style="font-size:11.5px; color:var(--slate);">Leave the note blank to use the default wording shown above.</span>
+            </div>
+          </div>
           <button class="btn btn-solid" style="width:auto; margin-top:10px;" id="cmsAddBlockBtn">Add Block</button>
         </div>
       </div>
@@ -795,6 +820,48 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel">
         <div class="panel-head"><h3>Existing blocks</h3></div>
         <div class="panel-body" id="cmsBlocksBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- MARKETPLACE PLACEMENTS — the "Advertise With Us" rate card. Was
+         hardcoded in unplug-magazine.html with grey size placeholders;
+         now editable here, with real images. -->
+    <div class="admin-section" id="section-placements">
+      <div class="main-head"><div><h1>Marketplace Placements</h1><p>The advertising options shown on the Marketplace page. Upload a real image for each one, or leave it blank to keep the grey size placeholder.</p></div></div>
+
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-head"><h3 id="plFormTitle">Add a placement</h3></div>
+        <div class="panel-body">
+          <input type="hidden" id="plEditId">
+          <div class="form-row">
+            <div><label for="plTitle">Title *</label><input id="plTitle" placeholder="e.g. Homepage Hero Banner"></div>
+            <div><label for="plSpec">Size / format label</label><input id="plSpec" placeholder="e.g. 1240x200"></div>
+            <div><label for="plPos">Order</label><input id="plPos" type="number" value="0"></div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-1;"><label for="plDesc">Description</label><input id="plDesc" placeholder="What the advertiser gets"></div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-2;"><label>Placement image <span style="font-weight:400; color:var(--slate);">— 4:3 works best. Leave blank to show the grey size placeholder.</span></label><div id="plImgUpload"></div></div>
+            <div><label for="plBtnLabel">Button label</label><input id="plBtnLabel" placeholder="Get In Contact"></div>
+            <div><label for="plBtnTarget">Button goes to</label><input id="plBtnTarget" placeholder="contact"></div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-1;">
+              <label class="tc-row" style="text-transform:none; letter-spacing:0; font-size:13px;">
+                <input type="checkbox" id="plFeatured">
+                <span>Highlight this as the premium option <span style="color:var(--slate);">— red border, like the Business Placement card</span></span>
+              </label>
+            </div>
+          </div>
+          <button class="btn btn-solid" style="width:auto; margin-top:10px;" id="plSaveBtn">Add Placement</button>
+          <button class="btn btn-line" style="width:auto; margin-top:10px; display:none;" id="plCancelBtn">Cancel</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Current placements</h3></div>
+        <div class="panel-body" id="plBody" style="padding:0;"></div>
       </div>
 
       <div class="panel">
@@ -1698,7 +1765,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <!-- COMPETITIONS -->
     <div class="admin-section" id="section-competitions">
       <div class="main-head"><div><h1>Competitions</h1><p>Add a competition, or change an existing one's name, dates, entry fee and status. <strong>Open</strong> shows it on the site; <strong>Draft</strong> and <strong>Closed</strong> hide it while keeping every entry and vote. Changing the entry fee only affects <strong>new</strong> entries — anyone who has already entered keeps the fee they were charged. A competition's web address can't be changed, because the site's pages look it up by that name.</p>
-      <p style="margin-top:8px;"><strong>The Top 10 is not listed here.</strong> It's a separate part of the site with its own page — manage its entries under <strong>Publish</strong>.</p></div></div>
+      <p style="margin-top:8px;"><strong>The Top 10 appears here too</strong>, but only its voting rule and status can be set — it has no closing date or entry fee. Manage its entries and rankings under <strong>Publish</strong>.</p></div></div>
       <div class="panel">
         <div class="panel-head"><h3>Add a competition</h3></div>
         <div class="panel-body">
@@ -2176,6 +2243,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'halloffame') { loadHallOfFame(); populateHofUserPicker(); }
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payqueue') loadPaymentQueue();
+    if (section === 'placements') loadPlacements();
     if (section === 'payments') { loadPendingEft(); loadAllPayments(); }
     if (section === 'users') loadUsers();
     if (section === 'consultants') loadConsultants();
@@ -3183,16 +3251,138 @@ document.getElementById('cmsAddBlockBtn').addEventListener('click', async () => 
     buttonLabel: document.getElementById('cmsBlockBtnLabel').value.trim(),
     buttonUrl: document.getElementById('cmsBlockBtnUrl').value.trim(),
     position: Number(document.getElementById('cmsBlockPos').value) || 0,
+    orientation: document.getElementById('cmsBlockOrientation').value,
+    imageLinkUrl: document.getElementById('cmsBlockImageLink').value.trim(),
+    showClickHint: document.getElementById('cmsBlockShowHint').checked,
+    clickHintText: document.getElementById('cmsBlockHintText').value.trim(),
   };
+  // Saying "tell readers this is clickable" without giving it somewhere to go
+  // is almost certainly a slip, and the backend drops the hint silently in
+  // that case — so it is worth stopping on rather than quietly ignoring.
+  if (payload.showClickHint && !payload.imageLinkUrl) {
+    showToast('Add an image link, or untick the note about clicking the image.', true);
+    return;
+  }
   try {
     await api('/page-cms/admin/blocks', { method: 'POST', body: JSON.stringify(payload) });
     showToast('Block added — it is live on that page now.');
-    ['cmsBlockTitle', 'cmsBlockSub', 'cmsBlockDesc', 'cmsBlockBtnLabel', 'cmsBlockBtnUrl'].forEach((id) => { document.getElementById(id).value = ''; });
+    ['cmsBlockTitle', 'cmsBlockSub', 'cmsBlockDesc', 'cmsBlockBtnLabel', 'cmsBlockBtnUrl',
+      'cmsBlockImageLink', 'cmsBlockHintText'].forEach((id) => { document.getElementById(id).value = ''; });
+    document.getElementById('cmsBlockShowHint').checked = false;
+    document.getElementById('cmsBlockOrientation').value = 'landscape';
     document.getElementById('cmsBlockImgUpload').innerHTML = UnplugUpload.fieldHtml('blockImage', '');
     loadPageCms();
   } catch (err) {
     showToast(err.message, true);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Marketplace placements (101_marketplace_placements.sql) — the rate card on
+// the public Marketplace page.
+// ---------------------------------------------------------------------------
+function plEnsureUpload(value) {
+  document.getElementById('plImgUpload').innerHTML =
+    UnplugUpload.fieldHtml('plImage', value || '', '', { w: 1200, h: 900, label: '4:3' });
+}
+
+function plResetForm() {
+  document.getElementById('plEditId').value = '';
+  ['plTitle', 'plSpec', 'plDesc', 'plBtnLabel', 'plBtnTarget'].forEach((id) => { document.getElementById(id).value = ''; });
+  document.getElementById('plPos').value = '0';
+  document.getElementById('plFeatured').checked = false;
+  plEnsureUpload('');
+  document.getElementById('plFormTitle').textContent = 'Add a placement';
+  document.getElementById('plSaveBtn').textContent = 'Add Placement';
+  document.getElementById('plCancelBtn').style.display = 'none';
+}
+
+async function loadPlacements() {
+  const body = document.getElementById('plBody');
+  if (!document.querySelector('#plImgUpload .img-upload')) plEnsureUpload('');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/marketplace/admin/placements');
+    const list = data.placements || [];
+    if (!list.length) { body.innerHTML = '<div class="empty-state">No placements yet — add one above.</div>'; return; }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Image</th><th>Title</th><th>Size</th><th>Order</th><th>Status</th><th></th></tr>';
+    list.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${p.image_url
+          ? `<img src="${escapeHtmlAdmin(p.image_url)}" alt="" style="width:64px; height:48px; object-fit:cover; border:1px solid var(--paper-line);">`
+          : '<span style="font-size:11.5px; color:#999;">No image</span>'}</td>`
+        + `<td><strong>${escapeHtmlAdmin(p.title)}</strong>${p.is_featured ? ' <span style="color:var(--red); font-size:11px; font-weight:700;">PREMIUM</span>' : ''}`
+        + `<br><span style="font-size:11.5px; color:#666;">${escapeHtmlAdmin(p.description || '')}</span></td>`
+        + `<td style="font-size:12px;">${escapeHtmlAdmin(p.spec_label || '—')}</td>`
+        + `<td>${p.position}</td>`
+        + `<td>${p.is_visible ? 'Visible' : 'Hidden'}</td>`
+        + `<td><div class="row-actions"><button class="approve">Edit</button><button class="reject">${p.is_visible ? 'Hide' : 'Show'}</button><button class="reject pl-del">Delete</button></div></td>`;
+      tr.querySelector('.approve').addEventListener('click', () => {
+        document.getElementById('plEditId').value = p.id;
+        document.getElementById('plTitle').value = p.title;
+        document.getElementById('plSpec').value = p.spec_label || '';
+        document.getElementById('plDesc').value = p.description || '';
+        document.getElementById('plBtnLabel').value = p.button_label || '';
+        document.getElementById('plBtnTarget').value = p.button_target || '';
+        document.getElementById('plPos').value = p.position;
+        document.getElementById('plFeatured').checked = !!p.is_featured;
+        plEnsureUpload(p.image_url || '');
+        document.getElementById('plFormTitle').textContent = `Edit "${p.title}"`;
+        document.getElementById('plSaveBtn').textContent = 'Save Changes';
+        document.getElementById('plCancelBtn').style.display = '';
+        document.getElementById('plTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      tr.querySelectorAll('.reject')[0].addEventListener('click', async () => {
+        try {
+          await api(`/marketplace/admin/placements/${p.id}`, { method: 'PATCH', body: JSON.stringify({ isVisible: !p.is_visible }) });
+          showToast(p.is_visible ? 'Hidden from the Marketplace page.' : 'Now showing on the Marketplace page.');
+          loadPlacements();
+        } catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.pl-del').addEventListener('click', async () => {
+        if (!confirm(`Delete "${p.title}"? It will disappear from the Marketplace page.`)) return;
+        try {
+          await api(`/marketplace/admin/placements/${p.id}`, { method: 'DELETE' });
+          showToast('Placement deleted.');
+          loadPlacements();
+        } catch (err) { showToast(err.message, true); }
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = ''; body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+document.getElementById('plCancelBtn').addEventListener('click', plResetForm);
+
+document.getElementById('plSaveBtn').addEventListener('click', async () => {
+  const title = document.getElementById('plTitle').value.trim();
+  if (!title) { showToast('Give the placement a title.', true); return; }
+  const payload = {
+    title,
+    specLabel: document.getElementById('plSpec').value.trim(),
+    description: document.getElementById('plDesc').value.trim(),
+    imageUrl: UnplugUpload.valueOf(document.getElementById('plImgUpload')),
+    buttonLabel: document.getElementById('plBtnLabel').value.trim() || 'Get In Contact',
+    buttonTarget: document.getElementById('plBtnTarget').value.trim() || 'contact',
+    isFeatured: document.getElementById('plFeatured').checked,
+    position: Number(document.getElementById('plPos').value) || 0,
+  };
+  const editId = document.getElementById('plEditId').value;
+  try {
+    if (editId) {
+      await api(`/marketplace/admin/placements/${editId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      showToast('Placement updated — live on the Marketplace page now.');
+    } else {
+      await api('/marketplace/admin/placements', { method: 'POST', body: JSON.stringify(payload) });
+      showToast('Placement added — live on the Marketplace page now.');
+    }
+    plResetForm();
+    loadPlacements();
+  } catch (err) { showToast(err.message, true); }
 });
 
 document.getElementById('cmsSaveContentBtn').addEventListener('click', async () => {
@@ -6792,7 +6982,11 @@ async function loadBadges() {
   try {
     const data = await api('/badges/admin/all');
     const badges = data.badges || [];
-    awardSelect.innerHTML = badges.map((b) => `<option value="${b.code}">${b.emoji} ${escapeHtmlAdmin(b.label)}</option>`).join('');
+    // Every badge is awardable, disabled ones included — is_enabled only
+    // governs the public "obtainable badges" list, so it is labelled here
+    // rather than hidden, which would leave an admin unable to grant it.
+    awardSelect.innerHTML = badges.map((b) =>
+      `<option value="${b.code}">${b.emoji} ${escapeHtmlAdmin(b.label)}${b.is_enabled ? '' : ' — disabled'}</option>`).join('');
     if (!badges.length) { body.innerHTML = '<div class="empty-state">No badge types yet — create one above.</div>'; return; }
     const table = document.createElement('table');
     table.innerHTML = '<tr><th></th><th>Label</th><th>Category</th><th>Period</th><th>Status</th><th></th></tr>';
@@ -6931,7 +7125,10 @@ document.getElementById('awardBadgeBtn').addEventListener('click', async () => {
     const already = period.awardMonth
       ? `That member already has this badge for ${BADGE_MONTHS[period.awardMonth - 1]} ${period.awardYear}.`
       : 'That member already has this badge.';
-    showToast(result.awarded ? 'Badge awarded.' : already);
+    const awardedMsg = result.badgeDisabled
+      ? 'Badge awarded — note this badge is disabled, so it is not in the public list of obtainable badges.'
+      : 'Badge awarded.';
+    showToast(result.awarded ? awardedMsg : already);
     document.getElementById('badgeAwardReason').value = '';
   } catch (err) { showToast(err.message, true); }
 });
@@ -8078,6 +8275,31 @@ function competitionRowHtml(c) {
   const statusOpts = Object.keys(COMP_STATUS_LABEL).map((s) =>
     `<option value="${s}"${c.status === s ? ' selected' : ''}>${escapeHtmlAdmin(COMP_STATUS_LABEL[s])}</option>`).join('');
 
+  // The Top 10 lives in this table only because it reuses the voting
+  // machinery. Its page shows no closing date and charges no entry fee, so
+  // those inputs would be controls that do nothing — they are left out rather
+  // than shown and quietly ignored. What IS shown is the voting rule, which
+  // is the reason the row appears here at all.
+  const dateAndFeeFields = c.managedElsewhere ? '' : `
+      <div class="field"><label>Opens</label><input class="comp-opens" type="date" value="${compDateInputValue(c.opens_at)}"></div>
+      <div class="field"><label>Closes</label><input class="comp-closes" type="date" value="${compDateInputValue(c.closes_at)}"></div>
+      <div class="field"><label>Entry fee (R) <span style="font-weight:400; text-transform:none; letter-spacing:0;">— new entries only</span></label><input class="comp-fee" type="number" min="0" step="0.01" value="${Number(c.entry_fee).toFixed(2)}"></div>`;
+
+  // Frozen once anyone has voted — the backend refuses the change too, this
+  // just explains why rather than letting the save fail.
+  const votingLocked = c.has_votes === true;
+  const votingField = `
+      <div class="field">
+        <label>Voting rule</label>
+        <select class="comp-daily" ${votingLocked ? 'disabled' : ''}>
+          <option value="once"${c.daily_voting ? '' : ' selected'}>One vote per person</option>
+          <option value="daily"${c.daily_voting ? ' selected' : ''}>One vote per person per day</option>
+        </select>
+        ${votingLocked
+          ? '<span style="font-size:11.5px; color:var(--slate);">Locked — voting has started. Changing it now would put early and late voters under different rules.</span>'
+          : '<span style="font-size:11.5px; color:var(--slate);">Can only be changed before the first vote.</span>'}
+      </div>`;
+
   return `<div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);" data-comp="${c.id}">
     <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
       <div style="font-weight:700;">${escapeHtmlAdmin(c.name)}
@@ -8087,12 +8309,12 @@ function competitionRowHtml(c) {
         /${escapeHtmlAdmin(c.slug)} · ${entries} ${entries === 1 ? 'entry' : 'entries'}${paid > 0 ? ` (${paid} paid)` : ''}
       </div>
     </div>
+    ${c.managedElsewhere ? `<p style="font-size:12px; color:var(--slate); margin:0 0 10px; padding:8px 10px; background:var(--paper); border:1px solid var(--paper-line); border-radius:4px;">Its entries and rankings are managed on the Top 10 screen. Only the settings that apply to it are shown here — it has no closing date or entry fee.</p>` : ''}
     <div class="grid-2">
       <div class="field"><label>Name</label><input class="comp-name" value="${escapeAttrAdmin(c.name)}"></div>
       <div class="field"><label>Status</label><select class="comp-status">${statusOpts}</select></div>
-      <div class="field"><label>Opens</label><input class="comp-opens" type="date" value="${compDateInputValue(c.opens_at)}"></div>
-      <div class="field"><label>Closes</label><input class="comp-closes" type="date" value="${compDateInputValue(c.closes_at)}"></div>
-      <div class="field"><label>Entry fee (R) <span style="font-weight:400; text-transform:none; letter-spacing:0;">— new entries only</span></label><input class="comp-fee" type="number" min="0" step="0.01" value="${Number(c.entry_fee).toFixed(2)}"></div>
+      ${dateAndFeeFields}
+      ${votingField}
     </div>
     <div class="field"><label>Description</label><textarea class="comp-desc" rows="2">${escapeHtmlAdmin(c.description || '')}</textarea></div>
     <button class="approve" style="padding:5px 12px;" onclick="saveCompetition(${c.id})">Save changes</button>
@@ -8105,20 +8327,34 @@ async function saveCompetition(id) {
   if (!row) return;
   const name = row.querySelector('.comp-name').value.trim();
   if (!name) { showToast('Give the competition a name.', true); return; }
-  const opens = row.querySelector('.comp-opens').value;
-  const closes = row.querySelector('.comp-closes').value;
+  // A managed-elsewhere row (the Top 10) renders no date or fee inputs, so
+  // these are absent rather than empty — read them defensively and simply
+  // leave those fields out of the payload.
+  const opensEl = row.querySelector('.comp-opens');
+  const closesEl = row.querySelector('.comp-closes');
+  const feeEl = row.querySelector('.comp-fee');
+  const opens = opensEl ? opensEl.value : '';
+  const closes = closesEl ? closesEl.value : '';
   if (opens && closes && closes <= opens) {
     showToast('The closing date must be after the opening date.', true); return;
   }
-  const fee = Number(row.querySelector('.comp-fee').value);
-  if (!Number.isFinite(fee) || fee < 0) { showToast('Entry fee must be zero or more.', true); return; }
+  let fee = null;
+  if (feeEl) {
+    fee = Number(feeEl.value);
+    if (!Number.isFinite(fee) || fee < 0) { showToast('Entry fee must be zero or more.', true); return; }
+  }
+  const dailyEl = row.querySelector('.comp-daily');
 
   try {
     await api(`/competitions/${id}`, { method: 'PATCH', body: JSON.stringify({
       name,
       description: row.querySelector('.comp-desc').value,
       status: row.querySelector('.comp-status').value,
-      entryFee: fee,
+      ...(fee !== null ? { entryFee: fee } : {}),
+      // Omitted when the control is disabled, so a locked rule is never
+      // resent — the backend would reject an actual change anyway, but
+      // sending the current value would make a no-op look like an attempt.
+      ...(dailyEl && !dailyEl.disabled ? { dailyVoting: dailyEl.value === 'daily' } : {}),
       // End of day, so a competition is open for the whole of its closing date.
       ...(opens ? { opensAt: opens + 'T00:00:00' } : {}),
       ...(closes ? { closesAt: closes + 'T23:59:59' } : {}),

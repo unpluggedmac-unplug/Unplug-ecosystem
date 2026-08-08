@@ -162,10 +162,20 @@ const MANAGED_ELSEWHERE_SLUGS = ['top-10'];
 router.get('/competitions/admin/all', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
+      // has_votes drives whether the admin UI offers the voting-rule control
+      // at all: it is frozen once voting starts (see the guard in PATCH
+      // /competitions/:id), and a control that always fails is worse than one
+      // that explains why it is locked. EXISTS rather than a count — it is
+      // only ever asked as a yes/no, and this stops at the first row.
       `SELECT c.id, c.name, c.slug, c.description, c.opens_at, c.closes_at,
               c.status, c.entry_fee, c.daily_voting, c.created_at,
               COUNT(ce.id)::int AS entry_count,
-              COUNT(ce.id) FILTER (WHERE ce.status <> 'awaiting_payment')::int AS paid_entry_count
+              COUNT(ce.id) FILTER (WHERE ce.status <> 'awaiting_payment')::int AS paid_entry_count,
+              EXISTS (
+                SELECT 1 FROM votes v
+                  JOIN competition_entries ce2 ON ce2.id = v.entry_id
+                 WHERE ce2.competition_id = c.id
+              ) AS has_votes
          FROM competitions c
          LEFT JOIN competition_entries ce ON ce.competition_id = c.id
         GROUP BY c.id

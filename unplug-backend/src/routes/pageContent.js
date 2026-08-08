@@ -5,6 +5,11 @@ const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
+// Kept in step with the page_blocks_orientation_check constraint in
+// 102_page_block_portrait_links.sql — validated here too so a bad value is a
+// clear 400 rather than a database constraint error surfacing as a 500.
+const ORIENTATIONS = ['landscape', 'portrait', 'square'];
+
 // GET /page-cms — public. One call returns every override and every visible
 // block for the whole site, because the magazine is a single-page app that
 // switches pages client-side: fetching per page would mean a round trip on
@@ -14,7 +19,8 @@ router.get('/', async (req, res, next) => {
     const content = await pool.query('SELECT page_key, content_key, value FROM page_content');
     const blocks = await pool.query(
       `SELECT id, page_key, title, subheading, description, image_url,
-              button_label, button_url, position
+              button_label, button_url, position,
+              orientation, image_link_url, show_click_hint, click_hint_text
          FROM page_blocks
         WHERE is_visible = true
         ORDER BY page_key, position, id`
@@ -106,7 +112,8 @@ router.get('/admin/blocks', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT id, page_key, title, subheading, description, image_url,
-              button_label, button_url, position, is_visible, updated_at
+              button_label, button_url, position, is_visible, updated_at,
+              orientation, image_link_url, show_click_hint, click_hint_text
          FROM page_blocks ORDER BY page_key, position, id`
     );
     res.json({ blocks: result.rows });
@@ -125,15 +132,23 @@ router.post('/admin/blocks', requireRole('admin'), async (req, res, next) => {
     if (!(b.title || b.subheading || b.description || b.imageUrl)) {
       return res.status(400).json({ error: 'Add at least an image, title, subheading or description.' });
     }
+    const orientation = ORIENTATIONS.includes(b.orientation) ? b.orientation : 'landscape';
     const result = await pool.query(
-      `INSERT INTO page_blocks (page_key, title, subheading, description, image_url, button_label, button_url, position, is_visible)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      `INSERT INTO page_blocks (page_key, title, subheading, description, image_url, button_label, button_url,
+                                position, is_visible, orientation, image_link_url, show_click_hint, click_hint_text)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
       [
         pageKey,
         b.title || null, b.subheading || null, b.description || null,
         b.imageUrl || null, b.buttonLabel || null, b.buttonUrl || null,
         Number.isInteger(Number(b.position)) ? Number(b.position) : 0,
         b.isVisible === false ? false : true,
+        orientation,
+        b.imageLinkUrl || null,
+        // A hint with nothing to click would be a lie, so it only sticks if
+        // the image actually links somewhere.
+        b.showClickHint === true && !!b.imageLinkUrl,
+        b.clickHintText || null,
       ]
     );
     res.status(201).json({ block: result.rows[0] });
@@ -151,7 +166,12 @@ router.patch('/admin/blocks/:id', requireRole('admin'), async (req, res, next) =
       title: 'title', subheading: 'subheading', description: 'description',
       imageUrl: 'image_url', buttonLabel: 'button_label', buttonUrl: 'button_url',
       position: 'position', isVisible: 'is_visible', pageKey: 'page_key',
+      orientation: 'orientation', imageLinkUrl: 'image_link_url',
+      showClickHint: 'show_click_hint', clickHintText: 'click_hint_text',
     };
+    if (req.body.orientation !== undefined && !ORIENTATIONS.includes(req.body.orientation)) {
+      return res.status(400).json({ error: `orientation must be one of: ${ORIENTATIONS.join(', ')}.` });
+    }
     const sets = [];
     const values = [];
     for (const [bodyKey, column] of Object.entries(map)) {

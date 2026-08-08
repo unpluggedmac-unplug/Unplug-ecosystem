@@ -283,6 +283,45 @@ test('redefining award_badge kept the follower fan-out and the notify kill switc
   await pool.query(`UPDATE settings SET value = 'true' WHERE key = 'notify_badge_enabled'`);
 });
 
+test('an admin can award a DISABLED badge, and is told it is disabled', async () => {
+  // The admin panel lists every badge type, so a disabled one is offered.
+  // It used to be silently unawardable, reported with the same message as a
+  // genuine duplicate — two different outcomes that looked identical.
+  const admin = await makeUser('admin');
+  const member = await makeUser();
+  const code = freshCode();
+  await req('POST', '/badges/admin', {
+    token: tokenFor(admin, 'admin'),
+    body: { code, label: 'Retired Badge', description: 'No longer offered', emoji: '🎗' },
+  });
+  await req('PATCH', `/badges/admin/${code}`, { token: tokenFor(admin, 'admin'), body: { isEnabled: false } });
+
+  const awarded = await req('POST', `/badges/admin/${code}/award`, {
+    token: tokenFor(admin, 'admin'), body: { userId: member },
+  });
+  assert.equal(awarded.status, 200);
+  assert.equal(awarded.body.awarded, true, 'a disabled badge should still be awardable by an admin');
+  assert.equal(awarded.body.badgeDisabled, true, 'the admin should be told it is disabled');
+  assert.equal(await countAwards(member, code), 1);
+
+  // It stays out of the PUBLIC obtainable list, which is what is_enabled is for.
+  const publicList = await req('GET', '/badges');
+  assert.equal(publicList.body.badges.some((b) => b.code === code), false);
+
+  // But the member genuinely holds it.
+  const held = await req('GET', `/badges/user/${member}`);
+  assert.ok(held.body.badges.some((b) => b.code === code));
+});
+
+test('awarding a badge code that does not exist is a 404, not a silent false', async () => {
+  const admin = await makeUser('admin');
+  const member = await makeUser();
+  const r = await req('POST', '/badges/admin/no_such_badge_code/award', {
+    token: tokenFor(admin, 'admin'), body: { userId: member },
+  });
+  assert.equal(r.status, 404);
+});
+
 // ---------------------------------------------------------------------------
 // Top 10 in the competitions editor
 // ---------------------------------------------------------------------------
@@ -298,6 +337,34 @@ test('the Top 10 now appears in the admin competitions list, flagged as managed 
 
   const arena = body.competitions.find((c) => c.slug === 'the-arena');
   assert.equal(arena.managedElsewhere, false);
+  // has_votes drives whether the admin UI offers the voting-rule control.
+  assert.equal(typeof top10.has_votes, 'boolean');
+});
+
+test('has_votes flips once someone votes, so the UI can lock the voting rule', async () => {
+  const admin = await makeUser('admin');
+  const owner = await makeUser();
+  const comp = await pool.query(
+    `INSERT INTO competitions (name, slug, opens_at, closes_at, status)
+     VALUES ('Has Votes Check', 'has-votes-check', now(), now() + interval '30 days', 'open') RETURNING id`
+  );
+  const profile = await pool.query(
+    `INSERT INTO profiles (user_id, type, package_tier, slug, display_name, status)
+     VALUES ($1, 'individual', 'basic', 'has-votes-p', 'Votes Check', 'approved') RETURNING id`,
+    [owner]
+  );
+  const entry = await pool.query(
+    `INSERT INTO competition_entries (competition_id, profile_id, status) VALUES ($1, $2, 'approved') RETURNING id`,
+    [comp.rows[0].id, profile.rows[0].id]
+  );
+
+  const listBefore = await req('GET', '/competitions/admin/all', { token: tokenFor(admin, 'admin') });
+  assert.equal(listBefore.body.competitions.find((c) => c.id === comp.rows[0].id).has_votes, false);
+
+  await req('POST', `/entries/${entry.rows[0].id}/vote`, { token: tokenFor(await makeUser()) });
+
+  const listAfter = await req('GET', '/competitions/admin/all', { token: tokenFor(admin, 'admin') });
+  assert.equal(listAfter.body.competitions.find((c) => c.id === comp.rows[0].id).has_votes, true);
 });
 
 test('daily voting can be toggled while a competition has no votes', async () => {
