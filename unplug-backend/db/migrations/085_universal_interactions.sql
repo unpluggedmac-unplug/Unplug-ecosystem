@@ -74,11 +74,16 @@ END $$;
 -- article_comments table, which is the only comment table that exists
 -- yet).
 -- =============================================================
-CREATE OR REPLACE FUNCTION get_content_stats(p_target_type TEXT, p_target_id INTEGER)
-RETURNS TABLE (likes INTEGER, dislikes INTEGER, comments INTEGER, saves INTEGER) AS $$
-  SELECT
-    (SELECT COUNT(*) FROM content_reactions WHERE target_type = p_target_type AND target_id = p_target_id AND reaction = 'like')::INTEGER,
-    (SELECT COUNT(*) FROM content_reactions WHERE target_type = p_target_type AND target_id = p_target_id AND reaction = 'dislike')::INTEGER,
-    (SELECT COUNT(*) FROM article_comments WHERE p_target_type = 'article' AND article_id = p_target_id AND status = 'approved')::INTEGER,
-    (SELECT COUNT(*) FROM content_saves WHERE target_type = p_target_type AND target_id = p_target_id)::INTEGER;
-$$ LANGUAGE SQL STABLE;
+-- The definition that used to live here has moved to
+-- 103_content_views.sql, which owns get_content_stats outright.
+--
+-- It cannot be declared here any more. Every migration re-runs on every
+-- deploy, and 103 changed the function's RETURNS TABLE to add a `views`
+-- column — Postgres rejects a CREATE OR REPLACE that changes a return type
+-- ("cannot change return type of existing function"), so this statement
+-- would fail on the second deploy and take the whole migration run with it.
+-- Caught by the idempotency test in test/contentViews.test.js.
+--
+-- (This version also predated content_comments and counted article_comments
+-- only, so it was superseded on content grounds by 086 before 103 touched
+-- it at all.)

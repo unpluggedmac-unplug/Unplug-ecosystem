@@ -68,14 +68,15 @@ END $$;
 -- Phase 1 filled in: counts content_comments for every target_type now,
 -- not just 'article'.
 -- =============================================================
-CREATE OR REPLACE FUNCTION get_content_stats(p_target_type TEXT, p_target_id INTEGER)
-RETURNS TABLE (likes INTEGER, dislikes INTEGER, comments INTEGER, saves INTEGER) AS $$
-  SELECT
-    (SELECT COUNT(*) FROM content_reactions WHERE target_type = p_target_type AND target_id = p_target_id AND reaction = 'like')::INTEGER,
-    (SELECT COUNT(*) FROM content_reactions WHERE target_type = p_target_type AND target_id = p_target_id AND reaction = 'dislike')::INTEGER,
-    (SELECT COUNT(*) FROM content_comments WHERE target_type = p_target_type AND target_id = p_target_id AND status = 'approved')::INTEGER,
-    (SELECT COUNT(*) FROM content_saves WHERE target_type = p_target_type AND target_id = p_target_id)::INTEGER;
-$$ LANGUAGE SQL STABLE;
+-- This file's fix — counting content_comments for EVERY target_type rather
+-- than only 'article' — is preserved verbatim in the current definition,
+-- which now lives in 103_content_views.sql along with the added `views`
+-- column.
+--
+-- It cannot also be declared here. Migrations re-run on every deploy, and
+-- Postgres refuses a CREATE OR REPLACE that changes a function's return
+-- type, so this 4-column version would fail against 103's 5-column one and
+-- abort the migration run. Caught by test/contentViews.test.js.
 
 -- =============================================================
 -- TARGET TITLE — one human-readable label per content type, for the

@@ -111,6 +111,44 @@ router.get('/:targetType/:targetId/mine', requireAuth, async (req, res, next) =>
   }
 });
 
+// POST /interactions/:targetType/:targetId/view — records that someone
+// looked at an item. Deliberately NOT auth-gated: most viewers of a public
+// gallery are signed out, and a view count that only counted members would
+// be wrong rather than merely incomplete.
+//
+// Guests are identified by the sessionId the frontend already generates for
+// anonymous voting. Deduped to one per viewer per day by a unique index
+// (103_content_views.sql), so ON CONFLICT DO NOTHING makes a refresh a
+// no-op instead of an error.
+router.post('/:targetType/:targetId/view', async (req, res, next) => {
+  try {
+    const target = validTarget(req, res);
+    if (!target) return;
+    const { targetType, targetId } = target;
+
+    const sessionId = String(req.body.sessionId || '').trim().slice(0, 120) || null;
+    if (!req.user && !sessionId) {
+      return res.status(400).json({ error: 'sessionId is required for guest views.' });
+    }
+    if (!(await targetExists(targetType, targetId))) {
+      return res.status(404).json({ error: 'That item no longer exists.' });
+    }
+
+    await pool.query(
+      `INSERT INTO content_views (target_type, target_id, user_id, session_id)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT DO NOTHING`,
+      [targetType, targetId, req.user ? req.user.id : null, req.user ? null : sessionId]
+    );
+    // The caller only needs the new total to repaint; whether THIS request
+    // was the one that counted is not interesting to it.
+    const stats = await pool.query('SELECT views FROM get_content_stats($1, $2)', [targetType, targetId]);
+    res.json({ views: stats.rows[0].views });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /interactions/:targetType/batch-stats?ids=1,2,3 — public counts for
 // many items in one call, so a grid of cards (gallery, marketplace, news)
 // doesn't fire one /stats request per card.
@@ -123,13 +161,13 @@ router.get('/:targetType/batch-stats', async (req, res, next) => {
     const ids = String(req.query.ids || '').split(',').map((s) => s.trim()).filter(Boolean).map(Number).filter(Number.isInteger);
     if (!ids.length) return res.json({ stats: {} });
     const result = await pool.query(
-      `SELECT t.id AS target_id, s.likes, s.dislikes, s.comments, s.saves
+      `SELECT t.id AS target_id, s.likes, s.dislikes, s.comments, s.saves, s.views
          FROM unnest($1::int[]) AS t(id)
          CROSS JOIN LATERAL get_content_stats($2, t.id) AS s`,
       [ids, targetType]
     );
     const stats = {};
-    result.rows.forEach((r) => { stats[r.target_id] = { likes: r.likes, dislikes: r.dislikes, comments: r.comments, saves: r.saves }; });
+    result.rows.forEach((r) => { stats[r.target_id] = { likes: r.likes, dislikes: r.dislikes, comments: r.comments, saves: r.saves, views: r.views }; });
     res.json({ stats });
   } catch (err) {
     next(err);

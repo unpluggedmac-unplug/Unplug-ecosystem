@@ -1079,9 +1079,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .int-btn:disabled{ opacity:0.6; cursor:default; }
 .int-static{ display:inline-flex; align-items:center; gap:6px; font-size:13.5px; color:var(--slate); padding:6px 4px; }
 .int-count{ font-variant-numeric:tabular-nums; }
-.int-bar-compact .interaction-bar{ gap:4px; margin:8px 0 0; }
+.int-bar-compact .interaction-bar{ gap:4px; margin:8px 0 0; flex-wrap:wrap; }
 .int-bar-compact .int-btn{ padding:3px 8px; font-size:11.5px; }
 .int-bar-compact .int-static{ font-size:11.5px; padding:3px 2px; }
+/* Comment thread opened from a card's 💬 button. Constrained and scrollable
+   so a long thread can't push the rest of a gallery grid off screen. */
+.int-comments{ margin-top:10px; padding-top:10px; border-top:1px solid var(--paper-line); text-align:left; max-height:420px; overflow-y:auto; }
+.int-comments .cmt-title{ font-size:14px; margin-bottom:8px; }
+.int-comments .cmt{ font-size:13px; }
+.int-comments .cmt-form textarea{ font-size:13.5px; }
+@media(max-width:600px){ .int-comments{ max-height:320px; } }
 /* Wrapper so a card's share row can sit OUTSIDE its <a>, while the card
    itself still stretches to fill the grid cell. */
 .card-shell{ display:flex; flex-direction:column; gap:10px; }
@@ -4617,11 +4624,15 @@ function paintInteractionBar(container, targetType, targetId, stats, mine) {
       <button class="int-btn${mine.reaction === 'dislike' ? ' on' : ''}" data-int-action="dislike" type="button" aria-pressed="${mine.reaction === 'dislike'}">
         <span aria-hidden="true">👎</span><span class="int-count">${stats.dislikes}</span>
       </button>
-      <span class="int-static"><span aria-hidden="true">💬</span><span class="int-count">${stats.comments}</span></span>
+      <button class="int-btn" data-int-action="comments" type="button" aria-expanded="false" title="View and add comments">
+        <span aria-hidden="true">💬</span><span class="int-count">${stats.comments}</span>
+      </button>
       <button class="int-btn${mine.saved ? ' on' : ''}" data-int-action="save" type="button" aria-pressed="${mine.saved}">
         <span aria-hidden="true">🔖</span><span class="int-count">${stats.saves}</span>
       </button>
-    </div>`;
+      <span class="int-static" title="Views"><span aria-hidden="true">👁</span><span class="int-count">${stats.views != null ? stats.views : 0}</span></span>
+    </div>
+    <div class="int-comments" hidden></div>`;
 
   ['like', 'dislike'].forEach((reaction) => {
     container.querySelector(`[data-int-action="${reaction}"]`).addEventListener('click', () =>
@@ -4629,6 +4640,88 @@ function paintInteractionBar(container, targetType, targetId, stats, mine) {
   });
   container.querySelector('[data-int-action="save"]').addEventListener('click', () =>
     handleInteractionSave(container, targetType, targetId));
+  container.querySelector('[data-int-action="comments"]').addEventListener('click', (e) => {
+    // Cards are often wrapped in a clickable shell (a gallery tile opens a
+    // lightbox); opening the thread must not also trigger that.
+    e.preventDefault();
+    e.stopPropagation();
+    toggleInteractionComments(container, targetType, targetId);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// View counting. A view is recorded when an item is actually SCROLLED INTO
+// VIEW, not when its card is rendered — a grid of twelve thumbnails would
+// otherwise book twelve views for a reader who scrolled past without
+// looking, which makes the number meaningless. The server additionally
+// dedupes to one per viewer per day (103_content_views.sql), so this is
+// belt-and-braces rather than the only guard.
+// ---------------------------------------------------------------------------
+const VIEWED_THIS_LOAD = new Set();
+let _viewObserver = null;
+
+function observeContentView(targetType, targetId, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const key = `${targetType}:${targetId}`;
+  if (VIEWED_THIS_LOAD.has(key)) return;
+  el.dataset.viewType = targetType;
+  el.dataset.viewId = String(targetId);
+
+  // No IntersectionObserver (very old browser): count it on render rather
+  // than never counting it at all.
+  if (typeof IntersectionObserver === 'undefined') {
+    recordContentView(targetType, targetId);
+    return;
+  }
+  if (!_viewObserver) {
+    _viewObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        _viewObserver.unobserve(entry.target);
+        recordContentView(entry.target.dataset.viewType, Number(entry.target.dataset.viewId));
+      });
+    }, { threshold: 0.5 });
+  }
+  _viewObserver.observe(el);
+}
+
+async function recordContentView(targetType, targetId) {
+  const key = `${targetType}:${targetId}`;
+  if (VIEWED_THIS_LOAD.has(key)) return;
+  VIEWED_THIS_LOAD.add(key);
+  try {
+    const res = await api(`/interactions/${targetType}/${targetId}/view`, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: guestSessionId() }),
+    });
+    // Repaint just this item's count, so the number a reader sees matches
+    // what was actually recorded.
+    const countEl = document.querySelector(`#${CSS.escape(`gallery-int-${targetId}`)} .int-static .int-count`);
+    if (countEl && res && res.views != null && targetType === 'gallery_image') countEl.textContent = res.views;
+  } catch (err) {
+    // A view is telemetry — never surface a failure to the reader.
+  }
+}
+
+// Opens/closes the comment thread under an interaction bar. The thread is
+// only fetched the first time it's opened, so a grid of cards costs nothing
+// until a reader actually asks for one.
+function toggleInteractionComments(container, targetType, targetId) {
+  const panel = container.querySelector('.int-comments');
+  const btn = container.querySelector('[data-int-action="comments"]');
+  if (!panel) return;
+  const opening = panel.hidden;
+  panel.hidden = !opening;
+  btn.setAttribute('aria-expanded', String(opening));
+  if (!opening) return;
+
+  if (!panel.dataset.loaded) {
+    // Unique id per target so two open threads never collide.
+    panel.id = panel.id || `intcmt-${targetType}-${targetId}`;
+    panel.dataset.loaded = '1';
+    loadComments(targetId, targetType, panel.id);
+  }
 }
 
 async function handleInteractionReact(container, targetType, targetId, reaction) {
@@ -4758,13 +4851,17 @@ async function loadProfileCommunityStats(profileUserId) {
   }
 }
 
-async function loadComments(articleId) {
-  const wrap = document.getElementById('articleComments');
+// Articles kept their original one-argument call; every other content type
+// (gallery images especially) passes its own type/id/container. The comments
+// API was already universal — only this renderer was hardcoded to articles.
+async function loadComments(articleId, targetType = 'article', containerId = 'articleComments') {
+  const targetId = articleId;
+  const wrap = document.getElementById(containerId);
   if (!wrap) return;
   wrap.innerHTML = '<h3 class="cmt-title">Comments</h3><div class="cmt-loading">Loading comments…</div>';
   let comments = [];
   try {
-    const data = await api('/comments/article/' + articleId);
+    const data = await api(`/comments/${targetType}/${targetId}`);
     comments = data.comments || [];
   } catch (err) {
     wrap.innerHTML = '<h3 class="cmt-title">Comments</h3><p class="cmt-empty">Comments aren\'t available right now.</p>';
@@ -4785,19 +4882,23 @@ async function loadComments(articleId) {
     : `<p class="cmt-signin">Want to join in? <a href="unplug-member-dashboard.html" target="_blank" rel="noopener">Sign in or create a free account</a> to comment.</p>`;
   wrap.innerHTML = `<h3 class="cmt-title">Comments${comments.length ? ` (${comments.length})` : ''}</h3>${list}${form}`;
 
-  const formEl = document.getElementById('cmtForm');
+  // Scoped to `wrap`, not document — a gallery page can have a thread open
+  // while the article reader still holds its own, and both use the same ids.
+  const formEl = wrap.querySelector('.cmt-form');
   if (formEl) {
     formEl.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const bodyEl = document.getElementById('cmtBody');
+      const bodyEl = formEl.querySelector('textarea');
       const text = bodyEl.value.trim();
       if (!text) return;
       const btn = formEl.querySelector('button[type="submit"]');
+      // Guards a double-click and a slow network retry from posting twice.
+      if (btn.disabled) return;
       btn.disabled = true;
       try {
-        const res = await api('/comments/article/' + articleId, {
+        const res = await api(`/comments/${targetType}/${targetId}`, {
           method: 'POST',
-          body: JSON.stringify({ body: text, website: document.getElementById('hpComment').value }),
+          body: JSON.stringify({ body: text, website: formEl.querySelector('.hp-field').value }),
         });
         bodyEl.value = '';
         showToast(res.message || 'Comment sent for review');
@@ -4824,7 +4925,7 @@ async function loadComments(articleId) {
         // Refetch rather than adjust locally: a member only holds one reaction
         // per comment, so switching reactions moves two counts at once and
         // guessing client-side would drift out of sync.
-        await loadComments(articleId);
+        await loadComments(targetId, targetType, containerId);
       } catch (err) {
         btn.disabled = false;
         showToast(err.message || "Couldn't record that reaction");
@@ -5041,6 +5142,7 @@ async function loadGallery(reset) {
     } else {
       grid.insertAdjacentHTML('beforeend', data.images.map((img, i) => galleryItemHtml(img, startIndex + i)).join(''));
       renderInteractionBarsBatch('gallery_image', data.images.map((img) => ({ id: img.id, containerId: `gallery-int-${img.id}` })));
+      data.images.forEach((img) => observeContentView('gallery_image', img.id, `gallery-int-${img.id}`));
     }
     loadMoreBtn.style.display = data.pagination.page < data.pagination.totalPages ? 'inline-flex' : 'none';
   } catch (err) {
