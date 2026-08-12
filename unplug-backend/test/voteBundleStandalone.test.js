@@ -214,28 +214,27 @@ test('admin reject leaves no votes allocated; admin reverse removes votes an app
   assert.equal(afterReverse.rows[0].n, 0);
 });
 
-test('the EFT reference leads with the contestant entry code, and the buyer is told so', async () => {
-  // So a buyer's bank statement and the admin queue both answer "who are
-  // these votes for?" without a lookup (104_vote_reference_entry_code.sql).
+test('the Reference Code IS the contestant entry code, and the buyer is told so', async () => {
+  // Superseded 104's entry-code-PLUS-suffix design: one code, called the
+  // Reference Code, everywhere a customer sees it
+  // (106_vote_reference_is_entry_code.sql).
   const entry = await makeApprovedEntry('Reference Prefix Target');
   const res = await req('POST', `/entries/${entry.id}/vote-bundle`, {
     body: { votes: 50, sessionId: 'sess_ref_prefix', termsAccepted: true },
   });
   assert.equal(res.status, 201);
   assert.equal(res.body.entryCode, entry.entry_code);
-  assert.ok(
-    res.body.reference.startsWith(`${entry.entry_code}-`),
-    `reference ${res.body.reference} should start with entry code ${entry.entry_code}`
-  );
-  assert.match(res.body.reference, /^[0-9]{10}-[A-Z2-9]{4}$/);
+  assert.equal(res.body.reference, entry.entry_code, 'the reference is the entry code, with nothing appended');
   assert.equal(res.body.instructions.reference, res.body.reference);
   assert.match(res.body.instructions.note, new RegExp(entry.entry_code));
 });
 
-test('two purchases for the SAME contestant get different references', async () => {
-  // The whole reason the entry code alone is not the reference: the admin
-  // queue matches a payment to a bundle by reference, so two buyers sharing
-  // one reference would be unmatchable — and a double payment invisible.
+test('two purchases for the SAME contestant share the Reference Code but stay separate orders', async () => {
+  // The accepted cost of one shared code: the admin queue can no longer tell
+  // two EFTs apart by reference alone, and matches on amount, date and buyer
+  // instead. What must NOT happen is the second purchase failing — reference
+  // used to be UNIQUE, so before migration 106 this was a duplicate-key error
+  // in the middle of someone's checkout.
   const entry = await makeApprovedEntry('Two Buyers One Contestant');
   const a = await req('POST', `/entries/${entry.id}/vote-bundle`, {
     body: { votes: 50, sessionId: 'buyer_a', termsAccepted: true },
@@ -245,29 +244,29 @@ test('two purchases for the SAME contestant get different references', async () 
   });
   assert.equal(a.status, 201);
   assert.equal(b.status, 201);
-  assert.notEqual(a.body.reference, b.body.reference, 'two buyers must not share a reference');
-  // Both still visibly point at the same contestant.
-  assert.ok(a.body.reference.startsWith(entry.entry_code));
-  assert.ok(b.body.reference.startsWith(entry.entry_code));
+  assert.equal(a.body.reference, b.body.reference, 'both quote the contestant entry code');
+  assert.equal(a.body.reference, entry.entry_code);
+  assert.notEqual(a.body.lookupToken, b.body.lookupToken, 'each order still has its own private handle');
 });
 
-test('the new longer reference still resolves through the public status lookup', async () => {
-  // The column was widened from VARCHAR(10); a reference that no longer fits
-  // would fail at INSERT, and one that fits but is not found would break the
-  // buyer's "check my order" path.
+test('the buyer resolves their own order through the public status lookup', async () => {
   const entry = await makeApprovedEntry('Longer Reference Lookup');
   const purchase = await req('POST', `/entries/${entry.id}/vote-bundle`, {
     body: { votes: 50, sessionId: 'sess_lookup_long', termsAccepted: true },
   });
-  const ref = purchase.body.reference;
-  assert.ok(ref.length > 10, 'the composite reference should exceed the old 10-char size');
+  const token = purchase.body.lookupToken;
 
-  const status = await req('GET', `/vote-bundles/status/${ref}`);
+  const status = await req('GET', `/vote-bundles/status/${token}`);
   assert.equal(status.status, 200);
   assert.equal(status.body.purchase.entry_code, entry.entry_code);
-  // Lookups uppercase the input, so a lowercase-typed reference still works.
-  const lower = await req('GET', `/vote-bundles/status/${ref.toLowerCase()}`);
+  // Lookups uppercase the input, so a lowercase-typed handle still works.
+  const lower = await req('GET', `/vote-bundles/status/${token.toLowerCase()}`);
   assert.equal(lower.status, 200);
+
+  // And the Reference Code alone is refused — it is a public entry code now,
+  // so it identifies the contestant, never the order.
+  const byCode = await req('GET', `/vote-bundles/status/${entry.entry_code}`);
+  assert.equal(byCode.status, 404);
 });
 
 test('GET /admin/vote-bundles searches by contestant name, reference and entry code, and filters by status', async () => {

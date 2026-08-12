@@ -13,29 +13,66 @@ const router = express.Router();
 // so it isn't reused as-is from that file.
 const VOTE_REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-// The reference leads with the contestant's 10-digit entry code so the buyer
-// and the admin can both see who the votes are for, then a short random
-// suffix — e.g. 0004821037-K7M2 (104_vote_reference_entry_code.sql).
+// The Reference Code the buyer puts on their EFT IS the contestant's entry
+// code — one code, under one name, everywhere a customer sees it. See
+// 106_vote_reference_is_entry_code.sql for what that costs and why it is
+// still what we do.
 //
-// The suffix is not decoration. An entry code identifies the CONTESTANT, not
-// the PURCHASE, so on its own it would arrive identically on every EFT for
-// that contestant and the admin queue — which matches a payment to a bundle
-// by reference — could not tell two buyers apart or spot a double payment.
-//
-// entryCode is optional: an entry that somehow has none (the code is
-// assigned by trigger on approval) still gets a working random reference
-// rather than a broken one.
+// A contestant who has not been issued an entry code yet (they are only
+// assigned on approval) falls back to a generated code, because a purchase
+// with no reference at all cannot be matched to a payment by anyone.
 async function generateVoteBundleReference(entryCode) {
-  const prefix = /^[0-9]{10}$/.test(String(entryCode || '')) ? `${entryCode}-` : '';
-  const suffixLength = prefix ? 4 : 10;
+  if (/^[0-9]{10}$/.test(String(entryCode || ''))) return String(entryCode);
   for (let attempt = 0; attempt < 8; attempt++) {
-    let suffix = '';
-    for (let i = 0; i < suffixLength; i++) suffix += VOTE_REF_ALPHABET[crypto.randomInt(VOTE_REF_ALPHABET.length)];
-    const candidate = prefix + suffix;
+    let candidate = '';
+    for (let i = 0; i < 10; i++) candidate += VOTE_REF_ALPHABET[crypto.randomInt(VOTE_REF_ALPHABET.length)];
     const existing = await pool.query('SELECT 1 FROM vote_bundles WHERE reference = $1', [candidate]);
     if (existing.rowCount === 0) return candidate;
   }
-  throw new Error('Could not generate a unique reference code.');
+  throw new Error('Could not generate a reference code.');
+}
+
+// The buyer's private handle on their own purchase. Never shown as "your
+// reference" and never typed in by hand — it lives in the link they are given
+// at checkout. It exists because the Reference Code is now a public entry
+// code, and this portal has no login, so something else has to be the thing
+// only the buyer knows.
+async function generateVoteBundleLookupToken() {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    let candidate = '';
+    for (let i = 0; i < 24; i++) candidate += VOTE_REF_ALPHABET[crypto.randomInt(VOTE_REF_ALPHABET.length)];
+    const existing = await pool.query('SELECT 1 FROM vote_bundles WHERE lookup_token = $1', [candidate]);
+    if (existing.rowCount === 0) return candidate;
+  }
+  throw new Error('Could not generate a lookup token.');
+}
+
+// Resolves whatever the buyer came back with to exactly one bundle.
+//
+// Accepts the lookup token, or a LEGACY reference (the pre-106 random or
+// entry-code-plus-suffix form), because those were unguessable and are still
+// quoted in links already sent out. It deliberately does NOT accept a bare
+// 10-digit entry code: that is printed publicly beside every contestant, so
+// treating it as a credential would let anyone open — or attach files to —
+// a stranger's purchase.
+function isBareEntryCode(value) {
+  return /^[0-9]{10}$/.test(String(value || '').trim());
+}
+
+async function resolveVoteBundle(handle) {
+  const value = String(handle || '').trim().toUpperCase();
+  if (!value) return { error: 'A reference is required.' };
+  const byToken = await pool.query('SELECT id FROM vote_bundles WHERE lookup_token = $1', [value]);
+  if (byToken.rowCount === 1) return { id: byToken.rows[0].id };
+  if (isBareEntryCode(value)) {
+    return { error: 'Please use the link you were given after checkout. An entry code on its own identifies the contestant, not your order.' };
+  }
+  const byRef = await pool.query('SELECT id FROM vote_bundles WHERE reference = $1', [value]);
+  if (byRef.rowCount === 1) return { id: byRef.rows[0].id };
+  if (byRef.rowCount > 1) {
+    return { error: 'That reference matches more than one order. Please use the link you were given after checkout.' };
+  }
+  return { error: 'No purchase found for that reference.' };
 }
 
 // Note: there is no global ENTRY_FEE constant — each competition sets its
@@ -465,7 +502,7 @@ router.get('/competitions/:id/entries/admin', requireRole('admin'), async (req, 
   try {
     const result = await pool.query(
       `SELECT ce.id, ce.status, ce.entry_fee, ce.created_at, ce.profile_id,
-              ce.manual_name, ce.manual_image_url,
+              ce.manual_name, ce.manual_image_url, ce.entry_code,
               COALESCE(p.display_name, ce.manual_name) AS display_name,
               COALESCE(ce.manual_image_url, p.feature_image_url) AS image_url,
               p.slug AS profile_slug,
@@ -801,22 +838,26 @@ router.post('/entries/:id/vote-bundle', async (req, res, next) => {
     const price = Number(tierResult.rows[0].price);
     const entryCode = entryCheck.rows[0].entry_code;
     const reference = await generateVoteBundleReference(entryCode);
+    const lookupToken = await generateVoteBundleLookupToken();
 
     const bundle = await pool.query(
-      `INSERT INTO vote_bundles (entry_id, buyer_user_id, session_id, vote_count, price, reference, terms_accepted_at, terms_version)
-       VALUES ($1, $2, $3, $4, $5, $6, now(), $7)
+      `INSERT INTO vote_bundles (entry_id, buyer_user_id, session_id, vote_count, price, reference, lookup_token, terms_accepted_at, terms_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8)
        RETURNING *`,
-      [req.params.id, req.user ? req.user.id : null, req.user ? null : sessionId, votes, price, reference, String(req.body.termsVersion || '')]
+      [req.params.id, req.user ? req.user.id : null, req.user ? null : sessionId, votes, price, reference, lookupToken, String(req.body.termsVersion || '')]
     );
 
     res.status(201).json({
       bundle: bundle.rows[0],
       reference,
       entryCode,
+      // The buyer's private handle. Named plainly so nothing downstream is
+      // tempted to show it as "your reference" — that is what `reference` is.
+      lookupToken,
       instructions: eftInstructions(reference,
         entryCode
-          ? `Make a standard bank EFT to the account above using this exact reference. It starts with entry code ${entryCode} — the contestant you are voting for — followed by a code unique to this order, so please copy the whole thing. Your votes are added once our team confirms the payment, usually within one business day.`
-          : 'Make a standard bank EFT to the account above using this exact reference. Your votes are added once our team confirms the payment — usually within one business day.'),
+          ? `Make a standard bank EFT to the account above using this exact Reference Code: ${entryCode}. It is the entry code of the contestant you are voting for. Your votes are added once our team confirms the payment, usually within one business day.`
+          : 'Make a standard bank EFT to the account above using this exact Reference Code. Your votes are added once our team confirms the payment — usually within one business day.'),
     });
   } catch (err) {
     next(err);
@@ -830,14 +871,16 @@ router.post('/entries/:id/vote-bundle', async (req, res, next) => {
 // so no email match is needed, just the reference itself.
 router.get('/vote-bundles/status/:reference', async (req, res, next) => {
   try {
+    const found = await resolveVoteBundle(req.params.reference);
+    if (found.error) return res.status(404).json({ error: found.error });
     const result = await pool.query(
-      `SELECT vb.status, vb.vote_count, vb.confirmed_at, ce.entry_code,
+      `SELECT vb.status, vb.vote_count, vb.confirmed_at, vb.reference, ce.entry_code,
               COALESCE(p.display_name, ce.manual_name) AS display_name
          FROM vote_bundles vb
          JOIN competition_entries ce ON ce.id = vb.entry_id
          LEFT JOIN profiles p ON p.id = ce.profile_id
-        WHERE vb.reference = $1`,
-      [String(req.params.reference || '').trim().toUpperCase()]
+        WHERE vb.id = $1`,
+      [found.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'No purchase found for that reference.' });
     res.json({ purchase: result.rows[0] });
@@ -849,16 +892,21 @@ router.get('/vote-bundles/status/:reference', async (req, res, next) => {
 // PATCH /vote-bundles/:reference/proof — attaches a proof-of-payment URL
 // (already uploaded via POST /uploads/proof) to a vote bundle. Deliberately
 // NOT behind requireAuth, matching GET /vote-bundles/status/:reference right
-// above: this whole portal has no login, so the reference — shown to the
-// buyer once, right after purchase — IS the credential, the same way it
-// already is for checking status.
+// above: this whole portal has no login.
+//
+// What stands in for a login is the lookup token, not the Reference Code.
+// The Reference Code is now the contestant's entry code, which is printed
+// publicly beside every contestant — so accepting it here would let anyone
+// read a code off the Top 10 page and attach a file to a stranger's order.
 router.patch('/vote-bundles/:reference/proof', async (req, res, next) => {
   try {
     const url = String(req.body.url || '').trim();
     if (!url) return res.status(400).json({ error: 'A file URL is required — upload via POST /uploads/proof first.' });
+    const found = await resolveVoteBundle(req.params.reference);
+    if (found.error) return res.status(404).json({ error: found.error });
     const result = await pool.query(
-      `UPDATE vote_bundles SET pop_url = $1 WHERE reference = $2 RETURNING id, pop_url`,
-      [url, String(req.params.reference || '').trim().toUpperCase()]
+      `UPDATE vote_bundles SET pop_url = $1 WHERE id = $2 RETURNING id, pop_url`,
+      [url, found.id]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'No purchase found for that reference.' });
     res.json({ bundle: result.rows[0], message: 'Proof of payment attached — thank you.' });
@@ -1042,6 +1090,67 @@ router.delete('/hall-of-fame/:id', requireRole('admin'), async (req, res, next) 
 
 // GET /admin/vote-bundles?status=&q=&from=&to= — search by contestant name,
 // reference or entry code, filter by status and/or date range.
+// POST /admin/entries/:id/adjust-votes — corrects an entry's vote total.
+//
+// Recorded as a votes row rather than by rewriting a stored total, because
+// there is no stored total: every count on the site is SUM(bundle_size) over
+// votes. Writing an adjustment row keeps that one source of truth, keeps the
+// correction reversible, and leaves it visible in the same history as every
+// real vote instead of a number silently changing overnight.
+//
+// The votes table requires a voter or a session, so each adjustment carries
+// its own unique synthetic session id — which also means the per-voter unique
+// indexes from 098 can never collide with an admin correction.
+router.post('/admin/entries/:id/adjust-votes', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const delta = Number(req.body.delta);
+    const reason = String(req.body.reason || '').trim();
+    if (!Number.isInteger(delta) || delta === 0) {
+      return res.status(400).json({ error: 'Enter a whole number of votes to add or remove — for example 25, or -25.' });
+    }
+    if (!reason) {
+      return res.status(400).json({ error: 'A reason is required, so the correction can be explained later.' });
+    }
+
+    const entry = await pool.query(
+      `SELECT ce.id, ce.entry_code, COALESCE(p.display_name, ce.manual_name) AS name,
+              COALESCE((SELECT SUM(bundle_size) FROM votes WHERE entry_id = ce.id), 0) AS total
+         FROM competition_entries ce
+         LEFT JOIN profiles p ON p.id = ce.profile_id
+        WHERE ce.id = $1`,
+      [id]
+    );
+    if (entry.rows.length === 0) return res.status(404).json({ error: 'Entry not found.' });
+
+    const before = Number(entry.rows[0].total);
+    // An adjustment must never drive a contestant's public total negative —
+    // that would show as a negative number on the leaderboard.
+    if (before + delta < 0) {
+      return res.status(400).json({ error: `That would take the total below zero. This entry currently has ${before} vote${before === 1 ? '' : 's'}.` });
+    }
+
+    await pool.query(
+      `INSERT INTO votes (entry_id, session_id, bundle_size, vote_day)
+       VALUES ($1, $2, $3, NULL)`,
+      [id, `admin-adjust:${crypto.randomUUID()}`, delta]
+    );
+
+    const after = before + delta;
+    await logActivity(req.user.id, 'entry_votes_adjusted',
+      `Adjusted votes for ${entry.rows[0].name || 'entry #' + id}`
+      + (entry.rows[0].entry_code ? ` (entry code ${entry.rows[0].entry_code})` : '')
+      + ` by ${delta > 0 ? '+' : ''}${delta}: ${before} -> ${after}. Reason: ${reason}`).catch(() => {});
+
+    res.json({
+      adjusted: true, before, after, delta,
+      message: `Vote total changed from ${before} to ${after}.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/admin/vote-bundles', requireRole('admin'), async (req, res, next) => {
   try {
     const conditions = [];

@@ -253,7 +253,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button type="button" class="nav-group-head"><span>Competition Management</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
         <a data-section="competitions">Competitions</a>
-        <a data-section="votebundles">Bulk Votes</a>
+        <a data-section="votebundles">Top 10</a>
       </div>
     </div>
 
@@ -1867,11 +1867,20 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
          standalone admin queue, independent of /payments admin, matching
          the standalone EFT flow this portal uses on the public side. -->
     <div class="admin-section" id="section-votebundles">
-      <div class="main-head"><div><h1>Bulk Votes</h1><p>Approve an EFT to add the votes to the leaderboard, reject one that never paid, or reverse a mistaken approval. Fully separate from the main Payments queue — Bulk Votes is its own portal end to end.</p></div></div>
+      <div class="main-head"><div><h1>Top 10</h1><p>The Top 10 competition end to end — every entry and its running vote total, and every vote purchase waiting to be approved. Approving an EFT adds the votes to the leaderboard; rejecting one that never paid adds nothing; reversing undoes a mistaken approval. Fully separate from the main Payments queue.</p></div></div>
+
       <div class="panel">
-        <div class="panel-head"><h3>Search & filter</h3></div>
+        <div class="panel-head"><h3>Entries</h3></div>
+        <div class="panel-body" style="padding:0;">
+          <p style="font-size:12.5px; color:var(--slate); padding:12px 16px 0; margin:0;">Each contestant's Entry Code is the Reference Code buyers use for their EFT when voting for them.</p>
+          <div id="t10EntriesBody" style="padding:0;">Loading…</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Search &amp; filter vote purchases</h3></div>
         <div class="panel-body" style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-          <div class="field" style="flex:1; min-width:200px;"><label for="vbSearch">Contestant, reference or entry code</label><input id="vbSearch" placeholder="Search…"></div>
+          <div class="field" style="flex:1; min-width:200px;"><label for="vbSearch">Contestant, Reference Code or entry code</label><input id="vbSearch" placeholder="Search…"></div>
           <div class="field"><label for="vbStatusFilter">Status</label><select id="vbStatusFilter">
             <option value="">All</option>
             <option value="awaiting_payment">Awaiting payment</option>
@@ -2513,7 +2522,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'gallerymgmt') loadGalleryAdmin();
     if (section === 'pricing') loadServicePricing();
     if (section === 'competitions') loadCompetitions();
-    if (section === 'votebundles') loadVoteBundlesAdmin();
+    if (section === 'votebundles') { loadTop10Entries(); loadVoteBundlesAdmin(); }
     if (section === 'editions') loadEditionsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
@@ -8719,6 +8728,108 @@ function compDateInputValue(ts) {
 const VB_STATUS_LABEL = {
   awaiting_payment: 'Awaiting payment', confirmed: 'Confirmed', rejected: 'Rejected', reversed: 'Reversed',
 };
+
+// ---------------------------------------------------------------------------
+// TOP 10 — the entries themselves, with their live vote totals.
+//
+// The purchases list below this answers "who has paid?"; this answers "where
+// does the competition actually stand?", which was previously only visible on
+// the public page. Vote totals are never stored — every count on the site is
+// the sum of the votes rows — so an adjustment here writes a correction row
+// rather than overwriting a number, and stays visible in the audit log.
+// ---------------------------------------------------------------------------
+async function loadTop10Entries() {
+  const body = document.getElementById('t10EntriesBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    // The Top 10 is a competition like any other, identified by its slug.
+    const comp = await api('/competitions/top-10');
+    const competitionId = comp.competition && comp.competition.id;
+    if (!competitionId) {
+      body.innerHTML = '<div class="empty-state">The Top 10 competition has not been set up yet.</div>';
+      return;
+    }
+    const data = await api(`/competitions/${competitionId}/entries/admin`);
+    const entries = data.entries || [];
+    if (!entries.length) {
+      body.innerHTML = '<div class="empty-state">No entries yet.</div>';
+      return;
+    }
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = '<th style="width:52px;"></th><th>Name</th><th>Entry Code</th><th>Votes</th><th>Status</th><th></th>';
+    table.appendChild(head);
+
+    entries.forEach((e) => {
+      const tr = document.createElement('tr');
+
+      const imgTd = document.createElement('td');
+      imgTd.innerHTML = e.image_url
+        ? `<img src="${escapeHtmlAdmin(e.image_url)}" alt="" style="width:40px; height:40px; border-radius:50%; object-fit:cover; background:var(--paper);">`
+        : '<div style="width:40px; height:40px; border-radius:50%; background:var(--paper);"></div>';
+      tr.appendChild(imgTd);
+
+      const nameTd = document.createElement('td');
+      nameTd.innerHTML = `<strong>${escapeHtmlAdmin(e.display_name || '—')}</strong>`
+        + (e.profile_slug ? `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(e.profile_slug)}</span>` : '');
+      tr.appendChild(nameTd);
+
+      const codeTd = document.createElement('td');
+      // Entry codes are only assigned once an entry is approved, so saying so
+      // is more use than an empty cell an admin would otherwise report as a bug.
+      codeTd.innerHTML = e.entry_code
+        ? `<code style="font-size:12px;">${escapeHtmlAdmin(e.entry_code)}</code>`
+        : '<span style="font-size:11.5px; color:var(--slate);">assigned on approval</span>';
+      tr.appendChild(codeTd);
+
+      const votesTd = document.createElement('td');
+      votesTd.innerHTML = `<strong style="font-size:15px;">${Number(e.vote_count).toLocaleString()}</strong>`;
+      tr.appendChild(votesTd);
+
+      const statusTd = document.createElement('td');
+      statusTd.textContent = e.status;
+      tr.appendChild(statusTd);
+
+      const actionTd = document.createElement('td');
+      actionTd.innerHTML = '<div class="row-actions"><button class="approve">Adjust votes</button></div>';
+      actionTd.querySelector('button').addEventListener('click', () => adjustTop10Votes(e));
+      tr.appendChild(actionTd);
+
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+// A reason is required by the endpoint, not just asked for politely here —
+// a vote total that changed with no recorded explanation is exactly the kind
+// of thing a losing contestant will ask about.
+async function adjustTop10Votes(entry) {
+  const raw = prompt(`Adjust votes for ${entry.display_name || 'this entry'}.\n\nCurrent total: ${entry.vote_count}\n\nEnter the change — for example 25 to add, or -25 to remove:`);
+  if (raw === null) return;
+  const delta = Number(String(raw).trim());
+  if (!Number.isInteger(delta) || delta === 0) {
+    showToast('Enter a whole number of votes, and not zero.', true);
+    return;
+  }
+  const reason = prompt('Why is this being adjusted? This is recorded in the audit log.');
+  if (reason === null) return;
+  if (!reason.trim()) { showToast('A reason is required.', true); return; }
+  try {
+    const res = await api(`/admin/entries/${entry.id}/adjust-votes`, {
+      method: 'POST', body: JSON.stringify({ delta, reason: reason.trim() }),
+    });
+    showToast(res.message || 'Votes adjusted.');
+    loadTop10Entries();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
 
 async function loadVoteBundlesAdmin() {
   const body = document.getElementById('vbBody');

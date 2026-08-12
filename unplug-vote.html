@@ -130,7 +130,7 @@ body{ min-height:100vh; }
         <option value="payfast" disabled>PayFast — coming soon</option>
         <option value="ozow" disabled>Ozow — coming soon</option>
       </select>
-      <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT — you'll get bank details and a reference to pay against.</p>
+      <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT — you'll get bank details and a Reference Code to pay against.</p>
     </div>
 
     <!-- MANDATORY TERMS & CONDITIONS GATE — unchecked by default, blocks
@@ -160,12 +160,12 @@ body{ min-height:100vh; }
          easy to close the tab on the one screen that carries the reference,
          and a payment with no reference cannot be matched to its votes. -->
     <div id="confirmBlock" style="margin-top:16px;">
-      <button class="btn btn-solid" id="confirmDetailsBtn" style="display:block; width:100%;">I have the banking details &amp; reference — Confirm</button>
+      <button class="btn btn-solid" id="confirmDetailsBtn" style="display:block; width:100%;">I have the banking details &amp; Reference Code — Confirm</button>
     </div>
     <div id="confirmedBlock" class="section-hidden" style="margin-top:16px;">
       <div style="border:2px solid var(--green, #2e7d32); background:#f2fbf3; border-radius:6px; padding:14px 16px;">
         <div style="font-weight:800; color:var(--green, #2e7d32); font-size:14px;">✓ Order confirmed</div>
-        <p style="font-size:13px; margin:6px 0 0; line-height:1.6;">Now make your EFT for <strong id="confirmedAmount"></strong> using reference <span class="ref" id="confirmedRef"></span>. Your votes are added once our team confirms the payment — usually within one business day.</p>
+        <p style="font-size:13px; margin:6px 0 0; line-height:1.6;">Now make your EFT for <strong id="confirmedAmount"></strong> using Reference Code <span class="ref" id="confirmedRef"></span>. Your votes are added once our team confirms the payment — usually within one business day.</p>
       </div>
       <div id="popHost" style="margin-top:14px;"></div>
       <a href="unplug-magazine.html?p=top10" class="btn btn-line" style="display:block; text-align:center; margin-top:14px;">Back to Top 10</a>
@@ -367,19 +367,24 @@ document.getElementById('payBtn').addEventListener('click', async () => {
       ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
       <b>Account Number:</b> ${i.accountNumber}<br>
       <b>Branch Code:</b> ${i.branchCode}<br>
-      <b>Reference:</b> <span class="ref">${i.reference}</span>
+      <b>Reference Code:</b> <span class="ref">${i.reference}</span>
       <button type="button" id="copyRefBtn" data-ref="${i.reference}" style="margin-left:8px; font-size:11px; padding:3px 9px; cursor:pointer; border:1px solid var(--paper-line); background:#fff;">Copy</button>
       <br><br>
       ${data.entryCode ? `<div style="border:2px solid var(--red); background:#fff6f6; border-radius:6px; padding:12px 14px; margin-bottom:12px;">
-        <div style="font-weight:800; color:var(--red); font-size:13px; letter-spacing:0.03em;">⚠️ USE THIS EXACT REFERENCE</div>
-        <p style="font-size:12.5px; margin:6px 0 0; line-height:1.55;">It begins with entry code <strong>${data.entryCode}</strong> — the contestant you are voting for — followed by a code unique to this order. Copy the whole reference; without it we cannot match your payment to your votes.</p>
+        <div style="font-weight:800; color:var(--red); font-size:13px; letter-spacing:0.03em;">⚠️ USE THIS EXACT REFERENCE CODE</div>
+        <p style="font-size:12.5px; margin:6px 0 0; line-height:1.55;">Your Reference Code is <strong>${data.entryCode}</strong> — the entry code of the contestant you are voting for. Use it exactly; without it we cannot match your payment to your votes.</p>
       </div>` : ''}
       ${i.note}`;
 
     // Held back until the details are confirmed — see #confirmBlock. Built
-    // here rather than in the markup so it carries this order's reference.
+    // here rather than in the markup so it carries this order's own handle.
+    //
+    // data-handle is the LOOKUP TOKEN, not the Reference Code. The Reference
+    // Code is now the contestant's entry code, which is printed publicly on
+    // the Top 10 page — so it identifies who the votes are for, and cannot
+    // also be the thing that proves this order is yours.
     document.getElementById('popHost').innerHTML = `
-      <div id="popUploadBlock" data-reference="${i.reference}" style="border-top:1px dashed var(--paper-line); padding-top:12px;">
+      <div id="popUploadBlock" data-handle="${data.lookupToken || i.reference}" style="border-top:1px dashed var(--paper-line); padding-top:12px;">
         <div style="font-weight:700; font-size:13px;">Already paid? Upload your proof of payment</div>
         <p style="font-size:12px; color:var(--slate); margin:4px 0 8px;">Optional — a screenshot or PDF from your banking app. It isn't required, but it helps us confirm your votes sooner.</p>
         <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" id="popUploadInput" style="font-size:12px;">
@@ -405,7 +410,7 @@ document.getElementById('confirmDetailsBtn').addEventListener('click', () => {
   document.getElementById('confirmBlock').classList.add('section-hidden');
   document.getElementById('confirmedBlock').classList.remove('section-hidden');
   document.getElementById('resultSuccess').textContent =
-    'Order confirmed — please make your EFT using the reference above.';
+    'Order confirmed — please make your EFT using the Reference Code above.';
   document.getElementById('confirmedBlock').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
 
@@ -437,8 +442,8 @@ document.addEventListener('click', async (e) => {
 
 // Proof-of-payment upload. Delegated because the block above only exists
 // once an order has been created. This portal has no login at all, so the
-// reference is the credential — PATCH /vote-bundles/:reference/proof
-// accepts it for exactly that reason (see routes/competitions.js).
+// order's LOOKUP TOKEN is the credential — not the Reference Code, which is
+// the contestant's publicly-listed entry code (see routes/competitions.js).
 document.addEventListener('change', async (e) => {
   const input = e.target.closest('#popUploadInput');
   if (!input || !input.files || !input.files[0]) return;
@@ -455,7 +460,7 @@ document.addEventListener('change', async (e) => {
     const uploaded = await uploadRes.json().catch(() => ({}));
     if (!uploadRes.ok) throw new Error(uploaded.error || 'Upload failed.');
 
-    const patchRes = await fetch(`${API_BASE}/vote-bundles/${encodeURIComponent(block.dataset.reference)}/proof`, {
+    const patchRes = await fetch(`${API_BASE}/vote-bundles/${encodeURIComponent(block.dataset.handle)}/proof`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: uploaded.url }),
