@@ -155,7 +155,21 @@ body{ min-height:100vh; }
     <h2>Payment Initiated</h2>
     <div class="success-banner" id="resultSuccess"></div>
     <div class="instructions-box" id="resultInstructions" style="font-size:13.5px; line-height:1.7;"></div>
-    <a href="unplug-magazine.html?p=top10" class="btn btn-line" style="display:block; text-align:center; margin-top:16px;">Back to Top 10</a>
+    <!-- The visitor confirms they have the banking details and reference
+         BEFORE the page offers them a way out. Without this gate it is very
+         easy to close the tab on the one screen that carries the reference,
+         and a payment with no reference cannot be matched to its votes. -->
+    <div id="confirmBlock" style="margin-top:16px;">
+      <button class="btn btn-solid" id="confirmDetailsBtn" style="display:block; width:100%;">I have the banking details &amp; reference — Confirm</button>
+    </div>
+    <div id="confirmedBlock" class="section-hidden" style="margin-top:16px;">
+      <div style="border:2px solid var(--green, #2e7d32); background:#f2fbf3; border-radius:6px; padding:14px 16px;">
+        <div style="font-weight:800; color:var(--green, #2e7d32); font-size:14px;">✓ Order confirmed</div>
+        <p style="font-size:13px; margin:6px 0 0; line-height:1.6;">Now make your EFT for <strong id="confirmedAmount"></strong> using reference <span class="ref" id="confirmedRef"></span>. Your votes are added once our team confirms the payment — usually within one business day.</p>
+      </div>
+      <div id="popHost" style="margin-top:14px;"></div>
+      <a href="unplug-magazine.html?p=top10" class="btn btn-line" style="display:block; text-align:center; margin-top:14px;">Back to Top 10</a>
+    </div>
   </div>
 
 </div>
@@ -250,6 +264,14 @@ document.getElementById('codeSubmitBtn').addEventListener('click', async () => {
 });
 
 function resolveEntry(entry) {
+  // A malformed entry used to sail through and surface as "Bulk Votes —
+  // undefined", then fail at checkout because the id was undefined too.
+  // Refusing it here keeps the visitor on the find screen, where they can
+  // still search or type the entry code.
+  if (!entry || !entry.id) {
+    showError('codeError', 'That contestant could not be loaded — please search for them by name or entry code.');
+    return;
+  }
   RESOLVED_ENTRY = entry;
   document.getElementById('findCard').classList.add('section-hidden');
   document.getElementById('tierCard').classList.remove('section-hidden');
@@ -352,18 +374,39 @@ document.getElementById('payBtn').addEventListener('click', async () => {
         <div style="font-weight:800; color:var(--red); font-size:13px; letter-spacing:0.03em;">⚠️ USE THIS EXACT REFERENCE</div>
         <p style="font-size:12.5px; margin:6px 0 0; line-height:1.55;">It begins with entry code <strong>${data.entryCode}</strong> — the contestant you are voting for — followed by a code unique to this order. Copy the whole reference; without it we cannot match your payment to your votes.</p>
       </div>` : ''}
-      ${i.note}
-      <div id="popUploadBlock" data-reference="${i.reference}" style="margin-top:14px; border-top:1px dashed var(--paper-line); padding-top:12px;">
+      ${i.note}`;
+
+    // Held back until the details are confirmed — see #confirmBlock. Built
+    // here rather than in the markup so it carries this order's reference.
+    document.getElementById('popHost').innerHTML = `
+      <div id="popUploadBlock" data-reference="${i.reference}" style="border-top:1px dashed var(--paper-line); padding-top:12px;">
         <div style="font-weight:700; font-size:13px;">Already paid? Upload your proof of payment</div>
         <p style="font-size:12px; color:var(--slate); margin:4px 0 8px;">Optional — a screenshot or PDF from your banking app. It isn't required, but it helps us confirm your votes sooner.</p>
         <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" id="popUploadInput" style="font-size:12px;">
         <div id="popUploadStatus" style="font-size:12px; margin-top:6px; min-height:16px;"></div>
       </div>`;
+    document.getElementById('confirmedRef').textContent = i.reference;
+    document.getElementById('confirmedAmount').textContent = 'R' + Number(SELECTED_TIER.price).toFixed(2);
+    // Reset the gate in case an earlier order was placed in this same visit.
+    document.getElementById('confirmBlock').classList.remove('section-hidden');
+    document.getElementById('confirmedBlock').classList.add('section-hidden');
   } catch (err) {
     showError('paymentError', err.message || 'Could not start this purchase — please try again.');
   } finally {
     btn.disabled = false; btn.textContent = 'Complete Order';
   }
+});
+
+// The confirm gate. Nothing is sent to the server here — the order already
+// exists at this point, and its reference was generated when it was created.
+// This step exists so the visitor has to acknowledge the banking details and
+// reference before the page shows them a way out.
+document.getElementById('confirmDetailsBtn').addEventListener('click', () => {
+  document.getElementById('confirmBlock').classList.add('section-hidden');
+  document.getElementById('confirmedBlock').classList.remove('section-hidden');
+  document.getElementById('resultSuccess').textContent =
+    'Order confirmed — please make your EFT using the reference above.';
+  document.getElementById('confirmedBlock').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
 
 // Copy the reference. Typing a 15-character reference into a banking app by
@@ -434,10 +477,18 @@ document.addEventListener('change', async (e) => {
 const PARAMS = new URLSearchParams(window.location.search);
 const directId = PARAMS.get('id');
 if (directId) {
-  api('/entries/' + encodeURIComponent(directId)).then(resolveEntry).catch(() => {
-    // Fall through to the normal find-by-search/code screen — a bad or
-    // stale id is not a dead end, just a slightly longer path.
-  });
+  // .entry, not the whole response — GET /entries/:id returns { entry }.
+  // Passing the wrapper straight to resolveEntry left every field undefined,
+  // so arriving from the Top 10 "Buy Bulk Votes" button showed
+  // "Bulk Votes — undefined" and then failed at checkout, because the id it
+  // posted to was undefined too. The by-code path above always unwrapped
+  // correctly, which is why only this entry point was broken.
+  api('/entries/' + encodeURIComponent(directId))
+    .then((data) => resolveEntry(data.entry))
+    .catch(() => {
+      // Fall through to the normal find-by-search/code screen — a bad or
+      // stale id is not a dead end, just a slightly longer path.
+    });
 }
 </script>
 <script src="accessibility.js" defer></script>
