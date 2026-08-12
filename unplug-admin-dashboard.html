@@ -343,9 +343,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- APPROVAL QUEUE -->
     <div class="admin-section" id="section-queue">
-      <div class="main-head"><div><h1>Approval Queue</h1><p>Live data from the Unplug API — approve or reject moves it immediately.</p></div></div>
+      <div class="main-head"><div><h1>Approval Queue</h1><p>Everything on the site waiting for a decision, in one list — content, services, payments and access requests. Each row carries its reference code so you can match it to an EFT on your bank statement.</p></div></div>
       <div class="panel">
-        <div class="queue-tabs" id="queueTabs"></div>
+        <div class="panel-body" style="padding:12px 16px; border-bottom:1px solid var(--paper-line);">
+          <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+            <input id="aqSearch" placeholder="Search reference, name, email…" style="flex:1; min-width:220px; padding:7px 10px; font-size:13px;">
+            <label style="font-size:12px; color:var(--slate);">From <input type="date" id="aqFrom" style="font-size:12.5px; padding:5px;"></label>
+            <label style="font-size:12px; color:var(--slate);">To <input type="date" id="aqTo" style="font-size:12.5px; padding:5px;"></label>
+            <button class="btn btn-line" id="aqSearchBtn" style="width:auto; padding:6px 14px;">Search</button>
+            <button class="btn btn-line" id="aqResetBtn" style="width:auto; padding:6px 14px;">Reset</button>
+          </div>
+          <div id="aqChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;"></div>
+        </div>
         <div id="queueBulkBar" style="display:none; padding:10px 16px; background:var(--paper); border-bottom:1px solid var(--paper-line); align-items:center; gap:10px; font-size:13px;">
           <span id="queueBulkCount">0 selected</span>
           <button class="approve" id="queueBulkApproveBtn" style="padding:5px 12px;">Approve Selected</button>
@@ -353,6 +362,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <button class="btn btn-line" id="queueBulkClearBtn" style="width:auto; padding:5px 12px;">Clear</button>
         </div>
         <div class="panel-body" id="queueBody" style="padding:0;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Directory management</h3></div>
+        <div class="panel-body" style="padding:0;">
+          <div class="queue-tabs" id="queueTabs"></div>
+          <div id="dirMgmtBody" style="padding:0;"></div>
+        </div>
       </div>
     </div>
 
@@ -2132,10 +2149,10 @@ function enterDashboard(user){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appShell').classList.add('active');
   // Dashboard Overview is the default screen now, so it needs data on first
-  // paint too — loadQueueTab stays as a cheap prefetch for when the admin
-  // clicks through to the queue.
+  // paint too — the queue is prefetched so its waiting count is known before
+  // the admin clicks through to it.
   loadOverview();
-  loadQueueTab('news');
+  loadApprovalQueue();
   refreshNotifBadge();
   // Fill the comments badge up front so a waiting queue is visible without
   // having to open the section first.
@@ -2486,6 +2503,9 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (parentGroup) parentGroup.classList.add('open');
     if (window.innerWidth > 800) window.scrollTo({ top: 0, behavior: 'smooth' });
     if (section === 'overview') loadOverview();
+    // The queue and the directory-management views below it are two different
+    // questions on one screen, so both load when the screen opens.
+    if (section === 'queue') { loadApprovalQueue(); loadQueueTab('approvedProfiles'); }
     if (section === 'manage') loadManageContent();
     if (section === 'highlights') loadHighlightsAdmin();
     if (section === 'covers') loadCoverManager();
@@ -2642,35 +2662,24 @@ async function loadOverview() {
 // Approval Queue — one config object per tab, so adding a new content
 // type later is just one more entry here, not new rendering code.
 // ---------------------------------------------------------------------------
+// The Approval Queue itself is now one unified list served by
+// /admin/approval-queue (see loadApprovalQueue below). What survives here are
+// the two DIRECTORY MANAGEMENT views that were never approval decisions at
+// all — they list listings that are already approved, for verifying,
+// featuring and renewing. Folding those into a queue of things awaiting a
+// decision would have meant an admin scrolling past live listings to find
+// the one submission actually waiting for them.
 const QUEUE_TABS = {
-  news: {
-    label: 'Latest News', listPath: '/admin/articles/pending', resource: 'articles',
-    columns: [
-      { header: 'Title', render: (r) => r.title },
-      { header: 'Supplied By', render: (r) => r.kicker_supplied_by || '—' },
-      { header: 'Category', render: (r) => r.category || '—' },
-      { header: 'Submitted By', render: (r) => r.submitted_by },
-    ],
-  },
-  directory: {
-    label: 'Directory', listPath: '/admin/profiles/pending', resource: 'profiles',
-    columns: [
-      { header: 'Name', render: (r) => r.display_name },
-      { header: 'Package', render: (r) => r.package_tier },
-      { header: 'Category', render: (r) => r.category || '—' },
-      { header: 'Submitted By', render: (r) => r.submitted_by },
-    ],
-  },
   approvedProfiles: {
-    label: 'Approved Profiles', listPath: '/admin/profiles/approved', resource: 'profiles', actions: ['verify', 'deaf-owned', 'feature', 'renew'],
+    label: 'Approved Listings', listPath: '/admin/profiles/approved', resource: 'profiles', actions: ['verify', 'deaf-owned', 'feature', 'renew'],
     columns: [
       { header: 'Name', render: (r) => r.display_name },
       { header: 'Type', render: (r) => r.type },
       { header: 'Package', render: (r) => r.package_tier },
       { header: 'Category', render: (r) => r.category || '—' },
       { header: 'Verified', render: (r) => r.verified ? 'Yes' : 'No' },
-      { header: 'Deaf-Owned', render: (r) => r.deaf_owned_verified ? '🤟 Yes' : 'No' },
-      { header: 'Featured', render: (r) => r.is_featured ? '⭐ Yes' : 'No' },
+      { header: 'Deaf-Owned', render: (r) => r.deaf_owned_verified ? 'Yes' : 'No' },
+      { header: 'Featured', render: (r) => r.is_featured ? 'Yes' : 'No' },
       { header: 'Renews', render: (r) => r.renews_at ? new Date(r.renews_at).toLocaleDateString() : '—' },
     ],
   },
@@ -2682,54 +2691,6 @@ const QUEUE_TABS = {
       { header: 'Package', render: (r) => r.package_tier },
       { header: 'Contact Email', render: (r) => r.contact_email },
       { header: 'Renews On', render: (r) => new Date(r.renews_at).toLocaleDateString() },
-    ],
-  },
-  gallery: {
-    label: 'Gallery', listPath: '/admin/gallery/pending', resource: 'gallery',
-    columns: [
-      { header: 'Caption', render: (r) => r.caption || '—' },
-      { header: 'Supplied By', render: (r) => r.supplied_by || '—' },
-      { header: 'Type', render: (r) => r.owner_type },
-    ],
-  },
-  events: {
-    label: 'Events', listPath: '/admin/events/pending', resource: 'events',
-    columns: [
-      { header: 'Name', render: (r) => r.name },
-      { header: 'Date', render: (r) => r.event_date },
-      { header: 'Venue', render: (r) => r.venue || '—' },
-      { header: 'Organizer', render: (r) => r.organizer },
-    ],
-  },
-  competitions: {
-    label: 'Competitions', listPath: '/admin/entries/pending', resource: 'entries',
-    columns: [
-      { header: 'Entrant', render: (r) => r.display_name },
-      { header: 'Competition', render: (r) => r.competition_name },
-      { header: 'Entry Fee', render: (r) => 'R' + r.entry_fee },
-    ],
-  },
-  investors: {
-    label: 'Investors', listPath: '/admin/investors/pending', resource: 'investors',
-    columns: [
-      { header: 'Name', render: (r) => r.name },
-      { header: 'Contact', render: (r) => r.contact_email || '—' },
-      { header: 'Submitted By', render: (r) => r.submitted_by },
-    ],
-  },
-  marketplace: {
-    label: 'Marketplace', listPath: '/admin/marketplace/pending', resource: 'marketplace',
-    columns: [
-      { header: 'Business', render: (r) => r.business_name },
-      { header: 'Headline', render: (r) => r.headline || '—' },
-      { header: 'Duration', render: (r) => r.duration_days + ' days' },
-    ],
-  },
-  highlights: {
-    label: 'Highlights', listPath: '/admin/highlights/pending', resource: 'highlights',
-    columns: [
-      { header: 'Target', render: (r) => r.target_type + ' #' + r.target_id },
-      { header: 'Duration', render: (r) => r.duration_days + ' days' },
     ],
   },
 };
@@ -2751,25 +2712,15 @@ Object.entries(QUEUE_TABS).forEach(([key, cfg], i) => {
 // Bulk selection state — cleared on every tab load, since selecting rows
 // across a tab switch would silently "approve" items the admin never
 // actually looked at on screen.
-let QUEUE_SELECTED_IDS = new Set();
-let QUEUE_BULK_CFG = null;
-let QUEUE_BULK_KEY = null;
-
+// Both remaining views act on already-approved listings with per-row actions
+// (verify / deaf-owned / feature / renew). None of those has a single obvious
+// meaning in bulk, so bulk select belongs to the Approval Queue above and not
+// here — leaving the machinery wired up to both would have meant a selection
+// made in one list being acted on by the other's buttons.
 async function loadQueueTab(key) {
   const cfg = QUEUE_TABS[key];
-  const body = document.getElementById('queueBody');
+  const body = document.getElementById('dirMgmtBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
-  QUEUE_SELECTED_IDS = new Set();
-  QUEUE_BULK_CFG = cfg;
-  QUEUE_BULK_KEY = key;
-  updateQueueBulkBar();
-
-  // Bulk select only applies to the plain approve/reject tabs — tabs with
-  // their own custom action set (cfg.actions, e.g. "Approved Profiles":
-  // verify/deaf-owned/renew) don't have a single obvious meaning for
-  // "bulk approve", so they keep the existing per-row-only buttons.
-  const bulkCapable = !cfg.actions;
-
   try {
     const data = await api(cfg.listPath);
     const rows = data[Object.keys(data)[0]]; // each endpoint's single top-level array
@@ -2780,12 +2731,6 @@ async function loadQueueTab(key) {
 
     const table = document.createElement('table');
     const thead = document.createElement('tr');
-    if (bulkCapable) {
-      const th = document.createElement('th');
-      th.style.width = '32px';
-      th.innerHTML = '<input type="checkbox" id="queueSelectAllChk" aria-label="Select all">';
-      thead.appendChild(th);
-    }
     cfg.columns.forEach((c) => {
       const th = document.createElement('th');
       th.textContent = c.header;
@@ -2796,15 +2741,6 @@ async function loadQueueTab(key) {
 
     rows.forEach((row) => {
       const tr = document.createElement('tr');
-      if (bulkCapable) {
-        const chkTd = document.createElement('td');
-        chkTd.innerHTML = `<input type="checkbox" class="queueRowChk" value="${row.id}" aria-label="Select this row">`;
-        chkTd.querySelector('input').addEventListener('change', (e) => {
-          if (e.target.checked) QUEUE_SELECTED_IDS.add(row.id); else QUEUE_SELECTED_IDS.delete(row.id);
-          updateQueueBulkBar();
-        });
-        tr.appendChild(chkTd);
-      }
       cfg.columns.forEach((c) => {
         const td = document.createElement('td');
         td.textContent = c.render(row);
@@ -2838,31 +2774,34 @@ async function loadQueueTab(key) {
     body.innerHTML = '';
     body.appendChild(table);
 
-    if (bulkCapable) {
-      document.getElementById('queueSelectAllChk').addEventListener('change', (e) => {
-        rows.forEach((row) => { if (e.target.checked) QUEUE_SELECTED_IDS.add(row.id); else QUEUE_SELECTED_IDS.delete(row.id); });
-        table.querySelectorAll('.queueRowChk').forEach((chk) => { chk.checked = e.target.checked; });
-        updateQueueBulkBar();
-      });
-    }
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
 
+// ---------------------------------------------------------------------------
+// THE APPROVAL QUEUE — one list, every pending decision on the site.
+//
+// Reads GET /admin/approval-queue, which merges seventeen sources server-side
+// and hands back, per row, the endpoint that already knows how to approve or
+// reject that kind of thing. This function never decides what approving means
+// for a given type; it calls what the server named. That is what stops a
+// second, subtly different approval path growing in the frontend.
+// ---------------------------------------------------------------------------
+let AQ_SELECTED = new Map(); // key -> row, so a selection survives re-renders
+let AQ_ACTIVE_TYPES = new Set();
+let AQ_LAST_ROWS = [];
+
 function updateQueueBulkBar() {
   const bar = document.getElementById('queueBulkBar');
-  const n = QUEUE_SELECTED_IDS.size;
-  if (n === 0) {
-    bar.style.display = 'none';
-    return;
-  }
+  const n = AQ_SELECTED.size;
+  if (n === 0) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
   document.getElementById('queueBulkCount').textContent = `${n} selected`;
 }
 
 document.getElementById('queueBulkClearBtn').addEventListener('click', () => {
-  QUEUE_SELECTED_IDS = new Set();
+  AQ_SELECTED = new Map();
   document.querySelectorAll('.queueRowChk').forEach((chk) => { chk.checked = false; });
   const selectAll = document.getElementById('queueSelectAllChk');
   if (selectAll) selectAll.checked = false;
@@ -2872,17 +2811,26 @@ document.getElementById('queueBulkClearBtn').addEventListener('click', () => {
 document.getElementById('queueBulkApproveBtn').addEventListener('click', () => bulkActOnQueueItems('approve'));
 document.getElementById('queueBulkRejectBtn').addEventListener('click', () => bulkActOnQueueItems('reject'));
 
-// Runs the SAME per-item endpoint the single Approve/Reject buttons use, in
-// sequence, one item at a time — never Promise.all, so a slow or failing
-// item can't be lost in a burst of concurrent requests and the admin gets
-// an accurate "X succeeded, Y failed" count at the end rather than a
-// half-applied batch with no way to tell which ones landed.
+// Performs one row's approve/reject by calling the endpoint the server named
+// for it. What that endpoint does — publishing the article, allocating the
+// votes, releasing the download — stays where it already lives and is tested.
+async function aqRunAction(row, which) {
+  const action = row.actions && row.actions[which];
+  if (!action) throw new Error('That action is not available for this item.');
+  return api(action.path, {
+    method: action.method,
+    ...(action.body ? { body: JSON.stringify(action.body) } : {}),
+  });
+}
+
+// Runs the SAME per-item endpoints the single buttons use, in sequence, one
+// item at a time — never Promise.all, so a slow or failing item can't be lost
+// in a burst of concurrent requests and the admin gets an accurate
+// "X succeeded, Y failed" count rather than a half-applied batch.
 async function bulkActOnQueueItems(action) {
-  const cfg = QUEUE_BULK_CFG;
-  const key = QUEUE_BULK_KEY;
-  const ids = Array.from(QUEUE_SELECTED_IDS);
-  if (!ids.length) return;
-  if (!confirm(`${action === 'approve' ? 'Approve' : 'Reject'} ${ids.length} item${ids.length > 1 ? 's' : ''}? This cannot be undone in bulk.`)) return;
+  const rows = Array.from(AQ_SELECTED.values());
+  if (!rows.length) return;
+  if (!confirm(`${action === 'approve' ? 'Approve' : 'Reject'} ${rows.length} item${rows.length > 1 ? 's' : ''}? This cannot be undone in bulk.`)) return;
 
   const approveBtn = document.getElementById('queueBulkApproveBtn');
   const rejectBtn = document.getElementById('queueBulkRejectBtn');
@@ -2890,27 +2838,215 @@ async function bulkActOnQueueItems(action) {
 
   let succeeded = 0;
   const failures = [];
-  for (const id of ids) {
-    try {
-      // Bulk approve never prompts for a per-article publish date (unlike
-      // the single-row Approve button) — asking that question once per
-      // selected item would mean N blocking prompts in a row. Bulk-approved
-      // articles simply go live immediately.
-      await api(`/admin/${cfg.resource}/${id}/${action}`, { method: 'PATCH' });
-      succeeded++;
-    } catch (err) {
-      failures.push({ id, message: err.message });
-    }
+  for (const row of rows) {
+    try { await aqRunAction(row, action); succeeded++; }
+    catch (err) { failures.push({ label: row.title, message: err.message }); }
   }
 
   approveBtn.disabled = false; rejectBtn.disabled = false;
+  AQ_SELECTED = new Map();
   if (failures.length === 0) {
     showToast(`${succeeded} item${succeeded === 1 ? '' : 's'} ${action}d.`);
   } else {
-    showToast(`${succeeded} ${action}d, ${failures.length} failed (${failures.map((f) => `#${f.id}: ${f.message}`).join('; ')}).`, true);
+    showToast(`${succeeded} ${action}d, ${failures.length} failed (${failures.map((f) => `${f.label}: ${f.message}`).join('; ')}).`, true);
   }
-  loadQueueTab(key);
+  loadApprovalQueue();
 }
+
+// Only the types that pay through the services portal can be declined with a
+// credit — the rest either aren't payable at all, or settle through their own
+// portal where handing money back is a different action entirely.
+const AQ_CREDIT_RESOURCE = {
+  article: 'articles', event: 'events', gallery: 'gallery',
+  directory_profile: 'profiles', competition_entry: 'entries',
+  top10_entry: 'top10-entries', marketplace: 'marketplace',
+  article_highlight: 'highlights', directory_highlight: 'highlights',
+};
+
+const AQ_GROUP_COLOUR = {
+  content: '#2e6da4', service: '#7a5a00', payment: '#1f7a3d', access: '#6b3fa0',
+};
+
+function aqPaymentColour(label) {
+  if (label === 'Paid') return 'var(--green, #2e7d32)';
+  if (label === 'Payment failed') return 'var(--red)';
+  if (label === 'Not payable') return 'var(--slate)';
+  return '#a15c00';
+}
+
+async function loadApprovalQueue() {
+  const body = document.getElementById('queueBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  AQ_SELECTED = new Map();
+  updateQueueBulkBar();
+
+  const params = new URLSearchParams();
+  if (AQ_ACTIVE_TYPES.size) params.set('type', Array.from(AQ_ACTIVE_TYPES).join(','));
+  const q = document.getElementById('aqSearch').value.trim();
+  const from = document.getElementById('aqFrom').value;
+  const to = document.getElementById('aqTo').value;
+  if (q) params.set('q', q);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+
+  try {
+    const data = await api('/admin/approval-queue' + (params.toString() ? '?' + params.toString() : ''));
+    AQ_LAST_ROWS = data.items || [];
+    aqRenderChips(data);
+
+    // A source that failed is named rather than hidden. A queue that quietly
+    // drops a whole category is worse than one that admits it lost one.
+    let warning = '';
+    if (data.problems && data.problems.length) {
+      warning = '<div style="padding:10px 16px; background:#fff4f4; color:var(--red); font-size:12.5px;">'
+        + 'Some categories could not be loaded: ' + escapeHtmlAdmin(data.problems.map((p) => p.type).join(', '))
+        + '. Everything else below is complete.</div>';
+    }
+
+    if (!AQ_LAST_ROWS.length) {
+      body.innerHTML = warning + '<div class="empty-state">Nothing is waiting for a decision right now.</div>';
+      return;
+    }
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = '<th style="width:32px;"><input type="checkbox" id="queueSelectAllChk" aria-label="Select all"></th>'
+      + '<th>Type</th><th>Item</th><th>Customer</th><th>Reference Code</th>'
+      + '<th>Payment</th><th>Status</th><th>Submitted</th><th>Files</th><th></th>';
+    table.appendChild(head);
+
+    AQ_LAST_ROWS.forEach((row) => {
+      const tr = document.createElement('tr');
+
+      const chkTd = document.createElement('td');
+      chkTd.innerHTML = '<input type="checkbox" class="queueRowChk" aria-label="Select this row">';
+      chkTd.querySelector('input').addEventListener('change', (e) => {
+        if (e.target.checked) AQ_SELECTED.set(row.key, row); else AQ_SELECTED.delete(row.key);
+        updateQueueBulkBar();
+      });
+      tr.appendChild(chkTd);
+
+      const typeTd = document.createElement('td');
+      typeTd.innerHTML = `<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:10.5px; background:${AQ_GROUP_COLOUR[row.group] || '#555'}; color:#fff; white-space:nowrap;">${escapeHtmlAdmin(row.typeLabel)}</span>`;
+      tr.appendChild(typeTd);
+
+      const itemTd = document.createElement('td');
+      itemTd.innerHTML = `<strong>${escapeHtmlAdmin(String(row.title || '—'))}</strong>`
+        + (row.subtitle ? `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(String(row.subtitle).slice(0, 90))}</span>` : '');
+      tr.appendChild(itemTd);
+
+      const custTd = document.createElement('td');
+      custTd.innerHTML = escapeHtmlAdmin(row.customerName || '—')
+        + (row.customerEmail ? `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(row.customerEmail)}</span>` : '');
+      tr.appendChild(custTd);
+
+      const refTd = document.createElement('td');
+      refTd.innerHTML = row.reference
+        ? `<code style="font-size:11.5px;">${escapeHtmlAdmin(row.reference)}</code>`
+        : '<span style="color:var(--slate);">—</span>';
+      tr.appendChild(refTd);
+
+      const payTd = document.createElement('td');
+      payTd.innerHTML = `<span style="color:${aqPaymentColour(row.paymentStatus)};">${escapeHtmlAdmin(row.paymentStatus)}</span>`
+        + (row.amount !== null && row.amount !== undefined ? `<br><span style="font-size:11.5px; color:var(--slate);">R${Number(row.amount).toFixed(2)}</span>` : '');
+      tr.appendChild(payTd);
+
+      const statusTd = document.createElement('td');
+      statusTd.textContent = row.itemStatus || '—';
+      tr.appendChild(statusTd);
+
+      const dateTd = document.createElement('td');
+      dateTd.textContent = row.submittedAt ? new Date(row.submittedAt).toLocaleDateString() : '—';
+      tr.appendChild(dateTd);
+
+      const filesTd = document.createElement('td');
+      filesTd.innerHTML = row.files.length
+        ? row.files.map((f) => `<a href="${escapeHtmlAdmin(f.url)}" target="_blank" rel="noopener" style="font-size:11.5px;">${escapeHtmlAdmin(f.label)}</a>`).join('<br>')
+        : '<span style="color:var(--slate);">—</span>';
+      tr.appendChild(filesTd);
+
+      const actionTd = document.createElement('td');
+      actionTd.innerHTML = '<div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div>';
+      actionTd.querySelector('.approve').addEventListener('click', async () => {
+        try {
+          const res = await aqRunAction(row, 'approve');
+          showToast((res && res.message) || `${row.typeLabel} approved.`);
+          loadApprovalQueue();
+        } catch (err) { showToast(err.message, true); }
+      });
+      actionTd.querySelector('.reject').addEventListener('click', async () => {
+        if (!confirm(`Reject this ${row.typeLabel.toLowerCase()}?`)) return;
+        try {
+          const res = await aqRunAction(row, 'reject');
+          showToast((res && res.message) || `${row.typeLabel} rejected.`);
+          loadApprovalQueue();
+        } catch (err) { showToast(err.message, true); }
+      });
+      const creditResource = AQ_CREDIT_RESOURCE[row.type];
+      if (creditResource) {
+        addDeclineWithCreditButton(actionTd.querySelector('.row-actions'), creditResource, row.id, loadApprovalQueue);
+      }
+      tr.appendChild(actionTd);
+
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = warning;
+    body.appendChild(table);
+
+    document.getElementById('queueSelectAllChk').addEventListener('change', (e) => {
+      AQ_LAST_ROWS.forEach((row) => { if (e.target.checked) AQ_SELECTED.set(row.key, row); else AQ_SELECTED.delete(row.key); });
+      table.querySelectorAll('.queueRowChk').forEach((chk) => { chk.checked = e.target.checked; });
+      updateQueueBulkBar();
+    });
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+// Filter chips. The counts come from the same response as the rows, so the
+// number on a chip is always exactly what clicking it will show.
+function aqRenderChips(data) {
+  const wrap = document.getElementById('aqChips');
+  const counts = data.counts || {};
+  const chip = (label, active, onClick, count) => {
+    const b = document.createElement('button');
+    b.className = 'btn btn-line';
+    b.style.cssText = `width:auto; padding:4px 11px; font-size:11.5px; ${active ? 'background:var(--ink); color:#fff;' : ''}`;
+    b.textContent = count === undefined ? label : `${label} (${count})`;
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  wrap.innerHTML = '';
+  wrap.appendChild(chip('All', AQ_ACTIVE_TYPES.size === 0, () => {
+    AQ_ACTIVE_TYPES = new Set();
+    loadApprovalQueue();
+  }, data.total));
+
+  // Every type is offered, not only the ones with rows right now — an admin
+  // asking "did any page banners come in?" needs to be able to ask, and a
+  // chip that disappears when the answer is zero cannot be clicked.
+  (data.types || []).forEach((t) => {
+    const n = counts[t.key] || 0;
+    const active = AQ_ACTIVE_TYPES.has(t.key);
+    const b = chip(t.label, active, () => {
+      if (AQ_ACTIVE_TYPES.has(t.key)) AQ_ACTIVE_TYPES.delete(t.key); else AQ_ACTIVE_TYPES.add(t.key);
+      loadApprovalQueue();
+    }, n);
+    if (!n && !active) b.style.opacity = '0.5';
+    wrap.appendChild(b);
+  });
+}
+
+document.getElementById('aqSearchBtn').addEventListener('click', loadApprovalQueue);
+document.getElementById('aqSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadApprovalQueue(); });
+document.getElementById('aqResetBtn').addEventListener('click', () => {
+  document.getElementById('aqSearch').value = '';
+  document.getElementById('aqFrom').value = '';
+  document.getElementById('aqTo').value = '';
+  AQ_ACTIVE_TYPES = new Set();
+  loadApprovalQueue();
+});
 
 // "Decline & credit R…" — the decline path from the Refund & Cancellation
 // Policy. Rejecting alone keeps the member's money for something we refused to
@@ -4253,7 +4389,7 @@ async function artSave(asDraft) {
       : `Saved as ${a.status} — not visible on the public site yet.`;
     showToast(res.message || 'Saved.');
     artLoadPickList();
-    loadQueueTab('news');
+    loadApprovalQueue();
   } catch (err) {
     note.textContent = '';
     showToast(err.message, true);
@@ -4289,7 +4425,7 @@ document.getElementById('artDeleteBtn').addEventListener('click', async () => {
     showToast('Article deleted.');
     artReset();
     artLoadPickList();
-    loadQueueTab('news');
+    loadApprovalQueue();
   } catch (err) {
     showToast(err.message, true);
   }
