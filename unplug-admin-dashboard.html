@@ -261,6 +261,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button type="button" class="nav-group-head"><span>User Management</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
         <a data-section="users">Users</a>
+        <a data-section="myunplug">My Unplug</a>
         <a data-section="consultants">Sales Consultants</a>
       </div>
     </div>
@@ -555,6 +556,55 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
          standalone payments, cart orders and anonymous Bulk Votes bundles
          into one searchable list. Approve/Reject route back to each
          portal's own existing endpoint rather than a new parallel one. -->
+    <!-- MY UNPLUG — members' community identities plus adoption analytics.
+         Separate from Directory listings, which are managed under Profiles. -->
+    <div class="admin-section" id="section-myunplug">
+      <div class="main-head"><div><h1>My Unplug</h1><p>Members' community identities — who they are on Unplug. Separate from Directory listings, which are what they offer and where they can be found.</p></div></div>
+
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-head"><h3>Adoption</h3></div>
+        <div class="panel-body" id="muaTotals"><div class="empty-state">Loading…</div></div>
+      </div>
+
+      <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-head"><h3>Where members drop off</h3></div>
+        <div class="panel-body" id="muaFunnel"><div class="empty-state">Loading…</div></div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:20px; margin-bottom:20px;">
+        <div class="panel">
+          <div class="panel-head"><h3>Profile completion</h3></div>
+          <div class="panel-body" id="muaCompletion"><div class="empty-state">Loading…</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Most popular</h3></div>
+          <div class="panel-body" id="muaTaxonomy"><div class="empty-state">Loading…</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>By province</h3></div>
+          <div class="panel-body" id="muaGeography"><div class="empty-state">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Profiles</h3></div>
+        <div class="panel-body">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+            <div style="flex:2; min-width:200px;"><label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:4px;">Search</label><input id="muaSearch" placeholder="@username, display name or email" style="width:100%; padding:8px 10px; border:1px solid var(--paper-line); font-size:13px;"></div>
+            <div style="flex:1; min-width:130px;"><label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:4px;">Visibility</label>
+              <select id="muaStatus" style="width:100%; padding:8px 10px; border:1px solid var(--paper-line); font-size:13px;">
+                <option value="">All</option>
+                <option value="published">Published</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+            <button class="btn btn-solid" style="width:auto;" id="muaSearchBtn">Search</button>
+          </div>
+        </div>
+        <div class="panel-body" id="muaBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <div class="admin-section" id="section-payqueue">
       <div class="main-head"><div><h1>All Payments</h1><p>Every payment across all three portals in one place — Services, Cart Orders and Bulk Votes. Search by reference, customer or contestant.</p></div></div>
       <div class="panel">
@@ -2086,6 +2136,148 @@ const PQ_STATUS_LABELS = {
   confirmed: 'Confirmed', rejected: 'Rejected', reversed: 'Reversed', failed: 'Failed',
 };
 
+// ---------------------------------------------------------------------------
+// MY UNPLUG — admin management + adoption analytics (routes/adminMyUnplug.js).
+// Every figure comes from live rows; there is no demo data anywhere here, so
+// an empty ecosystem correctly reads zero rather than looking healthy.
+// ---------------------------------------------------------------------------
+function muaStat(label, value, sub) {
+  return `<div style="flex:1; min-width:130px;">
+    <div style="font-family:'Playfair Display',serif; font-size:26px; font-weight:700;">${escapeHtmlAdmin(String(value))}</div>
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);">${escapeHtmlAdmin(label)}</div>
+    ${sub ? `<div style="font-size:11.5px; color:var(--slate); margin-top:2px;">${escapeHtmlAdmin(sub)}</div>` : ''}
+  </div>`;
+}
+
+function muaBarRows(rows, labelKey, countKey) {
+  if (!rows.length) return '<div class="empty-state">Nothing yet.</div>';
+  const max = Math.max(...rows.map((r) => Number(r[countKey]) || 0), 1);
+  return rows.map((r) => {
+    const n = Number(r[countKey]) || 0;
+    return `<div style="margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px;">
+        <span>${escapeHtmlAdmin(String(r[labelKey]))}</span><strong>${n}</strong>
+      </div>
+      <div style="height:6px; background:var(--paper-line); border-radius:3px; overflow:hidden;">
+        <div style="height:100%; width:${Math.round((n / max) * 100)}%; background:var(--red);"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadMyUnplugAnalytics() {
+  try {
+    const a = await api('/admin/my-unplug/analytics?days=30');
+
+    document.getElementById('muaTotals').innerHTML =
+      `<div style="display:flex; gap:22px; flex-wrap:wrap;">
+        ${muaStat('Profiles', a.totals.total, `${a.totals.adoptionRate}% of all accounts`)}
+        ${muaStat('Published', a.totals.published, `${a.totals.publishedRate}% of profiles`)}
+        ${muaStat('Private', a.totals.private, 'not publicly visible')}
+        ${muaStat('New (30 days)', a.totals.new_in_window, '')}
+      </div>`;
+
+    // The funnel is the actionable one — it says WHERE people stop.
+    document.getElementById('muaFunnel').innerHTML = a.activationFunnel.map((s, i, arr) => {
+      const prev = i > 0 ? arr[i - 1].users : s.users;
+      const dropped = prev - s.users;
+      return `<div style="margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:3px;">
+          <span>${escapeHtmlAdmin(s.stage)}</span>
+          <span><strong>${s.users}</strong> <span style="color:var(--slate);">(${s.conversion}%)</span></span>
+        </div>
+        <div style="height:8px; background:var(--paper-line); border-radius:4px; overflow:hidden;">
+          <div style="height:100%; width:${s.conversion}%; background:var(--red);"></div>
+        </div>
+        ${i > 0 && dropped > 0 ? `<div style="font-size:11.5px; color:var(--slate); margin-top:2px;">${dropped} did not get this far</div>` : ''}
+      </div>`;
+    }).join('');
+
+    const c = a.completion;
+    document.getElementById('muaCompletion').innerHTML = `
+      <div style="font-family:'Playfair Display',serif; font-size:30px; font-weight:700;">${c.average}%</div>
+      <div style="font-size:11.5px; color:var(--slate); margin-bottom:12px;">average completion</div>
+      ${muaBarRows(Object.entries(c.buckets).map(([label, n]) => ({ label, n })), 'label', 'n')}
+      <div style="margin-top:14px; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);">Most often missing</div>
+      ${c.mostCommonlyMissing.length
+        ? `<ul style="margin:6px 0 0 18px; font-size:12.5px;">${c.mostCommonlyMissing.slice(0, 5).map((m) => `<li>${escapeHtmlAdmin(m.label)} — ${m.count}</li>`).join('')}</ul>`
+        : '<div style="font-size:12.5px; color:var(--slate); margin-top:6px;">Nothing — every profile is complete.</div>'}`;
+
+    document.getElementById('muaTaxonomy').innerHTML = `
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); margin-bottom:6px;">Interests</div>
+      ${muaBarRows(a.topInterests.slice(0, 5), 'label', 'n')}
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); margin:12px 0 6px;">Skills</div>
+      ${muaBarRows(a.topSkills.slice(0, 5), 'label', 'n')}
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); margin:12px 0 6px;">Plugging into</div>
+      ${muaBarRows(a.topPurposes.slice(0, 5), 'label', 'n')}`;
+
+    document.getElementById('muaGeography').innerHTML = muaBarRows(a.byProvince, 'province', 'n');
+  } catch (e) {
+    document.getElementById('muaTotals').innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(e.message)}</div>`;
+  }
+}
+
+async function loadMyUnplugProfiles() {
+  const body = document.getElementById('muaBody');
+  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  try {
+    const params = new URLSearchParams();
+    const q = document.getElementById('muaSearch').value.trim();
+    const status = document.getElementById('muaStatus').value;
+    if (q) params.set('q', q);
+    if (status) params.set('status', status);
+    const d = await api('/admin/my-unplug/profiles?' + params.toString());
+    const rows = d.profiles || [];
+    if (!rows.length) { body.innerHTML = '<div class="empty-state">No profiles match.</div>'; return; }
+
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>@username</th><th>Name</th><th>Account</th><th>Visibility</th><th>Directory</th><th></th></tr>';
+    rows.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+          `<td style="font-family:monospace;">@${escapeHtmlAdmin(p.username)}</td>`
+        + `<td>${escapeHtmlAdmin(p.display_name)}</td>`
+        + `<td style="font-size:12px;">${escapeHtmlAdmin(p.email)}</td>`
+        + `<td style="font-weight:700; color:${p.is_published ? 'var(--green)' : '#a15c00'};">${p.is_published ? 'Published' : 'Private'}</td>`
+        // Surfaced because the two systems are separate on purpose — an admin
+        // should be able to see at a glance that they are NOT the same thing.
+        + `<td style="font-size:12px; color:var(--slate);">${p.has_directory_listing ? 'Has listing' : '—'}</td>`
+        + `<td><div class="row-actions">${p.is_published ? '<button class="reject mua-unpub">Unpublish</button>' : ''}<button class="reject mua-del">Delete</button></div></td>`;
+
+      const unpub = tr.querySelector('.mua-unpub');
+      if (unpub) unpub.addEventListener('click', async () => {
+        const reason = prompt(`Why is @${p.username} being unpublished? This is recorded in the audit log.`);
+        if (!reason || !reason.trim()) return;
+        try {
+          const r = await api(`/admin/my-unplug/profiles/${p.user_id}/unpublish`, { method: 'POST', body: JSON.stringify({ reason }) });
+          showToast(r.message);
+          loadMyUnplugProfiles(); loadMyUnplugAnalytics();
+        } catch (e) { showToast(e.message, true); }
+      });
+
+      tr.querySelector('.mua-del').addEventListener('click', async () => {
+        // Spells out what is and is not destroyed, because the three things
+        // are easy to conflate and only one of them is going away.
+        if (!confirm(`Delete @${p.username}'s My Unplug profile?\n\nTheir account and any Directory listing are NOT affected — only their community identity is removed. This cannot be undone.`)) return;
+        try {
+          const r = await api(`/admin/my-unplug/profiles/${p.user_id}`, { method: 'DELETE' });
+          showToast(r.message);
+          loadMyUnplugProfiles(); loadMyUnplugAnalytics();
+        } catch (e) { showToast(e.message, true); }
+      });
+
+      table.appendChild(tr);
+    });
+    body.innerHTML = ''; body.appendChild(table);
+  } catch (e) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(e.message)}</div>`;
+  }
+}
+
+document.getElementById('muaSearchBtn').addEventListener('click', loadMyUnplugProfiles);
+document.getElementById('muaSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadMyUnplugProfiles(); });
+document.getElementById('muaStatus').addEventListener('change', loadMyUnplugProfiles);
+
 async function loadPaymentQueue() {
   const body = document.getElementById('pqBody');
   if (!body) return;
@@ -2243,6 +2435,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'halloffame') { loadHallOfFame(); populateHofUserPicker(); }
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payqueue') loadPaymentQueue();
+    if (section === 'myunplug') { loadMyUnplugAnalytics(); loadMyUnplugProfiles(); }
     if (section === 'placements') loadPlacements();
     if (section === 'payments') { loadPendingEft(); loadAllPayments(); }
     if (section === 'users') loadUsers();

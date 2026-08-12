@@ -104,6 +104,7 @@ app.use('/newsletter', newsletterRoutes);
 app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);
+app.use('/admin/my-unplug', require('./routes/adminMyUnplug'));
 app.use('/saved', savedArticleRoutes);
 app.use('/comments', commentRoutes);
 app.use('/polls', pollRoutes);

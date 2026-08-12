@@ -281,4 +281,10 @@ router.get('/published', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Shared with the admin analytics (routes/adminMyUnplug.js) so the
+// completion percentage an admin sees is the same number the member sees.
+// Two copies of a scoring rule drift the first time one is tweaked.
+router.computeCompletion = computeCompletion;
+router.loadTaxonomies = loadTaxonomies;
+
 module.exports = router;
