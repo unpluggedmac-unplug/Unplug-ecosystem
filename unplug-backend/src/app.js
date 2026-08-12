@@ -50,6 +50,7 @@ const memberRoutes = require('./routes/members');
 const profileAnalyticsRoutes = require('./routes/profileAnalytics');
 const badgeRoutes = require('./routes/badges');
 const orderRoutes = require('./routes/orders');
+const myUnplugRoutes = require('./routes/myUnplug');
 
 const app = express();
 
@@ -119,6 +120,7 @@ app.use('/members', memberRoutes);
 app.use('/profile-analytics', profileAnalyticsRoutes);
 app.use('/badges', badgeRoutes);
 app.use('/orders', orderRoutes);
+app.use('/my-unplug', myUnplugRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,

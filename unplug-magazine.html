@@ -959,6 +959,26 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .cms-block-imglink:hover img{ transform:scale(1.03); opacity:0.92; }
 .cms-block-imglink:focus-visible{ outline:3px solid var(--red); outline-offset:3px; }
 .cms-block-hint{ font-size:12.5px; color:var(--slate); margin:7px 0 0; font-style:italic; }
+
+/* My Unplug public profile (105_my_unplug_profiles.sql). */
+.mu-pub{ max-width:760px; }
+.mu-pub-head{ display:flex; gap:22px; align-items:center; flex-wrap:wrap; }
+.mu-pub-avatar{ width:120px; height:120px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  background:linear-gradient(135deg,var(--paper),#e3d8c2); display:flex; align-items:center; justify-content:center;
+  font-family:'Playfair Display',serif; font-size:44px; font-weight:700; color:var(--slate); }
+.mu-pub-avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+.mu-pub-head h1{ font-size:clamp(26px,4vw,38px); margin:0; }
+.mu-pub-handle{ color:var(--red); font-weight:700; font-size:14px; margin:4px 0 0; }
+.mu-pub-place{ color:var(--slate); font-size:13.5px; margin:6px 0 0; }
+.mu-pub-about{ font-size:17px; line-height:1.65; margin:26px 0 0; max-width:60ch; }
+.mu-pub-block{ margin-top:30px; }
+.mu-pub-block h2{ font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--slate); margin:0 0 10px; }
+.mu-pub-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+.mu-pub-chip{ border:1px solid var(--paper-line); background:var(--paper); border-radius:20px; padding:7px 15px; font-size:13px; }
+@media(max-width:560px){
+  .mu-pub-head{ gap:16px; }
+  .mu-pub-avatar{ width:88px; height:88px; font-size:32px; }
+}
 .cms-block-text{ padding:26px 28px; }
 .cms-block-text h2{ font-size:clamp(20px,2.6vw,30px); font-weight:600; line-height:1.25; margin:8px 0 10px; }
 .cms-block-text p{ color:var(--slate); font-size:14.5px; line-height:1.65; }
@@ -2727,6 +2747,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 </main>
 
 <!-- ============ MEMBERS ============ -->
+<!-- MY UNPLUG PUBLIC PROFILE — /?p=myunplug&u=<username>.
+     Community identity only. The API for this page (GET /my-unplug/u/:username)
+     returns no email, phone or address at all, and unpublished profiles 404,
+     so there is nothing private for this template to accidentally render. -->
+<main class="page" id="page-myunplug">
+  <div class="wrap" style="padding-top:56px;">
+    <div id="muProfileBody"><div class="dir-empty-state">Loading…</div></div>
+  </div>
+</main>
+
 <main class="page" id="page-members">
   <div class="wrap" style="padding-top:56px;">
     <div class="section-head">
@@ -4023,6 +4053,60 @@ function cmsBlockHtml(b) {
       ${btn}
     </div>
   </section>`;
+}
+
+// ---------------------------------------------------------------------------
+// MY UNPLUG public profile (105_my_unplug_profiles.sql) — the member's
+// community identity. Rendered from GET /my-unplug/u/:username, which only
+// ever returns published profiles and carries no contact details.
+// ---------------------------------------------------------------------------
+async function loadMyUnplugPublicProfile(username) {
+  const host = document.getElementById('muProfileBody');
+  if (!host) return;
+  host.innerHTML = '<div class="dir-empty-state">Loading…</div>';
+  if (!username) {
+    host.innerHTML = '<div class="dir-empty-state">No profile requested.</div>';
+    return;
+  }
+  let data;
+  try {
+    data = await api('/my-unplug/u/' + encodeURIComponent(username));
+  } catch (err) {
+    // A private or non-existent profile is the same answer on purpose —
+    // saying "exists but private" would confirm the handle is taken.
+    host.innerHTML = `<div class="dir-empty-state">No published profile found for @${escapeHtml(username)}.</div>`;
+    return;
+  }
+  const p = data.profile;
+  const t = data.taxonomies || { interests: [], skills: [], purposes: [] };
+  const chips = (list) => list.length
+    ? `<div class="mu-pub-chips">${list.map((x) => `<span class="mu-pub-chip">${escapeHtml(x.label)}</span>`).join('')}</div>`
+    : '';
+  const place = [p.city, p.province, p.country].filter(Boolean).map(escapeHtml).join(', ');
+  const block = (title, list) => list.length ? `<section class="mu-pub-block"><h2>${title}</h2>${chips(list)}</section>` : '';
+
+  host.innerHTML = `
+    <article class="mu-pub">
+      <header class="mu-pub-head">
+        <div class="mu-pub-avatar">${p.avatar_url
+          ? `<img src="${escapeHtml(p.avatar_url)}" alt="${escapeHtml(p.display_name)}" loading="lazy" decoding="async">`
+          : `<span aria-hidden="true">${escapeHtml((p.display_name || '?').trim().charAt(0).toUpperCase())}</span>`}</div>
+        <div>
+          <h1>${escapeHtml(p.display_name)}</h1>
+          <p class="mu-pub-handle">@${escapeHtml(p.username)}</p>
+          ${place ? `<p class="mu-pub-place">📍 ${place}</p>` : ''}
+        </div>
+      </header>
+      ${p.about_me ? `<p class="mu-pub-about">${escapeHtml(p.about_me)}</p>` : ''}
+      ${block('What I’m plugging into', t.purposes)}
+      ${block('My skills &amp; talents', t.skills)}
+      ${block('My interests', t.interests)}
+    </article>`;
+
+  document.title = `${p.display_name} (@${p.username}) — Unplug Magazine`;
+  seoSetTitle(`${p.display_name} (@${p.username})`);
+  seoSetDescription(p.about_me || `${p.display_name} on Unplug Magazine.`);
+  if (p.avatar_url) seoSetImage(p.avatar_url);
 }
 
 // The Marketplace rate card, from 101_marketplace_placements.sql. Replaces
@@ -6641,6 +6725,11 @@ function goToPage(pageId){
     investorsLoaded = true;
     loadInvestors();
     loadProjects();
+  }
+  // Not cached on a "loaded" flag like the others: the username in the URL
+  // decides what this page shows, so it must re-fetch per profile.
+  if (pageId === 'myunplug') {
+    loadMyUnplugPublicProfile(new URLSearchParams(location.search).get('u'));
   }
   if (pageId === 'brandplacement' && !marketplaceLoaded) {
     marketplaceLoaded = true;

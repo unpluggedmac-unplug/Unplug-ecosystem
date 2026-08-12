@@ -74,6 +74,17 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .progress-track{ height:8px; background:var(--paper-line); border-radius:4px; overflow:hidden; margin-top:6px; }
 .progress-fill{ height:100%; background:var(--red); width:0%; transition:width .25s ease; }
 
+/* My Unplug multi-selects. Real checkboxes behind the chips, so keyboard
+   and screen-reader users get the native control and the whole group is
+   still a proper form field. */
+.mu-chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+.mu-chip{ position:relative; display:inline-flex; }
+.mu-chip input{ position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+.mu-chip span{ display:inline-block; border:1px solid var(--paper-line); background:#fff; border-radius:20px;
+  padding:7px 14px; font-size:12.5px; cursor:pointer; transition:background .15s, border-color .15s, color .15s; }
+.mu-chip input:checked + span{ background:var(--red); border-color:var(--red); color:#fff; font-weight:600; }
+.mu-chip input:focus-visible + span{ outline:2px solid var(--ink); outline-offset:2px; }
+
 .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
 .btn-solid{ background:var(--red); color:#fff; border-color:var(--red); }
 .btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
@@ -339,6 +350,81 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </section>
 
     <section class="ms-section section-hidden" data-ms-section="unplug">
+
+      <!-- MY UNPLUG PUBLIC PROFILE (105_my_unplug_profiles.sql).
+           Deliberately NOT the Directory listing, which is edited under
+           Profile — that one is what you offer and where you can be found,
+           this one is who you are in the community. -->
+      <div class="card">
+        <h2>My Unplug Profile</h2>
+        <p class="sub">Your community identity — who you are on Unplug. This is separate from your Directory listing, and nothing here is public until you choose to publish it.</p>
+        <div class="error-banner" id="muError"></div>
+
+        <div id="muPublishState" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--paper-line); border-radius:6px; padding:12px 14px; margin-bottom:16px; background:var(--paper);">
+          <div>
+            <div id="muPublishLabel" style="font-weight:700; font-size:14px;">Private</div>
+            <div id="muPublishHint" style="font-size:12.5px; color:var(--slate); margin-top:2px;">Only you can see this profile.</div>
+          </div>
+          <button class="btn btn-solid" id="muPublishBtn" type="button" style="width:auto;">Publish</button>
+        </div>
+
+        <div class="field">
+          <div style="display:flex; justify-content:space-between; align-items:baseline;">
+            <label style="margin:0;">Profile completion</label>
+            <span id="muCompletionPct" style="font-size:12px; color:var(--slate);">0%</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="muCompletionFill"></div></div>
+          <p id="muCompletionTodo" style="font-size:11.5px; color:var(--slate); margin-top:6px;"></p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="muUsername">@username</label>
+            <input id="muUsername" maxlength="30" placeholder="e.g. sarah_m" autocomplete="off">
+            <span id="muUsernameNote" style="font-size:11.5px; color:var(--slate);">3-30 characters — letters, numbers and underscores.</span>
+          </div>
+          <div class="field"><label for="muDisplayName">Display name</label><input id="muDisplayName" maxlength="60" placeholder="The name people see"></div>
+        </div>
+
+        <div class="field">
+          <label for="muAbout">About me <span style="font-weight:400; text-transform:none; letter-spacing:0;">— up to 50 words</span></label>
+          <textarea id="muAbout" rows="3" placeholder="A sentence or two about what you're about."></textarea>
+          <span id="muAboutCount" style="font-size:11.5px; color:var(--slate);">0 / 50 words</span>
+        </div>
+
+        <div class="field">
+          <label>Profile picture <span style="font-weight:400; opacity:0.7;">— 1080 × 1080px (square)</span></label>
+          <div id="mu-avatar-upload"></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field"><label for="muCountry">Country</label><input id="muCountry" maxlength="80" placeholder="South Africa"></div>
+          <div class="field"><label for="muProvince">Province</label><input id="muProvince" maxlength="80" placeholder="Gauteng"></div>
+        </div>
+        <div class="field"><label for="muCity">Town / City</label><input id="muCity" maxlength="120" placeholder="Krugersdorp"></div>
+        <p style="font-size:11.5px; color:var(--slate); margin-top:-6px;">Your town is all that shows publicly — never a street address, phone number or email.</p>
+
+        <button class="btn btn-solid" id="muSaveBtn" type="button" style="width:auto;">Save Profile</button>
+      </div>
+
+      <div class="card">
+        <h2>Interests, Skills &amp; Purpose</h2>
+        <p class="sub">What you care about, what you're good at, and what you want to be discovered for. Pick as many as apply.</p>
+        <div class="field">
+          <label>My interests</label>
+          <div id="muInterests" class="mu-chips"></div>
+        </div>
+        <div class="field">
+          <label>My skills &amp; talents</label>
+          <div id="muSkills" class="mu-chips"></div>
+        </div>
+        <div class="field">
+          <label>What are you plugging into?</label>
+          <div id="muPurposes" class="mu-chips"></div>
+        </div>
+        <button class="btn btn-solid" id="muSaveTaxBtn" type="button" style="width:auto;">Save Selections</button>
+      </div>
+
       <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
           <div>
@@ -1223,6 +1309,7 @@ function enterMemberDashboard(user){
   loadMyEditions();
   loadMyPayments();
   loadMyUnplug();
+  loadMyUnplugProfile();
   loadCredits();
   loadLeaderboard();
   loadMyAnalytics();
@@ -3181,6 +3268,207 @@ function msDate(d){ return d ? new Date(d).toLocaleDateString() : '—'; }
 // creates the member's participation profile on first visit and assigns
 // today's missions, so this single call is always safe to run cold.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// MY UNPLUG PROFILE (105_my_unplug_profiles.sql). The member's community
+// identity — separate from the Directory listing edited under Profile.
+//
+// Nothing here is public until the member presses Publish: the API defaults
+// is_published to false and saving never changes it, so this UI must not
+// imply otherwise.
+// ---------------------------------------------------------------------------
+let MU_PROFILE = null;
+let MU_TAXONOMY = null;
+
+function muCountWords(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function muChipsHtml(containerId, options, selectedKeys) {
+  const selected = new Set(selectedKeys || []);
+  return options.map((o) => `
+    <label class="mu-chip">
+      <input type="checkbox" value="${escapeAttrM(o.key)}" data-mu-group="${containerId}"${selected.has(o.key) ? ' checked' : ''}>
+      <span>${escapeHtmlM(o.label)}</span>
+    </label>`).join('');
+}
+
+function muSelectedKeys(containerId) {
+  return [...document.querySelectorAll(`#${containerId} input:checked`)].map((i) => i.value);
+}
+
+function muRenderCompletion(completion) {
+  if (!completion) return;
+  document.getElementById('muCompletionPct').textContent = completion.percent + '%';
+  document.getElementById('muCompletionFill').style.width = completion.percent + '%';
+  const todo = completion.steps.filter((s) => !s.done);
+  document.getElementById('muCompletionTodo').textContent = todo.length
+    ? 'Still to do: ' + todo.map((s) => `${s.label} (+${s.weight}%)`).join(' · ')
+    : 'Your profile is complete.';
+}
+
+function muRenderPublishState() {
+  const published = !!(MU_PROFILE && MU_PROFILE.is_published);
+  const label = document.getElementById('muPublishLabel');
+  const hint = document.getElementById('muPublishHint');
+  const btn = document.getElementById('muPublishBtn');
+  if (published) {
+    label.textContent = '🌍 Published';
+    hint.innerHTML = `Anyone can view your profile at <strong>@${escapeHtmlM(MU_PROFILE.username)}</strong>.`;
+    btn.textContent = 'Make Private';
+    btn.className = 'btn btn-line';
+  } else {
+    label.textContent = '🔒 Private';
+    hint.textContent = 'Only you can see this profile. Publish it when you are ready to be discovered.';
+    btn.textContent = 'Publish';
+    btn.className = 'btn btn-solid';
+  }
+  btn.style.width = 'auto';
+}
+
+function muFillForm() {
+  const p = MU_PROFILE || {};
+  document.getElementById('muUsername').value = p.username || '';
+  document.getElementById('muDisplayName').value = p.display_name || '';
+  document.getElementById('muAbout').value = p.about_me || '';
+  document.getElementById('muCountry').value = p.country || 'South Africa';
+  document.getElementById('muProvince').value = p.province || '';
+  document.getElementById('muCity').value = p.city || '';
+  document.getElementById('muAboutCount').textContent = `${muCountWords(p.about_me)} / 50 words`;
+  const avatarHost = document.getElementById('mu-avatar-upload');
+  if (avatarHost && !avatarHost.querySelector('.img-upload')) {
+    // Square, because this avatar is reused as a circle in comments,
+    // leaderboards and rankings — a landscape crop would lose faces.
+    avatarHost.innerHTML = UnplugUpload.fieldHtml('muAvatar', p.avatar_url || '', '', { w: 1080, h: 1080, label: '1:1 square' });
+  }
+  muRenderPublishState();
+}
+
+let _muLoaded = false;
+async function loadMyUnplugProfile() {
+  if (_muLoaded) return;
+  _muLoaded = true;
+  try {
+    const [tax, mine] = await Promise.all([
+      api('/my-unplug/taxonomy'),
+      api('/my-unplug/me'),
+    ]);
+    MU_TAXONOMY = tax;
+    MU_PROFILE = mine.profile;
+    muFillForm();
+    muRenderCompletion(mine.completion);
+    const picked = mine.taxonomies || { interests: [], skills: [], purposes: [] };
+    document.getElementById('muInterests').innerHTML = muChipsHtml('muInterests', tax.interests, picked.interests.map((x) => x.key));
+    document.getElementById('muSkills').innerHTML = muChipsHtml('muSkills', tax.skills, picked.skills.map((x) => x.key));
+    document.getElementById('muPurposes').innerHTML = muChipsHtml('muPurposes', tax.purposes, picked.purposes.map((x) => x.key));
+  } catch (e) {
+    document.getElementById('muError').textContent = 'Could not load your My Unplug profile: ' + e.message;
+    document.getElementById('muError').classList.add('show');
+    _muLoaded = false; // let a later visit retry
+  }
+}
+
+document.getElementById('muAbout').addEventListener('input', (e) => {
+  const n = muCountWords(e.target.value);
+  const el = document.getElementById('muAboutCount');
+  el.textContent = `${n} / 50 words`;
+  el.style.color = n > 50 ? 'var(--red)' : 'var(--slate)';
+});
+
+// Checked against the server as the member types, so a clash is known before
+// they fill in the rest of the form rather than on save.
+let _muNameTimer = null;
+document.getElementById('muUsername').addEventListener('input', (e) => {
+  const note = document.getElementById('muUsernameNote');
+  const value = e.target.value.trim();
+  clearTimeout(_muNameTimer);
+  if (!value) { note.textContent = '3-30 characters — letters, numbers and underscores.'; note.style.color = 'var(--slate)'; return; }
+  // Unchanged from what is already saved: it is theirs, so not a clash.
+  if (MU_PROFILE && value.toLowerCase() === String(MU_PROFILE.username || '').toLowerCase()) {
+    note.textContent = 'This is your current @username.'; note.style.color = 'var(--slate)'; return;
+  }
+  note.textContent = 'Checking…'; note.style.color = 'var(--slate)';
+  _muNameTimer = setTimeout(async () => {
+    try {
+      const r = await api('/my-unplug/username-available?username=' + encodeURIComponent(value));
+      note.textContent = r.available ? `@${value} is available.` : (r.reason || 'Not available.');
+      note.style.color = r.available ? 'green' : 'var(--red)';
+    } catch (err) { note.textContent = ''; }
+  }, 350);
+});
+
+document.getElementById('muSaveBtn').addEventListener('click', async () => {
+  const err = document.getElementById('muError');
+  err.classList.remove('show');
+  const btn = document.getElementById('muSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const data = await api('/my-unplug/me', {
+      method: 'PUT',
+      body: JSON.stringify({
+        username: document.getElementById('muUsername').value.trim(),
+        displayName: document.getElementById('muDisplayName').value.trim(),
+        aboutMe: document.getElementById('muAbout').value.trim(),
+        avatarUrl: UnplugUpload.valueOf(document.getElementById('mu-avatar-upload')) || undefined,
+        country: document.getElementById('muCountry').value.trim(),
+        province: document.getElementById('muProvince').value.trim(),
+        city: document.getElementById('muCity').value.trim(),
+      }),
+    });
+    MU_PROFILE = data.profile;
+    muRenderCompletion(data.completion);
+    muRenderPublishState();
+    showToast(MU_PROFILE.is_published ? 'Profile saved and updated publicly.' : 'Profile saved — still private until you publish.');
+  } catch (e) {
+    err.textContent = e.message; err.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Profile';
+  }
+});
+
+document.getElementById('muSaveTaxBtn').addEventListener('click', async () => {
+  const err = document.getElementById('muError');
+  err.classList.remove('show');
+  const btn = document.getElementById('muSaveTaxBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const data = await api('/my-unplug/me/taxonomy', {
+      method: 'PUT',
+      body: JSON.stringify({
+        interests: muSelectedKeys('muInterests'),
+        skills: muSelectedKeys('muSkills'),
+        purposes: muSelectedKeys('muPurposes'),
+      }),
+    });
+    muRenderCompletion(data.completion);
+    showToast('Selections saved.');
+  } catch (e) {
+    err.textContent = e.message; err.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Selections';
+  }
+});
+
+document.getElementById('muPublishBtn').addEventListener('click', async () => {
+  const err = document.getElementById('muError');
+  err.classList.remove('show');
+  const publishing = !(MU_PROFILE && MU_PROFILE.is_published);
+  // Publishing is the moment a private page becomes world-readable, so it is
+  // confirmed rather than a single stray click.
+  if (publishing && !confirm('Publish your My Unplug profile? Anyone will be able to view it. You can make it private again at any time.')) return;
+  const btn = document.getElementById('muPublishBtn');
+  btn.disabled = true;
+  try {
+    const data = await api(`/my-unplug/me/${publishing ? 'publish' : 'unpublish'}`, { method: 'POST' });
+    MU_PROFILE = data.profile;
+    muRenderPublishState();
+    showToast(data.message);
+  } catch (e) {
+    err.textContent = e.message; err.classList.add('show');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 async function loadMyUnplug() {
   try {
     const data = await api('/participation/dashboard');
