@@ -1,0 +1,16 @@
+-- Bulk-vote EFT references now lead with the contestant's entry code, so
+-- both the buyer and the admin can see at a glance who the votes are for.
+--
+-- The reference is the entry code PLUS a short unique suffix, e.g.
+--   0004821037-K7M2
+-- rather than the bare entry code, because an entry code identifies the
+-- CONTESTANT, not the PURCHASE. Five people buying votes for the same
+-- contestant would all send the identical reference, and the admin queue
+-- (which matches a payment to a bundle by reference) could not tell which
+-- R250 belonged to which order, nor spot a double payment. The suffix keeps
+-- every purchase individually matchable while the visible prefix still
+-- answers "who is this for?".
+--
+-- 10-char column was sized for the old random-only code. 24 leaves room for
+-- a 10-digit entry code, the separator, the suffix, and future growth.
+ALTER TABLE vote_bundles ALTER COLUMN reference TYPE VARCHAR(24);

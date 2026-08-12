@@ -12,10 +12,26 @@ const router = express.Router();
 // into an EFT), but checked against vote_bundles.reference specifically,
 // so it isn't reused as-is from that file.
 const VOTE_REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-async function generateVoteBundleReference() {
+
+// The reference leads with the contestant's 10-digit entry code so the buyer
+// and the admin can both see who the votes are for, then a short random
+// suffix — e.g. 0004821037-K7M2 (104_vote_reference_entry_code.sql).
+//
+// The suffix is not decoration. An entry code identifies the CONTESTANT, not
+// the PURCHASE, so on its own it would arrive identically on every EFT for
+// that contestant and the admin queue — which matches a payment to a bundle
+// by reference — could not tell two buyers apart or spot a double payment.
+//
+// entryCode is optional: an entry that somehow has none (the code is
+// assigned by trigger on approval) still gets a working random reference
+// rather than a broken one.
+async function generateVoteBundleReference(entryCode) {
+  const prefix = /^[0-9]{10}$/.test(String(entryCode || '')) ? `${entryCode}-` : '';
+  const suffixLength = prefix ? 4 : 10;
   for (let attempt = 0; attempt < 8; attempt++) {
-    let candidate = '';
-    for (let i = 0; i < 10; i++) candidate += VOTE_REF_ALPHABET[crypto.randomInt(VOTE_REF_ALPHABET.length)];
+    let suffix = '';
+    for (let i = 0; i < suffixLength; i++) suffix += VOTE_REF_ALPHABET[crypto.randomInt(VOTE_REF_ALPHABET.length)];
+    const candidate = prefix + suffix;
     const existing = await pool.query('SELECT 1 FROM vote_bundles WHERE reference = $1', [candidate]);
     if (existing.rowCount === 0) return candidate;
   }
@@ -768,8 +784,10 @@ router.post('/entries/:id/vote-bundle', async (req, res, next) => {
       return res.status(400).json({ error: 'You must read and accept the current Unplug Terms & Conditions and Cancellation, Refund & Account Credit Policy before checkout.' });
     }
 
+    // entry_code comes back too — it becomes the visible prefix of the EFT
+    // reference, so a buyer's bank statement says who they voted for.
     const entryCheck = await pool.query(
-      `SELECT id FROM competition_entries WHERE id = $1 AND status = 'approved'`,
+      `SELECT id, entry_code FROM competition_entries WHERE id = $1 AND status = 'approved'`,
       [req.params.id]
     );
     if (entryCheck.rows.length === 0) {
@@ -781,7 +799,8 @@ router.post('/entries/:id/vote-bundle', async (req, res, next) => {
       return res.status(400).json({ error: 'votes must match one of the published Bundle Vote tiers — see GET /vote-bundle-tiers.' });
     }
     const price = Number(tierResult.rows[0].price);
-    const reference = await generateVoteBundleReference();
+    const entryCode = entryCheck.rows[0].entry_code;
+    const reference = await generateVoteBundleReference(entryCode);
 
     const bundle = await pool.query(
       `INSERT INTO vote_bundles (entry_id, buyer_user_id, session_id, vote_count, price, reference, terms_accepted_at, terms_version)
@@ -793,8 +812,11 @@ router.post('/entries/:id/vote-bundle', async (req, res, next) => {
     res.status(201).json({
       bundle: bundle.rows[0],
       reference,
+      entryCode,
       instructions: eftInstructions(reference,
-        'Make a standard bank EFT to the account above using this exact reference. Your votes are added once our team confirms the payment — usually within one business day.'),
+        entryCode
+          ? `Make a standard bank EFT to the account above using this exact reference. It starts with entry code ${entryCode} — the contestant you are voting for — followed by a code unique to this order, so please copy the whole thing. Your votes are added once our team confirms the payment, usually within one business day.`
+          : 'Make a standard bank EFT to the account above using this exact reference. Your votes are added once our team confirms the payment — usually within one business day.'),
     });
   } catch (err) {
     next(err);

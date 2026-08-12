@@ -345,7 +345,13 @@ document.getElementById('payBtn').addEventListener('click', async () => {
       ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
       <b>Account Number:</b> ${i.accountNumber}<br>
       <b>Branch Code:</b> ${i.branchCode}<br>
-      <b>Reference:</b> <span class="ref">${i.reference}</span><br><br>
+      <b>Reference:</b> <span class="ref">${i.reference}</span>
+      <button type="button" id="copyRefBtn" data-ref="${i.reference}" style="margin-left:8px; font-size:11px; padding:3px 9px; cursor:pointer; border:1px solid var(--paper-line); background:#fff;">Copy</button>
+      <br><br>
+      ${data.entryCode ? `<div style="border:2px solid var(--red); background:#fff6f6; border-radius:6px; padding:12px 14px; margin-bottom:12px;">
+        <div style="font-weight:800; color:var(--red); font-size:13px; letter-spacing:0.03em;">⚠️ USE THIS EXACT REFERENCE</div>
+        <p style="font-size:12.5px; margin:6px 0 0; line-height:1.55;">It begins with entry code <strong>${data.entryCode}</strong> — the contestant you are voting for — followed by a code unique to this order. Copy the whole reference; without it we cannot match your payment to your votes.</p>
+      </div>` : ''}
       ${i.note}
       <div id="popUploadBlock" data-reference="${i.reference}" style="margin-top:14px; border-top:1px dashed var(--paper-line); padding-top:12px;">
         <div style="font-weight:700; font-size:13px;">Already paid? Upload your proof of payment</div>
@@ -357,6 +363,32 @@ document.getElementById('payBtn').addEventListener('click', async () => {
     showError('paymentError', err.message || 'Could not start this purchase — please try again.');
   } finally {
     btn.disabled = false; btn.textContent = 'Complete Order';
+  }
+});
+
+// Copy the reference. Typing a 15-character reference into a banking app by
+// hand is where mistakes happen, and a mistyped reference is the single most
+// common reason a payment can't be matched to its votes.
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('#copyRefBtn');
+  if (!btn) return;
+  const ref = btn.getAttribute('data-ref') || '';
+  try {
+    await navigator.clipboard.writeText(ref);
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  } catch (err) {
+    // Clipboard access can be blocked; selecting the text is the fallback
+    // rather than leaving the button looking broken.
+    const span = document.querySelector('#resultInstructions .ref');
+    if (span) {
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    btn.textContent = 'Select & copy';
   }
 });
 

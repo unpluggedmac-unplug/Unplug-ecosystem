@@ -214,6 +214,62 @@ test('admin reject leaves no votes allocated; admin reverse removes votes an app
   assert.equal(afterReverse.rows[0].n, 0);
 });
 
+test('the EFT reference leads with the contestant entry code, and the buyer is told so', async () => {
+  // So a buyer's bank statement and the admin queue both answer "who are
+  // these votes for?" without a lookup (104_vote_reference_entry_code.sql).
+  const entry = await makeApprovedEntry('Reference Prefix Target');
+  const res = await req('POST', `/entries/${entry.id}/vote-bundle`, {
+    body: { votes: 50, sessionId: 'sess_ref_prefix', termsAccepted: true },
+  });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.entryCode, entry.entry_code);
+  assert.ok(
+    res.body.reference.startsWith(`${entry.entry_code}-`),
+    `reference ${res.body.reference} should start with entry code ${entry.entry_code}`
+  );
+  assert.match(res.body.reference, /^[0-9]{10}-[A-Z2-9]{4}$/);
+  assert.equal(res.body.instructions.reference, res.body.reference);
+  assert.match(res.body.instructions.note, new RegExp(entry.entry_code));
+});
+
+test('two purchases for the SAME contestant get different references', async () => {
+  // The whole reason the entry code alone is not the reference: the admin
+  // queue matches a payment to a bundle by reference, so two buyers sharing
+  // one reference would be unmatchable — and a double payment invisible.
+  const entry = await makeApprovedEntry('Two Buyers One Contestant');
+  const a = await req('POST', `/entries/${entry.id}/vote-bundle`, {
+    body: { votes: 50, sessionId: 'buyer_a', termsAccepted: true },
+  });
+  const b = await req('POST', `/entries/${entry.id}/vote-bundle`, {
+    body: { votes: 50, sessionId: 'buyer_b', termsAccepted: true },
+  });
+  assert.equal(a.status, 201);
+  assert.equal(b.status, 201);
+  assert.notEqual(a.body.reference, b.body.reference, 'two buyers must not share a reference');
+  // Both still visibly point at the same contestant.
+  assert.ok(a.body.reference.startsWith(entry.entry_code));
+  assert.ok(b.body.reference.startsWith(entry.entry_code));
+});
+
+test('the new longer reference still resolves through the public status lookup', async () => {
+  // The column was widened from VARCHAR(10); a reference that no longer fits
+  // would fail at INSERT, and one that fits but is not found would break the
+  // buyer's "check my order" path.
+  const entry = await makeApprovedEntry('Longer Reference Lookup');
+  const purchase = await req('POST', `/entries/${entry.id}/vote-bundle`, {
+    body: { votes: 50, sessionId: 'sess_lookup_long', termsAccepted: true },
+  });
+  const ref = purchase.body.reference;
+  assert.ok(ref.length > 10, 'the composite reference should exceed the old 10-char size');
+
+  const status = await req('GET', `/vote-bundles/status/${ref}`);
+  assert.equal(status.status, 200);
+  assert.equal(status.body.purchase.entry_code, entry.entry_code);
+  // Lookups uppercase the input, so a lowercase-typed reference still works.
+  const lower = await req('GET', `/vote-bundles/status/${ref.toLowerCase()}`);
+  assert.equal(lower.status, 200);
+});
+
 test('GET /admin/vote-bundles searches by contestant name, reference and entry code, and filters by status', async () => {
   const admin = await makeUser('admin');
   const entry = await makeApprovedEntry('Searchable Admin Target');
