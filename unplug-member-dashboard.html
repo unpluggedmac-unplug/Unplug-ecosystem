@@ -980,8 +980,32 @@ async function api(path, options = {}) {
   });
   let body = null;
   try { body = await res.json(); } catch (e) {}
-  if (!res.ok) throw new Error((body && body.error) || `Request failed (${res.status})`);
+  if (!res.ok) {
+    // Same fix as the admin dashboard: a 401 once signed in means the session
+    // is no longer accepted, and every panel printing "Authentication
+    // required" inline left the member on a dashboard where nothing worked
+    // and nothing suggested signing in again. /auth/* is excluded because a
+    // wrong password is also a 401 there and must stay a form error.
+    if (res.status === 401 && path.indexOf('/auth/') !== 0) handleMemberSessionExpired();
+    throw new Error((body && body.error) || `Request failed (${res.status})`);
+  }
   return body;
+}
+
+let MEMBER_SESSION_EXPIRED_SHOWN = false;
+function handleMemberSessionExpired() {
+  if (MEMBER_SESSION_EXPIRED_SHOWN) return;
+  MEMBER_SESSION_EXPIRED_SHOWN = true;
+  AUTH_TOKEN = null;
+  localStorage.removeItem('unplug_auth_token');
+  const dash = document.getElementById('dashboard');
+  if (dash) dash.classList.add('section-hidden');
+  showCard('loginCard');
+  const banner = document.getElementById('loginError');
+  if (banner) {
+    banner.textContent = 'Your session has ended. Please sign in again.';
+    banner.classList.add('show');
+  }
 }
 
 function showToast(message, isError = false) {

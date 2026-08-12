@@ -979,6 +979,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="main-head"><div><h1>Publish</h1><p>Put content on the site directly. Nothing here charges anyone or goes through the payment portal.</p></div></div>
 
       <div class="panel">
+        <div class="panel-head"><h3>Session &amp; connection check</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">If a section says "Authentication required" or won't load, run this. It reports exactly what your browser is sending and what the server sends back, at three levels: no sign-in needed, signed in as anyone, and signed in as an admin. Nothing here changes any data.</p>
+          <button class="btn btn-solid" style="width:auto;" id="sessionCheckBtn">Run session check</button>
+          <div id="sessionCheckBox" style="margin-top:12px; font-size:12.5px;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
         <div class="panel-head"><h3>Email status</h3></div>
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Signup verification codes and password resets depend on outgoing email. If this isn't working, new members can't verify their accounts.</p>
@@ -1893,6 +1902,25 @@ UnplugUpload.init({ getApiBase: () => API_BASE, getToken: () => AUTH_TOKEN });
 let AUTH_TOKEN = null;
 let CURRENT_USER = null;
 
+// The admin session is stored under its OWN key. It used to share
+// 'unplug_auth_token' with the member dashboard and the checkout page, which
+// are the same origin — so signing in (or out) as a member in another tab
+// silently replaced or deleted the admin's token, and every admin section
+// then failed with "Authentication required". Separate keys mean the two
+// sessions can coexist and neither can clobber the other.
+const ADMIN_TOKEN_KEY = 'unplug_admin_token';
+const SHARED_TOKEN_KEY = 'unplug_auth_token';
+
+// One-time adoption of an existing shared-key session, so separating the keys
+// doesn't sign every admin out on the deploy that introduces it. The token is
+// still verified against /auth/me and role-checked before it's trusted.
+(function adoptSharedToken() {
+  if (!localStorage.getItem(ADMIN_TOKEN_KEY)) {
+    const shared = localStorage.getItem(SHARED_TOKEN_KEY);
+    if (shared) localStorage.setItem(ADMIN_TOKEN_KEY, shared);
+  }
+})();
+
 // ---------------------------------------------------------------------------
 // API helper — every call goes through here so the Authorization header
 // and error handling are consistent.
@@ -1909,9 +1937,44 @@ async function api(path, options = {}) {
   let body = null;
   try { body = await res.json(); } catch (e) { /* no JSON body */ }
   if (!res.ok) {
+    // A 401 after sign-in means the session is no longer accepted — expired,
+    // or issued against a secret the server no longer uses. Previously every
+    // section just printed "Authentication required" inline and the admin was
+    // left on a dashboard where nothing worked, with no way back to the login
+    // screen except guessing that a refresh might help. Now it says so and
+    // returns them to sign-in.
+    //
+    // /auth/* is excluded: a wrong password is also a 401 there, and that must
+    // stay an ordinary form error rather than tearing down the session.
+    if (res.status === 401 && path.indexOf('/auth/') !== 0) {
+      handleSessionExpired();
+    }
     throw new Error((body && body.error) || `Request failed (${res.status})`);
   }
   return body;
+}
+
+// Tears the session down once and sends the admin back to sign-in. Guarded so
+// that a screen firing six parallel loaders doesn't stack six banners.
+let SESSION_EXPIRED_SHOWN = false;
+function handleSessionExpired() {
+  if (SESSION_EXPIRED_SHOWN) return;
+  SESSION_EXPIRED_SHOWN = true;
+  AUTH_TOKEN = null;
+  CURRENT_USER = null;
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  document.getElementById('appShell').classList.remove('active');
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginPassword').value = '';
+  // If the admin had the "forgot password" card open, put the sign-in card
+  // back — otherwise they land on a screen with no password field.
+  document.getElementById('forgotCard').classList.add('section-hidden');
+  document.querySelector('.login-card:not(#forgotCard)').classList.remove('section-hidden');
+  const banner = document.getElementById('loginError');
+  if (banner) {
+    banner.textContent = 'Your session is no longer valid. Please sign in again.';
+    banner.classList.add('show');
+  }
 }
 
 function showToast(message, isError = false) {
@@ -2050,8 +2113,9 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     }
     AUTH_TOKEN = data.token;
     CURRENT_USER = data.user;
+    SESSION_EXPIRED_SHOWN = false;
     // Persist so a page refresh doesn't log the admin straight back out.
-    localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
+    localStorage.setItem(ADMIN_TOKEN_KEY, AUTH_TOKEN);
     localStorage.setItem('unplug_api_base', API_BASE);
     enterDashboard(data.user);
   } catch (err) {
@@ -2083,7 +2147,9 @@ function enterDashboard(user){
 document.getElementById('logoutBtn').addEventListener('click', () => {
   AUTH_TOKEN = null;
   CURRENT_USER = null;
-  localStorage.removeItem('unplug_auth_token');
+  // Only the admin key — signing out of the admin must not also sign the
+  // person out of the member site in another tab.
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
   document.getElementById('appShell').classList.remove('active');
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPassword').value = '';
@@ -2093,10 +2159,13 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
 // restore it automatically rather than forcing a fresh login every time
 // the page is refreshed.
 (async function restoreSession(){
-  const savedToken = localStorage.getItem('unplug_auth_token');
+  const savedToken = localStorage.getItem(ADMIN_TOKEN_KEY);
   if (!savedToken) return;
   AUTH_TOKEN = savedToken;
   try {
+    // /auth/ is excluded from the 401 teardown in api(), so a rejected token
+    // here lands in this catch rather than flashing the expired-session
+    // banner at someone who was never signed in to begin with.
     const data = await api('/auth/me');
     if (data.user.role !== 'admin') throw new Error('Not an admin account.');
     CURRENT_USER = data.user;
@@ -2104,7 +2173,7 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
   } catch (err) {
     // Saved token is invalid/expired — clear it and fall back to the login screen.
     AUTH_TOKEN = null;
-    localStorage.removeItem('unplug_auth_token');
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
   }
 })();
 
@@ -3643,13 +3712,25 @@ async function loadEmailStatus() {
     // Name the address we actually called. Every failure mode here (mixed
     // content, a stale saved address, a sleeping server) looks identical
     // otherwise, and the address is usually the answer.
+    //
+    // An authentication failure is NOT a connectivity failure, though: the
+    // server answered, it just refused. Calling that "could not reach the
+    // server" sent us hunting for a network problem that didn't exist, so
+    // the two are now labelled apart and only the real one offers the
+    // address reset.
+    const isAuthFailure = /Authentication required|permission/i.test(err.message || '');
     box.style.borderColor = 'var(--red)';
-    box.innerHTML = '<strong style="color:var(--red);">✕ Could not reach the server</strong><br>'
-      + '<span style="color:var(--slate);">' + escapeHtmlAdmin(err.message) + '</span><br>'
-      + '<span style="color:var(--slate); font-size:12px;">Tried: <code>' + escapeHtmlAdmin(API_BASE) + '</code>'
-      + (err.message === 'timed out' ? ' — if the server was asleep it can take up to a minute; press Re-check.' : '')
-      + '</span><br>'
-      + '<button class="btn btn-line" style="width:auto; margin-top:8px; font-size:11px;" id="resetApiBaseBtn">Reset server address</button>';
+    box.innerHTML = isAuthFailure
+      ? '<strong style="color:var(--red);">✕ The server refused this request</strong><br>'
+        + '<span style="color:var(--slate);">' + escapeHtmlAdmin(err.message) + '</span><br>'
+        + '<span style="color:var(--slate); font-size:12px;">The server is reachable — it did not accept your sign-in for this action. '
+        + 'Run the Session &amp; connection check above to see why.</span>'
+      : '<strong style="color:var(--red);">✕ Could not reach the server</strong><br>'
+        + '<span style="color:var(--slate);">' + escapeHtmlAdmin(err.message) + '</span><br>'
+        + '<span style="color:var(--slate); font-size:12px;">Tried: <code>' + escapeHtmlAdmin(API_BASE) + '</code>'
+        + (err.message === 'timed out' ? ' — if the server was asleep it can take up to a minute; press Re-check.' : '')
+        + '</span><br>'
+        + '<button class="btn btn-line" style="width:auto; margin-top:8px; font-size:11px;" id="resetApiBaseBtn">Reset server address</button>';
     const reset = document.getElementById('resetApiBaseBtn');
     if (reset) reset.addEventListener('click', () => {
       localStorage.removeItem('unplug_api_base');
@@ -3661,6 +3742,128 @@ async function loadEmailStatus() {
 }
 
 document.getElementById('checkEmailBtn').addEventListener('click', loadEmailStatus);
+
+// ---------------------------------------------------------------------------
+// Session & connection check.
+//
+// "Authentication required" is returned by the server whenever it cannot
+// verify a token — which looks identical whether the browser sent no token,
+// a token signed with a secret the server no longer uses, or a token that
+// expired. Nothing in the dashboard could tell those apart, so diagnosing it
+// meant asking a non-technical admin to open DevTools.
+//
+// This probes three levels deliberately: no auth needed, any signed-in user,
+// admin only. Which of the three is the first to fail identifies the fault on
+// its own — all three failing is a connection problem, /health passing but
+// /auth/me failing is a token problem, and only the admin one failing is a
+// role problem.
+//
+// Deliberately does NOT use api(): a 401 here must be reported, not trigger
+// the session teardown, and the raw status code matters.
+// ---------------------------------------------------------------------------
+
+// Reads the (unverified) payload of a JWT so the panel can show what the token
+// claims about itself. This is display only — the server is still the only
+// thing that decides whether a token is valid.
+function decodeTokenPayload(token) {
+  try {
+    const part = token.split('.')[1];
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function probeEndpoint(path, sendToken) {
+  const started = Date.now();
+  try {
+    const res = await fetch(API_BASE + path, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sendToken && AUTH_TOKEN ? { Authorization: 'Bearer ' + AUTH_TOKEN } : {}),
+      },
+    });
+    let text = '';
+    try { text = JSON.stringify(await res.json()).slice(0, 160); } catch (e) { text = '(no JSON body)'; }
+    return { ok: res.ok, status: res.status, body: text, ms: Date.now() - started, sentToken: !!(sendToken && AUTH_TOKEN) };
+  } catch (err) {
+    return { ok: false, status: 0, body: 'Request never completed: ' + err.message, ms: Date.now() - started, sentToken: !!(sendToken && AUTH_TOKEN) };
+  }
+}
+
+document.getElementById('sessionCheckBtn').addEventListener('click', async () => {
+  const box = document.getElementById('sessionCheckBox');
+  const btn = document.getElementById('sessionCheckBtn');
+  btn.disabled = true;
+  box.textContent = 'Checking…';
+
+  const payload = AUTH_TOKEN ? decodeTokenPayload(AUTH_TOKEN) : null;
+  const expiresAt = payload && payload.exp ? new Date(payload.exp * 1000) : null;
+
+  const checks = [
+    { label: '1. Server reachable (no sign-in needed)', path: '/health', auth: false },
+    { label: '2. Your sign-in accepted (any account)', path: '/auth/me', auth: true },
+    { label: '3. Admin access accepted', path: '/admin/content/articles', auth: true },
+  ];
+  const results = [];
+  for (const c of checks) results.push({ ...c, result: await probeEndpoint(c.path, c.auth) });
+
+  const row = (label, value) =>
+    `<tr><td style="padding:3px 10px 3px 0; color:var(--slate); white-space:nowrap;">${escapeHtmlAdmin(label)}</td>`
+    + `<td style="padding:3px 0;"><code style="font-size:11.5px;">${escapeHtmlAdmin(String(value))}</code></td></tr>`;
+
+  let html = '<div style="border:1px solid var(--paper-line); background:var(--paper); padding:12px;">';
+  html += '<strong style="font-size:12.5px;">What this browser is holding</strong><table style="width:100%; margin:6px 0 14px;">';
+  html += row('Server address', API_BASE);
+  html += row('Page address', location.origin);
+  html += row('Signed-in token held', AUTH_TOKEN ? 'yes (' + AUTH_TOKEN.length + ' characters)' : 'NO — nothing to send');
+  html += row('Token saved under', localStorage.getItem(ADMIN_TOKEN_KEY) ? ADMIN_TOKEN_KEY : '(nothing saved)');
+  html += row('Older shared key present', localStorage.getItem(SHARED_TOKEN_KEY) ? 'yes' : 'no');
+  if (payload) {
+    html += row('Token says account', payload.email || '(none)');
+    html += row('Token says role', payload.role || '(none)');
+    html += row('Token expires', expiresAt ? expiresAt.toLocaleString() + (expiresAt < new Date() ? '  ← ALREADY EXPIRED' : '') : '(no expiry)');
+  } else if (AUTH_TOKEN) {
+    html += row('Token contents', 'could not be read — the token is malformed');
+  }
+  html += '</table>';
+
+  html += '<strong style="font-size:12.5px;">What the server replied</strong><table style="width:100%; margin-top:6px;">';
+  results.forEach((r) => {
+    const good = r.result.ok;
+    html += `<tr><td style="padding:5px 10px 5px 0; white-space:nowrap;">${escapeHtmlAdmin(r.label)}</td>`
+      + `<td style="padding:5px 0; color:${good ? 'var(--green, #2e7d32)' : 'var(--red)'};">`
+      + `<strong>${r.result.status === 0 ? 'no reply' : r.result.status}</strong> `
+      + `<span style="color:var(--slate); font-size:11.5px;">(${r.result.ms} ms, token ${r.result.sentToken ? 'sent' : 'NOT sent'})</span><br>`
+      + `<code style="font-size:11px; color:var(--slate);">${escapeHtmlAdmin(r.result.body)}</code></td></tr>`;
+  });
+  html += '</table>';
+
+  // Say what the pattern means, so the admin gets an answer and not just data.
+  const [health, me, adminCheck] = results.map((r) => r.result);
+  let verdict;
+  if (!health.ok) {
+    verdict = 'The server itself could not be reached. This is a connection or server-address problem, not a sign-in problem.';
+  } else if (!AUTH_TOKEN) {
+    verdict = 'The server is fine, but this page is not holding a sign-in token at all — so every admin request is being sent as an anonymous visitor. Sign out fully and sign in again.';
+  } else if (!me.ok) {
+    verdict = expiresAt && expiresAt < new Date()
+      ? 'The server is fine and a token was sent, but it expired on ' + expiresAt.toLocaleString() + '. Sign in again.'
+      : 'The server is fine and a token was sent, but the server will not accept it. The token was most likely issued before the server\'s JWT_SECRET was changed. Signing in again will issue a fresh one; if that still fails, JWT_SECRET on Render is the thing to check.';
+  } else if (!adminCheck.ok) {
+    verdict = adminCheck.status === 403
+      ? 'Your sign-in works, but this account is not an admin — it is signed in as "' + escapeHtmlAdmin(String(payload && payload.role)) + '".'
+      : 'Your sign-in works but the admin endpoint refused it. Send this whole panel on.';
+  } else {
+    verdict = 'All three checks passed. Sign-in and admin access are working right now.';
+  }
+  html += `<div style="margin-top:12px; padding:10px; border-left:3px solid var(--gold, #b8860b); font-size:12.5px;"><strong>What this means:</strong> ${verdict}</div>`;
+  html += '</div>';
+
+  box.innerHTML = html;
+  btn.disabled = false;
+});
 
 // Connection diagnosis: tests mail ports from the server itself. A host-wide
 // SMTP block and a single unreachable mail server produce the same timeout,
