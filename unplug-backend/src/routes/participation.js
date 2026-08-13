@@ -698,18 +698,71 @@ router.post('/admin/trust-flags/:userId/reset', requireRole('admin'), async (req
 
 // -- Missions (daily + weekly) --
 
-// GET /participation/admin/missions?type=daily|weekly — full list including
-// disabled ones (admin needs to see everything, not just what's live).
+// GET /participation/admin/missions?type=&q=&enabled=&limit=&offset=
+//
+// Full list including disabled ones — the admin needs to see everything, not
+// just what is live. Searchable and paged: the programme is 870 missions
+// (730 daily, 104 weekly, 36 monthly), so returning them all was fine when
+// there were a dozen and is now both slow and unreadable. Every filter is
+// optional, so an existing caller passing nothing still works — it just gets
+// the first page, with `total` saying how many there really are.
 router.get('/admin/missions', requireRole('admin'), async (req, res, next) => {
   try {
-    const type = req.query.type;
+    const conditions = [];
+    const values = [];
+    if (req.query.type) {
+      values.push(String(req.query.type).trim());
+      conditions.push(`mission_type = $${values.length}`);
+    }
+    if (req.query.q) {
+      values.push(`%${String(req.query.q).trim()}%`);
+      conditions.push(`(code ILIKE $${values.length} OR title ILIKE $${values.length}
+                        OR description ILIKE $${values.length} OR action_code ILIKE $${values.length})`);
+    }
+    if (req.query.enabled === 'true' || req.query.enabled === 'false') {
+      values.push(req.query.enabled === 'true');
+      conditions.push(`is_enabled = $${values.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Capped rather than trusted — an admin screen asking for all 870 at once
+    // is a mistake, not a request worth honouring.
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    const [rows, count] = await Promise.all([
+      pool.query(
+        `SELECT * FROM missions ${where}
+          ORDER BY mission_type ASC, code ASC
+          LIMIT ${limit} OFFSET ${offset}`,
+        values
+      ),
+      pool.query(`SELECT COUNT(*)::int AS n FROM missions ${where}`, values),
+    ]);
+
+    res.json({
+      missions: rows.rows,
+      total: count.rows[0].n,
+      limit,
+      offset,
+      hasMore: offset + rows.rows.length < count.rows[0].n,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /participation/admin/missions/counts — how many of each type, and how
+// many are switched on. Lets the admin screen show the shape of the
+// programme without pulling 870 rows to count them.
+router.get('/admin/missions/counts', requireRole('admin'), async (req, res, next) => {
+  try {
     const result = await pool.query(
-      type
-        ? 'SELECT * FROM missions WHERE mission_type = $1 ORDER BY code ASC'
-        : 'SELECT * FROM missions ORDER BY mission_type ASC, code ASC',
-      type ? [type] : []
+      `SELECT mission_type, COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE is_enabled)::int AS enabled
+         FROM missions GROUP BY mission_type ORDER BY mission_type`
     );
-    res.json({ missions: result.rows });
+    res.json({ counts: result.rows });
   } catch (err) {
     next(err);
   }

@@ -16,6 +16,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -237,6 +238,13 @@ router.post('/:targetType/:targetId/react', requireAuth, async (req, res, next) 
     );
     if (existing.rowCount === 0) {
       try { await notifyProfileOwner(req.user.id, target.targetType, target.targetId, reaction === 'like' ? '❤️' : '👎', reaction + 'd'); } catch (e) { /* notification failure must never block the reaction itself */ }
+      // First reaction on this item only — switching like to dislike and back
+      // must not pay twice.
+      if (reaction === 'like') {
+        recordParticipationAsync(req.user.id, 'like_content', {
+          contentType: target.targetType, contentId: target.targetId,
+        });
+      }
     }
     res.status(201).json({ reaction });
   } catch (err) {
@@ -279,6 +287,11 @@ router.post('/:targetType/:targetId/save', requireAuth, async (req, res, next) =
     );
     if (inserted.rowCount > 0) {
       try { await notifyProfileOwner(req.user.id, target.targetType, target.targetId, '🔖', 'saved'); } catch (e) { /* notification failure must never block the save itself */ }
+      // rowCount > 0 means it was not already saved, so unsaving and saving
+      // the same item repeatedly cannot be used to earn.
+      recordParticipationAsync(req.user.id, 'save_content', {
+        contentType: target.targetType, contentId: target.targetId,
+      });
     }
     res.status(201).json({ saved: true });
   } catch (err) {

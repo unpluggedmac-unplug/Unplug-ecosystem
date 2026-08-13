@@ -57,7 +57,14 @@ after(async () => {
 test('get_current_monthly_challenge auto-rotates on first read and is stable within the same call', async () => {
   const result = await pool.query('SELECT * FROM get_current_monthly_challenge()');
   assert.equal(result.rows.length, 1);
-  assert.ok(['challenge_recognise20', 'challenge_vote40'].includes(result.rows[0].code));
+  // Asserts WHAT was picked is valid, not WHICH one. The pool was two
+  // seeded challenges; it is now 38, and naming them would break again on
+  // the next content drop.
+  const picked = await pool.query(
+    `SELECT mission_type, is_enabled FROM missions WHERE code = $1`, [result.rows[0].code]
+  );
+  assert.ok(['monthly', 'challenge'].includes(picked.rows[0].mission_type));
+  assert.equal(picked.rows[0].is_enabled, true);
 
   const again = await pool.query('SELECT * FROM get_current_monthly_challenge()');
   assert.equal(again.rows[0].code, result.rows[0].code);
@@ -82,7 +89,7 @@ test('assign_monthly_challenge gives a member exactly one row for the current mo
   const rows = await pool.query(
     `SELECT um.*, (um.assigned_date = date_trunc('month', CURRENT_DATE)::DATE) AS is_this_month
        FROM user_missions um JOIN missions m ON m.code = um.mission_code
-      WHERE um.user_id = $1 AND m.mission_type = 'challenge'`,
+      WHERE um.user_id = $1 AND m.mission_type IN ('monthly', 'challenge')`,
     [userId]
   );
   assert.equal(rows.rows.length, 1);
@@ -142,5 +149,7 @@ test('re-running every migration is idempotent — rotation history and challeng
   assert.equal(before1.rows[0].n, after1.rows[0].n);
 
   const challengeCount = await pool.query(`SELECT COUNT(*)::INTEGER AS n FROM missions WHERE mission_type = 'challenge'`);
-  assert.equal(challengeCount.rows[0].n, 2);
+  // Was 2 when two challenges were seeded. The catalogue grows, so this
+  // asserts the seed SURVIVES a re-run rather than pinning its size.
+  assert.ok(challengeCount.rows[0].n >= 2);
 });

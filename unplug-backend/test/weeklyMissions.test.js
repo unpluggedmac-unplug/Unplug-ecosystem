@@ -58,7 +58,13 @@ after(async () => {
 test('get_current_weekly_mission auto-rotates on first read and is stable within the same call', async () => {
   const result = await pool.query('SELECT * FROM get_current_weekly_mission()');
   assert.equal(result.rows.length, 1);
-  assert.ok(['weekly_recognise5', 'weekly_vote10', 'weekly_invite'].includes(result.rows[0].code));
+  // Asserts the pick is a real enabled weekly mission rather than one of
+  // three names — the pool is 107 now.
+  const picked = await pool.query(
+    `SELECT mission_type, is_enabled FROM missions WHERE code = $1`, [result.rows[0].code]
+  );
+  assert.equal(picked.rows[0].mission_type, 'weekly');
+  assert.equal(picked.rows[0].is_enabled, true);
 
   const again = await pool.query('SELECT * FROM get_current_weekly_mission()');
   assert.equal(again.rows[0].code, result.rows[0].code); // stable — not re-rolled on every read
@@ -131,7 +137,11 @@ test('a weekly mission does not complete from a DAILY mission row on the same ac
   // one whose mission_type matches assigned_date's granularity, not both
   // indiscriminately just because the action_code matches.
   const userId = await makeUser();
-  await pool.query('SELECT assign_daily_missions($1)', [userId]);
+  // Explicit, for the same reason: the daily pool is 731, so the random deal
+  // can no longer be relied on to hand out the row this test needs.
+  await pool.query(
+    `INSERT INTO user_missions (user_id, mission_code, assigned_date)
+     VALUES ($1, 'daily_recognise', CURRENT_DATE) ON CONFLICT DO NOTHING`, [userId]);
   await pool.query(`UPDATE weekly_mission_rotation SET mission_code = 'weekly_recognise5' WHERE week_start = date_trunc('week', CURRENT_DATE)::DATE`);
   await pool.query('SELECT assign_weekly_mission($1)', [userId]);
 
@@ -156,5 +166,7 @@ test('re-running every migration is idempotent — rotation history and mission 
   assert.equal(before1.rows[0].n, after1.rows[0].n);
 
   const weeklyCount = await pool.query(`SELECT COUNT(*)::INTEGER AS n FROM missions WHERE mission_type = 'weekly'`);
-  assert.equal(weeklyCount.rows[0].n, 3); // weekly_invite (Stage C) + weekly_recognise5 + weekly_vote10 (Stage H)
+  // Was 3 when only the Stage C/H missions existed. Asserts survival of a
+  // migration re-run, not the size of the catalogue.
+  assert.ok(weeklyCount.rows[0].n >= 3);
 });

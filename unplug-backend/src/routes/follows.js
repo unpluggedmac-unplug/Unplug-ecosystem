@@ -5,6 +5,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -28,6 +29,13 @@ router.post('/:userId', requireAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'That member no longer exists.' });
     }
     const result = await pool.query('SELECT follow_member($1, $2) AS followed', [req.user.id, followedId]);
+    // Only on a NEW follow. Re-following someone you already follow is a
+    // no-op, and scoring it would let a member farm points with one button.
+    if (result.rows[0].followed) {
+      recordParticipationAsync(req.user.id, 'member_follow', {
+        contentType: 'profile', contentId: followedId, contentOwner: followedId,
+      });
+    }
     res.status(201).json({ following: true, wasAlreadyFollowing: !result.rows[0].followed });
   } catch (err) {
     next(err);

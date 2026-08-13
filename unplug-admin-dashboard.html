@@ -1418,7 +1418,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div><label for="missionType">Type</label><select id="missionType" style="padding:8px; width:100%;">
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
-              <option value="challenge">Monthly Challenge</option>
+              <option value="monthly">Monthly</option>
+              <option value="challenge">Challenge (legacy)</option>
             </select></div>
             <div><label for="missionActionCode">Action code</label><input id="missionActionCode" placeholder="e.g. recognition_give"></div>
           </div>
@@ -1439,14 +1440,30 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="weeklyMissionCurrent" style="padding:0;"></div>
       </div>
 
-      <div class="panel" style="margin-bottom:16px;">
-        <div class="panel-head"><h3>Daily missions</h3></div>
-        <div class="panel-body" id="dailyMissionsBody" style="padding:0;"></div>
-      </div>
-
       <div class="panel">
-        <div class="panel-head"><h3>Weekly missions</h3></div>
-        <div class="panel-body" id="weeklyMissionsBody" style="padding:0;"></div>
+        <div class="panel-head"><h3>All missions <span id="missionListCount" style="font-weight:400; color:var(--slate); font-size:12.5px;"></span></h3></div>
+        <div class="panel-body" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; border-bottom:1px solid var(--paper-line);">
+          <input id="missionListSearch" placeholder="Search title, code, description or action…" style="flex:1; min-width:220px; padding:7px 10px; font-size:13px;">
+          <select id="missionListType" style="padding:6px; font-size:13px;">
+            <option value="">All types</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="challenge">Challenge (legacy)</option>
+          </select>
+          <select id="missionListEnabled" style="padding:6px; font-size:13px;">
+            <option value="">On and off</option>
+            <option value="true">Switched on</option>
+            <option value="false">Switched off</option>
+          </select>
+          <button class="btn btn-line" id="missionListSearchBtn" style="width:auto; padding:6px 14px;">Search</button>
+        </div>
+        <div class="panel-body" id="missionListBody" style="padding:0;"></div>
+        <div class="panel-body" style="display:flex; gap:10px; align-items:center; justify-content:flex-end; border-top:1px solid var(--paper-line);">
+          <span id="missionListPage" style="font-size:12px; color:var(--slate);"></span>
+          <button class="btn btn-line" id="missionListPrevBtn" style="width:auto; padding:5px 12px; font-size:12px;">Previous</button>
+          <button class="btn btn-line" id="missionListNextBtn" style="width:auto; padding:5px 12px; font-size:12px;">Next</button>
+        </div>
       </div>
 
       <div class="panel" style="margin-bottom:16px;">
@@ -1454,10 +1471,6 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="monthlyChallengeCurrent" style="padding:0;"></div>
       </div>
 
-      <div class="panel">
-        <div class="panel-head"><h3>Monthly challenges</h3></div>
-        <div class="panel-body" id="monthlyChallengesBody" style="padding:0;"></div>
-      </div>
     </div>
 
     <!-- BUSINESS STATUS LADDER -->
@@ -7264,20 +7277,13 @@ let UNPLUG_MISSIONS = [];
 
 async function loadUnplugMissions() {
   document.getElementById('weeklyMissionCurrent').innerHTML = '<div class="loading-state">Loading…</div>';
-  document.getElementById('dailyMissionsBody').innerHTML = '<div class="loading-state">Loading…</div>';
-  document.getElementById('weeklyMissionsBody').innerHTML = '<div class="loading-state">Loading…</div>';
   document.getElementById('monthlyChallengeCurrent').innerHTML = '<div class="loading-state">Loading…</div>';
-  document.getElementById('monthlyChallengesBody').innerHTML = '<div class="loading-state">Loading…</div>';
+  loadMissionList();
   try {
-    const [all, weeklyCurrent, monthlyCurrent] = await Promise.all([
-      api('/participation/admin/missions'),
+    const [weeklyCurrent, monthlyCurrent] = await Promise.all([
       api('/participation/admin/missions/weekly-current'),
       api('/participation/admin/missions/monthly-current'),
     ]);
-    UNPLUG_MISSIONS = all.missions || [];
-    renderMissionList('dailyMissionsBody', UNPLUG_MISSIONS.filter((m) => m.mission_type === 'daily'));
-    renderMissionList('weeklyMissionsBody', UNPLUG_MISSIONS.filter((m) => m.mission_type === 'weekly'));
-    renderMissionList('monthlyChallengesBody', UNPLUG_MISSIONS.filter((m) => m.mission_type === 'challenge'));
 
     const cur = weeklyCurrent.current;
     const history = weeklyCurrent.history || [];
@@ -7302,12 +7308,72 @@ async function loadUnplugMissions() {
       </div>`;
   } catch (err) {
     document.getElementById('weeklyMissionCurrent').innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
-    document.getElementById('dailyMissionsBody').innerHTML = '';
-    document.getElementById('weeklyMissionsBody').innerHTML = '';
     document.getElementById('monthlyChallengeCurrent').innerHTML = '';
-    document.getElementById('monthlyChallengesBody').innerHTML = '';
   }
 }
+
+// ---------------------------------------------------------------------------
+// THE MISSION LIST — one searchable, paged list for all 870.
+//
+// The three separate unpaginated panels this replaced fetched every mission
+// and filtered them in the browser. That was fine at a dozen; at 870 it is a
+// large download and three tables nobody can find anything in. The server
+// filters and pages now, so the screen stays the same size as the programme
+// grows.
+// ---------------------------------------------------------------------------
+const MISSION_PAGE_SIZE = 50;
+let MISSION_LIST_OFFSET = 0;
+let MISSION_LIST_TOTAL = 0;
+
+async function loadMissionList() {
+  const body = document.getElementById('missionListBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  const params = new URLSearchParams({
+    limit: String(MISSION_PAGE_SIZE), offset: String(MISSION_LIST_OFFSET),
+  });
+  const q = document.getElementById('missionListSearch').value.trim();
+  const type = document.getElementById('missionListType').value;
+  const enabled = document.getElementById('missionListEnabled').value;
+  if (q) params.set('q', q);
+  if (type) params.set('type', type);
+  if (enabled) params.set('enabled', enabled);
+
+  try {
+    const data = await api('/participation/admin/missions?' + params.toString());
+    const missions = data.missions || [];
+    MISSION_LIST_TOTAL = data.total || 0;
+    UNPLUG_MISSIONS = missions;
+
+    document.getElementById('missionListCount').textContent =
+      `— ${MISSION_LIST_TOTAL} mission${MISSION_LIST_TOTAL === 1 ? '' : 's'}`;
+    document.getElementById('missionListPage').textContent = MISSION_LIST_TOTAL
+      ? `${MISSION_LIST_OFFSET + 1}–${MISSION_LIST_OFFSET + missions.length} of ${MISSION_LIST_TOTAL}` : '';
+    document.getElementById('missionListPrevBtn').disabled = MISSION_LIST_OFFSET === 0;
+    document.getElementById('missionListNextBtn').disabled = !data.hasMore;
+
+    renderMissionList('missionListBody', missions);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+document.getElementById('missionListSearchBtn').addEventListener('click', () => {
+  MISSION_LIST_OFFSET = 0; loadMissionList();
+});
+document.getElementById('missionListSearch').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { MISSION_LIST_OFFSET = 0; loadMissionList(); }
+});
+['missionListType', 'missionListEnabled'].forEach((id) => {
+  document.getElementById(id).addEventListener('change', () => {
+    MISSION_LIST_OFFSET = 0; loadMissionList();
+  });
+});
+document.getElementById('missionListPrevBtn').addEventListener('click', () => {
+  MISSION_LIST_OFFSET = Math.max(0, MISSION_LIST_OFFSET - MISSION_PAGE_SIZE); loadMissionList();
+});
+document.getElementById('missionListNextBtn').addEventListener('click', () => {
+  MISSION_LIST_OFFSET += MISSION_PAGE_SIZE; loadMissionList();
+});
 
 function renderMissionList(elId, missions) {
   const el = document.getElementById(elId);
