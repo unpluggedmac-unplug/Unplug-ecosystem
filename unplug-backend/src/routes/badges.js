@@ -6,6 +6,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
@@ -63,11 +64,69 @@ router.get('/user/:userId', async (req, res, next) => {
 
 // -- Admin --
 
-// GET /badges/admin/all — every badge type, enabled or not.
+// GET /badges/admin/all?q=&category=&enabled=&limit=&offset=
+//
+// Searchable and paginated. The catalogue is 2000+ badges, so returning all
+// of them was fine when there were forty and is not now: it is a slow
+// response and, more to the point, an unusable list. Every filter is
+// optional, so an existing caller that passes nothing still works — it just
+// gets the first page instead of everything, with `total` saying how many
+// there really are.
 router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
   try {
-    const result = await pool.query('SELECT * FROM badges ORDER BY sort_order ASC, code ASC');
-    res.json({ badges: result.rows });
+    const conditions = [];
+    const values = [];
+    if (req.query.q) {
+      values.push(`%${String(req.query.q).trim()}%`);
+      conditions.push(`(code ILIKE $${values.length} OR label ILIKE $${values.length} OR description ILIKE $${values.length})`);
+    }
+    if (req.query.category) {
+      values.push(String(req.query.category).trim());
+      conditions.push(`category = $${values.length}`);
+    }
+    if (req.query.enabled === 'true' || req.query.enabled === 'false') {
+      values.push(req.query.enabled === 'true');
+      conditions.push(`is_enabled = $${values.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Capped rather than trusted: an admin page asking for 2000 rows at once
+    // is a mistake, not a request worth honouring.
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    const [rows, count] = await Promise.all([
+      pool.query(
+        `SELECT * FROM badges ${where}
+          ORDER BY sort_order ASC, category ASC, code ASC
+          LIMIT ${limit} OFFSET ${offset}`,
+        values
+      ),
+      pool.query(`SELECT COUNT(*)::int AS n FROM badges ${where}`, values),
+    ]);
+
+    res.json({
+      badges: rows.rows,
+      total: count.rows[0].n,
+      limit,
+      offset,
+      hasMore: offset + rows.rows.length < count.rows[0].n,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /badges/admin/categories — every category with how many badges are in
+// it, so the admin can narrow 2000 down before searching.
+router.get('/admin/categories', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT category, COUNT(*)::int AS badges,
+              COUNT(*) FILTER (WHERE is_enabled)::int AS enabled
+         FROM badges GROUP BY category ORDER BY category ASC`
+    );
+    res.json({ categories: result.rows });
   } catch (err) {
     next(err);
   }
@@ -158,6 +217,84 @@ router.post('/admin/:code/award', requireRole('admin'), async (req, res, next) =
       // A disabled badge is still awardable on purpose, but the admin should
       // know it is not in the public "obtainable badges" list.
       badgeDisabled: badge.rows[0].is_enabled === false,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /badges/admin/:code/award-bulk — body { userIds: [], reason?, awardMonth?, awardYear? }
+//
+// One badge, many members, one action. Awarding a "Top 10 August 2026" badge
+// to thirty finalists one click at a time is where an admin gives up halfway
+// and the thirty-first never gets it.
+//
+// Every member is awarded through the SAME award_badge() function the single
+// award uses — no second code path — so the period rules, the follower
+// fan-out and the notification behave identically whether one person or a
+// hundred were selected.
+//
+// Deliberately NOT one transaction. A single bad id in a list of fifty must
+// not silently discard the forty-nine that were fine; each is applied on its
+// own and the response reports exactly what happened to every one.
+router.post('/admin/:code/award-bulk', requireRole('admin'), async (req, res, next) => {
+  try {
+    const raw = Array.isArray(req.body.userIds) ? req.body.userIds : [];
+    // De-duplicated before anything else: the same member twice in one
+    // request would otherwise be reported as awarded and then "already had
+    // it", which reads like a bug.
+    const userIds = [...new Set(raw.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    if (!userIds.length) {
+      return res.status(400).json({ error: 'Choose at least one member to award this badge to.' });
+    }
+    if (userIds.length > 500) {
+      return res.status(400).json({ error: 'Award to at most 500 members at a time.' });
+    }
+    const period = parsePeriod(req.body.awardMonth, req.body.awardYear);
+    if (!period) return res.status(400).json({ error: PERIOD_ERROR });
+
+    const badge = await pool.query('SELECT code, label, is_enabled FROM badges WHERE code = $1', [req.params.code]);
+    if (!badge.rows.length) return res.status(404).json({ error: 'Badge not found.' });
+
+    // Named up front so a mistyped id is reported as "no such member" rather
+    // than silently counted as "already had it".
+    const known = await pool.query('SELECT id, email FROM users WHERE id = ANY($1)', [userIds]);
+    const emailById = new Map(known.rows.map((u) => [u.id, u.email]));
+
+    const awarded = [];
+    const alreadyHad = [];
+    const notFound = [];
+    const failed = [];
+
+    for (const userId of userIds) {
+      if (!emailById.has(userId)) { notFound.push(userId); continue; }
+      try {
+        const r = await pool.query('SELECT award_badge($1, $2, $3, $4, $5, $6) AS awarded', [
+          userId, req.params.code, req.user.id, req.body.reason || null, period.month, period.year,
+        ]);
+        (r.rows[0].awarded ? awarded : alreadyHad).push(userId);
+      } catch (err) {
+        failed.push({ userId, error: err.message });
+      }
+    }
+
+    await logActivity(req.user.id, 'badge_awarded_bulk',
+      `Awarded "${badge.rows[0].label}" (${req.params.code}) to ${awarded.length} member(s)`
+      + `${alreadyHad.length ? `, ${alreadyHad.length} already had it` : ''}`
+      + `${notFound.length ? `, ${notFound.length} not found` : ''}`
+      + `${period.month ? ` for ${period.month}/${period.year}` : ''}`).catch(() => {});
+
+    res.json({
+      badge: req.params.code,
+      awarded: awarded.length,
+      alreadyHad: alreadyHad.length,
+      notFound,
+      failed,
+      badgeDisabled: badge.rows[0].is_enabled === false,
+      message: `${awarded.length} awarded`
+        + (alreadyHad.length ? `, ${alreadyHad.length} already had it` : '')
+        + (notFound.length ? `, ${notFound.length} not found` : '')
+        + (failed.length ? `, ${failed.length} failed` : '') + '.',
     });
   } catch (err) {
     next(err);

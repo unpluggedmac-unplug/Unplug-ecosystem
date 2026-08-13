@@ -1627,9 +1627,36 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="panel" style="margin-bottom:20px;">
         <div class="panel-head"><h3>Award a badge</h3></div>
         <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin:0 0 14px;">Pick one badge, then tick everyone who should get it. The same badge goes to all of them in one action.</p>
+
+          <!-- STEP 1: narrow 2000 badges down to one -->
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--red); font-weight:700; margin-bottom:8px;">1 · Choose the badge</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;">
+            <div class="field" style="min-width:210px;"><label for="badgeAwardCategory">Category</label>
+              <select id="badgeAwardCategory" style="padding:8px;"><option value="">All categories</option></select></div>
+            <div class="field" style="flex:1; min-width:200px;"><label for="badgeAwardSearch">Search badges</label>
+              <input id="badgeAwardSearch" placeholder="Name, code or description…"></div>
+            <button class="btn btn-line" style="width:auto;" id="badgeAwardFindBtn">Find</button>
+          </div>
+          <div class="field"><label for="badgeAwardBadge">Badge</label>
+            <select id="badgeAwardBadge" style="padding:8px;"><option value="">Search or pick a category first…</option></select></div>
+          <div id="badgeAwardPreview" style="font-size:12.5px; color:var(--slate); margin:-4px 0 16px; min-height:18px;"></div>
+
+          <!-- STEP 2: pick as many members as needed -->
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--red); font-weight:700; margin-bottom:8px;">2 · Choose the members</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;">
+            <div class="field" style="flex:1; min-width:220px;"><label for="badgeUserSearch">Search members</label>
+              <input id="badgeUserSearch" placeholder="Name or email…"></div>
+            <button class="btn btn-line" style="width:auto;" id="badgeUserSearchBtn">Search</button>
+            <button class="btn btn-line" style="width:auto;" id="badgeUserSelectAllBtn">Select all shown</button>
+            <button class="btn btn-line" style="width:auto;" id="badgeUserClearBtn">Clear</button>
+          </div>
+          <div id="badgeUserList" style="max-height:260px; overflow-y:auto; border:1px solid var(--paper-line); padding:8px 10px; font-size:13px;">Loading members…</div>
+          <div id="badgeUserSelected" style="font-size:12.5px; color:var(--slate); margin-top:6px;">Nobody selected yet.</div>
+
+          <!-- STEP 3 -->
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--red); font-weight:700; margin:16px 0 8px;">3 · Award</div>
           <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-            <div class="field"><label for="badgeAwardBadge">Badge</label><select id="badgeAwardBadge" style="padding:8px;"></select></div>
-            <div class="field"><label for="badgeAwardUser">Member</label><select id="badgeAwardUser" style="padding:8px;"><option value="">Loading members…</option></select></div>
             <div class="field"><label for="badgeAwardMonth">Month</label><select id="badgeAwardMonth" style="padding:8px; max-width:170px;"></select></div>
             <div class="field"><label for="badgeAwardYear">Year</label><input id="badgeAwardYear" type="number" min="2000" max="2100" placeholder="Year" style="max-width:110px;"></div>
             <div class="field" style="flex:1; min-width:180px;"><label for="badgeAwardReason">Reason (optional)</label><input id="badgeAwardReason" placeholder="e.g. Community MVP this quarter"></div>
@@ -1637,7 +1664,24 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
         </div>
       </div>
-      <div class="panel"><div class="panel-head"><h3>Badge types</h3></div><div class="panel-body" id="badgesBody" style="padding:0;"></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Badge types</h3></div>
+        <div class="panel-body" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; border-bottom:1px solid var(--paper-line);">
+          <div class="field" style="min-width:210px;"><label for="badgeListCategory">Category</label>
+            <select id="badgeListCategory" style="padding:8px;"><option value="">All categories</option></select></div>
+          <div class="field" style="flex:1; min-width:200px;"><label for="badgeListSearch">Search</label>
+            <input id="badgeListSearch" placeholder="Name, code or description…"></div>
+          <button class="btn btn-line" style="width:auto;" id="badgeListSearchBtn">Search</button>
+          <span id="badgeListCount" style="font-size:12.5px; color:var(--slate);"></span>
+        </div>
+        <div class="panel-body" id="badgesBody" style="padding:0;"></div>
+        <div class="panel-body" style="display:flex; gap:10px; align-items:center; justify-content:flex-end; border-top:1px solid var(--paper-line);">
+          <button class="btn btn-line" style="width:auto;" id="badgeListPrevBtn">← Previous</button>
+          <span id="badgeListPage" style="font-size:12.5px; color:var(--slate);"></span>
+          <button class="btn btn-line" style="width:auto;" id="badgeListNextBtn">Next →</button>
+        </div>
+      </div>
     </div>
 
     <!-- HIGHLIGHTED ARTICLES -->
@@ -7885,34 +7929,139 @@ document.getElementById('modLookupBtn').addEventListener('click', async () => {
 // Achievements. Backed by /badges/admin/* (091_badges_and_hof_linking.sql).
 // ---------------------------------------------------------------------------
 let _badgeUsersLoaded = false;
-async function populateBadgeUserPicker() {
-  if (_badgeUsersLoaded) return;
-  const select = document.getElementById('badgeAwardUser');
-  select.innerHTML = '<option value="">Loading members…</option>';
+// ---------------------------------------------------------------------------
+// BADGES — a 2000-badge catalogue, so nothing here loads the whole list.
+//
+// The catalogue is far too big for a dropdown: the picker narrows by category
+// and search first, and the browse table below is paged. Awarding takes as
+// many members as you tick, in one action.
+// ---------------------------------------------------------------------------
+const BADGE_PAGE_SIZE = 50;
+let BADGE_LIST_OFFSET = 0;
+let BADGE_LIST_TOTAL = 0;
+let BADGE_SELECTED_USERS = new Map(); // id -> label, so a selection survives a re-search
+let BADGE_AWARD_CACHE = new Map();
+let _badgeCategoriesLoaded = false;
+
+// Filled once and reused by both the award picker and the browse filter.
+async function loadBadgeCategories() {
+  if (_badgeCategoriesLoaded) return;
   try {
-    const data = await api('/admin/users?limit=500&offset=0');
-    const users = data.users || [];
-    select.innerHTML = users.map((u) => `<option value="${u.id}">${escapeHtmlAdmin(u.full_name || u.email)}</option>`).join('');
-    _badgeUsersLoaded = true;
+    const data = await api('/badges/admin/categories');
+    const options = '<option value="">All categories</option>'
+      + (data.categories || []).map((c) =>
+          `<option value="${escapeHtmlAdmin(c.category)}">${escapeHtmlAdmin(c.category)} (${c.badges})</option>`).join('');
+    document.getElementById('badgeAwardCategory').innerHTML = options;
+    document.getElementById('badgeListCategory').innerHTML = options;
+    _badgeCategoriesLoaded = true;
+  } catch (err) { /* the pickers still work without categories */ }
+}
+
+function showBadgeAwardPreview() {
+  const b = BADGE_AWARD_CACHE.get(document.getElementById('badgeAwardBadge').value);
+  const el = document.getElementById('badgeAwardPreview');
+  el.textContent = b ? `${b.emoji} ${b.label} — ${b.description}` : '';
+}
+
+// --- Step 1: find the badge -------------------------------------------------
+async function findBadgesForAward() {
+  const select = document.getElementById('badgeAwardBadge');
+  const category = document.getElementById('badgeAwardCategory').value;
+  const q = document.getElementById('badgeAwardSearch').value.trim();
+  if (!category && !q) {
+    select.innerHTML = '<option value="">Search or pick a category first…</option>';
+    document.getElementById('badgeAwardPreview').textContent = '';
+    return;
+  }
+  select.innerHTML = '<option value="">Searching…</option>';
+  const params = new URLSearchParams({ limit: '200' });
+  if (category) params.set('category', category);
+  if (q) params.set('q', q);
+  try {
+    const data = await api('/badges/admin/all?' + params.toString());
+    const badges = data.badges || [];
+    if (!badges.length) {
+      select.innerHTML = '<option value="">No badges match that</option>';
+      document.getElementById('badgeAwardPreview').textContent = '';
+      return;
+    }
+    // Disabled badges stay awardable on purpose — is_enabled only governs the
+    // public "obtainable badges" list — so they are labelled, never hidden.
+    select.innerHTML = badges.map((b) =>
+      `<option value="${escapeHtmlAdmin(b.code)}">${b.emoji} ${escapeHtmlAdmin(b.label)}${b.is_enabled ? '' : ' — disabled'}</option>`).join('');
+    BADGE_AWARD_CACHE = new Map(badges.map((b) => [b.code, b]));
+    showBadgeAwardPreview();
+    if (data.hasMore) {
+      document.getElementById('badgeAwardPreview').textContent =
+        `Showing the first ${badges.length} of ${data.total} matches — narrow the search to see the rest.`;
+    }
   } catch (err) {
-    select.innerHTML = '<option value="">Could not load members</option>';
+    select.innerHTML = '<option value="">Could not search badges</option>';
   }
 }
 
-async function loadBadges() {
-  populateBadgeUserPicker();
-  const body = document.getElementById('badgesBody');
-  const awardSelect = document.getElementById('badgeAwardBadge');
-  body.innerHTML = '<div class="loading-state">Loading…</div>';
+// --- Step 2: pick the members ----------------------------------------------
+async function searchBadgeUsers() {
+  const list = document.getElementById('badgeUserList');
+  const q = document.getElementById('badgeUserSearch').value.trim();
+  list.innerHTML = 'Loading members…';
   try {
-    const data = await api('/badges/admin/all');
+    const params = new URLSearchParams({ limit: '200', offset: '0' });
+    if (q) params.set('q', q);
+    const data = await api('/admin/users?' + params.toString());
+    const users = data.users || [];
+    if (!users.length) { list.innerHTML = '<span style="color:var(--slate);">No members match that.</span>'; return; }
+    list.innerHTML = users.map((u) => {
+      const label = u.full_name ? `${u.full_name} (${u.email})` : u.email;
+      return `<label style="display:block; padding:3px 0; cursor:pointer;">
+        <input type="checkbox" class="badge-user-chk" value="${u.id}" data-label="${escapeHtmlAdmin(label)}"
+               ${BADGE_SELECTED_USERS.has(String(u.id)) ? 'checked' : ''}>
+        ${escapeHtmlAdmin(label)}</label>`;
+    }).join('');
+    list.querySelectorAll('.badge-user-chk').forEach((chk) => {
+      chk.addEventListener('change', () => {
+        if (chk.checked) BADGE_SELECTED_USERS.set(chk.value, chk.dataset.label);
+        else BADGE_SELECTED_USERS.delete(chk.value);
+        renderBadgeSelectedCount();
+      });
+    });
+    renderBadgeSelectedCount();
+  } catch (err) {
+    list.innerHTML = `<span style="color:var(--red);">Could not load members: ${escapeHtmlAdmin(err.message)}</span>`;
+  }
+}
+
+// Names the first few rather than only counting: "12 selected" is not enough
+// to catch having ticked the wrong person before awarding.
+function renderBadgeSelectedCount() {
+  const el = document.getElementById('badgeUserSelected');
+  const n = BADGE_SELECTED_USERS.size;
+  if (!n) { el.textContent = 'Nobody selected yet.'; return; }
+  const names = Array.from(BADGE_SELECTED_USERS.values());
+  el.textContent = `${n} selected: ` + names.slice(0, 5).join(', ') + (n > 5 ? ` and ${n - 5} more` : '');
+}
+
+// --- The browse table -------------------------------------------------------
+async function loadBadges() {
+  loadBadgeCategories();
+  const body = document.getElementById('badgesBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  const params = new URLSearchParams({ limit: String(BADGE_PAGE_SIZE), offset: String(BADGE_LIST_OFFSET) });
+  const q = document.getElementById('badgeListSearch').value.trim();
+  const category = document.getElementById('badgeListCategory').value;
+  if (q) params.set('q', q);
+  if (category) params.set('category', category);
+  try {
+    const data = await api('/badges/admin/all?' + params.toString());
     const badges = data.badges || [];
-    // Every badge is awardable, disabled ones included — is_enabled only
-    // governs the public "obtainable badges" list, so it is labelled here
-    // rather than hidden, which would leave an admin unable to grant it.
-    awardSelect.innerHTML = badges.map((b) =>
-      `<option value="${b.code}">${b.emoji} ${escapeHtmlAdmin(b.label)}${b.is_enabled ? '' : ' — disabled'}</option>`).join('');
-    if (!badges.length) { body.innerHTML = '<div class="empty-state">No badge types yet — create one above.</div>'; return; }
+    BADGE_LIST_TOTAL = data.total || 0;
+    document.getElementById('badgeListCount').textContent = `${BADGE_LIST_TOTAL} badge${BADGE_LIST_TOTAL === 1 ? '' : 's'}`;
+    document.getElementById('badgeListPage').textContent = BADGE_LIST_TOTAL
+      ? `${BADGE_LIST_OFFSET + 1}–${BADGE_LIST_OFFSET + badges.length} of ${BADGE_LIST_TOTAL}` : '';
+    document.getElementById('badgeListPrevBtn').disabled = BADGE_LIST_OFFSET === 0;
+    document.getElementById('badgeListNextBtn').disabled = !data.hasMore;
+
+    if (!badges.length) { body.innerHTML = '<div class="empty-state">No badges match that.</div>'; return; }
     const table = document.createElement('table');
     table.innerHTML = '<tr><th></th><th>Label</th><th>Category</th><th>Period</th><th>Status</th><th></th></tr>';
     badges.forEach((b) => {
@@ -7921,7 +8070,8 @@ async function loadBadges() {
         ? `${BADGE_MONTHS[b.award_month - 1]} ${b.award_year}`
         : '<span style="color:#999;">Ongoing</span>';
       tr.innerHTML = `<td style="font-size:20px;">${b.emoji}</td>`
-        + `<td><strong>${escapeHtmlAdmin(b.label)}</strong><br><span style="font-size:11.5px; color:#666;">${escapeHtmlAdmin(b.description)}</span></td>`
+        + `<td><strong>${escapeHtmlAdmin(b.label)}</strong><br><span style="font-size:11.5px; color:#666;">${escapeHtmlAdmin(b.description)}</span>`
+        + `<br><code style="font-size:10.5px; color:var(--slate);">${escapeHtmlAdmin(b.code)}</code></td>`
         + `<td>${escapeHtmlAdmin(b.category)}</td>`
         + `<td style="font-size:12px;">${period}</td>`
         + `<td>${b.is_enabled ? 'Enabled' : 'Disabled'}</td>`
@@ -7954,6 +8104,36 @@ async function loadBadges() {
     body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
   }
 }
+
+document.getElementById('badgeAwardFindBtn').addEventListener('click', findBadgesForAward);
+document.getElementById('badgeAwardCategory').addEventListener('change', findBadgesForAward);
+document.getElementById('badgeAwardSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') findBadgesForAward(); });
+document.getElementById('badgeAwardBadge').addEventListener('change', showBadgeAwardPreview);
+
+document.getElementById('badgeUserSearchBtn').addEventListener('click', searchBadgeUsers);
+document.getElementById('badgeUserSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchBadgeUsers(); });
+document.getElementById('badgeUserSelectAllBtn').addEventListener('click', () => {
+  document.querySelectorAll('.badge-user-chk').forEach((chk) => {
+    chk.checked = true;
+    BADGE_SELECTED_USERS.set(chk.value, chk.dataset.label);
+  });
+  renderBadgeSelectedCount();
+});
+document.getElementById('badgeUserClearBtn').addEventListener('click', () => {
+  BADGE_SELECTED_USERS = new Map();
+  document.querySelectorAll('.badge-user-chk').forEach((chk) => { chk.checked = false; });
+  renderBadgeSelectedCount();
+});
+
+document.getElementById('badgeListSearchBtn').addEventListener('click', () => { BADGE_LIST_OFFSET = 0; loadBadges(); });
+document.getElementById('badgeListSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') { BADGE_LIST_OFFSET = 0; loadBadges(); } });
+document.getElementById('badgeListCategory').addEventListener('change', () => { BADGE_LIST_OFFSET = 0; loadBadges(); });
+document.getElementById('badgeListPrevBtn').addEventListener('click', () => {
+  BADGE_LIST_OFFSET = Math.max(0, BADGE_LIST_OFFSET - BADGE_PAGE_SIZE); loadBadges();
+});
+document.getElementById('badgeListNextBtn').addEventListener('click', () => {
+  BADGE_LIST_OFFSET += BADGE_PAGE_SIZE; loadBadges();
+});
 
 // Month/year are a pair everywhere they appear — the backend rejects one
 // without the other, so the UI checks it first and says so in plain words
@@ -8030,32 +8210,48 @@ document.getElementById('createBadgeBtn').addEventListener('click', async () => 
 
 document.getElementById('awardBadgeBtn').addEventListener('click', async () => {
   const code = document.getElementById('badgeAwardBadge').value;
-  const userId = document.getElementById('badgeAwardUser').value;
-  if (!code || !userId) { showToast('Pick a badge and a member.', true); return; }
+  const userIds = Array.from(BADGE_SELECTED_USERS.keys()).map(Number);
+  if (!code) { showToast('Pick a badge first.', true); return; }
+  if (!userIds.length) { showToast('Tick at least one member.', true); return; }
   const period = badgePeriodFrom('badgeAwardMonth', 'badgeAwardYear');
   if (!period) { showToast('Set both a month and a year, or leave both blank.', true); return; }
+
+  const badge = BADGE_AWARD_CACHE.get(code);
+  const name = badge ? badge.label : code;
+  // Named and counted before it happens: awarding the wrong badge to forty
+  // people is a great deal more work to undo than to prevent.
+  if (!confirm(`Award "${name}" to ${userIds.length} member${userIds.length === 1 ? '' : 's'}?`)) return;
+
+  const btn = document.getElementById('awardBadgeBtn');
+  btn.disabled = true;
+  btn.textContent = 'Awarding…';
   try {
-    const result = await api(`/badges/admin/${code}/award`, {
+    const result = await api(`/badges/admin/${code}/award-bulk`, {
       method: 'POST',
       body: JSON.stringify({
-        userId,
+        userIds,
         reason: document.getElementById('badgeAwardReason').value.trim() || undefined,
         awardMonth: period.awardMonth,
         awardYear: period.awardYear,
       }),
     });
-    // "already has" is only the whole story for an undated badge; with a
-    // period it means they already have it FOR THAT MONTH, which is a
-    // different thing an admin may well want to correct.
-    const already = period.awardMonth
-      ? `That member already has this badge for ${BADGE_MONTHS[period.awardMonth - 1]} ${period.awardYear}.`
-      : 'That member already has this badge.';
-    const awardedMsg = result.badgeDisabled
-      ? 'Badge awarded — note this badge is disabled, so it is not in the public list of obtainable badges.'
-      : 'Badge awarded.';
-    showToast(result.awarded ? awardedMsg : already);
+    // The server reports awarded / already had it / not found separately, so
+    // "12 awarded, 3 already had it" is the honest answer rather than "done".
+    let msg = result.message || 'Done.';
+    if (result.badgeDisabled) {
+      msg += ' Note: this badge is disabled, so it is not in the public list of obtainable badges.';
+    }
+    showToast(msg, (result.failed && result.failed.length) > 0);
     document.getElementById('badgeAwardReason').value = '';
-  } catch (err) { showToast(err.message, true); }
+    BADGE_SELECTED_USERS = new Map();
+    document.querySelectorAll('.badge-user-chk').forEach((chk) => { chk.checked = false; });
+    renderBadgeSelectedCount();
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Award';
+  }
 });
 
 async function viewUnplugCampaignReport(id) {

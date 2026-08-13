@@ -137,8 +137,11 @@ test('admin can create a brand new badge type, not just use the seeded ones', as
   });
   assert.equal(create.status, 201);
 
-  const all = await req('GET', '/badges/admin/all', { token: tokenFor(admin, 'admin') });
-  assert.ok(all.body.badges.some((b) => b.code === 'test_badge_xyz'));
+  // Searched rather than scanned: the catalogue is 2000+ badges and the admin
+  // list is paged, so "is it on page one" stopped being the same question as
+  // "does it exist". Searching is also what an admin actually does.
+  const found = await req('GET', '/badges/admin/all?q=test_badge_xyz', { token: tokenFor(admin, 'admin') });
+  assert.ok(found.body.badges.some((b) => b.code === 'test_badge_xyz'));
 });
 
 test('hall_of_fame accepts an optional linkedUserId, and get_public_profile_analytics reflects it as competitions_won', async () => {
