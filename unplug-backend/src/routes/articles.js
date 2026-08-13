@@ -4,6 +4,7 @@ const { requireAuth, requireOwnerOrAdmin, requireRole } = require('../middleware
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { deriveMetadata, slugify } = require('../utils/articleMeta');
 const { publishesFree, statusForNewSubmission } = require('../utils/publishingRights');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -318,6 +319,10 @@ router.post('/', requireAuth, async (req, res, next) => {
         : 'Article created using your free Article credit — submitted for approval, no payment needed.',
       awaiting_payment: 'Article created — call POST /payments/initiate with linkedType "article_publish" and this article\'s id (R95.00) to submit it for approval.',
     };
+    recordParticipationAsync(req.user.id, 'content_submit', {
+      contentType: 'article', contentId: result.rows[0] ? result.rows[0].id : null,
+    });
+
     res.status(201).json({
       article,
       sectionCount,

@@ -3,6 +3,7 @@ const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { publishesFree, statusForNewSubmission } = require("../utils/publishingRights");
 const { getPagination, paginationMeta } = require('../utils/pagination');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -63,6 +64,8 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (hasCredit && !publishesFree(req.user)) {
       await pool.query('UPDATE profiles SET free_event_credits = free_event_credits - 1 WHERE id = $1', [profileResult.rows[0].id]);
     }
+
+    recordParticipationAsync(req.user.id, 'content_submit', { contentType: 'event' });
 
     // Derived from the STATUS that was actually persisted, not re-derived from
     // hasCredit alone — hasCredit only covers the paying-member free-credit

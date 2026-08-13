@@ -3,6 +3,7 @@ const pool = require('../db');
 const { requireAuth, requireRole, requireOwnerOrAdmin } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { SA_PROVINCES } = require('../utils/saPlaces');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -339,6 +340,13 @@ router.patch('/profiles/:id', requireOwnerOrAdmin(getProfileOwnerId), async (req
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Profile not found.' });
+    }
+    // The OWNER keeping their listing current is the participation; an admin
+    // editing someone else's must never earn that member points.
+    if (req.user && req.user.id === result.rows[0].user_id) {
+      recordParticipationAsync(req.user.id, 'profile_action', {
+        contentType: 'profile', contentId: result.rows[0].id,
+      });
     }
     res.json({ profile: result.rows[0] });
   } catch (err) {

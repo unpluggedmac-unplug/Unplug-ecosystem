@@ -3,6 +3,7 @@ const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { publishesFree } = require("../utils/publishingRights");
 const { getPagination, paginationMeta } = require('../utils/pagination');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -127,6 +128,10 @@ router.post('/', requireAuth, async (req, res, next) => {
       values
     );
     const insertedImages = insertResult.rows;
+
+    // One credit for the submission, not one per image — a ten-image bundle
+    // is a single act of taking part.
+    recordParticipationAsync(req.user.id, 'gallery_submit_or_interact', { contentType: 'gallery_image' });
 
     res.status(201).json({
       bundle,

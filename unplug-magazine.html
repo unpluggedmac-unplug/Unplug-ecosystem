@@ -7696,7 +7696,19 @@ async function loadCalendarEvents() {
         document.querySelectorAll('.cal-add-wrap.open').forEach((w) => { if (w !== wrap) w.classList.remove('open'); });
         wrap.classList.toggle('open');
       });
-      menu.addEventListener('click', (e) => { e.stopPropagation(); wrap.classList.remove('open'); });
+      menu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        wrap.classList.remove('open');
+        // Adding an event to your own calendar is a real interaction with it
+        // — recorded on choosing Google or .ics, not on merely opening the
+        // menu, so an accidental tap earns nothing.
+        if (e.target && e.target.tagName === 'A' && UnplugAPI.getToken()) {
+          UnplugAPI.api('/participation/action', {
+            method: 'POST',
+            body: JSON.stringify({ actionCode: 'event_interaction', contentType: 'event', contentId: ev.id || null }),
+          }).catch(() => {});
+        }
+      });
       // Clicking the card (not the add-to-cal button) opens the detail modal.
       card.addEventListener('click', () => openEventModal(ev));
     });

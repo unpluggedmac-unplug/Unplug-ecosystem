@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -103,6 +104,11 @@ router.post('/nominate', publicSubmitLimiter, honeypot, async (req, res, next) =
        VALUES ($1, $2, $3)`,
       [name, (message || '').trim() || null, (email || '').trim() || null]
     );
+
+    // Nominating is open to anyone, signed in or not — only a member can be
+    // credited for it. Capped at 5/day by the action, so the form cannot be
+    // submitted repeatedly for points.
+    if (req.user) recordParticipationAsync(req.user.id, 'recognition_nominate');
     res.status(201).json({
       // Says the week out loud. Someone who nominates a friend and sees
       // nothing for days should know that's the process working, not a

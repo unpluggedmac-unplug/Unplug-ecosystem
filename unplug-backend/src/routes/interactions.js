@@ -141,6 +141,25 @@ router.post('/:targetType/:targetId/view', async (req, res, next) => {
        ON CONFLICT DO NOTHING`,
       [targetType, targetId, req.user ? req.user.id : null, req.user ? null : sessionId]
     );
+    // Discovering someone or something is a real participation action, but
+    // only for a signed-in member and only for the three target types the
+    // mission programme actually asks about. Capped at 10/day per action by
+    // the engine, so scrolling a list cannot be farmed.
+    const DISCOVERY_ACTION = {
+      profile: 'member_discover',
+      marketplace_listing: 'marketplace_discover',
+    };
+    if (req.user) {
+      // A business and a member are both `profile` rows; the type tells them
+      // apart, so a business view is credited as a business discovery.
+      let action = DISCOVERY_ACTION[targetType];
+      if (targetType === 'profile') {
+        const kind = await pool.query('SELECT type FROM profiles WHERE id = $1', [targetId]);
+        if (kind.rows[0] && kind.rows[0].type === 'business') action = 'business_discover';
+      }
+      if (action) recordParticipationAsync(req.user.id, action, { contentType: targetType, contentId: targetId });
+    }
+
     // The caller only needs the new total to repaint; whether THIS request
     // was the one that counted is not interesting to it.
     const stats = await pool.query('SELECT views FROM get_content_stats($1, $2)', [targetType, targetId]);
