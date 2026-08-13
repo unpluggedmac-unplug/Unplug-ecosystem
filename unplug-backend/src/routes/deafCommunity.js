@@ -136,15 +136,21 @@ router.post('/passports', publicSubmitLimiter, honeypot, async (req, res, next) 
 
 // GET /deaf-community/passports/:id/comments — public comments on a passport.
 //
-// Approved only. This POST is anonymous (no account required), so without
-// this filter anyone on the internet could put text straight onto a live
-// public page — see 111_passport_comment_moderation.sql.
+// Approved AND named. This POST needs no account, so without the status
+// filter anyone on the internet could put text straight onto a live public
+// page — see 111_passport_comment_moderation.sql.
+//
+// The name check is a second, independent guard. A name is required on every
+// new comment, so only rows predating that rule can be nameless; this makes
+// certain none of them can ever render as an unattributed comment, even if
+// one is approved by mistake.
 router.get('/passports/:id/comments', async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT id, commenter_name, comment, created_at
        FROM deaf_passport_comments
        WHERE passport_id = $1 AND status = 'approved'
+         AND COALESCE(TRIM(commenter_name), '') <> ''
        ORDER BY created_at ASC`,
       [req.params.id]
     );
@@ -160,8 +166,13 @@ router.post('/passports/:id/comments', publicSubmitLimiter, honeypot, async (req
   try {
     const { commenterName, comment } = req.body;
     const text = (comment || '').trim();
+    const name = (commenterName || '').trim();
     if (!text) return res.status(400).json({ error: 'A comment is required.' });
     if (text.length > 500) return res.status(400).json({ error: 'Comment is too long (max 500 characters).' });
+    // A name is required. Comments on this site are attributed to a person —
+    // nothing publishes as "Anonymous".
+    if (!name) return res.status(400).json({ error: 'Please add your name — comments are shown with the name of the person who wrote them.' });
+    if (name.length > 120) return res.status(400).json({ error: 'That name is too long (max 120 characters).' });
 
     // Only allow commenting on a live passport.
     const live = await pool.query(
@@ -177,7 +188,7 @@ router.post('/passports/:id/comments', publicSubmitLimiter, honeypot, async (req
     await pool.query(
       `INSERT INTO deaf_passport_comments (passport_id, commenter_name, comment)
        VALUES ($1, $2, $3)`,
-      [req.params.id, (commenterName || '').trim() || null, text]
+      [req.params.id, name, text]
     );
     // Says plainly that it is not live yet. Telling someone "Comment posted"
     // and then not showing it reads as the site being broken.

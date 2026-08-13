@@ -153,20 +153,99 @@ router.post('/:id/react', requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /comments/pending — admin moderation queue across every content
-// type, oldest first so nothing waits indefinitely behind newer comments.
+// GET /comments/pending — THE one place every comment on the site is
+// reviewed, whatever surface it came from.
+//
+// Two tables feed it: content_comments (members, signed in, on articles /
+// profiles / gallery / events / marketplace) and deaf_passport_comments
+// (posted on a passport). They are merged here rather than being two admin
+// screens, because an admin asking "what have people said?" should not have
+// to remember there are two answers.
+//
+// Each row carries the endpoint that approves it, the same way the Approval
+// Queue does — so the frontend never has to know which table a row came from,
+// and approving still goes through each surface's own tested route.
+//
+// Oldest first, so nothing waits indefinitely behind newer comments.
 router.get('/pending', requireRole('admin'), async (req, res, next) => {
   try {
-    const result = await pool.query(
-      `SELECT c.id, c.body, c.created_at, c.target_type, c.target_id,
-              get_target_title(c.target_type, c.target_id) AS target_title,
-              u.email AS author_email, ${PUBLIC_AUTHOR_SQL}
-         FROM content_comments c
-         JOIN users u ON u.id = c.user_id
-        WHERE c.status = 'pending'
-        ORDER BY c.created_at ASC`
-    );
-    res.json({ comments: result.rows });
+    const [member, passport] = await Promise.all([
+      pool.query(
+        `SELECT c.id, c.body, c.created_at, c.target_type, c.target_id,
+                get_target_title(c.target_type, c.target_id) AS target_title,
+                u.email AS author_email, ${PUBLIC_AUTHOR_SQL}
+           FROM content_comments c
+           JOIN users u ON u.id = c.user_id
+          WHERE c.status = 'pending'
+          ORDER BY c.created_at ASC`
+      ),
+      pool.query(
+        `SELECT c.id, c.comment AS body, c.created_at, c.commenter_name,
+                c.passport_id, p.name AS passport_name
+           FROM deaf_passport_comments c
+           LEFT JOIN deaf_passports p ON p.id = c.passport_id
+          WHERE c.status = 'pending'
+          ORDER BY c.created_at ASC`
+      ),
+    ]);
+
+    const rows = [
+      ...member.rows.map((c) => ({
+        key: `member:${c.id}`,
+        source: 'member',
+        sourceLabel: 'Member comment',
+        id: c.id,
+        body: c.body,
+        author: c.author,
+        authorEmail: c.author_email,
+        // A member comment always has a real account behind it.
+        authorKnown: true,
+        context: c.target_title || `${c.target_type} #${c.target_id}`,
+        // Kept alongside `context` rather than folded into it: the admin
+        // screen builds a real link to the article a comment is on, which
+        // needs the type and id, not a display string.
+        target_type: c.target_type,
+        target_id: c.target_id,
+        target_title: c.target_title,
+        createdAt: c.created_at,
+        actions: {
+          approve: { method: 'PATCH', path: `/comments/${c.id}/status`, body: { status: 'approved' } },
+          reject: { method: 'PATCH', path: `/comments/${c.id}/status`, body: { status: 'rejected' } },
+        },
+      })),
+      ...passport.rows.map((c) => {
+        const name = (c.commenter_name || '').trim();
+        return {
+          key: `passport:${c.id}`,
+          source: 'passport',
+          sourceLabel: 'Passport comment',
+          id: c.id,
+          body: c.body,
+          // Never invented. A name is required on new comments, so only
+          // rows predating that rule can be nameless — and the admin is told
+          // so plainly rather than being shown a made-up "Anonymous", which
+          // reads like a real person chose to hide their identity.
+          author: name || null,
+          authorEmail: null,
+          authorKnown: Boolean(name),
+          context: `Passport of ${c.passport_name || 'a member'}`,
+          createdAt: c.created_at,
+          actions: {
+            approve: { method: 'PATCH', path: `/deaf-community/admin/passport-comments/${c.id}/approve` },
+            reject: { method: 'PATCH', path: `/deaf-community/admin/passport-comments/${c.id}/reject` },
+          },
+        };
+      }),
+    ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    res.json({
+      comments: rows,
+      total: rows.length,
+      counts: {
+        member: member.rows.length,
+        passport: passport.rows.length,
+      },
+    });
   } catch (err) {
     next(err);
   }

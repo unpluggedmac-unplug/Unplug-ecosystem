@@ -7104,12 +7104,23 @@ async function loadDeafPassports() {
         const textEl = form.querySelector('.dc-c-text');
         const hpEl = form.querySelector('.dc-c-hp');
         if (!textEl.value.trim()) return;
+        // A name is required — comments are shown with the name of the person
+        // who wrote them, never as "Anonymous". Checked here so the writer is
+        // told before they lose what they typed, and again on the server.
+        if (!nameEl.value.trim()) {
+          showToast('Please add your name — comments are shown with the name of the person who wrote them.', true);
+          nameEl.focus();
+          return;
+        }
         try {
-          await api(`/deaf-community/passports/${id}/comments`, {
+          const res = await api(`/deaf-community/passports/${id}/comments`, {
             method: 'POST',
-            body: JSON.stringify({ commenterName: nameEl.value.trim() || undefined, comment: textEl.value.trim(), website: hpEl ? hpEl.value : '' }),
+            body: JSON.stringify({ commenterName: nameEl.value.trim(), comment: textEl.value.trim(), website: hpEl ? hpEl.value : '' }),
           });
           textEl.value = '';
+          // Says it is waiting for review. Clearing the box with no word said
+          // reads as the comment having been posted and then vanishing.
+          showToast(res.message || 'Thank you — your comment has been sent for review.');
           loadPassportComments(id);
         } catch (err) { showToast(err.message, true); }
       });
@@ -7135,7 +7146,7 @@ function dcPassportHtml(p) {
       <div class="dc-comment-thread" id="dc-comments-${p.id}"></div>
       <form class="dc-comment-form" data-id="${p.id}">
         <input type="text" name="website" class="dc-c-hp hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <input class="dc-c-name" placeholder="Your name (optional)" maxlength="120">
+        <input class="dc-c-name" placeholder="Your name" maxlength="120" required>
         <input class="dc-c-text" placeholder="Leave a comment of support…" maxlength="500" required>
         <button class="btn btn-line" type="submit">Post</button>
       </form>

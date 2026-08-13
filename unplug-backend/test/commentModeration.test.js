@@ -205,7 +205,7 @@ test('a passport comment becomes public only after an admin approves it', async 
 
 test('a rejected passport comment never becomes public', async () => {
   await req('POST', `/deaf-community/passports/${passportId}/comments`, {
-    body: { comment: 'Something abusive.' },
+    body: { commenterName: 'Bad Actor', comment: 'Something abusive.' },
   });
   const pending = await req('GET', '/deaf-community/admin/passport-comments/pending', { token: adminToken });
   const target = pending.body.comments.find((c) => c.comment === 'Something abusive.');
@@ -217,7 +217,7 @@ test('a rejected passport comment never becomes public', async () => {
 });
 
 test('passport comment moderation is admin-only', async () => {
-  await req('POST', `/deaf-community/passports/${passportId}/comments`, { body: { comment: 'Guard test.' } });
+  await req('POST', `/deaf-community/passports/${passportId}/comments`, { body: { commenterName: 'Guard Tester', comment: 'Guard test.' } });
   const pending = await req('GET', '/deaf-community/admin/passport-comments/pending', { token: adminToken });
   const target = pending.body.comments.find((c) => c.comment === 'Guard test.');
 
@@ -234,35 +234,38 @@ test('passport comment moderation is admin-only', async () => {
   assert.ok(!publicView.body.comments.map((c) => c.comment).includes('Guard test.'));
 });
 
-// --- Both surfaces reach the one queue --------------------------------------
+// --- One place: both surfaces in a single review screen --------------------
 
-test('both kinds of pending comment appear in the Approval Queue', async () => {
+test('both kinds of pending comment appear in ONE list', async () => {
   await req('POST', `/comments/article/${articleId}`, {
-    token: tokenFor(memberId), body: { body: 'Queue visibility member comment.' },
+    token: tokenFor(memberId), body: { body: 'One list member comment.' },
   });
   await req('POST', `/deaf-community/passports/${passportId}/comments`, {
-    body: { comment: 'Queue visibility passport comment.' },
+    body: { commenterName: 'Named Poster', comment: 'One list passport comment.' },
   });
 
-  const queue = await req('GET', '/admin/approval-queue?type=comment,passport_comment', { token: adminToken });
-  assert.equal(queue.status, 200);
-  assert.deepEqual(queue.body.problems, [], 'both source queries must run: ' + JSON.stringify(queue.body.problems));
-
-  const titles = queue.body.items.map((i) => i.title);
-  assert.ok(titles.some((t) => t.includes('Queue visibility member comment')));
-  assert.ok(titles.some((t) => t.includes('Queue visibility passport comment')));
-
-  // An anonymous poster has no account, so the queue must still name someone.
-  const anon = queue.body.items.find((i) => i.type === 'passport_comment');
-  assert.ok(anon.customerName, 'an anonymous comment still needs an attributed name');
+  const res = await req('GET', '/comments/pending', { token: adminToken });
+  assert.equal(res.status, 200);
+  const bodies = res.body.comments.map((c) => c.body);
+  assert.ok(bodies.includes('One list member comment.'));
+  assert.ok(bodies.includes('One list passport comment.'));
+  assert.ok(res.body.counts.member > 0 && res.body.counts.passport > 0);
 });
 
-test('approving from the queue uses the endpoint the server named', async () => {
+test('comments are NOT in the Approval Queue — there is only one place', async () => {
+  const queue = await req('GET', '/admin/approval-queue', { token: adminToken });
+  assert.equal(queue.status, 200);
+  const types = queue.body.types.map((t) => t.key);
+  assert.ok(!types.includes('comment'), 'comments belong in the Comments screen only');
+  assert.ok(!types.includes('passport_comment'));
+});
+
+test('approving from the one list uses the endpoint the server named', async () => {
   const posted = await req('POST', `/comments/article/${articleId}`, {
-    token: tokenFor(memberId), body: { body: 'Approved via the queue.' },
+    token: tokenFor(memberId), body: { body: 'Approved via the one list.' },
   });
-  const queue = await req('GET', '/admin/approval-queue?type=comment', { token: adminToken });
-  const row = queue.body.items.find((i) => i.id === posted.body.comment.id);
+  const list = await req('GET', '/comments/pending', { token: adminToken });
+  const row = list.body.comments.find((c) => c.id === posted.body.comment.id && c.source === 'member');
 
   const res = await req(row.actions.approve.method, row.actions.approve.path, {
     token: adminToken, body: row.actions.approve.body,
@@ -270,7 +273,79 @@ test('approving from the queue uses the endpoint the server named', async () => 
   assert.equal(res.status, 200);
 
   const publicView = await req('GET', `/comments/article/${articleId}`);
-  assert.ok(publicView.body.comments.map((c) => c.body).includes('Approved via the queue.'));
+  assert.ok(publicView.body.comments.map((c) => c.body).includes('Approved via the one list.'));
+});
+
+test('a passport comment approves through the same list', async () => {
+  await req('POST', `/deaf-community/passports/${passportId}/comments`, {
+    body: { commenterName: 'Second Poster', comment: 'Passport approve via list.' },
+  });
+  const list = await req('GET', '/comments/pending', { token: adminToken });
+  const row = list.body.comments.find((c) => c.body === 'Passport approve via list.');
+  assert.equal(row.source, 'passport');
+
+  await req(row.actions.approve.method, row.actions.approve.path, { token: adminToken });
+
+  const publicView = await req('GET', `/deaf-community/passports/${passportId}/comments`);
+  assert.ok(publicView.body.comments.map((c) => c.comment).includes('Passport approve via list.'));
+});
+
+// --- Nothing is ever attributed to "Anonymous" -----------------------------
+
+test('a passport comment without a name is refused outright', async () => {
+  const res = await req('POST', `/deaf-community/passports/${passportId}/comments`, {
+    body: { comment: 'No name on this one.' },
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /name/i);
+
+  const stored = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM deaf_passport_comments WHERE comment = 'No name on this one.'`
+  );
+  assert.equal(stored.rows[0].n, 0, 'nothing nameless should even be stored');
+});
+
+test('the word "Anonymous" is never used to attribute a comment', async () => {
+  await req('POST', `/deaf-community/passports/${passportId}/comments`, {
+    body: { commenterName: 'Real Person', comment: 'Attributed properly.' },
+  });
+  const list = await req('GET', '/comments/pending', { token: adminToken });
+  const authors = list.body.comments.map((c) => c.author);
+  assert.ok(!authors.includes('Anonymous'), 'no comment may be attributed to "Anonymous"');
+  // Every row either names someone, or is flagged as having no name at all.
+  list.body.comments.forEach((c) => {
+    if (c.authorKnown) assert.ok(c.author && c.author.trim(), 'a known author must have a name');
+    else assert.equal(c.author, null, 'an unnamed comment must be null, never an invented name');
+  });
+});
+
+test('a legacy comment with no name can never become public, even if approved', async () => {
+  // Rows predating the name requirement. The public read filters them out
+  // independently of their status, so an approval by mistake cannot publish
+  // an unattributed comment.
+  const legacy = await pool.query(
+    `INSERT INTO deaf_passport_comments (passport_id, commenter_name, comment, status)
+     VALUES ($1, NULL, 'Legacy nameless comment.', 'approved') RETURNING id`,
+    [passportId]
+  );
+  assert.ok(legacy.rows[0].id);
+
+  const publicView = await req('GET', `/deaf-community/passports/${passportId}/comments`);
+  const comments = publicView.body.comments.map((c) => c.comment);
+  assert.ok(!comments.includes('Legacy nameless comment.'), 'an unnamed comment must never render');
+});
+
+test('an admin sees an unnamed legacy comment flagged, not disguised', async () => {
+  await pool.query(
+    `INSERT INTO deaf_passport_comments (passport_id, commenter_name, comment, status)
+     VALUES ($1, '   ', 'Whitespace name legacy.', 'pending')`,
+    [passportId]
+  );
+  const list = await req('GET', '/comments/pending', { token: adminToken });
+  const row = list.body.comments.find((c) => c.body === 'Whitespace name legacy.');
+  assert.ok(row);
+  assert.equal(row.authorKnown, false, 'a whitespace-only name is not a name');
+  assert.equal(row.author, null);
 });
 
 test('re-running every migration is idempotent, and keeps comments unapproved', async () => {

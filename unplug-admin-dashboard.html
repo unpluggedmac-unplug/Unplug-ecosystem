@@ -4977,35 +4977,72 @@ async function loadPendingComments() {
   if (!body) return;
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {
+    // The one place every comment on the site is reviewed. The server merges
+    // member comments and passport comments and tells each row which endpoint
+    // approves it, so nothing here needs to know which table a row came from.
     const data = await api('/comments/pending');
     const list = data.comments || [];
     const badge = document.getElementById('commentsBadge');
     if (badge) { badge.textContent = list.length; badge.style.display = list.length ? 'inline-block' : 'none'; }
     if (list.length === 0) { body.innerHTML = '<div class="empty-state">No comments waiting for review.</div>'; return; }
+
+    const counts = data.counts || {};
+    const summary = document.createElement('div');
+    summary.style.cssText = 'padding:10px 16px; font-size:12.5px; color:var(--slate); border-bottom:1px solid var(--paper-line);';
+    summary.textContent = `${list.length} waiting — ${counts.member || 0} from members, ${counts.passport || 0} on passports. Nothing is public until you approve it.`;
+
     const table = document.createElement('table');
     table.innerHTML = '<tr><th>Comment</th><th>By</th><th>On</th><th>When</th><th></th></tr>';
     list.forEach((c) => {
       const tr = document.createElement('tr');
-      const targetLabel = `${escapeHtmlAdmin(c.target_title || ('#' + c.target_id))} <span style="font-size:10.5px; color:var(--slate);">(${escapeHtmlAdmin(c.target_type)})</span>`;
+      // A comment with no name is only possible on rows that predate the
+      // name requirement. Say so plainly — never invent "Anonymous", which
+      // reads as though someone chose to hide who they are.
+      const who = c.authorKnown
+        ? `${escapeHtmlAdmin(c.author)}${c.authorEmail ? `<br><span style="font-size:10.5px; color:var(--slate);">${escapeHtmlAdmin(c.authorEmail)}</span>` : ''}`
+        : '<span style="color:var(--red); font-size:12px;">No name given</span>'
+          + '<br><span style="font-size:10.5px; color:var(--slate);">posted before names were required</span>';
+
       tr.innerHTML = `<td style="max-width:340px;">${escapeHtmlAdmin(c.body)}</td>`
-        + `<td>${escapeHtmlAdmin(c.author || '')}<br><span style="font-size:10.5px; color:var(--slate);">${escapeHtmlAdmin(c.author_email || '')}</span></td>`
-        + `<td>${c.target_type === 'article' ? `<a href="unplug-magazine.html?p=article&id=${c.target_id}" target="_blank" rel="noopener">${targetLabel}</a>` : targetLabel}</td>`
-        + `<td>${new Date(c.created_at).toLocaleDateString()}</td>`
+        + `<td>${who}</td>`
+        + `<td>${c.target_type === 'article'
+              ? `<a href="unplug-magazine.html?p=article&id=${c.target_id}" target="_blank" rel="noopener">${escapeHtmlAdmin(c.context || '')}</a>`
+              : escapeHtmlAdmin(c.context || '')}`
+        + `<br><span style="font-size:10.5px; color:var(--slate);">${escapeHtmlAdmin(c.sourceLabel)}</span></td>`
+        + `<td>${new Date(c.createdAt).toLocaleDateString()}</td>`
         + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
-      tr.querySelector('.approve').addEventListener('click', async () => {
-        try { await api(`/comments/${c.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) }); showToast('Comment published.'); loadPendingComments(); }
-        catch (err) { showToast(err.message, true); }
-      });
-      tr.querySelector('.reject').addEventListener('click', async () => {
-        try { await api(`/comments/${c.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) }); showToast('Comment rejected.'); loadPendingComments(); }
-        catch (err) { showToast(err.message, true); }
-      });
+
+      const run = async (which, okMessage) => {
+        const action = c.actions[which];
+        try {
+          await api(action.path, {
+            method: action.method,
+            ...(action.body ? { body: JSON.stringify(action.body) } : {}),
+          });
+          showToast(okMessage);
+          loadPendingComments();
+        } catch (err) { showToast(err.message, true); }
+      };
+      // An unnamed comment can still be rejected, but never published — the
+      // public page filters those out anyway, so approving one would look
+      // like the approval silently failed.
+      const approveBtn = tr.querySelector('.approve');
+      if (!c.authorKnown) {
+        approveBtn.disabled = true;
+        approveBtn.title = 'This comment has no name, so it cannot be published. Reject it instead.';
+        approveBtn.style.opacity = '0.45';
+        approveBtn.style.cursor = 'not-allowed';
+      } else {
+        approveBtn.addEventListener('click', () => run('approve', 'Comment published.'));
+      }
+      tr.querySelector('.reject').addEventListener('click', () => run('reject', 'Comment rejected.'));
       table.appendChild(tr);
     });
     body.innerHTML = '';
+    body.appendChild(summary);
     body.appendChild(table);
   } catch (err) {
-    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
   }
 }
 
