@@ -904,8 +904,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <section class="ms-section section-hidden" data-ms-section="payments">
     <div class="card">
+      <h2>Cancel a service</h2>
+      <p class="sub">Ask us to stop a service you're paying for. Your request goes to our team — the service keeps running until they confirm, and they'll be in touch about anything owed back to you.</p>
+      <div id="cancelServicesContent"><div class="loading-state">Loading…</div></div>
+      <h3 style="margin-top:22px; font-size:15px;">Your cancellation requests</h3>
+      <div id="myCancellationsContent"><div class="loading-state">Loading…</div></div>
+    </div>
+
+    <div class="card">
       <h2>My Payments</h2>
-      <p class="sub">Everything you've paid for, newest first. If you paid by EFT, the reference is what we match against our bank statement.</p>
+      <p class="sub">Everything you've paid for, newest first. If you paid by EFT, the Reference Code is what we match against our bank statement.</p>
       <div id="myPaymentsContent"><div class="loading-state">Loading…</div></div>
     </div>
     </section>
@@ -1332,6 +1340,8 @@ function enterMemberDashboard(user){
   loadReadingList();
   loadMyEditions();
   loadMyPayments();
+  loadCancellableServices();
+  loadMyCancellations();
   loadMyUnplug();
   loadMyUnplugProfile();
   loadCredits();
@@ -3254,6 +3264,90 @@ async function downloadMyEdition(purchaseId, editionId) {
 // ---------------------------------------------------------------------------
 // My Payments — everything the member has paid for.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// CANCELLING A SERVICE.
+//
+// The member asks; an admin decides. Nothing here stops a service — there is
+// no endpoint that would let it, and the copy says plainly that the service
+// keeps running until the team confirms, so nobody assumes they have already
+// cancelled and stops paying attention.
+// ---------------------------------------------------------------------------
+const CANCEL_STATUS_TEXT = {
+  requested: 'Requested — waiting for our team',
+  under_review: 'Our team is reviewing it',
+  cancelled: 'Approved — the service has been stopped',
+  approved: 'Approved',
+  rejected: 'Not approved',
+};
+
+async function loadCancellableServices() {
+  const el = document.getElementById('cancelServicesContent');
+  if (!el) return;
+  try {
+    const data = await api('/cancellations/services');
+    const services = data.services || [];
+    if (!services.length) {
+      el.innerHTML = '<p class="sub" style="margin:0;">You have no active services that can be cancelled right now.</p>';
+      return;
+    }
+    el.innerHTML = services.map((s, i) => `
+      <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; padding:10px 0; border-bottom:1px solid var(--paper-line);">
+        <div>
+          <strong>${escapeHtmlM(s.label)}</strong>
+          <div style="font-size:12px; color:var(--slate);">${escapeHtmlM(s.serviceTypeLabel)}${s.submittedAt ? ' · started ' + new Date(s.submittedAt).toLocaleDateString() : ''}</div>
+        </div>
+        <button class="btn btn-line" style="width:auto; padding:6px 14px; font-size:12px;" data-cancel-idx="${i}">Request cancellation</button>
+      </div>`).join('');
+    el.querySelectorAll('[data-cancel-idx]').forEach((btn) => {
+      btn.addEventListener('click', () => requestCancellation(services[Number(btn.dataset.cancelIdx)]));
+    });
+  } catch (err) {
+    el.innerHTML = `<p class="sub" style="margin:0; color:var(--red);">Could not load: ${escapeHtmlM(err.message)}</p>`;
+  }
+}
+
+async function requestCancellation(service) {
+  const reason = prompt(`Request cancellation of "${service.label}".\n\nWhy would you like to cancel? (this helps us respond properly)`);
+  if (reason === null) return;
+  const when = prompt('From what date? Leave blank for as soon as possible.\n\nFormat: YYYY-MM-DD');
+  if (when === null) return;
+  try {
+    const res = await api('/cancellations', {
+      method: 'POST',
+      body: JSON.stringify({
+        serviceType: service.serviceType, serviceId: service.serviceId,
+        reason: reason.trim(), requestedEffectiveDate: when.trim() || null,
+      }),
+    });
+    showToast(res.message || 'Cancellation requested.');
+    loadCancellableServices();
+    loadMyCancellations();
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function loadMyCancellations() {
+  const el = document.getElementById('myCancellationsContent');
+  if (!el) return;
+  try {
+    const data = await api('/cancellations/mine');
+    const rows = data.requests || [];
+    if (!rows.length) {
+      el.innerHTML = '<p class="sub" style="margin:0;">You haven\'t asked to cancel anything.</p>';
+      return;
+    }
+    el.innerHTML = rows.map((r) => `
+      <div style="padding:10px 0; border-bottom:1px solid var(--paper-line);">
+        <strong>${escapeHtmlM(r.service_label || r.service_type)}</strong>
+        ${r.reference ? `<span style="font-size:12px; color:var(--slate);"> · ${escapeHtmlM(r.reference)}</span>` : ''}
+        <div style="font-size:12.5px; margin-top:2px;">${escapeHtmlM(CANCEL_STATUS_TEXT[r.status] || r.status)}</div>
+        <div style="font-size:11.5px; color:var(--slate);">Requested ${new Date(r.created_at).toLocaleDateString()}${r.refund_amount ? ` · R${Number(r.refund_amount).toFixed(2)} credited to your account` : ''}</div>
+        ${r.admin_note ? `<div style="font-size:11.5px; color:var(--slate); margin-top:2px;">Our note: ${escapeHtmlM(r.admin_note)}</div>` : ''}
+      </div>`).join('');
+  } catch (err) {
+    el.innerHTML = `<p class="sub" style="margin:0; color:var(--red);">Could not load: ${escapeHtmlM(err.message)}</p>`;
+  }
+}
+
 async function loadMyPayments() {
   const el = document.getElementById('myPaymentsContent');
   if (!el) return;

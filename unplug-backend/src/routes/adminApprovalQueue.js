@@ -49,6 +49,7 @@ const TYPES = {
   cart_order:          { label: 'Cart Order',          group: 'payment' },
   service_payment:     { label: 'Service Payment',     group: 'payment' },
   edition_purchase:    { label: 'Edition Purchase',    group: 'payment' },
+  cancellation:        { label: 'Cancellation Request', group: 'access'  },
 };
 
 // Finds the payment behind a submission so its reference code and payment
@@ -367,6 +368,28 @@ const SOURCES = [
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/payments/admin/${r.id}`, body: { status: 'confirmed' } },
       reject: { method: 'PATCH', path: `/payments/admin/${r.id}`, body: { status: 'failed' } },
+    }),
+  },
+  {
+    // A member asking to stop a service they pay for. Approving it here is
+    // the same decision as approving it in its own screen — both call
+    // PATCH /cancellations/admin/:id — but approving from the queue does NOT
+    // set a refund amount, because that is a number a person has to choose
+    // and a queue row is the wrong place to type it. The message the admin
+    // gets back says so.
+    type: 'cancellation',
+    sql: `SELECT c.id, c.service_label AS title,
+                 'Cancel ' || c.service_type || COALESCE(' — ' || c.reason, '') AS subtitle,
+                 u.full_name AS customer_name, u.email AS customer_email, c.user_id,
+                 c.created_at AS submitted_at, c.status AS item_status,
+                 c.reference, NULL AS pay_status, NULL::numeric AS pay_amount,
+                 NULL AS pop_url, NULL AS invoice_url
+            FROM service_cancellations c
+            JOIN users u ON u.id = c.user_id
+           WHERE c.status IN ('requested', 'under_review')`,
+    actions: (r) => ({
+      approve: { method: 'PATCH', path: `/cancellations/admin/${r.id}`, body: { action: 'approve' } },
+      reject: { method: 'PATCH', path: `/cancellations/admin/${r.id}`, body: { action: 'reject' } },
     }),
   },
   {

@@ -134,7 +134,7 @@ test('every source query runs against the real schema', async () => {
   // column in any of the seventeen queries lands here as a named problem
   // instead of quietly returning an incomplete queue in production.
   assert.deepEqual(res.body.problems, [], 'a source query failed: ' + JSON.stringify(res.body.problems));
-  assert.equal(res.body.types.length, 17);
+  assert.equal(res.body.types.length, 18);
 });
 
 test('an empty site returns an empty queue rather than an error', async () => {

@@ -271,6 +271,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="nav-group-items">
         <a data-section="payqueue">All Payments (Unified)</a>
         <a data-section="payments">Payments (EFT)</a>
+        <a data-section="cancellations">Cancellations <span id="cancelBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="pricing">Service Pricing</a>
         <a data-section="vouchers">Vouchers</a>
       </div>
@@ -652,6 +653,25 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
       <div class="panel" style="margin-top:16px;">
         <div class="panel-body" id="pqBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <div class="admin-section" id="section-cancellations">
+      <div class="main-head"><div><h1>Cancellations</h1><p>Members asking to stop a service they pay for. Nothing is cancelled until you approve it here — and approving stops the service immediately. Any money back is an amount you choose; nothing is ever refunded automatically.</p></div></div>
+      <div class="panel">
+        <div class="panel-body" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; border-bottom:1px solid var(--paper-line);">
+          <input id="cancSearch" placeholder="Search service, Reference Code or member…" style="flex:1; min-width:220px; padding:7px 10px; font-size:13px;">
+          <select id="cancStatus" style="padding:6px; font-size:13px;">
+            <option value="">Open requests</option>
+            <option value="requested">Requested</option>
+            <option value="under_review">Under review</option>
+            <option value="cancelled">Approved &amp; cancelled</option>
+            <option value="rejected">Rejected</option>
+            <option value="all">All</option>
+          </select>
+          <button class="btn btn-line" id="cancSearchBtn" style="width:auto; padding:6px 14px;">Search</button>
+        </div>
+        <div class="panel-body" id="cancBody" style="padding:0;">Loading…</div>
       </div>
     </div>
 
@@ -2567,6 +2587,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'payqueue') loadPaymentQueue();
     if (section === 'myunplug') { loadMyUnplugAnalytics(); loadMyUnplugProfiles(); }
     if (section === 'placements') loadPlacements();
+    if (section === 'cancellations') loadCancellations();
     if (section === 'payments') { loadPendingEft(); loadAllPayments(); }
     if (section === 'users') loadUsers();
     if (section === 'consultants') { loadConsultants(); loadConsultantLinks(); }
@@ -3396,6 +3417,123 @@ async function clUnlink(consultant) {
 
 document.getElementById('clSearchBtn').addEventListener('click', loadConsultantLinks);
 document.getElementById('clSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadConsultantLinks(); });
+
+// ---------------------------------------------------------------------------
+// CANCELLATIONS — members asking to stop a service they pay for.
+//
+// Approving here is the same endpoint the Approval Queue calls, with one
+// addition: the refund amount. That is why this screen exists separately —
+// a refund is a figure a person decides, and a queue row is the wrong place
+// to type one. Nothing is ever calculated automatically.
+// ---------------------------------------------------------------------------
+const CANC_STATUS_LABELS = {
+  requested: 'Requested', under_review: 'Under review',
+  cancelled: 'Approved — service stopped', rejected: 'Rejected', approved: 'Approved',
+};
+
+async function loadCancellations() {
+  const body = document.getElementById('cancBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  const q = document.getElementById('cancSearch').value.trim();
+  const status = document.getElementById('cancStatus').value;
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (status && status !== 'all') params.set('status', status);
+
+  try {
+    const data = await api('/cancellations/admin' + (params.toString() ? '?' + params.toString() : ''));
+    let rows = data.requests || [];
+    // The default view is the work still to do; "All" and the explicit status
+    // filters are what reach the decided ones.
+    if (!status) rows = rows.filter((r) => ['requested', 'under_review'].includes(r.status));
+
+    const open = (data.requests || []).filter((r) => ['requested', 'under_review'].includes(r.status)).length;
+    const badge = document.getElementById('cancelBadge');
+    if (badge) { badge.textContent = open; badge.style.display = open ? 'inline-block' : 'none'; }
+
+    if (!rows.length) { body.innerHTML = '<div class="empty-state">Nothing here.</div>'; return; }
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = '<th>Service</th><th>Member</th><th>Reference Code</th><th>Requested</th><th>Wants to end</th><th>Status</th><th>Refund</th><th></th>';
+    table.appendChild(head);
+
+    rows.forEach((r) => {
+      const tr = document.createElement('tr');
+      const decided = ['cancelled', 'rejected'].includes(r.status);
+      tr.innerHTML = `<td><strong>${escapeHtmlAdmin(r.service_label || r.service_type)}</strong>`
+        + `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(r.service_type)}`
+        + (r.service_submitted_at ? ` · started ${new Date(r.service_submitted_at).toLocaleDateString()}` : '') + '</span>'
+        + (r.reason ? `<br><span style="font-size:11.5px; color:var(--slate);">“${escapeHtmlAdmin(String(r.reason).slice(0, 90))}”</span>` : '')
+        + '</td>'
+        + `<td>${escapeHtmlAdmin(r.full_name || '—')}<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(r.email)}</span></td>`
+        + `<td>${r.reference ? `<code style="font-size:11.5px;">${escapeHtmlAdmin(r.reference)}</code>` : '—'}</td>`
+        + `<td>${new Date(r.created_at).toLocaleDateString()}</td>`
+        + `<td>${r.requested_effective_date ? new Date(r.requested_effective_date).toLocaleDateString() : 'As soon as possible'}</td>`
+        + `<td>${escapeHtmlAdmin(CANC_STATUS_LABELS[r.status] || r.status)}`
+        + (r.admin_email ? `<br><span style="font-size:11px; color:var(--slate);">by ${escapeHtmlAdmin(r.admin_email)}</span>` : '') + '</td>'
+        + `<td>${r.refund_amount ? 'R' + Number(r.refund_amount).toFixed(2) : (decided ? '—' : '')}</td>`
+        + '<td><div class="row-actions">'
+        + (decided ? '' : '<button class="approve">Approve</button><button class="btn btn-line" style="width:auto; padding:4px 10px; font-size:11px;">Review</button><button class="reject">Reject</button>')
+        + '</div></td>';
+
+      if (!decided) {
+        tr.querySelector('.approve').addEventListener('click', () => cancApprove(r));
+        tr.querySelector('.btn-line').addEventListener('click', () => cancDecide(r, 'review'));
+        tr.querySelector('.reject').addEventListener('click', () => cancDecide(r, 'reject'));
+      }
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+// Blank means no refund, deliberately — an empty box must never be read as
+// "refund everything", and a full refund has to be typed out in full.
+async function cancApprove(r) {
+  const amount = prompt(
+    `Approve cancellation of "${r.service_label || r.service_type}" for ${r.email}?\n\n`
+    + 'This stops the service immediately.\n\n'
+    + 'Refund to give back as account credit (leave blank for no refund):');
+  if (amount === null) return;
+  const trimmed = String(amount).trim();
+  if (trimmed && !(Number(trimmed) >= 0)) { showToast('Enter a number, or leave it blank.', true); return; }
+
+  const note = prompt('Note for the record (optional):') || '';
+  const confirmMsg = trimmed
+    ? `Stop the service and credit R${Number(trimmed).toFixed(2)} to ${r.email}?`
+    : `Stop the service with NO refund?`;
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await api(`/cancellations/admin/${r.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'approve', refundAmount: trimmed === '' ? null : Number(trimmed), adminNote: note.trim() }),
+    });
+    showToast(res.message || 'Cancelled.');
+    loadCancellations();
+  } catch (err) { showToast(err.message, true); }
+}
+
+async function cancDecide(r, action) {
+  if (action === 'reject' && !confirm(`Reject this cancellation request? The service keeps running.`)) return;
+  const note = prompt(action === 'reject' ? 'Why is it being refused? (recorded)' : 'Note (optional):') || '';
+  if (action === 'reject' && !note.trim()) { showToast('Please give a reason.', true); return; }
+  try {
+    const res = await api(`/cancellations/admin/${r.id}`, {
+      method: 'PATCH', body: JSON.stringify({ action, adminNote: note.trim() }),
+    });
+    showToast(res.message || 'Saved.');
+    loadCancellations();
+  } catch (err) { showToast(err.message, true); }
+}
+
+document.getElementById('cancSearchBtn').addEventListener('click', loadCancellations);
+document.getElementById('cancStatus').addEventListener('change', loadCancellations);
+document.getElementById('cancSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadCancellations(); });
 
 async function loadDirProfiles() {
   const picker = document.getElementById('dpPicker');

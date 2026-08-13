@@ -106,6 +106,7 @@ app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);
 app.use('/admin/approval-queue', require('./routes/adminApprovalQueue'));
 app.use('/admin/links', require('./routes/adminProfileLinks'));
+app.use('/cancellations', require('./routes/cancellations'));
 app.use('/admin/my-unplug', require('./routes/adminMyUnplug'));
 app.use('/saved', savedArticleRoutes);
 app.use('/comments', commentRoutes);
