@@ -10,11 +10,58 @@ const {
   generateReference, generateToken, referenceMatches, normaliseEmail, isValidEmail,
 } = require('../utils/editionAccess');
 
+const { generateDocument } = require('../utils/pdfDocs');
+const uploadsRouter = require('./uploads');
+
 const router = express.Router();
 
 // Where the download-claim link in the approval email should point. Same
 // SITE_URL convention the sign-in emails use, so it follows the domain.
 const SITE_URL = (process.env.SITE_URL || 'https://www.unplugnews.com').replace(/\/$/, '');
+
+// Where a buyer sends their proof of payment. One constant, quoted by the
+// checkout response, the confirmation PDF and the confirmation email, so the
+// three can never end up telling the customer different things.
+const SALES_EMAIL = process.env.SALES_EMAIL || 'sales@unplugnews.com';
+
+// The payment procedure, in the order it actually happens. Returned to the
+// frontend rather than written into the page, for the same reason: one source.
+function paymentProcedure(reference, amount) {
+  return {
+    salesEmail: SALES_EMAIL,
+    reference,
+    steps: [
+      `Make your payment of R${Number(amount).toFixed(2)} using the Reference Code ${reference}.`,
+      `Email your proof of payment, quoting Reference Code ${reference}, to ${SALES_EMAIL}.`,
+      'Our team checks the payment against the Reference Code, usually within one business day.',
+      'Once it is approved we email you a claim code for your edition.',
+      'Enter that claim code with your email address to download your PDF. The download works once, so save the file when it arrives.',
+    ],
+    availableMethods: ['EFT', 'Account credit', 'Voucher'],
+    comingSoonMethods: ['Ozow', 'PayFast'],
+  };
+}
+
+// Builds the proof-of-order document a buyer gets at checkout. Deliberately
+// labelled an ORDER CONFIRMATION and not a receipt: nothing has been paid at
+// this point, and handing someone a "receipt" before the money arrives is how
+// a customer ends up believing they are done.
+async function buildConfirmationPdf(purchase, edition) {
+  return generateDocument({
+    kind: 'invoice',
+    reference: purchase.download_reference,
+    customerName: purchase.customer_name,
+    customerEmail: purchase.customer_email,
+    items: [{ label: `Unplug Magazine — ${edition.title} (PDF edition)`, amount: purchase.amount }],
+    subtotal: purchase.amount,
+    voucherDiscount: 0,
+    creditUsed: 0,
+    total: purchase.amount,
+    method: purchase.payment_method,
+    status: 'Awaiting payment',
+    date: new Date().toLocaleDateString('en-ZA'),
+  });
+}
 
 // GET /editions — public list, newest first. Includes the pdf_url so the
 // frontend's "View Online" button can embed/link to it directly — viewing
@@ -175,7 +222,7 @@ router.post('/:id/purchase', publicSubmitLimiter, async (req, res, next) => {
          (user_id, edition_id, customer_email, customer_name, amount,
           payment_method, payment_status, download_reference)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, download_reference`,
+       RETURNING id, download_reference, customer_email, customer_name, amount, payment_method`,
       [
         req.user ? req.user.id : null, edition.rows[0].id, email,
         (req.body.name || '').trim().slice(0, 160) || null, amount, method,
@@ -186,12 +233,54 @@ router.post('/:id/purchase', publicSubmitLimiter, async (req, res, next) => {
       ]
     );
 
+    // The order confirmation. Generated and stored best-effort: a storage
+    // outage must not cost the customer their order, so a failure here leaves
+    // the purchase standing and simply means no document to download. The
+    // Reference Code — the thing they actually need — is in the response
+    // either way.
+    let confirmationAvailable = false;
+    try {
+      const pdf = await buildConfirmationPdf(result.rows[0], edition.rows[0]);
+      if (uploadsRouter.supabasePrivateConfigured) {
+        const url = await uploadsRouter.uploadBufferToSupabasePrivate(
+          pdf, `edition-order-${result.rows[0].download_reference}.pdf`, 'application/pdf');
+        await pool.query('UPDATE edition_purchases SET confirmation_url = $1 WHERE id = $2',
+          [url, result.rows[0].id]);
+        confirmationAvailable = true;
+      }
+    } catch (e) {
+      console.error('Edition order confirmation could not be stored:', e.message);
+    }
+
+    // Emailed as well as downloadable, because a buyer who closes the tab has
+    // otherwise lost the Reference Code, and a payment with no reference
+    // cannot be matched to its order.
+    const procedure = paymentProcedure(result.rows[0].download_reference, amount);
+    sendEmail({
+      to: email,
+      subject: `Your Unplug edition order — Reference Code ${result.rows[0].download_reference}`,
+      text: [
+        'Thank you for your order.',
+        '',
+        `Edition: ${edition.rows[0].title}`,
+        `Amount: R${Number(amount).toFixed(2)}`,
+        `Reference Code: ${result.rows[0].download_reference}`,
+        '',
+        'What happens next:',
+        ...procedure.steps.map((s, i) => `${i + 1}. ${s}`),
+        '',
+        'Please keep this email — the Reference Code is how we match your payment to your order.',
+      ].join('\n'),
+    }).catch((e) => console.error('Edition order email failed:', e.message));
+
     res.status(201).json({
       purchaseId: result.rows[0].id,
       reference: result.rows[0].download_reference,
       amount,
       method,
       editionTitle: edition.rows[0].title,
+      procedure,
+      confirmationAvailable,
       // For online, the frontend sends the buyer to the existing checkout with
       // these — no second payment system.
       linkedType: 'edition_download',
@@ -424,7 +513,107 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
         GROUP BY e.id
         ORDER BY e.publication_date DESC NULLS LAST, e.issue_number DESC`
     );
-    res.json({ editions: result.rows });
+    // Says, per edition, whether a paying customer's download would come from
+    // a file anybody with the link could already read. Computed rather than
+    // stored so it can never go stale against the actual URLs.
+    res.json({
+      editions: result.rows.map((e) => {
+        const servedFrom = e.download_pdf_url || e.pdf_url || null;
+        return {
+          ...e,
+          downloadFileIsPublic: uploadsRouter.isPublicStorageUrl(servedFrom),
+          hasPrivateDownloadCopy: Boolean(e.download_pdf_url),
+        };
+      }),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /editions/purchases/confirmation { reference, email }
+//
+// Streams the order confirmation back. Verified with the SAME reference +
+// email pair the download claim uses — this document carries the customer's
+// name, email and what they paid, so it is not something a bare reference
+// should open. Rate limited for the same reason the claim is: a 10-character
+// reference is otherwise guessable by trying codes.
+router.post('/purchases/confirmation', publicSubmitLimiter, async (req, res, next) => {
+  try {
+    const reference = String(req.body.reference || '').trim();
+    const email = normaliseEmail(req.body.email || '');
+    if (!reference || !isValidEmail(email)) {
+      return res.status(400).json({ error: 'Enter the Reference Code and the email address you ordered with.' });
+    }
+    // Looked up by reference AND email together, exactly as the download
+    // claim does — a Reference Code alone is not enough to open this.
+    const found = await pool.query(
+      `SELECT id, confirmation_url, download_reference
+         FROM edition_purchases
+        WHERE download_reference = $1 AND lower(customer_email) = $2`,
+      [reference, email]
+    );
+    const p = found.rows[0];
+    // One message for "no such order" and "wrong email", so this cannot be
+    // used to discover which references exist.
+    if (!p || !referenceMatches(reference, p.download_reference)) {
+      return res.status(404).json({ error: 'We could not find an order with that Reference Code and email address.' });
+    }
+    if (!p.confirmation_url) {
+      return res.status(404).json({ error: 'No confirmation document was stored for this order. Your Reference Code is ' + p.download_reference + '.' });
+    }
+
+    const upstream = await uploadsRouter.fetchFromSupabasePrivate(p.confirmation_url);
+    if (!upstream || !upstream.ok) return res.status(502).json({ error: 'The confirmation could not be fetched. Please try again.' });
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="unplug-order-${p.download_reference}.pdf"`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /editions/admin/:id/secure-download
+//
+// Copies an edition's paid download file into the PRIVATE bucket and points
+// download_pdf_url at the copy, so the paid download stops being served from
+// a URL that needs no purchase. The public view-online file is left exactly
+// where it is — that one is meant to be free.
+router.post('/admin/:id/secure-download', requireRole('admin'), async (req, res, next) => {
+  try {
+    if (!uploadsRouter.supabasePrivateConfigured) {
+      return res.status(400).json({ error: 'Supabase Storage is not configured, so there is nowhere private to put the file.' });
+    }
+    const id = Number(req.params.id);
+    const found = await pool.query('SELECT id, title, pdf_url, download_pdf_url FROM editions WHERE id = $1', [id]);
+    if (found.rows.length === 0) return res.status(404).json({ error: 'Edition not found.' });
+    const e = found.rows[0];
+
+    const source = e.download_pdf_url || e.pdf_url;
+    if (!source) return res.status(400).json({ error: 'This edition has no PDF to secure yet.' });
+    if (!uploadsRouter.isPublicStorageUrl(source)) {
+      return res.status(409).json({ error: 'This edition\'s download file is already private.' });
+    }
+
+    const upstream = await fetch(source);
+    if (!upstream.ok) return res.status(502).json({ error: `Could not read the current file (${upstream.status}).` });
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+
+    const url = await uploadsRouter.uploadBufferToSupabasePrivate(
+      buffer, `edition-${id}-download.pdf`, 'application/pdf');
+
+    await pool.query(
+      'UPDATE editions SET download_pdf_url = $1, download_secured_at = now() WHERE id = $2',
+      [url, id]
+    );
+    await logActivity(req.user.id, 'edition_download_secured',
+      `Moved the paid download file for "${e.title}" (#${id}) into the private bucket`).catch(() => {});
+
+    res.json({
+      secured: true,
+      message: 'The paid download is now served only through a verified purchase. The free view-online file is unchanged.',
+    });
   } catch (err) {
     next(err);
   }

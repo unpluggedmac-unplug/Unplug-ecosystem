@@ -2197,7 +2197,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <select id="edBuyMethod">
             <option value="eft">EFT — pay by bank transfer</option>
             <option value="online">Card / online payment</option>
+            <option value="ozow" disabled>Ozow — coming soon</option>
+            <option value="payfast" disabled>PayFast — coming soon</option>
           </select></label>
+        <p style="font-size:12px; color:var(--slate); margin:-4px 0 8px; line-height:1.5;">Account credit and vouchers can be used at the card / online checkout. Ozow and PayFast are coming soon.</p>
         <label style="display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--slate); line-height:1.5; margin:12px 0 6px; cursor:pointer;">
           <input type="checkbox" id="edBuyTermsChk" style="margin-top:2px; flex-shrink:0;">
           <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span>
@@ -2210,11 +2213,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div id="edBuyStep2" hidden>
         <span class="eyebrow" style="color:var(--red);">Almost there</span>
         <h3 style="font-family:'Playfair Display',serif; font-size:24px; margin:6px 0 10px;">Pay by EFT</h3>
-        <p style="font-size:13.5px; color:var(--slate); line-height:1.6;">Use this reference on your transfer so we can match it. Once we confirm the payment, we'll email your download link.</p>
+        <p style="font-size:13.5px; color:var(--slate); line-height:1.6;">Use this Reference Code on your transfer so we can match it to your order.</p>
         <div class="ed-reference" id="edBuyReference"></div>
         <p style="font-size:12.5px; color:var(--slate); margin:-6px 0 14px;">Keep this code — you'll need it with your email address to start the download.</p>
         <div id="edBuyBank" style="font-size:13.5px; line-height:1.9;"></div>
-        <button class="btn btn-line" id="edBuyDone" style="width:100%; margin-top:16px;">Done</button>
+
+        <!-- The procedure, in the order it actually happens. Comes from the
+             server so the page, the emailed confirmation and the PDF can
+             never end up telling the customer three different things. -->
+        <div id="edBuyProcedure" style="margin-top:16px; padding:14px 16px; background:var(--paper); border:1px solid var(--paper-line); border-radius:6px;"></div>
+
+        <button class="btn btn-line" id="edBuyConfirmationBtn" style="width:100%; margin-top:12px;">Download your order confirmation</button>
+        <p id="edBuyConfirmationNote" style="font-size:12px; color:var(--slate); margin-top:6px; text-align:center;">We've also emailed this to you.</p>
+        <button class="btn btn-line" id="edBuyDone" style="width:100%; margin-top:10px;">Done</button>
       </div>
 
       <!-- STEP 3: already approved — claim the download now -->
@@ -6113,8 +6124,32 @@ document.getElementById('edBuySubmit').addEventListener('click', async () => {
       <strong>Account name:</strong> ${escapeHtml(i.accountName || '')}<br>
       <strong>Account number:</strong> ${escapeHtml(i.accountNumber || '')}<br>
       <strong>Branch code:</strong> ${escapeHtml(i.branchCode || '')}<br>
-      <strong>Reference:</strong> ${escapeHtml(res.reference)}
+      <strong>Reference Code:</strong> ${escapeHtml(res.reference)}
       <p style="font-size:12.5px; color:var(--slate); line-height:1.6; margin-top:10px;">${escapeHtml(i.note || '')}</p>`;
+
+    // Remember what this order was, so the confirmation button below can ask
+    // for it back with the same reference + email pair the server requires.
+    edLastOrder = { reference: res.reference, email };
+
+    const p = res.procedure || {};
+    document.getElementById('edBuyProcedure').innerHTML = `
+      <div style="font-weight:700; font-size:13px; margin-bottom:8px;">What happens next</div>
+      <ol style="font-size:12.5px; color:var(--slate); line-height:1.65; margin:0 0 0 18px; padding:0;">
+        ${(p.steps || []).map((s) => `<li style="margin-bottom:5px;">${escapeHtml(s)}</li>`).join('')}
+      </ol>
+      ${p.salesEmail ? `<p style="font-size:12.5px; margin:10px 0 0;">Send your proof of payment to
+        <a href="mailto:${escapeHtml(p.salesEmail)}"><strong>${escapeHtml(p.salesEmail)}</strong></a>,
+        quoting Reference Code <strong>${escapeHtml(res.reference)}</strong>.</p>` : ''}
+      ${(p.comingSoonMethods || []).length ? `<p style="font-size:11.5px; color:var(--slate); margin:8px 0 0;">
+        ${escapeHtml(p.comingSoonMethods.join(' and '))} payments are coming soon.</p>` : ''}`;
+
+    // Only offered when the server actually stored one — a button that
+    // reliably fails is worse than no button.
+    const confBtn = document.getElementById('edBuyConfirmationBtn');
+    const confNote = document.getElementById('edBuyConfirmationNote');
+    confBtn.hidden = !res.confirmationAvailable;
+    confNote.hidden = !res.confirmationAvailable;
+
     edShowStep(2);
   } catch (e) {
     err.textContent = e.message || 'Something went wrong. Please try again.';
@@ -6127,6 +6162,48 @@ document.getElementById('edBuySubmit').addEventListener('click', async () => {
 
 document.getElementById('edBuyClose').addEventListener('click', () => edCloseModal('edBuyModal'));
 document.getElementById('edBuyDone').addEventListener('click', () => edCloseModal('edBuyModal'));
+
+// The order the buyer just placed, so the confirmation can be re-requested
+// with the reference + email pair the server checks. Not persisted: this is
+// only for the few seconds the confirmation screen is open, and the same
+// document is in their inbox regardless.
+let edLastOrder = null;
+
+// Fetched rather than linked: the confirmation lives in the private bucket
+// and carries the buyer's name, email and amount, so there is no URL to hand
+// out — the server checks the pair and streams the bytes back.
+document.getElementById('edBuyConfirmationBtn').addEventListener('click', async () => {
+  if (!edLastOrder) return;
+  const btn = document.getElementById('edBuyConfirmationBtn');
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = 'Preparing…';
+  try {
+    const res = await fetch(UnplugAPI.getApiBase() + '/editions/purchases/confirmation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(edLastOrder),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Could not prepare your confirmation.');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `unplug-order-${edLastOrder.reference}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (e) {
+    alert(e.message || 'Could not prepare your confirmation. It has also been emailed to you.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
 
 // Claiming: email + reference in, one-time download link out.
 document.getElementById('edClaimSubmit').addEventListener('click', async () => {

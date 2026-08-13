@@ -268,8 +268,42 @@ router.post('/', requireAuth, (req, res) => {
 // (fetchFromSupabasePrivate), storing a generated invoice/receipt PDF
 // (uploadBufferToSupabase), and knowing whether that's even possible right
 // now (supabaseConfigured) — all without duplicating this file's storage logic.
+// The private-bucket twin of uploadBufferToSupabase, for bytes that are
+// nobody's business but the customer's — an edition order confirmation
+// carries their name, email and what they paid, so it must not sit on a
+// public URL the way an invoice PDF harmlessly can.
+async function uploadBufferToSupabasePrivate(buffer, filename, mimetype) {
+  const objectPath = `${Date.now()}-${filename}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_PRIVATE_BUCKET}/${objectPath}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      apikey: SUPABASE_SERVICE_KEY,
+      'Content-Type': mimetype || 'application/octet-stream',
+      'x-upsert': 'true',
+    },
+    body: buffer,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Supabase Storage upload failed (${res.status}): ${detail}`);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/${SUPABASE_PRIVATE_BUCKET}/${objectPath}`;
+}
+
+// True when a URL points at the PUBLIC bucket — i.e. anyone holding the link
+// can read the file without going through this backend at all. Used to tell
+// an admin, in plain words, which paid editions are still being served from a
+// link that needs no purchase.
+function isPublicStorageUrl(url) {
+  return typeof url === 'string' && url.includes('/storage/v1/object/public/');
+}
+
 router.fetchFromSupabasePrivate = fetchFromSupabasePrivate;
 router.uploadBufferToSupabase = uploadBufferToSupabase;
+router.uploadBufferToSupabasePrivate = uploadBufferToSupabasePrivate;
+router.isPublicStorageUrl = isPublicStorageUrl;
 router.supabaseConfigured = supabaseConfigured;
+router.supabasePrivateConfigured = supabasePrivateConfigured;
 
 module.exports = router;
