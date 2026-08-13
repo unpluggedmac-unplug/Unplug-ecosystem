@@ -9,6 +9,7 @@ const pool = require('../db');
 const { requireAuth, requireRole, attachUser } = require('../middleware/auth');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const { logActivity } = require('./activityLog');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -383,6 +384,14 @@ router.post('/shares', attachUser, publicSubmitLimiter, async (req, res, next) =
         String(req.body.channel || '').trim().slice(0, 30) || null,
       ]
     );
+    // Only a signed-in sharer can be credited; anonymous shares are still
+    // recorded above for the analytics, they just earn nobody anything.
+    if (req.user) {
+      recordParticipationAsync(req.user.id, 'content_share', {
+        contentType: shareType,
+        contentId: Number.isInteger(Number(req.body.entityId)) ? Number(req.body.entityId) : null,
+      });
+    }
     res.json({ recorded: true });
   } catch (err) {
     next(err);

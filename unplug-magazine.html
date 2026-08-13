@@ -3825,6 +3825,36 @@ function initArticleReader(a, id, shareUrl) {
   let fontStep = 0;
   const FONT = [16, 18, 20, 23];
 
+  // ---------------------------------------------------------------------
+  // Participation signals for the mission programme.
+  //
+  // Some actions have no server-side moment to hang off — nothing on the
+  // backend knows a reader finished an article or pressed Listen. These
+  // report it, through the same endpoint and engine every other action
+  // uses, so missions keyed to them can actually complete.
+  //
+  // Signed-in members only: the endpoint needs a session, and there is
+  // nobody to credit otherwise. Silent by design — a reader must never see
+  // an error because a points call failed.
+  // ---------------------------------------------------------------------
+  function recordAction(actionCode, contentType, contentId) {
+    if (!UnplugAPI.getToken()) return;
+    UnplugAPI.api('/participation/action', {
+      method: 'POST',
+      body: JSON.stringify({ actionCode, contentType: contentType || null, contentId: contentId || null }),
+    }).catch(() => {});
+  }
+
+  // Once per article per visit. The server caps the action per day as well,
+  // so this is belt and braces against re-scrolling for points.
+  let readRecordedFor = null;
+  function recordRead() {
+    const id = window.__currentArticleId || null;
+    if (!id || readRecordedFor === id) return;
+    readRecordedFor = id;
+    recordAction('article_read_complete', 'article', id);
+  }
+
   // Scroll progress (only fills while the article page is the active one).
   function updateProgress() {
     const page = document.getElementById('page-articledetail');
@@ -3832,7 +3862,14 @@ function initArticleReader(a, id, shareUrl) {
     const rect = body.getBoundingClientRect();
     const total = rect.height - window.innerHeight;
     const done = Math.min(Math.max(-rect.top, 0), Math.max(total, 1));
-    bar.style.width = (total > 0 ? (done / total) * 100 : 0) + '%';
+    const pct = total > 0 ? (done / total) * 100 : 0;
+    bar.style.width = pct + '%';
+
+    // A read counts at 70% of the way down, not on page load — otherwise
+    // opening an article and leaving would earn as much as reading it.
+    // Recorded once per article per visit; the server also caps the action
+    // at 10 a day, so this cannot be scrolled repeatedly for points.
+    if (pct >= 70) recordRead();
   }
   if (!window.__artProgressBound) {
     window.addEventListener('scroll', () => { if (window.__updateArtProgress) window.__updateArtProgress(); }, { passive: true });
@@ -3901,6 +3938,9 @@ function initArticleReader(a, id, shareUrl) {
       if (ttsChunks.length === 0) return;
       ttsIndex = 0;
       ttsActive = true;
+      // Recorded on starting playback, not on stopping — a reader who
+      // listens and navigates away still listened.
+      recordAction('article_audio_listen', 'article', window.__currentArticleId);
       // First utterance must be spoken synchronously inside this click so the
       // mobile browser treats it as user-initiated audio. No cancel() first —
       // on Android, cancel() immediately before speak() can drop the audio.
@@ -5054,6 +5094,9 @@ async function loadArticleDetail(id) {
   if (window.__stopArticleSpeak) window.__stopArticleSpeak();
   const el = document.getElementById('articleDetailContent');
   el.innerHTML = '<div class="dir-empty-state">Loading story…</div>';
+  // Which article the reader is on, so the read/listen signals know what to
+  // report. Set before the fetch so it is never stale from the last article.
+  window.__currentArticleId = Number(id) || null;
   trackPageView('article-' + id);
   try {
     const data = await api('/articles/' + id);

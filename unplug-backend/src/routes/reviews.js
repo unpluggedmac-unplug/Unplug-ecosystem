@@ -6,6 +6,7 @@ const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { notifyProfileOwner } = require('./interactions');
 const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -154,6 +155,11 @@ router.patch('/:id/status', requireRole('admin'), async (req, res, next) => {
     logActivity(req.user.id, 'review_' + status, `review ${reviewId}`);
     if (status === 'approved') {
       pool.query('SELECT check_and_update_business_status($1)', [result.rows[0].profile_id]).catch(() => {});
+      // On approval only, for the same reason comments are: a rejected
+      // review never reached anybody.
+      recordParticipationAsync(result.rows[0].user_id, 'review_create', {
+        contentType: 'profile', contentId: result.rows[0].profile_id,
+      });
       try { await notifyProfileOwner(result.rows[0].user_id, 'profile', result.rows[0].profile_id, '⭐', 'reviewed'); } catch (e) { /* notification failure must never block approval */ }
     }
     res.json({ review: result.rows[0] });

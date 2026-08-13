@@ -6,6 +6,7 @@ const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { notifyProfileOwner } = require('./interactions');
 const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -277,6 +278,12 @@ router.patch('/:id/status', requireRole('admin'), async (req, res, next) => {
     if (status === 'approved') {
       const c = result.rows[0];
       try { await notifyProfileOwner(c.user_id, c.target_type, c.target_id, '💬', 'commented on'); } catch (e) { /* notification failure must never block approval */ }
+      // Credited on APPROVAL rather than on posting. A comment that is later
+      // rejected never became real, and paying for it would let someone earn
+      // by posting anything at all.
+      recordParticipationAsync(c.user_id, 'comment_create', {
+        contentType: c.target_type, contentId: c.target_id,
+      });
     }
     res.json({ comment: result.rows[0] });
   } catch (err) {

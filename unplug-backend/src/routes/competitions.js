@@ -4,6 +4,7 @@ const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { eftInstructions } = require('../utils/eftDetails');
 const { logActivity } = require('./activityLog');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -416,6 +417,10 @@ router.post('/competitions/:id/entries', requireAuth, async (req, res, next) => 
       await pool.query('UPDATE profiles SET free_arena_credits = free_arena_credits - 1 WHERE id = $1', [profileId]);
     }
 
+    recordParticipationAsync(req.user.id, 'competition_enter', {
+      contentType: 'competition', contentId: Number(req.params.id),
+    });
+
     res.status(201).json({
       entry: result.rows[0],
       message: hasCredit
@@ -681,6 +686,14 @@ router.post('/entries/:id/vote', async (req, res, next) => {
        RETURNING *`,
       [req.params.id, req.user ? req.user.id : null, req.user ? null : sessionId, dailyVoting]
     );
+
+    // Signed-in voters only. An anonymous vote has no member to credit, and
+    // this must never be a way to earn points without an account.
+    if (req.user) {
+      recordParticipationAsync(req.user.id, 'competition_vote', {
+        contentType: 'competition_entry', contentId: Number(req.params.id),
+      });
+    }
 
     res.status(201).json({ vote: result.rows[0], dailyVoting });
   } catch (err) {

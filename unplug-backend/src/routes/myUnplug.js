@@ -12,6 +12,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { recordParticipationAsync } = require('../utils/participation');
 
 const router = express.Router();
 
@@ -167,6 +168,8 @@ router.put('/me', requireAuth, async (req, res, next) => {
 // PUT /my-unplug/me/taxonomy — replace the member's selections wholesale.
 // Body: { interests: [...keys], skills: [...], purposes: [...] } — any key
 // omitted is left untouched, so the three multi-selects can save independently.
+// Saving interests/skills/purposes is a real profile action, so it feeds the
+// engine — capped at 3/day by the action itself, so re-saving cannot farm it.
 router.put('/me/taxonomy', requireAuth, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -194,6 +197,12 @@ router.put('/me/taxonomy', requireAuth, async (req, res, next) => {
       }
     }
     await client.query('COMMIT');
+
+    // After COMMIT only — a member whose save rolled back has not set
+    // anything, and crediting them for it would pay for work that no longer
+    // exists. Capped at 3/day by the action itself, so re-saving the same
+    // choices over and over cannot be farmed.
+    recordParticipationAsync(req.user.id, 'purpose_action');
 
     const profile = (await pool.query('SELECT * FROM my_unplug_profiles WHERE user_id = $1', [req.user.id])).rows[0];
     const taxonomies = await loadTaxonomies(req.user.id);
