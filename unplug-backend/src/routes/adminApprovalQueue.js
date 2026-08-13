@@ -50,6 +50,8 @@ const TYPES = {
   service_payment:     { label: 'Service Payment',     group: 'payment' },
   edition_purchase:    { label: 'Edition Purchase',    group: 'payment' },
   cancellation:        { label: 'Cancellation Request', group: 'access'  },
+  comment:             { label: 'Comment',              group: 'content' },
+  passport_comment:    { label: 'Passport Comment',     group: 'content' },
 };
 
 // Finds the payment behind a submission so its reference code and payment
@@ -298,6 +300,43 @@ const SOURCES = [
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/page-cms/admin/ad-slots/${r.id}/moderate`, body: { status: 'approved' } },
       reject: { method: 'PATCH', path: `/page-cms/admin/ad-slots/${r.id}/moderate`, body: { status: 'rejected' } },
+    }),
+  },
+  {
+    // Member comments on articles, profiles, gallery images, events and
+    // marketplace posters. Nothing is public until it is approved here.
+    type: 'comment',
+    sql: `SELECT c.id, LEFT(c.body, 120) AS title,
+                 'on ' || c.target_type || ' #' || c.target_id AS subtitle,
+                 u.full_name AS customer_name, u.email AS customer_email, c.user_id,
+                 c.created_at AS submitted_at, c.status AS item_status,
+                 NULL AS reference, NULL AS pay_status, NULL::numeric AS pay_amount,
+                 NULL AS pop_url, NULL AS invoice_url
+            FROM content_comments c
+            JOIN users u ON u.id = c.user_id
+           WHERE c.status = 'pending'`,
+    actions: (r) => ({
+      approve: { method: 'PATCH', path: `/comments/${r.id}/status`, body: { status: 'approved' } },
+      reject: { method: 'PATCH', path: `/comments/${r.id}/status`, body: { status: 'rejected' } },
+    }),
+  },
+  {
+    // Passport comments are posted ANONYMOUSLY — no account is required — so
+    // there is no user to name, and reviewing them matters more, not less.
+    type: 'passport_comment',
+    sql: `SELECT c.id, LEFT(c.comment, 120) AS title,
+                 'on the passport of ' || COALESCE(p.name, 'a member') AS subtitle,
+                 COALESCE(NULLIF(c.commenter_name, ''), 'Anonymous') AS customer_name,
+                 NULL AS customer_email, NULL::integer AS user_id,
+                 c.created_at AS submitted_at, c.status AS item_status,
+                 NULL AS reference, NULL AS pay_status, NULL::numeric AS pay_amount,
+                 NULL AS pop_url, NULL AS invoice_url
+            FROM deaf_passport_comments c
+            LEFT JOIN deaf_passports p ON p.id = c.passport_id
+           WHERE c.status = 'pending'`,
+    actions: (r) => ({
+      approve: { method: 'PATCH', path: `/deaf-community/admin/passport-comments/${r.id}/approve` },
+      reject: { method: 'PATCH', path: `/deaf-community/admin/passport-comments/${r.id}/reject` },
     }),
   },
   {

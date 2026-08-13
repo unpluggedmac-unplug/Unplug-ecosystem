@@ -182,11 +182,11 @@ verified live after the fact.
 
 One queue, everything awaiting a decision, at **Approval Queue** in the admin.
 
-**18 categories:** Article · Directory Listing · Gallery Image · Event ·
+**20 categories:** Article · Directory Listing · Gallery Image · Event ·
 Competition Entry · Top 10 Entry · Top 10 Vote Purchase · Investor ·
 Marketplace Poster · Article Highlight · Directory Highlight · Page Banner ·
 Shoutout · Listing Claim · Cancellation Request · Cart Order · Service
-Payment · Edition Purchase.
+Payment · Edition Purchase · **Comment** · **Passport Comment**.
 
 Each row shows type, item, customer, **Reference Code**, payment status,
 service status, date submitted, supporting files (proof of payment, invoice),

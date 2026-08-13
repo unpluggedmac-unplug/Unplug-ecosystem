@@ -3,6 +3,7 @@ const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
+const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
@@ -134,12 +135,16 @@ router.post('/passports', publicSubmitLimiter, honeypot, async (req, res, next) 
 });
 
 // GET /deaf-community/passports/:id/comments — public comments on a passport.
+//
+// Approved only. This POST is anonymous (no account required), so without
+// this filter anyone on the internet could put text straight onto a live
+// public page — see 111_passport_comment_moderation.sql.
 router.get('/passports/:id/comments', async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT id, commenter_name, comment, created_at
        FROM deaf_passport_comments
-       WHERE passport_id = $1
+       WHERE passport_id = $1 AND status = 'approved'
        ORDER BY created_at ASC`,
       [req.params.id]
     );
@@ -167,12 +172,18 @@ router.post('/passports/:id/comments', publicSubmitLimiter, honeypot, async (req
       return res.status(404).json({ error: 'That passport is not available for comments.' });
     }
 
+    // status is left to its default of 'pending'. Never set here — a comment
+    // that publishes itself is the bug this whole change exists to remove.
     await pool.query(
       `INSERT INTO deaf_passport_comments (passport_id, commenter_name, comment)
        VALUES ($1, $2, $3)`,
       [req.params.id, (commenterName || '').trim() || null, text]
     );
-    res.status(201).json({ message: 'Comment posted.' });
+    // Says plainly that it is not live yet. Telling someone "Comment posted"
+    // and then not showing it reads as the site being broken.
+    res.status(201).json({
+      message: 'Thank you — your comment has been sent for review and will appear once approved.',
+    });
   } catch (err) {
     next(err);
   }
@@ -200,6 +211,53 @@ router.get('/admin/passports/pending', requireRole('admin'), async (req, res, ne
        FROM deaf_passports WHERE status = 'pending' ORDER BY created_at ASC`
     );
     res.json({ passports: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /deaf-community/admin/passport-comments/pending
+router.get('/admin/passport-comments/pending', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.passport_id, c.commenter_name, c.comment, c.created_at,
+              p.name AS passport_name
+         FROM deaf_passport_comments c
+         LEFT JOIN deaf_passports p ON p.id = c.passport_id
+        WHERE c.status = 'pending'
+        ORDER BY c.created_at ASC`
+    );
+    res.json({ comments: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /deaf-community/admin/passport-comments/:id/:action
+//
+// Separate from moderationHandler below: that one resets a 14-day expiry
+// window, which is meaningful for a job or a passport and meaningless for a
+// comment. Sharing it would have silently added an expiry column requirement.
+router.patch('/admin/passport-comments/:id/:action', requireRole('admin'), async (req, res, next) => {
+  try {
+    const action = req.params.action;
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ error: 'action must be approve or reject.' });
+    }
+    const status = action === 'approve' ? 'approved' : 'rejected';
+    const result = await pool.query(
+      `UPDATE deaf_passport_comments
+          SET status = $1, reviewed_at = now(), reviewed_by = $2
+        WHERE id = $3 RETURNING id, comment`,
+      [status, req.user.id, Number(req.params.id)]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Comment not found.' });
+
+    await logActivity(req.user.id, `passport_comment_${status}`,
+      `${status === 'approved' ? 'Approved' : 'Rejected'} passport comment #${result.rows[0].id}: `
+      + `"${String(result.rows[0].comment).slice(0, 80)}"`).catch(() => {});
+
+    res.json({ id: result.rows[0].id, status });
   } catch (err) {
     next(err);
   }
