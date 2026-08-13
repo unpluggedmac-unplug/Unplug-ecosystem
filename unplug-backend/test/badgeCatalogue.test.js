@@ -95,6 +95,7 @@ before(async () => {
   app.use(express.json());
   app.use(attachUser);
   app.use('/badges', require('../src/routes/badges'));
+  app.use('/members', require('../src/routes/members'));
   app.use((err, _req, res, _next) => res.status(500).json({ error: err.message }));
   await new Promise((resolve) => { server = app.listen(0, resolve); });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -284,4 +285,54 @@ test('badge admin endpoints are admin-only', async () => {
   assert.equal((await req('POST', '/badges/admin/recog_022/award-bulk', {
     token: memberToken, body: { userIds: [1] },
   })).status, 403);
+});
+
+// --- The Members page "Badges" filter --------------------------------------
+
+test('the Badges filter shows ONLY members who hold a badge', async () => {
+  // A filter, not just an ordering: a member with no badges must never appear
+  // under it, however high they rank on anything else.
+  const withBadge = await makeUser();
+  const without = await makeUser();
+  for (const [uid, slug, name] of [[withBadge, 'badged-member', 'Badged Member'], [without, 'plain-member', 'Plain Member']]) {
+    await pool.query(
+      `INSERT INTO profiles (user_id, type, package_tier, slug, display_name, status)
+       VALUES ($1, 'individual', 'basic', $2, $3, 'approved')`,
+      [uid, slug, name]
+    );
+  }
+  await req('POST', '/badges/admin/aviation_03/award-bulk', {
+    token: adminToken, body: { userIds: [withBadge] },
+  });
+
+  const res = await req('GET', '/members?sort=badged&limit=60');
+  assert.equal(res.status, 200);
+  const names = res.body.members.map((m) => m.display_name);
+  assert.ok(names.includes('Badged Member'));
+  assert.ok(!names.includes('Plain Member'), 'a member with no badge must not appear');
+});
+
+test('every card carries a badge_count, and the badged view is most-decorated first', async () => {
+  const many = await makeUser();
+  await pool.query(
+    `INSERT INTO profiles (user_id, type, package_tier, slug, display_name, status)
+     VALUES ($1, 'individual', 'basic', 'most-decorated', 'Most Decorated', 'approved')`,
+    [many]
+  );
+  for (const code of ['aviation_03', 'creator_001', 'creator_002', 'recog_022']) {
+    await req('POST', `/badges/admin/${code}/award-bulk`, { token: adminToken, body: { userIds: [many] } });
+  }
+
+  const res = await req('GET', '/members?sort=badged&limit=60');
+  assert.equal(res.body.members[0].display_name, 'Most Decorated', 'most badges should lead');
+  assert.equal(Number(res.body.members[0].badge_count), 4);
+  // And the count travels on every tab, not only this one.
+  const newest = await req('GET', '/members?sort=newest&limit=60');
+  assert.ok(newest.body.members.every((m) => m.badge_count !== undefined));
+});
+
+test('an unknown sort falls back to newest rather than erroring', async () => {
+  const res = await req('GET', '/members?sort=not_a_sort');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.sort, 'newest');
 });

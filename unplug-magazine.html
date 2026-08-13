@@ -2794,6 +2794,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
 
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px;">
+      <button class="btn btn-line members-sort-btn" data-sort="badged" type="button" style="width:auto; padding:8px 16px; font-size:13px;">🏅 Badges</button>
       <button class="btn btn-line members-sort-btn active" data-sort="newest" type="button" style="width:auto; padding:8px 16px; font-size:13px;">New Members</button>
       <button class="btn btn-line members-sort-btn" data-sort="trending" type="button" style="width:auto; padding:8px 16px; font-size:13px;">🔥 Trending</button>
       <button class="btn btn-line members-sort-btn" data-sort="most_followed" type="button" style="width:auto; padding:8px 16px; font-size:13px;">Most Followed</button>
@@ -6886,7 +6887,10 @@ function memberCardHtml(m) {
       <p style="font-size:11.5px; color:var(--slate);">${m.province ? escapeHtml(m.province) + ' · ' : ''}${m.unplug_score} pts</p>
     </a>
     <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px 12px;">
-      <span style="font-size:11.5px; color:var(--slate);">${m.followers} follower${m.followers === 1 ? '' : 's'} · ❤️ ${m.total_likes}</span>
+      <span style="font-size:11.5px; color:var(--slate);">${m.followers} follower${m.followers === 1 ? '' : 's'} · ❤️ ${m.total_likes}${
+        // Only shown when they actually hold one, so a member with none is not
+        // labelled "0 badges" on every other tab.
+        Number(m.badge_count) > 0 ? ` · 🏅 ${m.badge_count}` : ''}</span>
       <button class="btn btn-line member-follow-btn" type="button" data-user-id="${m.user_id}" style="width:auto; padding:5px 12px; font-size:11.5px;">+ Follow</button>
     </div>
   </div>`;
@@ -6913,7 +6917,11 @@ async function loadMembers(reset) {
     const data = await api('/members?' + params.toString());
     const members = data.members || [];
     if (reset && members.length === 0) {
-      grid.innerHTML = '<div class="dir-empty-state">No members match yet — try a different filter.</div>';
+      // The Badges tab is a filter, not just an ordering, so "nothing here"
+      // has a specific meaning worth saying rather than the generic message.
+      grid.innerHTML = membersSort === 'badged'
+        ? '<div class="dir-empty-state">No members have been awarded a badge yet.</div>'
+        : '<div class="dir-empty-state">No members match yet — try a different filter.</div>';
     } else {
       grid.insertAdjacentHTML('beforeend', members.map(memberCardHtml).join(''));
     }

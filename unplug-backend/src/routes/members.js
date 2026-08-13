@@ -6,7 +6,9 @@ const pool = require('../db');
 
 const router = express.Router();
 
-const VALID_SORTS = ['trending', 'newest', 'most_followed', 'highest_ranked', 'featured', 'random'];
+// 'badged' both filters and orders: it narrows to members who actually hold a
+// badge, most-decorated first. Every other value only reorders the same set.
+const VALID_SORTS = ['badged', 'trending', 'newest', 'most_followed', 'highest_ranked', 'featured', 'random'];
 const VALID_TYPES = ['individual', 'business'];
 
 // GET /members?search=&category=&province=&type=&sort=&limit=&offset=
