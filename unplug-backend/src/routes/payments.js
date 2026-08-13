@@ -6,6 +6,7 @@ const { spendCredit, balanceFor, historyFor } = require('../utils/accountCredit'
 const { priceFor, packagesFor, highlightServiceKey } = require('../utils/servicePackages');
 const { logActivity } = require('./activityLog');
 const { eftInstructions } = require('../utils/eftDetails');
+const { attributeConsultant } = require('../utils/consultantAttribution');
 
 const router = express.Router();
 
@@ -885,15 +886,27 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       }
       const payable = Number((finalAmount - creditUsed).toFixed(2));
 
+      // Who earns commission on this payment. The buyer's checkout selection
+      // is only the LAST of three rules — an admin assignment, then the
+      // consultant the member named at signup, both outrank it. See
+      // utils/consultantAttribution.js for the order and why it lives there.
+      const attributed = await attributeConsultant(
+        req.user.id,
+        referralSource === 'sales_consultant' ? salesConsultantId : null,
+        client
+      );
+
       const result = await client.query(
         `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id, referral_source, sales_consultant_id,
+                               consultant_source,
                                terms_version, terms_accepted_at, terms_ip, terms_user_agent, credit_used, order_total,
                                voucher_discount, voucher_code)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10, $11, $12, $13, $14, $15)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), $11, $12, $13, $14, $15, $16)
          RETURNING *`,
         // order_total is the FULL price before any discount, so the stored
         // breakdown reconciles: order_total - voucher_discount - credit_used = amount.
-        [req.user.id, payable, method, reference, linkedType, linkedId, referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null,
+        [req.user.id, payable, method, reference, linkedType, linkedId, referralSource || null,
+          attributed.consultantId, attributed.source,
           TERMS_VERSION, req.ip, req.get('user-agent') || null, creditUsed, amount,
           Number((amount - finalAmount).toFixed(2)), appliedVoucher ? voucherCode : null]
       );

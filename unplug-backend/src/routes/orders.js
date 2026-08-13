@@ -12,6 +12,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
+const { attributeConsultant } = require('../utils/consultantAttribution');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor } = require('../utils/accountCredit');
@@ -208,15 +209,25 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       }
       const total = Number((afterVoucher - creditUsed).toFixed(2));
 
+      // One attribution decision for the whole order, reused for every item
+      // below — resolving per item could otherwise credit two consultants for
+      // a single basket. See utils/consultantAttribution.js.
+      const attributed = await attributeConsultant(
+        req.user.id,
+        referralSource === 'sales_consultant' ? salesConsultantId : null,
+        client
+      );
+
       const orderResult = await client.query(
         `INSERT INTO orders (user_id, reference, method, subtotal, voucher_code, voucher_discount, credit_used, total,
-                              referral_source, sales_consultant_id, terms_version, terms_accepted_at, terms_ip, terms_user_agent, info_confirmed_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now(), $12, $13, now())
+                              referral_source, sales_consultant_id, consultant_source,
+                              terms_version, terms_accepted_at, terms_ip, terms_user_agent, info_confirmed_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(), $13, $14, now())
          RETURNING *`,
         [
           req.user.id, reference, method, subtotal,
           appliedVoucher ? voucherCode : null, voucherDiscount, creditUsed, total,
-          referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null,
+          referralSource || null, attributed.consultantId, attributed.source,
           TERMS_VERSION, req.ip, req.get('user-agent') || null,
         ]
       );
@@ -237,13 +248,14 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
 
         const paymentResult = await client.query(
           `INSERT INTO payments (user_id, amount, method, gateway_reference, linked_type, linked_id,
-                                  referral_source, sales_consultant_id, terms_version, terms_accepted_at, terms_ip, terms_user_agent,
+                                  referral_source, sales_consultant_id, consultant_source,
+                                  terms_version, terms_accepted_at, terms_ip, terms_user_agent,
                                   credit_used, order_total, voucher_discount, voucher_code, order_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10, $11, $12, $13, $14, $15, $16)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), $11, $12, $13, $14, $15, $16, $17)
            RETURNING *`,
           [
             req.user.id, share, method, `${reference}-${i + 1}`, priced[i].linkedType, priced[i].linkedId,
-            referralSource || null, referralSource === 'sales_consultant' ? salesConsultantId : null,
+            referralSource || null, attributed.consultantId, attributed.source,
             TERMS_VERSION, req.ip, req.get('user-agent') || null,
             0, priced[i].amount, 0, null, order.id,
           ]
