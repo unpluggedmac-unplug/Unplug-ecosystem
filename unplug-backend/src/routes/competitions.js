@@ -1005,7 +1005,59 @@ router.post('/top10/publish', requireRole('admin'), async (req, res, next) => {
       client.release();
     }
 
-    res.json({ message: 'Top 10 published.' });
+    // The three placement badges, stamped with the month being published.
+    //
+    // Defaults to the current month because the Top 10 is published at the
+    // end of each month, but can be overridden — publishing on the 1st for
+    // the month just gone would otherwise stamp the wrong period, and a badge
+    // that says the wrong month is worse than no badge.
+    const now = new Date();
+    const month = Number(req.body.awardMonth) || (now.getMonth() + 1);
+    const year = Number(req.body.awardYear) || now.getFullYear();
+    const PLACEMENT_BADGES = { 1: 'top10_champion', 2: 'top10_runner_up', 3: 'top10_third_place' };
+    const awarded = [];
+
+    try {
+      // Republishing a corrected month must not leave the previous winner
+      // holding "Champion — August". Every placement badge for THIS period is
+      // cleared first, then re-awarded from the rankings that were just
+      // published, so the badges can never disagree with the live Top 10.
+      await pool.query(
+        `DELETE FROM user_badges
+          WHERE badge_code = ANY($1) AND award_month = $2 AND award_year = $3`,
+        [Object.values(PLACEMENT_BADGES), month, year]
+      );
+
+      for (const r of rankings) {
+        const code = PLACEMENT_BADGES[Number(r.rank)];
+        if (!code) continue; // only the top three carry a badge
+
+        // Badges belong to a USER; the rankings store a profile. A listing
+        // with no owner account simply cannot be awarded one.
+        const owner = await pool.query('SELECT user_id FROM profiles WHERE id = $1', [r.profileId]);
+        if (!owner.rows[0] || !owner.rows[0].user_id) continue;
+
+        await pool.query('SELECT award_badge($1, $2, $3, $4, $5, $6)', [
+          owner.rows[0].user_id, code, req.user.id,
+          `Top 10 placement ${r.rank} for ${month}/${year}`, month, year,
+        ]);
+        awarded.push({ rank: r.rank, userId: owner.rows[0].user_id, badge: code });
+      }
+    } catch (err) {
+      // The rankings are already published and must stand. A badge failure is
+      // reported, not thrown — the admin can award by hand from the Badges
+      // screen rather than have the publish look like it failed.
+      console.error('[top10] placement badges failed:', err.message);
+      return res.json({
+        message: 'Top 10 published, but the placement badges could not be awarded automatically.',
+        badgeError: err.message,
+      });
+    }
+
+    res.json({
+      message: `Top 10 published. ${awarded.length} placement badge${awarded.length === 1 ? '' : 's'} awarded for ${month}/${year}.`,
+      awardedBadges: awarded,
+    });
   } catch (err) {
     next(err);
   }
