@@ -1790,8 +1790,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <a href="https://youtube.com/@unpluggedmagazineza?si=FWWo49yKAc7zu_7I" target="_blank" rel="noopener" class="btn btn-solid">Visit Our Channel ↗</a>
         </div>
         <div class="youtube-embed" id="youtubeVisual">
+          <!-- enablejsapi=1 and an id are what let the YouTube IFrame API
+               attach to this player and report whether anyone actually
+               watched. Without both, the embed is a black box. -->
           <iframe
-            src="https://www.youtube.com/embed/videoseries?list=PLbpi6ZahtOH6Ar_3GPy3workwDO91Sj7"
+            id="unplugYouTubePlayer"
+            src="https://www.youtube.com/embed/videoseries?list=PLbpi6ZahtOH6Ar_3GPy3workwDO91Sj7&enablejsapi=1"
             title="Unplug Magazine on YouTube"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowfullscreen>
@@ -7592,6 +7596,123 @@ async function loadYoutubeImage() {
     /* keep the embedded playlist on failure */
   }
 }
+
+// ---------------------------------------------------------------------------
+// WATCHING A VIDEO — the YouTube IFrame API.
+//
+// A bare embed tells the page nothing: it cannot say whether a visitor
+// watched, pressed play and left, or never touched it. The IFrame API is the
+// only way to know, so it is loaded here and the player reports its own state.
+//
+// A watch is counted after 30 SECONDS OF ACTUAL PLAYBACK, accumulated across
+// pauses. Pressing play and leaving does not count — that would pay people
+// for loading the homepage, which is exactly what makes a points system
+// meaningless. Thirty seconds rather than a percentage because this is a
+// playlist and the videos differ in length.
+//
+// Everything is guarded and lazy:
+//   - the API script loads only when the video scrolls into view, so it costs
+//     nothing to visitors who never reach it;
+//   - if an admin has replaced the embed with a still image (see
+//     loadYoutubeImage above) there is no player, and this quietly does
+//     nothing;
+//   - if YouTube is slow, blocked, or the API never arrives, the video still
+//     plays exactly as it does today. Nothing here can break the embed.
+// ---------------------------------------------------------------------------
+(function unplugVideoWatchTracking() {
+  const PLAYER_ID = 'unplugYouTubePlayer';
+  const WATCH_SECONDS_REQUIRED = 30;
+
+  let apiRequested = false;
+  let player = null;
+  let watchedSeconds = 0;
+  let ticker = null;
+  let recorded = false;
+
+  function recordWatch() {
+    if (recorded) return;
+    recorded = true;
+    // Signed-in members only — there is nobody to credit otherwise. Silent:
+    // a viewer must never see an error because a points call failed.
+    if (!window.UnplugAPI || !UnplugAPI.getToken()) return;
+    UnplugAPI.api('/participation/action', {
+      method: 'POST',
+      body: JSON.stringify({ actionCode: 'video_watch', contentType: 'video' }),
+    }).catch(() => {});
+  }
+
+  function startTicking() {
+    if (ticker) return;
+    ticker = setInterval(() => {
+      watchedSeconds += 1;
+      if (watchedSeconds >= WATCH_SECONDS_REQUIRED) {
+        stopTicking();
+        recordWatch();
+      }
+    }, 1000);
+  }
+
+  function stopTicking() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+  }
+
+  function buildPlayer() {
+    // Re-checked here rather than at page load: loadYoutubeImage() may have
+    // replaced the whole embed with a still image by now.
+    const el = document.getElementById(PLAYER_ID);
+    if (!el || player || !window.YT || !window.YT.Player) return;
+    try {
+      player = new YT.Player(PLAYER_ID, {
+        events: {
+          onStateChange: (e) => {
+            if (!window.YT || !window.YT.PlayerState) return;
+            if (e.data === YT.PlayerState.PLAYING) startTicking();
+            else stopTicking(); // paused, buffering, ended — all stop the clock
+          },
+        },
+      });
+    } catch (err) {
+      /* a failed player must never affect the page */
+    }
+  }
+
+  // The API calls this global by name when it finishes loading. Chained so a
+  // handler set by anything else still runs.
+  const previousReady = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = function () {
+    if (typeof previousReady === 'function') { try { previousReady(); } catch (e) { /* ignore */ } }
+    buildPlayer();
+  };
+
+  function loadApi() {
+    if (apiRequested) return;
+    apiRequested = true;
+    if (window.YT && window.YT.Player) { buildPlayer(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    s.async = true;
+    s.onerror = () => { /* no tracking, but the embed keeps working */ };
+    document.head.appendChild(s);
+  }
+
+  function watchForVisibility() {
+    const box = document.getElementById('youtubeVisual');
+    if (!box) return;
+    if (!('IntersectionObserver' in window)) { loadApi(); return; }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) { loadApi(); io.disconnect(); }
+      });
+    }, { rootMargin: '200px' });
+    io.observe(box);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', watchForVisibility);
+  } else {
+    watchForVisibility();
+  }
+})();
 
 // ---------------------------------------------------------------------------
 // Homepage Calendar Events:
