@@ -254,6 +254,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="nav-group-items">
         <a data-section="competitions">Competitions</a>
         <a data-section="votebundles">Top 10</a>
+        <a data-section="top10monthly">Top 10 Monthly Rankings</a>
       </div>
     </div>
 
@@ -2005,6 +2006,34 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="vbBody" style="padding:0;">Loading…</div>
       </div>
     </div>
+
+    <!-- TOP 10 MONTHLY RANKINGS — the permanent record of how each month
+         finished, captured automatically once the month turns over. -->
+    <div class="admin-section" id="section-top10monthly">
+      <div class="main-head"><div><h1>Top 10 Monthly Rankings</h1>
+      <p>The record of how every month finished — #1 down to the last spot, with the votes each contestant had when the month closed. This is captured on its own shortly after each month ends, and the winner, runner-up and third place are given their badges at the same time.</p>
+      <p style="margin-top:8px;"><strong>Votes start again at zero each month</strong>, but nobody loses their place: the new month opens in the order the last one closed, and the board moves as soon as people start voting again. No votes are ever deleted — every bulk purchase stays on record against its payment, it simply belongs to the month it was bought in.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Captured months</h3></div>
+        <div class="panel-body" style="padding:0;">
+          <div id="t10MonthlyBody" style="padding:0;">Loading…</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Close a month by hand</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">You normally never need this — the month closes on its own. Use it to capture a month that was missed, or to redo one after correcting someone's votes.</p>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="field"><label for="t10CapYear">Year</label><input id="t10CapYear" type="number" min="2020" max="2100" style="width:110px;"></div>
+            <div class="field"><label for="t10CapMonth">Month</label><select id="t10CapMonth"></select></div>
+            <button class="btn btn-solid" id="t10CaptureBtn" style="width:auto;">Capture this month</button>
+          </div>
+          <span id="t10CapNote" style="font-size:12px; color:var(--slate); display:block; margin-top:10px;"></span>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2632,6 +2661,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'pricing') loadServicePricing();
     if (section === 'competitions') loadCompetitions();
     if (section === 'votebundles') { loadTop10Entries(); loadVoteBundlesAdmin(); }
+    if (section === 'top10monthly') loadTop10MonthlyRankings();
     if (section === 'editions') loadEditionsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
@@ -9433,7 +9463,10 @@ async function loadTop10Entries() {
 
     const table = document.createElement('table');
     const head = document.createElement('tr');
-    head.innerHTML = '<th style="width:52px;"></th><th>Name</th><th>Entry Code</th><th>Votes</th><th>Status</th><th></th>';
+    // Two vote columns since the Top 10 resets monthly: what shows on the
+    // public board right now, and every vote the entry has ever received —
+    // which is what a bulk purchase from an earlier month is counted in.
+    head.innerHTML = '<th style="width:52px;"></th><th>Name</th><th>Entry Code</th><th>Votes this month</th><th>All time</th><th>Status</th><th></th>';
     table.appendChild(head);
 
     entries.forEach((e) => {
@@ -9462,6 +9495,10 @@ async function loadTop10Entries() {
       votesTd.innerHTML = `<strong style="font-size:15px;">${Number(e.vote_count).toLocaleString()}</strong>`;
       tr.appendChild(votesTd);
 
+      const allTimeTd = document.createElement('td');
+      allTimeTd.innerHTML = `<span style="color:var(--slate);">${Number(e.all_time_vote_count != null ? e.all_time_vote_count : e.vote_count).toLocaleString()}</span>`;
+      tr.appendChild(allTimeTd);
+
       const statusTd = document.createElement('td');
       statusTd.textContent = e.status;
       tr.appendChild(statusTd);
@@ -9485,7 +9522,9 @@ async function loadTop10Entries() {
 // a vote total that changed with no recorded explanation is exactly the kind
 // of thing a losing contestant will ask about.
 async function adjustTop10Votes(entry) {
-  const raw = prompt(`Adjust votes for ${entry.display_name || 'this entry'}.\n\nCurrent total: ${entry.vote_count}\n\nEnter the change — for example 25 to add, or -25 to remove:`);
+  // The Top 10 resets monthly, so the number being corrected is THIS month's
+  // — that is what shows on the public board and what the change lands in.
+  const raw = prompt(`Adjust votes for ${entry.display_name || 'this entry'}.\n\nThis month's total: ${entry.vote_count}\n\nEnter the change — for example 25 to add, or -25 to remove:`);
   if (raw === null) return;
   const delta = Number(String(raw).trim());
   if (!Number.isInteger(delta) || delta === 0) {
@@ -9505,6 +9544,146 @@ async function adjustTop10Votes(entry) {
     showToast(err.message, true);
   }
 }
+
+// ---------------------------------------------------------------------------
+// TOP 10 MONTHLY RANKINGS
+// ---------------------------------------------------------------------------
+
+const T10_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+async function loadTop10MonthlyRankings() {
+  // The "close a month by hand" form defaults to the month just gone, which
+  // is the only one an admin would normally ever need to capture.
+  const yearInput = document.getElementById('t10CapYear');
+  const monthSel = document.getElementById('t10CapMonth');
+  if (monthSel && !monthSel.options.length) {
+    monthSel.innerHTML = T10_MONTH_NAMES.map((n, i) => `<option value="${i + 1}">${n}</option>`).join('');
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    yearInput.value = prev.getFullYear();
+    monthSel.value = prev.getMonth() + 1;
+  }
+
+  const body = document.getElementById('t10MonthlyBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/top10/monthly-rankings');
+    const months = data.months || [];
+    if (!months.length) {
+      body.innerHTML = '<div class="empty-state">No month has closed yet. The first record appears here shortly after the end of this month.</div>';
+      return;
+    }
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = '<th>Month</th><th>Winner</th><th>Contestants</th><th>Votes cast</th><th>Captured</th><th></th>';
+    table.appendChild(head);
+
+    months.forEach((m) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td><strong>${escapeHtmlAdmin(m.period_label)}</strong></td>`
+        + `<td>${m.winner_name ? '🥇 ' + escapeHtmlAdmin(m.winner_name) : '<span style="color:var(--slate);">no contestants</span>'}</td>`
+        + `<td>${Number(m.entry_count).toLocaleString()}</td>`
+        + `<td>${Number(m.total_votes).toLocaleString()}</td>`
+        + `<td style="font-size:11.5px; color:var(--slate);">${new Date(m.captured_at).toLocaleDateString('en-ZA')}`
+        + `${m.captured_auto ? '' : '<br>by hand'}</td>`
+        + '<td><div class="row-actions"><button class="approve">View full list</button></div></td>';
+      tr.querySelector('button').addEventListener('click', () => viewTop10Month(m.period_year, m.period_month));
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(table);
+    // Where the full board for a chosen month is rendered, below the list.
+    const detail = document.createElement('div');
+    detail.id = 't10MonthDetail';
+    body.appendChild(detail);
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load the monthly rankings.')}</div>`;
+  }
+}
+
+async function viewTop10Month(year, month) {
+  const host = document.getElementById('t10MonthDetail');
+  if (!host) return;
+  host.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api(`/top10/monthly-rankings/${year}/${month}`);
+    const rows = data.rankings || [];
+    const label = escapeHtmlAdmin(data.month.period_label);
+    if (!rows.length) {
+      host.innerHTML = `<div class="empty-state">Nobody was on the Top 10 in ${label}.</div>`;
+      return;
+    }
+
+    // Medals for the three that carry a badge, plain numbers below that.
+    const medal = (r) => (r === 1 ? '🥇' : r === 2 ? '🥈' : r === 3 ? '🥉' : `#${r}`);
+
+    host.innerHTML = `<div style="padding:16px; border-top:1px solid var(--paper-line);">
+      <h4 style="margin:0 0 12px;">${label} — final placings</h4>
+      <table>
+        <tr><th style="width:60px;">Place</th><th>Contestant</th><th>Entry Code</th><th>Votes</th></tr>
+        ${rows.map((r) => `<tr>
+          <td><strong style="font-size:15px;">${medal(r.rank)}</strong></td>
+          <td><strong>${escapeHtmlAdmin(r.display_name)}</strong>${
+            r.category ? `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(r.category)}</span>` : ''}</td>
+          <td>${r.entry_code ? `<code style="font-size:12px;">${escapeHtmlAdmin(r.entry_code)}</code>` : '<span style="color:var(--slate);">—</span>'}</td>
+          <td><strong>${Number(r.vote_count).toLocaleString()}</strong></td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+    host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {
+    host.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load that month.')}</div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('t10CaptureBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const year = Number(document.getElementById('t10CapYear').value);
+    const month = Number(document.getElementById('t10CapMonth').value);
+    const note = document.getElementById('t10CapNote');
+    const label = `${T10_MONTH_NAMES[month - 1]} ${year}`;
+    if (!year || !month) { showToast('Choose a year and a month.', true); return; }
+
+    note.textContent = 'Capturing…';
+    try {
+      const res = await api('/top10/capture-month', {
+        method: 'POST', body: JSON.stringify({ year, month }),
+      });
+      note.textContent = res.message || `${label} captured.`;
+      showToast(res.message || `${label} captured.`);
+      loadTop10MonthlyRankings();
+    } catch (e) {
+      // A month already captured is the common case here, and the only safe
+      // way past it is a deliberate redo — so ask rather than silently redoing.
+      if (/already captured/i.test(e.message || '')) {
+        if (!confirm(`${e.message}\n\nCapture it again, replacing the record and re-awarding the badges from the current votes?`)) {
+          note.textContent = 'Left as it was.';
+          return;
+        }
+        try {
+          const res = await api('/top10/capture-month', {
+            method: 'POST', body: JSON.stringify({ year, month, force: true }),
+          });
+          note.textContent = res.message || `${label} captured again.`;
+          showToast(res.message || `${label} captured again.`);
+          loadTop10MonthlyRankings();
+        } catch (err2) {
+          note.textContent = err2.message;
+          showToast(err2.message, true);
+        }
+        return;
+      }
+      note.textContent = e.message;
+      showToast(e.message, true);
+    }
+  });
+});
 
 async function loadVoteBundlesAdmin() {
   const body = document.getElementById('vbBody');

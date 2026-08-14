@@ -6443,9 +6443,21 @@ function openEdcalModal(key) {
 // them in rank order (votes DESC, then earliest entry, then id) — this re-sorts
 // with the SAME deterministic rule so the two pages can never disagree, even if
 // a caller reorders the array.
+// A contestant who has never had a month captured has no carried position and
+// sorts last among equals, rather than jumping ahead of last month's winner.
+function carriedRankOf(entry) {
+  return entry.carried_rank == null ? Number.MAX_SAFE_INTEGER : Number(entry.carried_rank);
+}
+
 function rankedEntries(entries) {
   return [...entries].sort((a, b) =>
     Number(b.vote_count) - Number(a.vote_count)
+    // The Top 10 resets every month, so on the 1st every contestant is level
+    // on zero. carried_rank is what keeps the board in the order the previous
+    // month closed in instead of falling back to who entered first. It MUST
+    // match the server's ORDER BY (see routes/competitions.js) — the two
+    // disagreeing would mean the page reordered itself after loading.
+    || carriedRankOf(a) - carriedRankOf(b)
     || new Date(a.created_at) - new Date(b.created_at)
     || a.id - b.id);
 }

@@ -5,8 +5,30 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { eftInstructions } = require('../utils/eftDetails');
 const { logActivity } = require('./activityLog');
 const { recordParticipationAsync } = require('../utils/participation');
+const { captureMonth, currentPeriod, previousPeriod } = require('../utils/top10MonthlyCapture');
 
 const router = express.Router();
+
+// Competitions whose vote totals start again each month. The Top 10 is a
+// monthly title: at month end the board is captured to the permanent archive
+// and the new month opens with everyone on zero, in the order they finished.
+//
+// This is a rule of the Top 10 SPECIFICALLY, kept alongside BUILT_IN_SLUGS
+// below rather than in a database flag, because The Arena runs to its own
+// dates and must never have its totals reset underneath it.
+const MONTHLY_RESET_SLUGS = ['top-10'];
+const isMonthlyReset = (slug) => MONTHLY_RESET_SLUGS.includes(slug);
+
+// The vote total a monthly-reset competition should show: this month's votes
+// only. Older votes still exist — they are attached to real payments and are
+// never deleted — they simply belong to a month that has already been decided.
+// For every other competition, `monthly` is false and this counts everything,
+// exactly as it always has.
+function voteCountExpr(monthlyParam, periodParam) {
+  return `COALESCE(SUM(v.bundle_size) FILTER (
+            WHERE NOT ${monthlyParam}::boolean OR v.vote_period = ${periodParam}::date
+          ), 0)`;
+}
 
 // Reference codes for vote_bundles — same alphabet/shape as
 // utils/editionAccess.js (O/0, I/1 excluded — read off a screen, typed
@@ -105,17 +127,22 @@ router.get('/competitions/:slug', async (req, res, next) => {
     }
     const competition = compResult.rows[0];
 
+    // The Top 10 shows THIS MONTH's votes; every other competition shows its
+    // running total. See MONTHLY_RESET_SLUGS at the top of this file.
+    const monthly = isMonthlyReset(competition.slug);
+    const period = monthly ? (await currentPeriod()).period : null;
+
     // LEFT JOIN, not JOIN: a manual entry has no profile, so its identity
     // comes from ce.manual_name / ce.manual_image_url instead. display_name and
     // image are COALESCEd so the frontend renders both kinds the same way; a
     // manual entry returns a null profile_slug (no profile page to link to).
     const entries = await pool.query(
-      `SELECT ce.id, ce.profile_id, ce.created_at, ce.entry_code,
+      `SELECT ce.id, ce.profile_id, ce.created_at, ce.entry_code, ce.carried_rank,
               COALESCE(p.display_name, ce.manual_name) AS display_name,
               p.slug AS profile_slug,
               ce.manual_image_url,
               COALESCE(ce.manual_image_url, p.feature_image_url) AS image_url,
-              c.name AS category, COALESCE(SUM(v.bundle_size), 0) AS vote_count
+              c.name AS category, ${voteCountExpr('$2', '$3')} AS vote_count
        FROM competition_entries ce
        LEFT JOIN profiles p ON p.id = ce.profile_id
        LEFT JOIN categories c ON c.id = p.category_id
@@ -126,8 +153,16 @@ router.get('/competitions/:slug', async (req, res, next) => {
        -- gets the SAME order for the same data. Ties break on who reached the
        -- competition first, then on id — never arbitrarily, so positions don't
        -- shuffle between page loads when two entries are level.
-       ORDER BY vote_count DESC, ce.created_at ASC, ce.id ASC`,
-      [competition.id]
+       --
+       -- carried_rank sits directly after the votes: on the 1st of a new month
+       -- every contestant is level on zero, and this is what keeps the board in
+       -- the order the previous month closed in instead of reshuffling it. It
+       -- is only ever a tie-breaker, so a single new vote still moves someone
+       -- above last month's champion. It is NULL outside the Top 10, where this
+       -- line then does nothing at all.
+       ORDER BY vote_count DESC, ce.carried_rank ASC NULLS LAST,
+                ce.created_at ASC, ce.id ASC`,
+      [competition.id, monthly, period]
     );
 
     // SUM() comes back from pg as a NUMERIC string ("12"), which sorts and
@@ -135,7 +170,14 @@ router.get('/competitions/:slug', async (req, res, next) => {
     // number and can't accidentally rank "9" above "10".
     const rows = entries.rows.map((r) => ({ ...r, vote_count: Number(r.vote_count) }));
 
-    res.json({ competition, entries: rows });
+    // monthlyReset/votingPeriod let the page say WHICH month these totals are
+    // for. Without it a board reading zero on the 1st looks broken rather than
+    // like a new month starting.
+    res.json({
+      competition, entries: rows,
+      monthlyReset: monthly,
+      votingPeriod: period,
+    });
   } catch (err) {
     next(err);
   }
@@ -505,13 +547,22 @@ router.post('/competitions/:id/admin-entries', requireRole('admin'), async (req,
 // approved entries.
 router.get('/competitions/:id/entries/admin', requireRole('admin'), async (req, res, next) => {
   try {
+    // vote_count is what the public board shows (this month, for the Top 10).
+    // all_time_vote_count is every vote ever counted for the entry. Both are
+    // returned because an admin checking a bulk purchase needs to see the
+    // votes they delivered even after the month they landed in has closed.
+    const comp = await pool.query('SELECT slug FROM competitions WHERE id = $1', [Number(req.params.id)]);
+    const monthly = comp.rows[0] ? isMonthlyReset(comp.rows[0].slug) : false;
+    const period = monthly ? (await currentPeriod()).period : null;
+
     const result = await pool.query(
-      `SELECT ce.id, ce.status, ce.entry_fee, ce.created_at, ce.profile_id,
+      `SELECT ce.id, ce.status, ce.entry_fee, ce.created_at, ce.profile_id, ce.carried_rank,
               ce.manual_name, ce.manual_image_url, ce.entry_code,
               COALESCE(p.display_name, ce.manual_name) AS display_name,
               COALESCE(ce.manual_image_url, p.feature_image_url) AS image_url,
               p.slug AS profile_slug,
-              COALESCE(SUM(v.bundle_size), 0) AS vote_count,
+              ${voteCountExpr('$2', '$3')} AS vote_count,
+              COALESCE(SUM(v.bundle_size), 0) AS all_time_vote_count,
               -- Whether real money is attached. Drives whether delete is safe.
               EXISTS (
                 SELECT 1 FROM payments pay
@@ -522,12 +573,19 @@ router.get('/competitions/:id/entries/admin', requireRole('admin'), async (req, 
          LEFT JOIN votes v ON v.entry_id = ce.id
         WHERE ce.competition_id = $1
         GROUP BY ce.id, p.display_name, p.slug, p.feature_image_url
-        ORDER BY vote_count DESC, ce.created_at ASC, ce.id ASC`,
-      [Number(req.params.id)]
+        ORDER BY vote_count DESC, ce.carried_rank ASC NULLS LAST,
+                 ce.created_at ASC, ce.id ASC`,
+      [Number(req.params.id), monthly, period]
     );
     // SUM() arrives as a NUMERIC string; cast so "9" can't sort above "10".
     res.json({
-      entries: result.rows.map((r) => ({ ...r, vote_count: Number(r.vote_count) })),
+      monthlyReset: monthly,
+      votingPeriod: period,
+      entries: result.rows.map((r) => ({
+        ...r,
+        vote_count: Number(r.vote_count),
+        all_time_vote_count: Number(r.all_time_vote_count),
+      })),
     });
   } catch (err) {
     next(err);
@@ -729,7 +787,18 @@ const ENTRY_LOOKUP_SELECT = `
          COALESCE(ce.manual_image_url, p.feature_image_url) AS image_url,
          cat.name AS category,
          c.name AS competition_name, c.slug AS competition_slug,
-         COALESCE((SELECT SUM(v.bundle_size) FROM votes v WHERE v.entry_id = ce.id), 0)::INTEGER AS vote_count
+         -- The count a BUYER is shown, so it has to be the same number the
+         -- public board shows — for the Top 10 that is this month's total, not
+         -- the all-time one. Someone about to buy votes seeing "5,000 votes so
+         -- far" next to a board reading 0 would rightly think one of them is
+         -- broken. The slug test mirrors MONTHLY_RESET_SLUGS at the top of this
+         -- file; it is inlined here because this fragment is shared by several
+         -- queries and carries no parameters of its own.
+         COALESCE((SELECT SUM(v.bundle_size) FROM votes v
+                    WHERE v.entry_id = ce.id
+                      AND (c.slug <> 'top-10'
+                           OR v.vote_period = date_trunc('month', (now() AT TIME ZONE 'Africa/Johannesburg'))::date)
+                  ), 0)::INTEGER AS vote_count
     FROM competition_entries ce
     LEFT JOIN profiles p ON p.id = ce.profile_id
     LEFT JOIN categories cat ON cat.id = p.category_id
@@ -1064,6 +1133,122 @@ router.post('/top10/publish', requireRole('admin'), async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
+// TOP 10 MONTHLY RANKINGS — the permanent record of how each month finished.
+//
+// Separate from top10_rankings above, which holds only the current editorial
+// board and is wiped on every publish. These are captured automatically at
+// month end and never overwritten by the next month. See
+// src/utils/top10MonthlyCapture.js.
+// ---------------------------------------------------------------------------
+
+// GET /top10/monthly-rankings — the list of captured months, newest first.
+// Admin-only: this is the record-keeping view the dashboard renders.
+router.get('/top10/monthly-rankings', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.period_year, c.period_month, c.entry_count, c.total_votes,
+              c.captured_at, c.captured_auto,
+              u.email AS captured_by_email,
+              to_char(make_date(c.period_year, c.period_month, 1), 'FMMonth YYYY') AS period_label,
+              (SELECT display_name FROM top10_monthly_rankings r
+                WHERE r.period_year = c.period_year AND r.period_month = c.period_month
+                  AND r.rank = 1) AS winner_name
+         FROM top10_monthly_captures c
+         LEFT JOIN users u ON u.id = c.captured_by
+        ORDER BY c.period_year DESC, c.period_month DESC`
+    );
+    res.json({ months: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /top10/monthly-rankings/:year/:month — one month's full board, #1 down
+// to the last spot.
+router.get('/top10/monthly-rankings/:year/:month', requireRole('admin'), async (req, res, next) => {
+  try {
+    const year = Number(req.params.year);
+    const month = Number(req.params.month);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Give a valid year and a month from 1 to 12.' });
+    }
+
+    const capture = await pool.query(
+      `SELECT period_year, period_month, entry_count, total_votes, captured_at, captured_auto,
+              to_char(make_date(period_year, period_month, 1), 'FMMonth YYYY') AS period_label
+         FROM top10_monthly_captures WHERE period_year = $1 AND period_month = $2`,
+      [year, month]
+    );
+    if (capture.rows.length === 0) {
+      return res.status(404).json({ error: 'That month has not been captured.' });
+    }
+
+    const rankings = await pool.query(
+      `SELECT rank, entry_id, profile_id, display_name, entry_code, category,
+              image_url, profile_slug, vote_count
+         FROM top10_monthly_rankings
+        WHERE period_year = $1 AND period_month = $2
+        ORDER BY rank ASC`,
+      [year, month]
+    );
+
+    res.json({ month: capture.rows[0], rankings: rankings.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /top10/capture-month — run the capture by hand.
+//
+// The hourly job does this on its own; this exists so an admin can close a
+// month early, re-run one that was captured before a correction was made
+// (force), or capture a month the site was asleep through.
+router.post('/top10/capture-month', requireRole('admin'), async (req, res, next) => {
+  try {
+    // Defaults to the month just gone, which is what "close last month" means
+    // and what the button on the dashboard does.
+    const prev = await previousPeriod();
+    const year = Number(req.body.year) || prev.year;
+    const month = Number(req.body.month) || prev.month;
+    if (month < 1 || month > 12) {
+      return res.status(400).json({ error: 'Month must be from 1 to 12.' });
+    }
+
+    const cur = await currentPeriod();
+    if (year > cur.year || (year === cur.year && month > cur.month)) {
+      return res.status(400).json({ error: 'That month has not happened yet.' });
+    }
+
+    const result = await captureMonth({
+      year, month, adminUserId: req.user.id, auto: false,
+      force: req.body.force === true,
+    });
+
+    if (!result.captured && result.reason === 'already-captured') {
+      return res.status(409).json({
+        error: `${month}/${year} was already captured on ${new Date(result.capturedAt).toLocaleString('en-ZA')}. Re-capture it only if the votes have since been corrected.`,
+        alreadyCaptured: true, ...result,
+      });
+    }
+    if (!result.captured && result.reason === 'no-top10-competition') {
+      return res.status(400).json({ error: 'There is no Top 10 competition to capture.' });
+    }
+
+    await logActivity(req.user.id, 'top10_month_captured',
+      `Captured the Top 10 for ${month}/${year}: ${result.entryCount} entries, `
+      + `${result.totalVotes} votes, ${result.awardedBadges.length} placement badges`).catch(() => {});
+
+    res.json({
+      message: `${month}/${year} captured — ${result.entryCount} contestant${result.entryCount === 1 ? '' : 's'} recorded`
+        + (result.awardedBadges.length ? `, ${result.awardedBadges.length} placement badge${result.awardedBadges.length === 1 ? '' : 's'} awarded.` : '.'),
+      ...result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Hall of Fame — past competition winners (admin-entered). Uses a distinct
 // /hall-of-fame path so it doesn't collide with /competitions/:slug.
 // ---------------------------------------------------------------------------
@@ -1178,17 +1363,29 @@ router.post('/admin/entries/:id/adjust-votes', requireRole('admin'), async (req,
       return res.status(400).json({ error: 'A reason is required, so the correction can be explained later.' });
     }
 
+    // The correction row this inserts is stamped with the CURRENT month (the
+    // column default), so it lands on the board the admin is looking at. The
+    // guard below therefore has to be against that same month's total, not the
+    // all-time one — otherwise -50 could be accepted against a healthy
+    // all-time figure and still drive this month's public number negative.
+    const period = (await currentPeriod()).period;
     const entry = await pool.query(
-      `SELECT ce.id, ce.entry_code, COALESCE(p.display_name, ce.manual_name) AS name,
-              COALESCE((SELECT SUM(bundle_size) FROM votes WHERE entry_id = ce.id), 0) AS total
+      `SELECT ce.id, ce.entry_code, comp.slug AS competition_slug,
+              COALESCE(p.display_name, ce.manual_name) AS name,
+              COALESCE((SELECT SUM(bundle_size) FROM votes
+                         WHERE entry_id = ce.id AND vote_period = $2::date), 0) AS month_total,
+              COALESCE((SELECT SUM(bundle_size) FROM votes
+                         WHERE entry_id = ce.id), 0) AS all_time_total
          FROM competition_entries ce
+         LEFT JOIN competitions comp ON comp.id = ce.competition_id
          LEFT JOIN profiles p ON p.id = ce.profile_id
         WHERE ce.id = $1`,
-      [id]
+      [id, period]
     );
     if (entry.rows.length === 0) return res.status(404).json({ error: 'Entry not found.' });
 
-    const before = Number(entry.rows[0].total);
+    const monthly = isMonthlyReset(entry.rows[0].competition_slug);
+    const before = Number(monthly ? entry.rows[0].month_total : entry.rows[0].all_time_total);
     // An adjustment must never drive a contestant's public total negative —
     // that would show as a negative number on the leaderboard.
     if (before + delta < 0) {
