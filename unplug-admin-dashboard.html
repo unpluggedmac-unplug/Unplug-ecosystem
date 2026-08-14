@@ -262,6 +262,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button type="button" class="nav-group-head"><span>User Management</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
         <a data-section="users">Users</a>
+        <a data-section="partmembers">Participation Members</a>
         <a data-section="myunplug">My Unplug</a>
         <a data-section="consultants">Sales Consultants</a>
       </div>
@@ -2034,6 +2035,38 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
       </div>
     </div>
+
+    <!-- PARTICIPATION MEMBERS — everyone signed up to the engine, including
+         the inactive and the ones who opted out of the public leaderboard. -->
+    <div class="admin-section" id="section-partmembers">
+      <div class="main-head"><div><h1>Participation Members</h1>
+      <p>Everyone who is part of the participation engine — not just the leaderboard. This includes members who have signed up but done nothing yet, and members who chose not to appear on the public leaderboard, both of whom are invisible everywhere else.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-body" id="pmTotals" style="display:flex; gap:26px; flex-wrap:wrap;">Loading…</div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Search &amp; sort</h3></div>
+        <div class="panel-body" style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+          <div class="field" style="flex:1; min-width:220px;"><label for="pmSearch">Name, email or referral code</label><input id="pmSearch" placeholder="Search…"></div>
+          <div class="field"><label for="pmSort">Sort by</label><select id="pmSort">
+            <option value="score">Unplug score</option>
+            <option value="actions">Most active</option>
+            <option value="streak">Longest current streak</option>
+            <option value="newest">Newest sign-up</option>
+            <option value="oldest">Oldest sign-up</option>
+            <option value="name">Name</option>
+          </select></div>
+          <button class="btn btn-line" id="pmSearchBtn" style="width:auto;">Search</button>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Members</h3></div>
+        <div class="panel-body" id="pmBody" style="padding:0;">Loading…</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2662,6 +2695,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'competitions') loadCompetitions();
     if (section === 'votebundles') { loadTop10Entries(); loadVoteBundlesAdmin(); }
     if (section === 'top10monthly') loadTop10MonthlyRankings();
+    if (section === 'partmembers') loadParticipationMembers();
     if (section === 'editions') loadEditionsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
@@ -2965,6 +2999,11 @@ document.getElementById('queueBulkRejectBtn').addEventListener('click', () => bu
 // votes, releasing the download — stays where it already lives and is tested.
 async function aqRunAction(row, which) {
   const action = row.actions && row.actions[which];
+  // Unpaid items reach here through bulk approve, where there is no button to
+  // grey out — so the reason has to come through as the error itself.
+  if (!action && which === 'approve' && row.approveBlockedReason) {
+    throw new Error(`${row.title || row.typeLabel}: ${row.approveBlockedReason}`);
+  }
   if (!action) throw new Error('That action is not available for this item.');
   return api(action.path, {
     method: action.method,
@@ -3101,7 +3140,17 @@ async function loadApprovalQueue() {
       tr.appendChild(payTd);
 
       const statusTd = document.createElement('td');
-      statusTd.textContent = row.itemStatus || '—';
+      // An item still awaiting payment is now LISTED rather than hidden, so it
+      // has to say plainly why it cannot be approved yet — otherwise a greyed
+      // out button looks like a fault.
+      if (row.awaitingPayment) {
+        statusTd.innerHTML = '<span style="color:var(--red); font-weight:600;">waiting for payment</span>';
+      } else if (row.paidButNotPromoted) {
+        statusTd.innerHTML = '<span style="color:green; font-weight:600;">paid</span>'
+          + '<br><span style="font-size:11px; color:var(--slate);">ready to approve</span>';
+      } else {
+        statusTd.textContent = row.itemStatus || '—';
+      }
       tr.appendChild(statusTd);
 
       const dateTd = document.createElement('td');
@@ -3115,14 +3164,24 @@ async function loadApprovalQueue() {
       tr.appendChild(filesTd);
 
       const actionTd = document.createElement('td');
-      actionTd.innerHTML = '<div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div>';
-      actionTd.querySelector('.approve').addEventListener('click', async () => {
-        try {
-          const res = await aqRunAction(row, 'approve');
-          showToast((res && res.message) || `${row.typeLabel} approved.`);
-          loadApprovalQueue();
-        } catch (err) { showToast(err.message, true); }
-      });
+      // The server withholds the approve action itself for anything unpaid, so
+      // this button reflects that rather than deciding it — the same rule then
+      // holds however the row is reached, including bulk approve.
+      const canApprove = !!(row.actions && row.actions.approve);
+      actionTd.innerHTML = '<div class="row-actions">'
+        + (canApprove
+            ? '<button class="approve">Approve</button>'
+            : `<button class="approve" disabled title="${escapeHtmlAdmin(row.approveBlockedReason || 'Not available for this item.')}" style="opacity:0.45; cursor:not-allowed;">Approve</button>`)
+        + '<button class="reject">Reject</button></div>';
+      if (canApprove) {
+        actionTd.querySelector('.approve').addEventListener('click', async () => {
+          try {
+            const res = await aqRunAction(row, 'approve');
+            showToast((res && res.message) || `${row.typeLabel} approved.`);
+            loadApprovalQueue();
+          } catch (err) { showToast(err.message, true); }
+        });
+      }
       actionTd.querySelector('.reject').addEventListener('click', async () => {
         if (!confirm(`Reject this ${row.typeLabel.toLowerCase()}?`)) return;
         try {
@@ -9544,6 +9603,112 @@ async function adjustTop10Votes(entry) {
     showToast(err.message, true);
   }
 }
+
+// ---------------------------------------------------------------------------
+// PARTICIPATION MEMBERS — the full roll call.
+// ---------------------------------------------------------------------------
+
+let PM_OFFSET = 0;
+const PM_PAGE = 100;
+
+async function loadParticipationMembers(offset = 0) {
+  PM_OFFSET = offset;
+  const body = document.getElementById('pmBody');
+  const totalsEl = document.getElementById('pmTotals');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+
+  const q = (document.getElementById('pmSearch').value || '').trim();
+  const sort = document.getElementById('pmSort').value;
+
+  try {
+    const data = await api(`/participation/admin/members?limit=${PM_PAGE}&offset=${offset}`
+      + `&sort=${encodeURIComponent(sort)}${q ? '&q=' + encodeURIComponent(q) : ''}`);
+
+    const t = data.totals || {};
+    const stat = (label, value, colour) =>
+      `<div><div style="font-size:22px; font-weight:700; color:${colour || 'var(--ink)'};">${Number(value || 0).toLocaleString()}</div>`
+      + `<div style="font-size:11.5px; color:var(--slate); text-transform:uppercase; letter-spacing:0.4px;">${label}</div></div>`;
+    totalsEl.innerHTML = stat('Signed up', t.enrolled)
+      + stat('Ever active', t.ever_active)
+      + stat('Active last 30 days', t.active_30d, 'green')
+      + stat('Hidden from leaderboard', t.hidden_from_leaderboard, 'var(--slate)');
+
+    const members = data.members || [];
+    if (!members.length) {
+      body.innerHTML = `<div class="empty-state">${q ? 'Nobody matches that search.' : 'Nobody has joined the participation engine yet.'}</div>`;
+      return;
+    }
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = '<th>Member</th><th>Status</th><th>Score</th><th>Rank</th><th>Actions</th>'
+      + '<th>Streak</th><th>Badges</th><th>Missions</th><th>Last active</th><th>Referral code</th>';
+    table.appendChild(head);
+
+    members.forEach((m) => {
+      const tr = document.createElement('tr');
+      const never = '<span style="color:var(--slate);">never</span>';
+      tr.innerHTML =
+        `<td><strong>${escapeHtmlAdmin(m.display_name || '—')}</strong>`
+        + `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(m.email || '')}</span>`
+        // Saying so plainly matters: this member is deliberately absent from
+        // the public leaderboard, which is not the same as being inactive.
+        + (m.show_on_leaderboard === false
+            ? '<br><span style="font-size:11px; color:var(--slate);">hidden from leaderboard</span>' : '')
+        + '</td>'
+        + `<td>${m.status_label ? `${m.status_emoji || ''} ${escapeHtmlAdmin(m.status_label)}` : '<span style="color:var(--slate);">—</span>'}`
+        + (Number(m.trust_score) < 100
+            ? `<br><span style="font-size:11px; color:var(--red);">trust ${m.trust_score}</span>` : '')
+        + '</td>'
+        + `<td><strong>${Number(m.unplug_score).toLocaleString()}</strong></td>`
+        + `<td>${m.rank_position ? '#' + m.rank_position : '<span style="color:var(--slate);">—</span>'}</td>`
+        + `<td>${Number(m.total_actions).toLocaleString()}</td>`
+        + `<td>${Number(m.current_streak_days)}<span style="font-size:11px; color:var(--slate);"> / ${Number(m.longest_streak_days)} best</span></td>`
+        + `<td>${Number(m.badge_count)}</td>`
+        + `<td>${Number(m.missions_completed)}</td>`
+        + `<td style="font-size:11.5px;">${m.last_action_at ? new Date(m.last_action_at).toLocaleDateString('en-ZA') : never}</td>`
+        + `<td><code style="font-size:11.5px;">${escapeHtmlAdmin(m.referral_code || '—')}</code></td>`;
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(table);
+
+    // Paging only appears when there is more than one page to move through.
+    const total = data.matched || 0;
+    if (total > PM_PAGE) {
+      const nav = document.createElement('div');
+      nav.style.cssText = 'padding:12px 16px; display:flex; gap:10px; align-items:center; border-top:1px solid var(--paper-line);';
+      const shownTo = Math.min(offset + PM_PAGE, total);
+      nav.innerHTML = `<span style="font-size:12px; color:var(--slate);">Showing ${offset + 1}–${shownTo} of ${total.toLocaleString()}</span>`;
+      if (offset > 0) {
+        const prev = document.createElement('button');
+        prev.className = 'btn btn-line'; prev.style.width = 'auto'; prev.textContent = 'Previous';
+        prev.addEventListener('click', () => loadParticipationMembers(Math.max(offset - PM_PAGE, 0)));
+        nav.appendChild(prev);
+      }
+      if (shownTo < total) {
+        const next = document.createElement('button');
+        next.className = 'btn btn-line'; next.style.width = 'auto'; next.textContent = 'Next';
+        next.addEventListener('click', () => loadParticipationMembers(offset + PM_PAGE));
+        nav.appendChild(next);
+      }
+      body.appendChild(nav);
+    }
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load the participation members.')}</div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('pmSearchBtn');
+  if (!btn) return;
+  btn.addEventListener('click', () => loadParticipationMembers(0));
+  document.getElementById('pmSort').addEventListener('change', () => loadParticipationMembers(0));
+  document.getElementById('pmSearch').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadParticipationMembers(0);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // TOP 10 MONTHLY RANKINGS

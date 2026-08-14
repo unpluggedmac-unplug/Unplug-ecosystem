@@ -649,6 +649,114 @@ router.get('/admin/analytics', requireRole('admin'), async (req, res, next) => {
 // score (i.e. flagged at least once), most recently flagged first, plus
 // the moderation_actions log entries for each auto-flag so an admin can
 // see exactly what tripped it.
+// GET /participation/admin/members — EVERY member signed up to the
+// participation engine, not just the top of the leaderboard.
+//
+// member_participation_profiles is the enrolment record itself: a row exists
+// from the moment ensure_member_participation_profile() runs for someone. That
+// is what makes this the real "who is in the engine" list — the public
+// leaderboard only ever shows the top few, and hides anyone who opted out of
+// appearing on it. An admin needs to see everyone, including the opted-out and
+// the completely inactive, which is exactly who those two views drop.
+//
+// LEFT JOINs throughout: a member who signed up today has no score_cache row,
+// no streak and no rank yet. They must still be listed, on zero, rather than
+// vanishing because a supporting row has not been written.
+router.get('/admin/members', requireRole('admin'), async (req, res, next) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const sort = String(req.query.sort || 'score');
+    const limit = Math.min(Math.max(asInt(req.query.limit) || 100, 1), 500);
+    const offset = Math.max(asInt(req.query.offset) || 0, 0);
+
+    // Whitelisted, never interpolated from the raw value.
+    const ORDER = {
+      score: 'COALESCE(sc.unplug_score, 0) DESC, u.id ASC',
+      newest: 'mpp.created_at DESC',
+      oldest: 'mpp.created_at ASC',
+      name: 'display_name ASC',
+      actions: '(SELECT COUNT(*) FROM participation_points pp3 WHERE pp3.user_id = u.id) DESC',
+      streak: 'COALESCE(st.current_streak_days, 0) DESC',
+    };
+    const orderBy = ORDER[sort] || ORDER.score;
+
+    const params = [];
+    let where = '';
+    if (q) {
+      params.push(`%${q}%`);
+      where = `WHERE (u.email ILIKE $1 OR u.full_name ILIKE $1
+                      OR COALESCE(dp.display_name, '') ILIKE $1
+                      OR mpp.referral_code ILIKE $1)`;
+    }
+
+    const rows = await pool.query(
+      `SELECT u.id AS user_id, u.email, u.role, u.created_at AS joined_at,
+              COALESCE(dp.display_name, u.full_name, SPLIT_PART(u.email, '@', 1)) AS display_name,
+              dp.slug AS profile_slug,
+              mpp.referral_code, mpp.show_on_leaderboard, mpp.created_at AS enrolled_at,
+              COALESCE(sc.unplug_score, 0)::int        AS unplug_score,
+              -- Counted LIVE rather than read from score_cache. The cache is
+              -- only recalculated every six hours, so a member who joined and
+              -- started this morning would read as zero actions — and "who has
+              -- actually done something" is the whole question this list
+              -- answers. The score itself stays the cached, official one.
+              (SELECT COUNT(*)::int FROM participation_points pp2 WHERE pp2.user_id = u.id) AS total_actions,
+              COALESCE(sc.total_actions, 0)::int       AS scored_actions,
+              COALESCE(sc.days_since_join, 0)::int     AS days_since_join,
+              COALESCE(sc.qualified_active_months, 0)::int AS active_months,
+              COALESCE(st.current_streak_days, 0)::int AS current_streak_days,
+              COALESCE(st.longest_streak_days, 0)::int AS longest_streak_days,
+              r.rank_position,
+              sl.label AS status_label, sl.emoji AS status_emoji,
+              COALESCE(ts.score, 100)::int AS trust_score,
+              (SELECT COUNT(*)::int FROM user_badges ub WHERE ub.user_id = u.id) AS badge_count,
+              (SELECT COUNT(*)::int FROM user_missions um
+                WHERE um.user_id = u.id AND um.is_completed = TRUE) AS missions_completed,
+              (SELECT MAX(pp.created_at) FROM participation_points pp WHERE pp.user_id = u.id) AS last_action_at
+         FROM member_participation_profiles mpp
+         JOIN users u ON u.id = mpp.user_id
+         LEFT JOIN profiles dp ON dp.user_id = u.id AND dp.status = 'approved'
+         LEFT JOIN score_cache sc ON sc.user_id = u.id
+         LEFT JOIN user_streaks st ON st.user_id = u.id
+         LEFT JOIN trust_scores ts ON ts.user_id = u.id
+         LEFT JOIN rankings r ON r.user_id = u.id
+              AND r.ranking_type = 'overall' AND r.period_type = 'lifetime'
+         LEFT JOIN member_status_history msh ON msh.user_id = u.id AND msh.is_active_status = TRUE
+         LEFT JOIN member_status_levels sl ON sl.code = msh.status_code
+         ${where}
+        ORDER BY ${orderBy}
+        LIMIT ${limit} OFFSET ${offset}`,
+      params
+    );
+
+    const totals = await pool.query(
+      `SELECT COUNT(*)::int AS enrolled,
+              COUNT(*) FILTER (WHERE pp.last_at IS NOT NULL)::int AS ever_active,
+              COUNT(*) FILTER (WHERE pp.last_at >= now() - INTERVAL '30 days')::int AS active_30d,
+              COUNT(*) FILTER (WHERE mpp.show_on_leaderboard = FALSE)::int AS hidden_from_leaderboard
+         FROM member_participation_profiles mpp
+         LEFT JOIN score_cache sc ON sc.user_id = mpp.user_id
+         LEFT JOIN LATERAL (
+           SELECT MAX(created_at) AS last_at FROM participation_points WHERE user_id = mpp.user_id
+         ) pp ON TRUE`
+    );
+
+    // matched drives paging when a search is on; enrolled is the true total.
+    const matched = q
+      ? (await pool.query(
+          `SELECT COUNT(*)::int AS n
+             FROM member_participation_profiles mpp
+             JOIN users u ON u.id = mpp.user_id
+             LEFT JOIN profiles dp ON dp.user_id = u.id AND dp.status = 'approved'
+             ${where}`, params)).rows[0].n
+      : totals.rows[0].enrolled;
+
+    res.json({ members: rows.rows, totals: totals.rows[0], matched, limit, offset });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/admin/trust-flags', requireRole('admin'), async (req, res, next) => {
   try {
     const flagged = await pool.query(

@@ -77,6 +77,43 @@ function payLateral(types, idColumn) {
           ) pay ON TRUE`;
 }
 
+// WAITING FOR PAYMENT vs WAITING FOR YOU.
+//
+// A submission that has not been paid for sits at 'awaiting_payment'. Those
+// used to be filtered out of this queue entirely, which meant an admin could
+// not see them at all — the article was submitted, the member was waiting, and
+// the dashboard showed nothing. They are now listed, but the approve action is
+// withheld until the money is in: payment first, then approval.
+//
+// The test is deliberately on the PAYMENT, not on the item's own status. A
+// confirmed payment whose fulfilment did not run leaves the item stranded at
+// 'awaiting_payment' for ever (orders.js swallows a failing per-item effect so
+// one bad item cannot block a whole cart). Reading the payment directly means
+// such an item unblocks itself here the moment an admin looks at it, instead
+// of needing someone to notice it in the database.
+function approvability(r, source) {
+  const actions = source.actions(r);
+  if (r.item_status !== 'awaiting_payment') return { actions, awaitingPayment: false };
+
+  const paid = r.pay_status === 'confirmed';
+  if (paid) {
+    // Paid but never promoted — worth flagging so it is obvious why an item
+    // that has clearly been paid for is still sitting in the queue.
+    return { actions, awaitingPayment: false, paidButNotPromoted: r.item_status === 'awaiting_payment' };
+  }
+
+  // Approve is REMOVED rather than merely flagged, so a screen that ignores
+  // the flag still cannot publish something that has not been paid for.
+  const { approve, ...rest } = actions;
+  return {
+    actions: rest,
+    awaitingPayment: true,
+    approveBlockedReason: r.pop_url
+      ? 'Proof of payment uploaded but not yet confirmed — confirm the payment first, then approve.'
+      : 'Not paid for yet. Approving becomes available once the payment is confirmed.',
+  };
+}
+
 // Each source returns the same column names so the merge below stays dumb.
 // Anything a source genuinely doesn't have is selected as NULL rather than
 // omitted, so a missing column is never mistaken for a coding slip.
@@ -94,7 +131,7 @@ const SOURCES = [
             JOIN users u ON u.id = a.author_user_id
             LEFT JOIN categories c ON c.id = a.category_id
             ${payLateral(['article_publish'], 'a.id')}
-           WHERE a.status = 'pending'`,
+           WHERE a.status IN ('pending', 'awaiting_payment')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/articles/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/articles/${r.id}/reject` },
@@ -110,7 +147,7 @@ const SOURCES = [
             FROM profiles p
             JOIN users u ON u.id = p.user_id
             ${payLateral(['profile_package', 'profile_upgrade'], 'p.id')}
-           WHERE p.status = 'pending'`,
+           WHERE p.status IN ('pending', 'awaiting_payment')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/profiles/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/profiles/${r.id}/reject` },
@@ -127,7 +164,7 @@ const SOURCES = [
                  pay.pop_url, pay.invoice_url
             FROM gallery_images g
             ${payLateral(['gallery_bundle'], 'g.id')}
-           WHERE g.status = 'pending'`,
+           WHERE g.status IN ('pending', 'awaiting_payment')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/gallery/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/gallery/${r.id}/reject` },
@@ -144,7 +181,7 @@ const SOURCES = [
             FROM events e
             JOIN users u ON u.id = e.organizer_user_id
             ${payLateral(['event_listing'], 'e.id')}
-           WHERE e.status = 'pending'`,
+           WHERE e.status IN ('pending', 'awaiting_payment')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/events/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/events/${r.id}/reject` },
@@ -166,7 +203,7 @@ const SOURCES = [
             LEFT JOIN profiles pr ON pr.id = ce.profile_id
             LEFT JOIN competitions c ON c.id = ce.competition_id
             ${payLateral(['competition_entry'], 'ce.id')}
-           WHERE ce.status = 'pending'`,
+           WHERE ce.status IN ('pending', 'awaiting_payment')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/entries/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/entries/${r.id}/reject` },
@@ -184,7 +221,7 @@ const SOURCES = [
             JOIN profiles pr ON pr.id = te.profile_id
             LEFT JOIN users u ON u.id = pr.user_id
             ${payLateral(['top10_entry'], 'te.id')}
-           WHERE te.status = 'pending'`,
+           WHERE te.status IN ('pending', 'awaiting_payment')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/top10-entries/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/top10-entries/${r.id}/reject` },
@@ -222,7 +259,7 @@ const SOURCES = [
                  NULL AS pop_url, NULL AS invoice_url
             FROM investors i
             JOIN users u ON u.id = i.user_id
-           WHERE i.status = 'pending'`,
+           WHERE i.status IN ('pending', 'awaiting_payment')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/investors/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/investors/${r.id}/reject` },
@@ -239,7 +276,7 @@ const SOURCES = [
             FROM marketplace_listings l
             JOIN advertisers a ON a.id = l.advertiser_id
             ${payLateral(['marketplace_listing'], 'l.id')}
-           WHERE l.status = 'pending'`,
+           WHERE l.status IN ('pending', 'awaiting_payment')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/marketplace/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/marketplace/${r.id}/reject` },
@@ -473,7 +510,7 @@ router.get('/', requireRole('admin'), async (req, res, next) => {
           paymentStatus: paymentLabel(r),
           itemStatus: r.item_status,
           files: fileList(r),
-          actions: source.actions(r),
+          ...approvability(r, source),
         }));
       } catch (err) {
         problems.push({ type: source.type, error: err.message });

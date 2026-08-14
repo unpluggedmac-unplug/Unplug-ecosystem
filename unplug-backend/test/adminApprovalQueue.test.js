@@ -175,6 +175,56 @@ test('an unpaid submission reads "Awaiting payment", not blank', async () => {
   assert.equal(row.paymentStatus, 'Awaiting payment');
 });
 
+// ---------------------------------------------------------------------------
+// AWAITING PAYMENT — visible, but not approvable until the money is in.
+//
+// These used to be filtered out of the queue entirely, so an admin could not
+// see them at all: the member had submitted, and the dashboard showed nothing
+// to act on. That is the "admin can't approve new articles" gap.
+// ---------------------------------------------------------------------------
+
+test('an article still AWAITING PAYMENT appears in the queue at all', async () => {
+  const userId = await makeUser();
+  await pool.query(
+    `INSERT INTO articles (author_user_id, title, body, status)
+     VALUES ($1, 'Submitted Not Paid', 'Body', 'awaiting_payment')`,
+    [userId]
+  );
+  const res = await req('GET', '/admin/approval-queue?type=article', { token: adminToken });
+  const row = res.body.items.find((i) => i.title === 'Submitted Not Paid');
+  assert.ok(row, 'a submission nobody has paid for must still be VISIBLE to an admin');
+  assert.equal(row.awaitingPayment, true);
+});
+
+test('...but it cannot be approved until it is paid for', async () => {
+  const res = await req('GET', '/admin/approval-queue?type=article', { token: adminToken });
+  const row = res.body.items.find((i) => i.title === 'Submitted Not Paid');
+  assert.equal(row.actions.approve, undefined,
+    'the approve action must be WITHHELD, not merely flagged — a screen that ignores the flag must still not publish it');
+  assert.ok(row.approveBlockedReason, 'and it must say why');
+  assert.ok(row.actions.reject, 'rejecting an unpaid submission stays available');
+});
+
+test('a CONFIRMED payment unblocks approval even if the item was never promoted', async () => {
+  // orders.js swallows a failing per-item effect so one bad item cannot block a
+  // whole cart — which can leave a paid article stranded at awaiting_payment.
+  // Reading the payment directly is what lets it unblock itself here.
+  const userId = await makeUser();
+  const a = await pool.query(
+    `INSERT INTO articles (author_user_id, title, body, status)
+     VALUES ($1, 'Paid But Stranded', 'Body', 'awaiting_payment') RETURNING id`,
+    [userId]
+  );
+  await makePayment(userId, 'article_publish', a.rows[0].id, { reference: 'ARTREF0009', status: 'confirmed' });
+
+  const res = await req('GET', '/admin/approval-queue?type=article', { token: adminToken });
+  const row = res.body.items.find((i) => i.title === 'Paid But Stranded');
+  assert.equal(row.awaitingPayment, false);
+  assert.equal(row.paidButNotPromoted, true, 'flagged so it is obvious why a paid item is still sitting here');
+  assert.equal(row.actions.approve.path, `/admin/articles/${a.rows[0].id}/approve`,
+    'a paid article MUST be approvable, however it got stuck');
+});
+
 test('a submission that is not payable is labelled so, not "awaiting payment"', async () => {
   const userId = await makeUser();
   await pool.query(
