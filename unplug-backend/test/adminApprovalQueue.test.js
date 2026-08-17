@@ -285,6 +285,36 @@ test('a vote purchase carries the contestant entry code as its reference', async
   assert.equal(row.typeLabel, 'Top 10 Vote Purchase');
 });
 
+test('A VOTE PURCHASE AWAITING PAYMENT IS APPROVABLE — approving IS confirming it', async () => {
+  // The live bug this pins: every Top 10 vote purchase sits at
+  // 'awaiting_payment' by definition — that is what an EFT waiting to be
+  // checked off looks like — and the approve endpoint is what marks it
+  // received and allocates the votes. Gating it on "is it paid?" locked the
+  // admin out of confirming any vote payment at all.
+  const res = await req('GET', '/admin/approval-queue?type=top10_votes', { token: adminToken });
+  const row = res.body.items[0];
+  assert.ok(row, 'the purchase must be in the queue');
+  assert.equal(row.group, 'payment');
+  assert.equal(row.awaitingPayment, false,
+    'a payment row is never "waiting for payment" — the admin IS the payment check');
+  assert.ok(row.actions.approve, 'APPROVE MUST BE AVAILABLE — this is how an EFT gets confirmed');
+  assert.match(row.actions.approve.path, /vote-bundles\/\d+\/approve/);
+});
+
+test('every payment-group row keeps its approve action', async () => {
+  // Cart orders, service payments and edition purchases are confirmations
+  // too. None of them may ever be gated behind "has it been paid for", because
+  // approving them is precisely how that question gets answered.
+  const res = await req('GET', '/admin/approval-queue', { token: adminToken });
+  const payments = res.body.items.filter((i) => i.group === 'payment');
+  assert.ok(payments.length > 0, 'there must be payment rows to check');
+  payments.forEach((row) => {
+    assert.ok(row.actions.approve,
+      `${row.typeLabel} must stay approvable — it is a payment confirmation, not a publishing decision`);
+    assert.equal(row.awaitingPayment, false, `${row.typeLabel} must not be flagged as blocked`);
+  });
+});
+
 test('an order-linked payment appears once, as its order — never twice', async () => {
   const userId = await makeUser();
   const order = await pool.query(

@@ -3143,7 +3143,12 @@ async function loadApprovalQueue() {
       // An item still awaiting payment is now LISTED rather than hidden, so it
       // has to say plainly why it cannot be approved yet — otherwise a greyed
       // out button looks like a fault.
-      if (row.awaitingPayment) {
+      if (row.group === 'payment') {
+        // Approving a payment row IS confirming the money arrived, so this is
+        // a job waiting on the admin — never a blocker.
+        statusTd.innerHTML = '<span style="color:var(--gold, #b8860b); font-weight:600;">EFT to confirm</span>'
+          + '<br><span style="font-size:11px; color:var(--slate);">approve once paid</span>';
+      } else if (row.awaitingPayment) {
         statusTd.innerHTML = '<span style="color:var(--red); font-weight:600;">waiting for payment</span>';
       } else if (row.paidButNotPromoted) {
         statusTd.innerHTML = '<span style="color:green; font-weight:600;">paid</span>'

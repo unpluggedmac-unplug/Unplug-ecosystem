@@ -91,8 +91,16 @@ function payLateral(types, idColumn) {
 // one bad item cannot block a whole cart). Reading the payment directly means
 // such an item unblocks itself here the moment an admin looks at it, instead
 // of needing someone to notice it in the database.
+// ONLY applies to things an admin PUBLISHES. For anything in the 'payment'
+// group — a bulk vote purchase, a cart order, a service payment, an edition
+// purchase — approving IS the act of confirming the money arrived. Those rows
+// sit at 'awaiting_payment' by definition: that is what an EFT waiting to be
+// checked off looks like, and gating them would mean the admin could never
+// confirm a payment at all. They are always approvable.
 function approvability(r, source) {
   const actions = source.actions(r);
+  const group = TYPES[source.type].group;
+  if (group === 'payment') return { actions, awaitingPayment: false };
   if (r.item_status !== 'awaiting_payment') return { actions, awaitingPayment: false };
 
   const paid = r.pay_status === 'confirmed';
