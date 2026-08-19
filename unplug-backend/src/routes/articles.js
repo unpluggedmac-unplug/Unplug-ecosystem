@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireOwnerOrAdmin, requireRole } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
-const { deriveMetadata, slugify } = require('../utils/articleMeta');
+const { deriveMetadata, slugify, cleanTopicTerms } = require('../utils/articleMeta');
 const { publishesFree, statusForNewSubmission } = require('../utils/publishingRights');
 const { recordParticipationAsync } = require('../utils/participation');
 
@@ -107,9 +107,12 @@ router.get('/', async (req, res, next) => {
     );
 
     const result = await pool.query(
-      `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at, a.banner_image_url, c.name AS category
+      `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at,
+              a.banner_image_url, a.subtitle, c.name AS category,
+              a.author_name, con.name AS contributor_name, con.slug AS contributor_slug
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
+       LEFT JOIN contributors con ON con.id = a.contributor_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -204,9 +207,12 @@ router.get('/:id', async (req, res, next) => {
     // Public sees an article only once approved AND past its scheduled date; an
     // admin can open it any time (to preview a draft or a future-dated piece).
     const result = await pool.query(
-      `SELECT a.*, c.name AS category
+      `SELECT a.*, c.name AS category,
+              con.name AS contributor_name, con.slug AS contributor_slug,
+              con.role_title AS contributor_role, con.photo_url AS contributor_photo
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
+       LEFT JOIN contributors con ON con.id = a.contributor_id
        WHERE a.id = $1
          AND ($2::boolean OR (a.status = 'approved'
               AND (a.scheduled_for IS NULL OR a.scheduled_for <= CURRENT_DATE)))`,
@@ -215,9 +221,18 @@ router.get('/:id', async (req, res, next) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Article not found.' });
     }
+    // Tags and keywords are derived, and the articles published before the
+    // never-a-topic filter existed still carry terms like "Something" — which
+    // the reader page prints under "Topics in this story". Cleaning them on the
+    // way out fixes those without a migration and without rewriting the stored
+    // row, so an editor's own edits are never silently overwritten.
+    const article = result.rows[0];
+    article.tags = cleanTopicTerms(article.tags);
+    article.keywords = cleanTopicTerms(article.keywords);
+
     res.json({
-      article: result.rows[0],
-      sections: await loadSections(result.rows[0].id),
+      article,
+      sections: await loadSections(article.id),
     });
   } catch (err) {
     next(err);
@@ -279,8 +294,8 @@ router.post('/', requireAuth, async (req, res, next) => {
         (author_user_id, category_id, title, body, kicker_supplied_by, banner_image_url, emotion,
          status, published_at, seo_title, subtitle, meta_description, conclusion, cta_label, cta_url,
          slug, key_takeaways, keywords, tags, suggested_category_id,
-         gallery_images, links, body_format)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+         gallery_images, links, body_format, author_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        RETURNING *`,
       [
         req.user.id, categoryId || null, title, body, kickerSuppliedBy || null,
@@ -299,6 +314,12 @@ router.post('/', requireAuth, async (req, res, next) => {
         cleanGallery(galleryImages),
         JSON.stringify(cleanLinks(links) || []),
         bodyFormat === 'text' ? 'text' : 'html',
+        // WHO WROTE IT. Offered on the member submission form too, not only in
+        // the admin editor — the person sending the story in is usually the
+        // person who wrote it, and asking later means chasing them for it.
+        // Separate from kicker_supplied_by, which records who SUPPLIED the
+        // story; see migration 117 for why the two are not the same fact.
+        (req.body.authorName || '').trim() || null,
       ]
     );
     const article = result.rows[0];
@@ -353,6 +374,10 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
     if (title !== undefined) { values.push(title); setClauses.push(`title = $${values.length}`); }
     if (body !== undefined) { values.push(body); setClauses.push(`body = $${values.length}`); }
     if (kickerSuppliedBy !== undefined) { values.push(kickerSuppliedBy); setClauses.push(`kicker_supplied_by = $${values.length}`); }
+    if (req.body.authorName !== undefined) {
+      values.push(String(req.body.authorName).trim() || null);
+      setClauses.push(`author_name = $${values.length}`);
+    }
     if (categoryId !== undefined) { values.push(categoryId || null); setClauses.push(`category_id = $${values.length}`); }
     if (bannerImageUrl !== undefined) { values.push(bannerImageUrl || null); setClauses.push(`banner_image_url = $${values.length}`); }
     if (emotion !== undefined) {
@@ -411,6 +436,17 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
       if (req.body.status === 'approved') {
         setClauses.push(`published_at = COALESCE(published_at, now())`);
       }
+    }
+    // Linking an article to a contributor PROFILE is an editorial act — it
+    // puts the piece on that person's public page — so it sits behind the same
+    // admin guard as status and scheduling, not with the free-text byline.
+    if (isAdmin && req.body.contributorId !== undefined) {
+      const cid = req.body.contributorId === null || req.body.contributorId === ''
+        ? null : Number(req.body.contributorId);
+      if (cid !== null && !Number.isInteger(cid)) {
+        return res.status(400).json({ error: 'contributorId must be a number or null.' });
+      }
+      values.push(cid); setClauses.push(`contributor_id = $${values.length}`);
     }
     if (isAdmin && req.body.scheduledFor !== undefined) {
       values.push(req.body.scheduledFor || null);

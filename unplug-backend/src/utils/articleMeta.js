@@ -69,6 +69,38 @@ function sentences(text) {
     .filter((s) => s.length > 40 && s.length < 300);
 }
 
+// NEVER A TOPIC, however often an article happens to say them.
+//
+// The tag list is frequency-ranked, so a piece that repeats "something" ends up
+// publicly labelled "Topics in this story: Something" — which is what makes a
+// page read as machine-generated rather than edited. These are filtered
+// separately from STOP_WORDS because they must also be stripped from tags that
+// were DERIVED BEFORE this list existed and are already stored on published
+// articles; see cleanTopicTerms below.
+//
+// Two kinds only:
+//   - indefinite pronouns, which name no subject at all
+//   - fragments of names that are not topics on their own ("South" out of
+//     "South Africa"), plus the publication's own name
+// A word goes here only if an editor would never legitimately choose it as a
+// tag. Anything merely BROAD ("africa", "business") is a judgement call and is
+// deliberately left in — that is an editor's decision, not this file's.
+const NEVER_A_TOPIC = new Set([
+  'something', 'someone', 'somebody', 'anything', 'anyone', 'anybody',
+  'everything', 'everyone', 'everybody', 'nothing', 'nobody', 'none',
+  'somewhere', 'anywhere', 'everywhere', 'nowhere', 'else', 'other', 'others',
+  'south', 'unplug', 'magazine',
+]);
+
+// Strips the never-a-topic terms from a stored or freshly derived list.
+// Applied when serving an article as well as when generating one, so the
+// articles that already carry junk tags are cleaned up without a migration
+// and without silently rewriting anything an editor actually chose.
+function cleanTopicTerms(terms) {
+  if (!Array.isArray(terms)) return terms;
+  return terms.filter((t) => t && !NEVER_A_TOPIC.has(String(t).trim().toLowerCase()));
+}
+
 // Word frequency, ignoring stop words and very short tokens.
 function termFrequency(text) {
   const counts = new Map();
@@ -79,7 +111,13 @@ function termFrequency(text) {
 }
 
 function keywords(text, limit = 8) {
-  const all = [...termFrequency(text).entries()].sort((a, b) => b[1] - a[1]);
+  // Junk is removed from the CANDIDATE POOL, before the repeated/fallback
+  // decision below. Filtering later meant a piece that leans on "something"
+  // and "someone" spent its tag slots on them and came back with two tags
+  // instead of the five asked for.
+  const all = [...termFrequency(text).entries()]
+    .sort((a, b) => b[1] - a[1])
+    .filter(([w]) => !NEVER_A_TOPIC.has(w));
   // Prefer words the article uses more than once — a single mention usually
   // isn't what the piece is about. But short articles rarely repeat anything,
   // and returning nothing at all is worse than returning its main nouns, so
@@ -94,7 +132,15 @@ function keywords(text, limit = 8) {
 // appear so the takeaways still read as a sequence.
 function keyTakeaways(text, limit = 4) {
   const freq = termFrequency(text);
-  const list = sentences(text);
+  // A takeaway is shown on its own, out of order, away from what came before
+  // it. A sentence opening with a conjunction refers back to a sentence the
+  // reader cannot see ("And it is one that makes this journey worth watching"),
+  // so it reads as a fragment however well it scores. Dropped from the
+  // candidates rather than patched up, because trimming the opening word would
+  // change what a person actually wrote.
+  const CONTINUES_A_THOUGHT = /^(and|but|or|so|yet|nor|because|however|therefore|which|that|then|also|instead|besides)[^a-z]/i;
+  const all = sentences(text);
+  const list = all.filter((sentence) => !CONTINUES_A_THOUGHT.test(sentence.trim()));
   if (list.length === 0) return [];
   const scored = list.map((sentence, index) => {
     const words = sentence.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/)
@@ -174,5 +220,5 @@ function deriveMetadata({ title, body, sections, categories }) {
 
 module.exports = {
   slugify, keywords, keyTakeaways, suggestedTags, metaDescription,
-  suggestCategory, deriveMetadata, stripHtml,
+  suggestCategory, deriveMetadata, stripHtml, cleanTopicTerms,
 };

@@ -2080,6 +2080,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   </div>
 </main>
   
+<main class="page" id="page-contributor">
+  <div class="wrap" style="padding-top:56px; max-width:70ch;">
+    <button class="btn btn-line" data-page="news" style="margin-bottom:24px;">&larr; Back to News</button>
+    <div id="contributorContent">Loading&hellip;</div>
+  </div>
+</main>
+
   <main class="page" id="page-directoryprofile">
   <div class="wrap" style="padding-top:56px;">
     <button class="btn btn-line" data-page="directory" style="margin-bottom:24px;">← Back to Directory</button>
@@ -5105,7 +5112,13 @@ async function loadArticleDetail(id) {
   try {
     const data = await api('/articles/' + id);
     const a = data.article;
-    const submitter = a.kicker_supplied_by || a.author_name || '';
+    // WHO WROTE IT and WHO SENT IT IN are two different facts and get two
+    // different labels. author_name is the byline; kicker_supplied_by records
+    // who supplied the story. Collapsing them under one label was what made
+    // the page read "Submitted by ..." over journalism nobody had credited.
+    const writer = a.contributor_name || a.author_name || '';
+    const writerLink = a.contributor_slug ? '?p=contributor&slug=' + encodeURIComponent(a.contributor_slug) : '';
+    const submitter = a.kicker_supplied_by || '';
     const dateStr = a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
     const shareUrl = location.origin + '/?p=article&id=' + id;
     el.innerHTML = `
@@ -5115,8 +5128,12 @@ async function loadArticleDetail(id) {
       <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 10px;">${escapeHtml(a.title)}</h1>
       ${a.subtitle ? `<p class="article-subtitle">${escapeHtml(a.subtitle)}</p>` : ''}
       <div class="article-byline">
-        ${submitter ? `<span>Submitted by <span class="who">${escapeHtml(submitter)}</span></span>` : ''}
-        ${submitter && dateStr ? '<span>·</span>' : ''}
+        ${writer ? `<span>By ${writerLink
+          ? `<a class="who" href="${writerLink}">${escapeHtml(writer)}</a>`
+          : `<span class="who">${escapeHtml(writer)}</span>`}</span>` : ''}
+        ${writer && submitter ? '<span>·</span>' : ''}
+        ${submitter ? `<span>Supplied by <span class="who">${escapeHtml(submitter)}</span></span>` : ''}
+        ${(writer || submitter) && dateStr ? '<span>·</span>' : ''}
         ${dateStr ? `<span>${dateStr}</span>` : ''}
         <span>·</span><span>${readMinutes(a.body)} min read</span>
       </div>
@@ -5710,7 +5727,15 @@ function homeStoryCardHtml(article, idPrefix) {
   const title = escapeHtml(article.title);
   const excerpt = textExcerpt(article.body, 140);
   const category = escapeHtml(article.category || '');
-  const kicker = article.kicker_supplied_by ? `<span class="story-kicker">Supplied by <strong>${escapeHtml(article.kicker_supplied_by)}</strong></span>` : '';
+  // The card credits the WRITER when there is one, and falls back to who
+  // supplied the story otherwise — the same two facts, same labels, as the
+  // article page, so a card and the piece it opens never disagree.
+  const cardWriter = article.contributor_name || article.author_name || '';
+  const kicker = cardWriter
+    ? `<span class="story-kicker">By <strong>${escapeHtml(cardWriter)}</strong></span>`
+    : (article.kicker_supplied_by
+        ? `<span class="story-kicker">Supplied by <strong>${escapeHtml(article.kicker_supplied_by)}</strong></span>`
+        : '');
   const thumbImg = coverImgTag(article.banner_image_url, article.title);
   return `<article class="story-card" data-id="${article.id}" role="link" tabindex="0" style="cursor:pointer;">
         <div class="story-thumb">${thumbImg}</div>
@@ -6658,11 +6683,57 @@ function routeFromUrl(){
     if (p === 'article' && params.get('id')) { goToPage('articledetail'); loadArticleDetail(params.get('id')); }
     else if (p === 'project' && params.get('id')) { goToPage('project'); loadProject(params.get('id')); }
     else if (p === 'profile' && params.get('slug')) { goToPage('directoryprofile'); loadProfileDetail(params.get('slug')); }
+    else if (p === 'contributor' && params.get('slug')) { goToPage('contributor'); loadContributor(params.get('slug')); }
     else if (p && document.getElementById('page-' + p)) { goToPage(p); }
     else { goToPage('home'); }
   } finally { window.__seoSuppress = false; }
 }
 window.addEventListener('popstate', routeFromUrl);
+
+// ---- Contributor page (the byline links here) ----
+//
+// The whole point of a byline that links somewhere: a reader who liked one
+// piece can see who wrote it and what else they have written. A name on its
+// own is a claim; a page with a face, a bio and a body of work is evidence.
+async function loadContributor(slug) {
+  const el = document.getElementById('contributorContent');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--slate);">Loading&hellip;</p>';
+  try {
+    const d = await api('/contributors/' + encodeURIComponent(slug));
+    const c = d.contributor;
+    const articles = d.articles || [];
+
+    const photo = c.photo_url
+      ? `<img src="${escapeHtml(c.photo_url)}" alt="${escapeHtml(c.name)}" style="width:96px; height:96px; border-radius:50%; object-fit:cover; flex:none;">`
+      : '';
+
+    el.innerHTML = `
+      <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; margin-bottom:28px;">
+        ${photo}
+        <div style="flex:1; min-width:220px;">
+          <h1 style="font-size:clamp(24px,3.4vw,34px); margin:0 0 6px;">${escapeHtml(c.name)}</h1>
+          ${c.role_title ? `<p style="color:var(--slate); margin:0 0 10px; font-style:italic;">${escapeHtml(c.role_title)}</p>` : ''}
+          ${c.bio ? `<p style="margin:0;">${escapeHtml(c.bio)}</p>` : ''}
+        </div>
+      </div>
+      <h2 style="font-size:18px; margin:0 0 14px;">${articles.length
+        ? `${articles.length} ${articles.length === 1 ? 'story' : 'stories'}`
+        : 'Stories'}</h2>
+      ${articles.length === 0
+        ? '<p style="color:var(--slate);">Nothing published under this byline yet.</p>'
+        : articles.map((a) => `<a href="?p=article&id=${a.id}" class="related-card" style="display:block; padding:12px 0; border-bottom:1px solid var(--paper-line); color:inherit; text-decoration:none;">
+            <strong>${escapeHtml(a.title)}</strong>
+            ${a.subtitle ? `<br><span style="font-size:13px; color:var(--slate);">${escapeHtml(a.subtitle)}</span>` : ''}
+            ${a.category ? `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtml(a.category)}</span>` : ''}
+          </a>`).join('')}
+    `;
+    seoSetTitle(c.name + ' — Unplug Magazine');
+    if (c.bio) seoSetDescription(c.bio);
+  } catch (e) {
+    el.innerHTML = `<p style="color:var(--slate);">${escapeHtml(e.message || 'Could not load this contributor.')}</p>`;
+  }
+}
 
 // ---- Homepage Investor Spotlight (references a live project by ID) ----
 async function loadSpotlight(){

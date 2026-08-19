@@ -76,6 +76,7 @@ app.use('/', profileRoutes); // exposes /directory and /profiles/*
 app.use('/gallery', galleryRoutes);
 app.use('/payments', paymentRoutes);
 app.use('/articles', articleRoutes);
+app.use('/contributors', require('./routes/contributors'));
 app.use('/events', eventRoutes);
 app.use('/birthdays', birthdayRoutes);
 app.use('/', competitionRoutes); // exposes /competitions, /entries/:id/vote, /top10

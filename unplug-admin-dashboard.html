@@ -228,6 +228,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="contributors">Contributors</a>
         <a data-section="birthdays">Birthdays</a>
         <a data-section="halloffame">Hall of Fame</a>
         <a data-section="calevents">Calendar Events</a>
@@ -1107,7 +1108,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
               <span id="artMetaCount" style="font-size:11px; color:var(--slate);"></span></div>
           </div>
           <div class="form-row">
-            <div><label for="artKicker">Supplied by (optional)</label><input id="artKicker" placeholder="e.g. Thandi M."></div>
+            <div><label for="artAuthor">Written by <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; the byline readers see</span></label><input id="artAuthor" placeholder="e.g. Thandi Mokoena"></div>
+            <div><label for="artContributor">Link to contributor <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; optional; makes the byline click through to their page</span></label><select id="artContributor"><option value="">&mdash; no linked profile &mdash;</option></select></div>
+            <div><label for="artKicker">Supplied by <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; who sent the story in, if not the writer</span></label><input id="artKicker" placeholder="e.g. Thandi M."></div>
             <div><label for="artEmotion">Emotion (optional)</label><select id="artEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
             <div><label>Main image <span style="font-weight:400; color:var(--slate);">— 1920 × 1080px (16:9)</span></label><div id="artBannerUpload"></div></div>
           </div>
@@ -2036,6 +2039,32 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- CONTRIBUTORS — the people whose names appear on articles. -->
+    <div class="admin-section" id="section-contributors">
+      <div class="main-head"><div><h1>Contributors</h1>
+      <p>The writers whose names appear on articles. A contributor gets a public page with their photo, a short bio and everything they have written &mdash; which is what turns a byline from a name into something a reader can check.</p>
+      <p style="margin-top:8px;">A byline does <strong>not</strong> require a profile: an article can simply carry a &ldquo;Written by&rdquo; name. Add someone here when they write regularly enough to be worth a page, then link their articles to them in the article editor.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Add a contributor</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label for="conName">Name</label><input id="conName" placeholder="e.g. Thandi Mokoena"></div>
+            <div><label for="conRole">Role or title <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; optional</span></label><input id="conRole" placeholder="e.g. Senior Writer"></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label for="conBio">Short bio <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; optional, a sentence or two</span></label><textarea id="conBio" rows="3"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label>Photo <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; square, at least 400 &times; 400px</span></label><div id="conPhotoUpload"></div></div>
+          <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="conAddBtn">Add contributor</button>
+          <span id="conNote" style="font-size:12px; color:var(--slate); display:block; margin-top:8px;"></span>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>All contributors</h3></div>
+        <div class="panel-body" id="conBody" style="padding:0;">Loading&hellip;</div>
+      </div>
+    </div>
+
     <!-- PARTICIPATION MEMBERS — everyone signed up to the engine, including
          the inactive and the ones who opted out of the public leaderboard. -->
     <div class="admin-section" id="section-partmembers">
@@ -2696,6 +2725,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'votebundles') { loadTop10Entries(); loadVoteBundlesAdmin(); }
     if (section === 'top10monthly') loadTop10MonthlyRankings();
     if (section === 'partmembers') loadParticipationMembers();
+    if (section === 'contributors') loadContributorsAdmin();
     if (section === 'editions') loadEditionsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
@@ -4566,6 +4596,20 @@ async function loadPublishSection() {
   } catch (err) {
     catSel.innerHTML = '<option value="">Categories unavailable</option>';
   }
+  // Contributors for the byline picker. Deactivated ones are included, because
+  // an article written years ago by someone who has since left still has to be
+  // editable without silently dropping its byline.
+  const conSel = document.getElementById('artContributor');
+  if (conSel) {
+    try {
+      const list = await api('/contributors/admin/all');
+      conSel.innerHTML = '<option value="">— no linked profile —</option>'
+        + (list.contributors || []).map((c) =>
+            `<option value="${c.id}">${escapeHtmlAdmin(c.name)}${c.is_active ? '' : ' (inactive)'}</option>`).join('');
+    } catch (err) {
+      conSel.innerHTML = '<option value="">Contributors unavailable</option>';
+    }
+  }
   try {
     const dir = await api('/directory?limit=200');
     const profiles = dir.profiles || dir.directory || [];
@@ -4739,8 +4783,9 @@ function artShowDerived(a) {
 function artReset() {
   ART_EDITING_ID = null;
   ART_EDITING_STATUS = null;
-  ['artTitle', 'artSubtitle', 'artSeoTitle', 'artSlug', 'artMeta', 'artKicker', 'artBody', 'artConclusion', 'artCtaLabel', 'artCtaUrl'].forEach((id) => { document.getElementById(id).value = ''; });
+  ['artTitle', 'artSubtitle', 'artSeoTitle', 'artSlug', 'artMeta', 'artKicker', 'artAuthor', 'artBody', 'artConclusion', 'artCtaLabel', 'artCtaUrl'].forEach((id) => { document.getElementById(id).value = ''; });
   document.getElementById('artCategory').value = '';
+  document.getElementById('artContributor').value = '';
   document.getElementById('artEmotion').value = '';
   document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '');
   artRenderSections([]);
@@ -4800,6 +4845,8 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     document.getElementById('artSlug').value = a.slug || '';
     document.getElementById('artMeta').value = a.meta_description || '';
     document.getElementById('artKicker').value = a.kicker_supplied_by || '';
+    document.getElementById('artAuthor').value = a.author_name || '';
+    document.getElementById('artContributor').value = a.contributor_id || '';
     document.getElementById('artCategory').value = a.category_id || '';
     document.getElementById('artEmotion').value = a.emotion || '';
     document.getElementById('artBody').value = a.body || '';
@@ -4844,6 +4891,8 @@ async function artSave(asDraft) {
     metaDescription: document.getElementById('artMeta').value.trim() || null,
     categoryId: document.getElementById('artCategory').value || null,
     kickerSuppliedBy: document.getElementById('artKicker').value.trim() || null,
+    authorName: document.getElementById('artAuthor').value.trim() || null,
+    contributorId: document.getElementById('artContributor').value || null,
     emotion: document.getElementById('artEmotion').value || null,
     bannerImageUrl: UnplugUpload.valueOf(document.getElementById('artBannerUpload')) || null,
     conclusion: document.getElementById('artConclusion').value.trim() || null,
@@ -9648,6 +9697,106 @@ async function adjustTop10Votes(entry) {
     showToast(err.message, true);
   }
 }
+
+// ---------------------------------------------------------------------------
+// CONTRIBUTORS
+// ---------------------------------------------------------------------------
+
+async function loadContributorsAdmin() {
+  if (!document.querySelector('#conPhotoUpload .img-upload')) {
+    document.getElementById('conPhotoUpload').innerHTML =
+      UnplugUpload.fieldHtml('conPhoto', '', '', { w: 400, h: 400, label: 'square' });
+  }
+
+  const body = document.getElementById('conBody');
+  body.innerHTML = '<div class="loading-state">Loading&hellip;</div>';
+  try {
+    const d = await api('/contributors/admin/all');
+    const rows = d.contributors || [];
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-state">No contributors yet. Add the people who write for Unplug above.</div>';
+      return;
+    }
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = '<th style="width:52px;"></th><th>Name</th><th>Role</th><th>Articles</th><th>Page</th><th>Status</th><th></th>';
+    table.appendChild(head);
+
+    rows.forEach((c) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td>${c.photo_url
+            ? `<img src="${escapeHtmlAdmin(c.photo_url)}" alt="" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">`
+            : '<div style="width:40px; height:40px; border-radius:50%; background:var(--paper);"></div>'}</td>`
+        + `<td><strong>${escapeHtmlAdmin(c.name)}</strong>${c.bio
+            ? `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(String(c.bio).slice(0, 70))}</span>` : ''}</td>`
+        + `<td>${escapeHtmlAdmin(c.role_title || '—')}</td>`
+        + `<td>${Number(c.article_count).toLocaleString()}</td>`
+        + `<td><a href="/?p=contributor&slug=${encodeURIComponent(c.slug)}" target="_blank" rel="noopener" style="font-size:11.5px;">view</a></td>`
+        + `<td>${c.is_active
+            ? '<span style="color:green;">active</span>'
+            : '<span style="color:var(--slate);">hidden</span>'}</td>`
+        + '<td><div class="row-actions">'
+        + `<button class="approve">${c.is_active ? 'Hide' : 'Show'}</button>`
+        + '<button class="reject">Delete</button></div></td>';
+
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        try {
+          await api('/contributors/admin/' + c.id, {
+            method: 'PATCH', body: JSON.stringify({ isActive: !c.is_active }),
+          });
+          showToast(c.is_active ? 'Hidden from the contributors page.' : 'Now shown on the contributors page.');
+          loadContributorsAdmin();
+        } catch (err) { showToast(err.message, true); }
+      });
+
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        if (!confirm(`Delete ${c.name}? Their articles are NOT deleted — but if any are credited to them, this will be refused and you should hide them instead.`)) return;
+        try {
+          await api('/contributors/admin/' + c.id, { method: 'DELETE' });
+          showToast('Contributor deleted.');
+          loadContributorsAdmin();
+        } catch (err) { showToast(err.message, true); }
+      });
+
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load contributors.')}</div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('conAddBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const name = document.getElementById('conName').value.trim();
+    const note = document.getElementById('conNote');
+    if (!name) { showToast('A name is required.', true); return; }
+    try {
+      await api('/contributors/admin', {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          roleTitle: document.getElementById('conRole').value.trim() || null,
+          bio: document.getElementById('conBio').value.trim() || null,
+          photoUrl: UnplugUpload.valueOf(document.getElementById('conPhotoUpload')) || null,
+        }),
+      });
+      note.textContent = `${name} added — they now appear in the article editor's byline picker.`;
+      showToast('Contributor added.');
+      ['conName', 'conRole', 'conBio'].forEach((id) => { document.getElementById(id).value = ''; });
+      loadContributorsAdmin();
+    } catch (err) {
+      note.textContent = err.message;
+      showToast(err.message, true);
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // PARTICIPATION MEMBERS — the full roll call.

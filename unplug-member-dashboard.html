@@ -624,7 +624,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field"><label for="art-title">Title</label><input id="art-title"></div>
         <div class="field"><label for="art-body">Story</label><textarea id="art-body" rows="4"></textarea></div>
         <p id="art-readtime-hint" style="font-size:12px; color:var(--slate); margin-top:-4px;">Aim for a 3-6 minute read (roughly 600-1200 words). Current: 0 words, ~0 min.</p>
-        <div class="field"><label for="art-kicker">Supplied By (kicker byline)</label><input id="art-kicker"></div>
+        <div class="field"><label for="art-author">Written by <span style="font-weight:400; opacity:0.7;">&mdash; the byline readers see. Your name, or whoever wrote it.</span></label><input id="art-author" placeholder="e.g. Thandi Mokoena"></div>
+        <div class="field"><label for="art-kicker">Supplied by <span style="font-weight:400; opacity:0.7;">&mdash; optional, only if someone else sent the story in</span></label><input id="art-kicker"></div>
         <div class="field"><label>Cover image <span style="font-weight:400; opacity:0.7;">— 1920 × 1080px (16:9)</span></label>
           <div id="art-cover-upload"></div>
           <span style="font-size:12px; color:var(--slate);">The main picture shown with your story.</span>
@@ -2534,6 +2535,7 @@ async function createSubmission(type) {
         // Written in a plain textarea, so line breaks become paragraphs
         // rather than collapsing into one block.
         bodyFormat: 'text',
+        authorName: document.getElementById('art-author').value.trim() || undefined,
         kickerSuppliedBy: document.getElementById('art-kicker').value.trim() || undefined,
         bannerImageUrl: UnplugUpload.valueOf(document.getElementById('art-cover-upload')) || undefined,
         galleryImages: artCollectGallery(),
