@@ -151,8 +151,19 @@ window.UnplugAnalytics = (function () {
     if (!force && get('unplug_analytics_attr')) return;
     let params;
     try { params = new URLSearchParams(window.location.search); } catch (e) { params = null; }
+    // The root redirect stub (index.html) hands the browser on to the magazine
+    // page, which makes THIS page's referrer our own domain — a self-referral
+    // that would file a click from Instagram as "Direct". The stub stashes the
+    // real one on the way through; it is used only when what the browser is
+    // reporting is our own site or nothing at all, so a genuine referrer is
+    // never overridden by a stale stash.
+    let entryReferrer = '';
+    try { entryReferrer = sessionStorage.getItem('unplug_entry_referrer') || ''; } catch (e) { /* ignore */ }
+    const liveReferrer = document.referrer || '';
+    const ownSite = liveReferrer && liveReferrer.indexOf(window.location.host) !== -1;
+
     const attr = {
-      referrer: document.referrer || '',
+      referrer: (!liveReferrer || ownSite) && entryReferrer ? entryReferrer : liveReferrer,
       utmSource: params ? (params.get('utm_source') || '') : '',
       utmMedium: params ? (params.get('utm_medium') || '') : '',
       utmCampaign: params ? (params.get('utm_campaign') || '') : '',

@@ -5,11 +5,48 @@
   <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Unplug Magazine</title>
-  <meta http-equiv="refresh" content="0; url=unplug-magazine.html">
   <link rel="canonical" href="unplug-magazine.html">
-  <script>window.location.replace('unplug-magazine.html');</script>
+  <!--
+    THE QUERY STRING MUST SURVIVE THIS HOP.
+
+    This stub used to redirect to a bare "unplug-magazine.html", which threw
+    away everything after the "?". A campaign link is exactly the thing that
+    gets pointed at the bare domain — unplugnews.com/?utm_source=instagram in
+    a bio or an ad — so every one of those arrived with its tags already gone
+    and could never be attributed to the campaign that paid for it.
+
+    The meta refresh is removed rather than fixed: it cannot carry a query it
+    does not know at build time, and leaving it in means whichever fires first
+    decides whether the tags survive. The <noscript> link below covers the rare
+    reader with JavaScript off, who has no analytics to lose anyway.
+  -->
+  <script>
+    (function () {
+      var search = window.location.search || '';
+      var hash = window.location.hash || '';
+
+      // WHERE THEY CAME FROM MUST SURVIVE TOO.
+      //
+      // After this redirect the next page's referrer is THIS page — our own
+      // domain — which reads as a self-referral and would file a click from
+      // Instagram as "Direct". Stashing the real referrer lets the tracker
+      // recover it. Only an EXTERNAL referrer is stored: our own pages are
+      // internal navigation, not a source.
+      try {
+        var ref = document.referrer || '';
+        if (ref && ref.indexOf(window.location.host) === -1) {
+          sessionStorage.setItem('unplug_entry_referrer', ref);
+        }
+      } catch (e) { /* private mode — the redirect still works */ }
+
+      window.location.replace('unplug-magazine.html' + search + hash);
+    })();
+  </script>
 </head>
 <body>
   <p>Redirecting to <a href="unplug-magazine.html">Unplug Magazine</a>…</p>
+  <noscript>
+    <meta http-equiv="refresh" content="0; url=unplug-magazine.html">
+  </noscript>
 </body>
 </html>
