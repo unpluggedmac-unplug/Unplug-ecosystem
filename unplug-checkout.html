@@ -36,8 +36,10 @@ body{ min-height:100vh; }
    applies only on small screens — the desktop sizing is deliberate and has no
    zoom behaviour to defend against. */
 @media(max-width:640px){
-  input, select, textarea{ font-size:16px; }
-  input[type="checkbox"], input[type="radio"]{ font-size:inherit; }
+  /* !important because a media query adds no specificity, so a bare `input`
+     rule loses to `.field input{ font-size:14px }` further up the file. */
+  input, select, textarea{ font-size:16px !important; }
+  input[type="checkbox"], input[type="radio"]{ font-size:inherit !important; }
   button, .btn{ min-height:44px; }
 }
 </style>

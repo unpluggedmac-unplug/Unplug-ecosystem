@@ -1324,9 +1324,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       screens: the desktop sizing is a deliberate design choice and there is no
       zoom behaviour to defend against there. */
 @media(max-width:640px){
-  input, select, textarea{ font-size:16px; }
+  /* !important is load-bearing here, not laziness. A media query adds no
+     specificity, so a bare `input` rule loses to every `.field input` and
+     `.art-section input` on the page — which is exactly what happened: the
+     first attempt at this shipped and left 41 of the controls untouched.
+     This is a device-level correction that has to beat component styling. */
+  input, select, textarea{ font-size:16px !important; }
   /* A checkbox has no text to zoom, and 16px would just make it clumsy. */
-  input[type="checkbox"], input[type="radio"]{ font-size:inherit; }
+  input[type="checkbox"], input[type="radio"]{ font-size:inherit !important; }
 }
 
 /* 3. TAP TARGETS. The language picker stood 28px tall; a finger needs about
