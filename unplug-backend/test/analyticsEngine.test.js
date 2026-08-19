@@ -344,17 +344,49 @@ test('identify requires signing in', async () => {
   assert.equal((await req('POST', '/analytics/identify', { body: { sessionId: 's-1' } })).status, 401);
 });
 
-test('the GA config returns nothing until a real property is set', async () => {
+test('the live GA property is served, and only when it is valid', async () => {
+  // Seeded by migration 119 — Google Analytics is on out of the box.
   let res = await req('GET', '/analytics/config');
-  assert.equal(res.body.ga4MeasurementId, null, 'an unset id must not load a tag that fires at nothing');
+  assert.equal(res.body.ga4MeasurementId, 'G-7CNWS63ZHD', 'the real property ships configured');
 
   await pool.query(`UPDATE settings SET value = 'not-a-real-id' WHERE key = 'ga4_measurement_id'`);
   res = await req('GET', '/analytics/config');
-  assert.equal(res.body.ga4MeasurementId, null, 'a malformed id is refused rather than passed through');
+  assert.equal(res.body.ga4MeasurementId, null,
+    'a malformed id is refused rather than passed through to load a tag that fires at nothing');
 
-  await pool.query(`UPDATE settings SET value = 'G-ABC123XYZ' WHERE key = 'ga4_measurement_id'`);
+  await pool.query(`UPDATE settings SET value = '' WHERE key = 'ga4_measurement_id'`);
   res = await req('GET', '/analytics/config');
-  assert.equal(res.body.ga4MeasurementId, 'G-ABC123XYZ');
+  assert.equal(res.body.ga4MeasurementId, null, 'clearing the field switches Google Analytics off');
+
+  await pool.query(`UPDATE settings SET value = 'G-7CNWS63ZHD' WHERE key = 'ga4_measurement_id'`);
+});
+
+test('the real GA property is seeded, and a re-deploy never overrides a change', async () => {
+  // Migrations re-run on EVERY deploy. Without the one-time marker this would
+  // silently reinstate the seeded id each time, undoing an admin who changed
+  // it — or who cleared it deliberately to switch Google Analytics off.
+  const migrations = fs.readdirSync(path.join(__dirname, '..', 'db', 'migrations'))
+    .filter((x) => x.endsWith('.sql')).sort();
+  const rerun = async () => {
+    for (const f of migrations) {
+      await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', f), 'utf8'));
+    }
+  };
+
+  // An admin decides to point at a different property.
+  await pool.query(`UPDATE settings SET value = 'G-ADMINCHOICE' WHERE key = 'ga4_measurement_id'`);
+  await rerun();
+  let v = (await pool.query(`SELECT value FROM settings WHERE key = 'ga4_measurement_id'`)).rows[0].value;
+  assert.equal(v, 'G-ADMINCHOICE', 'a deploy must not overwrite the id an admin chose');
+
+  // An admin switches Google Analytics off entirely.
+  await pool.query(`UPDATE settings SET value = '' WHERE key = 'ga4_measurement_id'`);
+  await rerun();
+  v = (await pool.query(`SELECT value FROM settings WHERE key = 'ga4_measurement_id'`)).rows[0].value;
+  assert.equal(v, '', 'clearing the field must stay cleared through a deploy');
+
+  const res = await req('GET', '/analytics/config');
+  assert.equal(res.body.ga4MeasurementId, null, 'and no tag is served while it is empty');
 });
 
 test('every report is admin-only', async () => {
