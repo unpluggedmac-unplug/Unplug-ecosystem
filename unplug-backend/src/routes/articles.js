@@ -4,6 +4,7 @@ const { requireAuth, requireOwnerOrAdmin, requireRole } = require('../middleware
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { deriveMetadata, slugify, cleanTopicTerms } = require('../utils/articleMeta');
 const { recordConversionAsync } = require('../utils/analyticsRecorder');
+const { normaliseTags } = require('../utils/tags');
 const { publishesFree, statusForNewSubmission } = require('../utils/publishingRights');
 const { recordParticipationAsync } = require('../utils/participation');
 
@@ -406,7 +407,9 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
     if (ctaUrl !== undefined) { values.push(ctaUrl || null); setClauses.push(`cta_url = $${values.length}`); }
     if (Array.isArray(keyTakeaways)) { values.push(keyTakeaways.filter(Boolean)); setClauses.push(`key_takeaways = $${values.length}`); }
     if (Array.isArray(keywords)) { values.push(keywords.filter(Boolean)); setClauses.push(`keywords = $${values.length}`); }
-    if (Array.isArray(tags)) { values.push(tags.filter(Boolean)); setClauses.push(`tags = $${values.length}`); }
+    // Through the shared rules so an article, a Directory listing and a My
+    // Unplug profile all agree on what a tag is and how many are allowed.
+    if (tags !== undefined) { values.push(normaliseTags(tags)); setClauses.push(`tags = $${values.length}`); }
     if (req.body.galleryImages !== undefined) {
       const cleaned = cleanGallery(req.body.galleryImages);
       if (Array.isArray(req.body.galleryImages) && req.body.galleryImages.filter(Boolean).length > MAX_GALLERY_IMAGES) {

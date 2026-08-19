@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { recordConversionAsync } = require('../utils/analyticsRecorder');
+const { normaliseTags } = require('../utils/tags');
 const { requireAuth, requireRole, requireOwnerOrAdmin } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { SA_PROVINCES } = require('../utils/saPlaces');
@@ -326,6 +327,15 @@ router.patch('/profiles/:id', requireOwnerOrAdmin(getProfileOwnerId), async (req
     const LOCATION_KEYS = new Set(['streetAddress', 'suburb', 'city', 'province', 'country']);
     const setClauses = [];
     const values = [];
+
+    // Tags: words the OWNER chooses to describe what they do, so a reader
+    // searching for them finds this listing. Handled outside the allowlist
+    // loop because it is the one field that needs cleaning rather than
+    // copying — see utils/tags.js for why that lives in one place.
+    if (req.body.tags !== undefined) {
+      values.push(normaliseTags(req.body.tags));
+      setClauses.push(`tags = $${values.length}`);
+    }
     for (const [bodyKey, column] of Object.entries(bodyKeyMap)) {
       if (req.body[bodyKey] !== undefined) {
         let value = req.body[bodyKey];

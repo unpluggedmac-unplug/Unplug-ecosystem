@@ -229,6 +229,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="contributors">Contributors</a>
+        <a data-section="tags">Tags</a>
         <a data-section="birthdays">Birthdays</a>
         <a data-section="halloffame">Hall of Fame</a>
         <a data-section="calevents">Calendar Events</a>
@@ -875,6 +876,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
           <div class="field" style="margin-top:12px;"><label>Feature image <span style="font-weight:400; color:var(--slate);">— the banner / headshot on the card and profile page</span></label><div id="dpFeatureUpload"></div></div>
           <div class="field" style="margin-top:12px;"><label for="dpBio">Bio</label><textarea id="dpBio" rows="4"></textarea></div>
+          <div class="field" style="margin-top:12px;"><label for="dpTags">Tags <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; up to 10, separated by commas. These are what site search matches on.</span></label><input id="dpTags" placeholder="e.g. Coffee, Roastery, Cape Town"></div>
           <div class="form-row">
             <div><label for="dpEmail">Contact email</label><input id="dpEmail"></div>
             <div><label for="dpPhone">Contact phone</label><input id="dpPhone"></div>
@@ -1203,7 +1205,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div style="margin-bottom:10px;"><label for="artTakeaways">Key takeaways (one per line)</label><textarea id="artTakeaways" rows="4" style="width:100%;"></textarea></div>
             <div class="form-row">
               <div><label for="artKeywords">Keywords (comma separated)</label><input id="artKeywords"></div>
-              <div><label for="artTags">Tags (comma separated)</label><input id="artTags"></div>
+              <div><label for="artTags">Tags <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; up to 10, comma separated. Site search matches these.</span></label><input id="artTags"></div>
             </div>
             <div id="artSuggestedCat" style="font-size:12.5px; color:var(--slate); margin-top:8px;"></div>
           </div>
@@ -2088,6 +2090,34 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <!-- TAGS — every tag in use, across all three things people can tag. -->
+    <div class="admin-section" id="section-tags">
+      <div class="main-head"><div><h1>Tags</h1>
+      <p>Every tag in use across articles, Directory listings and member profiles. Tags are what site search matches on, and what the Topics report groups by &mdash; so a tag written two ways counts as two different subjects until it is merged here.</p>
+      <p style="margin-top:8px;">Editors, businesses and members can each add up to <strong>10 tags</strong> to what they own. Nothing needs approving; anything unwanted can be renamed or removed from this screen.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-body" id="tagsTotals" style="display:flex; gap:26px; flex-wrap:wrap;">Loading&hellip;</div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Suggest tags for anything with none</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin:0 0 12px;">Reads the text of each untagged article, listing and profile and suggests tags from it. <strong>Anything already tagged is left alone</strong>, so nothing anyone chose is overwritten. Suggestions stop at what the text actually supports rather than padding to ten &mdash; a weak tag makes the Topics report misleading.</p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-line" id="tagsPreviewBtn" style="width:auto;">Preview &mdash; change nothing</button>
+            <button class="btn btn-solid" id="tagsSuggestBtn" style="width:auto;">Suggest tags</button>
+          </div>
+          <span id="tagsBackfillNote" style="font-size:12px; color:var(--slate); display:block; margin-top:10px;"></span>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>All tags</h3></div>
+        <div class="panel-body" id="tagsBody" style="padding:0;">Loading&hellip;</div>
+      </div>
+    </div>
+
     <!-- CONTRIBUTORS — the people whose names appear on articles. -->
     <div class="admin-section" id="section-contributors">
       <div class="main-head"><div><h1>Contributors</h1>
@@ -2775,6 +2805,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'top10monthly') loadTop10MonthlyRankings();
     if (section === 'partmembers') loadParticipationMembers();
     if (section === 'contributors') loadContributorsAdmin();
+    if (section === 'tags') loadTagsAdmin();
     if (section === 'editions') loadEditionsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();
     if (section === 'calevents') loadCalEvents();
@@ -3833,6 +3864,7 @@ async function dpLoadProfile(id, slug) {
     document.getElementById('dpName').value = p.display_name || '';
     document.getElementById('dpCategory').value = p.category_id || '';
     document.getElementById('dpBio').value = p.bio || '';
+    document.getElementById('dpTags').value = (p.tags || []).join(', ');
     document.getElementById('dpEmail').value = p.contact_email || '';
     document.getElementById('dpPhone').value = p.contact_phone || '';
     document.getElementById('dpWebsite').value = p.contact_website || '';
@@ -3903,6 +3935,7 @@ document.getElementById('dpSaveBtn').addEventListener('click', async () => {
   const payload = {
     displayName: document.getElementById('dpName').value.trim(),
     bio: document.getElementById('dpBio').value.trim(),
+    tags: document.getElementById('dpTags').value,
     contactEmail: document.getElementById('dpEmail').value.trim(),
     contactPhone: document.getElementById('dpPhone').value.trim(),
     contactWebsite: document.getElementById('dpWebsite').value.trim(),
@@ -10004,6 +10037,115 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// TAGS — every tag in use, across articles, listings and member profiles
+// ---------------------------------------------------------------------------
+
+async function loadTagsAdmin() {
+  const body = document.getElementById('tagsBody');
+  const totals = document.getElementById('tagsTotals');
+  body.innerHTML = '<div class="loading-state">Loading&hellip;</div>';
+  try {
+    const d = await api('/admin/tags');
+    const rows = d.tags || [];
+    const t = d.totals || {};
+
+    totals.innerHTML =
+      `<div><div style="font-size:22px; font-weight:700;">${Number(t.distinct || 0).toLocaleString()}</div>`
+      + '<div style="font-size:11.5px; color:var(--slate); text-transform:uppercase; letter-spacing:0.4px;">Different tags</div></div>'
+      + `<div><div style="font-size:22px; font-weight:700; color:${t.withMultipleSpellings ? 'var(--red)' : 'var(--ink)'};">${Number(t.withMultipleSpellings || 0).toLocaleString()}</div>`
+      + '<div style="font-size:11.5px; color:var(--slate); text-transform:uppercase; letter-spacing:0.4px;">Written more than one way</div>'
+      + '<div style="font-size:11px; color:var(--slate);">each spelling counts separately in reports</div></div>';
+
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-state">No tags yet. Use &ldquo;Suggest tags&rdquo; above, or add them on an article or listing.</div>';
+      return;
+    }
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = '<th>Tag</th><th>Uses</th><th>Articles</th><th>Directory</th><th>Members</th><th></th>';
+    table.appendChild(head);
+
+    rows.forEach((r) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td><strong>${escapeHtmlAdmin(r.tag)}</strong>`
+        + (r.spellings > 1
+            ? `<br><span style="font-size:11px; color:var(--red);">written ${r.spellings} different ways</span>` : '')
+        + '</td>'
+        + `<td>${Number(r.uses).toLocaleString()}</td>`
+        + `<td>${Number(r.articles).toLocaleString()}</td>`
+        + `<td>${Number(r.directory).toLocaleString()}</td>`
+        + `<td>${Number(r.members).toLocaleString()}</td>`
+        + '<td><div class="row-actions"><button class="approve">Rename</button><button class="reject">Remove</button></div></td>';
+
+      tr.querySelector('.approve').addEventListener('click', async () => {
+        const to = prompt(`Rename "${r.tag}" to what?\n\nEverything tagged with it is updated. Renaming it to an existing tag merges the two.`, r.tag);
+        if (to === null || !to.trim()) return;
+        try {
+          const res = await api('/admin/tags/rename', {
+            method: 'POST', body: JSON.stringify({ from: r.tag, to: to.trim() }),
+          });
+          showToast(`Updated ${Object.values(res.updated).reduce((a, b) => a + b, 0)} item(s).`);
+          loadTagsAdmin();
+        } catch (err) { showToast(err.message, true); }
+      });
+
+      tr.querySelector('.reject').addEventListener('click', async () => {
+        if (!confirm(`Remove "${r.tag}" from all ${r.uses} item(s)?\n\nThe articles, listings and profiles themselves are NOT deleted — only this tag is taken off them.`)) return;
+        try {
+          await api('/admin/tags/rename', {
+            method: 'POST', body: JSON.stringify({ from: r.tag, to: null }),
+          });
+          showToast('Tag removed.');
+          loadTagsAdmin();
+        } catch (err) { showToast(err.message, true); }
+      });
+
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load tags.')}</div>`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const suggest = document.getElementById('tagsSuggestBtn');
+  if (!suggest) return;
+
+  async function runBackfill(dryRun) {
+    const note = document.getElementById('tagsBackfillNote');
+    note.textContent = dryRun ? 'Checking…' : 'Suggesting…';
+    try {
+      const r = await api('/admin/tags/backfill', {
+        method: 'POST', body: JSON.stringify({ dryRun: dryRun }),
+      });
+      const summary = `${r.articles} article(s), ${r.directory} listing(s), ${r.members} member profile(s)`;
+      note.innerHTML = (dryRun
+        ? `Would add tags to ${summary}. Nothing has been changed yet.`
+        : `Added tags to ${summary}.`)
+        + (r.skippedTooLittleText
+            ? ` ${r.skippedTooLittleText} skipped — too little text to suggest anything sensible.` : '')
+        + (r.samples && r.samples.length
+            ? '<br><span style="color:var(--slate);">e.g. '
+              + r.samples.slice(0, 3).map((x) => `${escapeHtmlAdmin(x.name)} → ${x.tags.map(escapeHtmlAdmin).join(', ')}`).join(' &middot; ')
+              + '</span>' : '');
+      if (!dryRun) { showToast('Tags suggested.'); loadTagsAdmin(); }
+    } catch (err) {
+      note.textContent = err.message;
+      showToast(err.message, true);
+    }
+  }
+
+  suggest.addEventListener('click', () => runBackfill(false));
+  const preview = document.getElementById('tagsPreviewBtn');
+  if (preview) preview.addEventListener('click', () => runBackfill(true));
 });
 
 // ---------------------------------------------------------------------------

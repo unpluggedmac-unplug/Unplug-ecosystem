@@ -11,6 +11,7 @@
 
 const express = require('express');
 const pool = require('../db');
+const { normaliseTags } = require('../utils/tags');
 const { requireAuth } = require('../middleware/auth');
 const { recordParticipationAsync } = require('../utils/participation');
 
@@ -140,18 +141,23 @@ router.put('/me', requireAuth, async (req, res, next) => {
 
     const result = await pool.query(
       `INSERT INTO my_unplug_profiles
-         (user_id, username, display_name, about_me, avatar_url, country, province, city)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (user_id, username, display_name, about_me, avatar_url, country, province, city, tags)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (user_id) DO UPDATE SET
          username = EXCLUDED.username, display_name = EXCLUDED.display_name,
          about_me = EXCLUDED.about_me, avatar_url = EXCLUDED.avatar_url,
          country = EXCLUDED.country, province = EXCLUDED.province, city = EXCLUDED.city,
+         -- Only replaced when tags were actually sent. This route saves the
+         -- whole profile, so an older screen that does not know about tags
+         -- would otherwise wipe them every time somebody edited their bio.
+         tags = COALESCE(EXCLUDED.tags, my_unplug_profiles.tags),
          updated_at = now()
        RETURNING *`,
       [
         req.user.id, check.username, displayName.slice(0, 60),
         aboutMe || null, b.avatarUrl || null,
         b.country || null, b.province || null, b.city || null,
+        b.tags === undefined ? null : normaliseTags(b.tags),
       ]
     );
     const taxonomies = await loadTaxonomies(req.user.id);

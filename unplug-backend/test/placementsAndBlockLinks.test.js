@@ -26,7 +26,7 @@ let pool;
 let server;
 let baseUrl;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-placements-'));
-const port = 22400 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
+const port = 30000 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 
 async function req(method, urlPath, { token, body } = {}) {
   const res = await fetch(baseUrl + urlPath, {

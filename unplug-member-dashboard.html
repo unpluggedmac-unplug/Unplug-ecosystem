@@ -403,6 +403,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <textarea id="muAbout" rows="3" placeholder="A sentence or two about what you're about."></textarea>
           <span id="muAboutCount" style="font-size:11.5px; color:var(--slate);">0 / 50 words</span>
         </div>
+        <div class="field">
+          <label for="muTags">Tags <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; up to 10, separated by commas. This is how people find you in search.</span></label>
+          <input id="muTags" placeholder="e.g. Poetry, Deaf Culture, Pretoria">
+        </div>
 
         <div class="field">
           <label>Profile picture <span style="font-weight:400; opacity:0.7;">— 1080 × 1080px (square)</span></label>
@@ -1662,6 +1666,7 @@ async function loadProfile() {
       </div>
       <div class="field-row">
         <div class="field"><label for="editBio">Bio</label><textarea id="editBio" rows="3">${p.bio || ''}</textarea></div>
+        <div class="field"><label for="editTags">Tags <span style="font-weight:400; opacity:0.7;">&mdash; up to 10, separated by commas. This is how people find you in search.</span></label><input id="editTags" value="${(p.tags || []).join(', ')}" placeholder="e.g. Coffee, Roastery, Cape Town"></div>
         <div class="field"><label for="editQuote">Quote</label><textarea id="editQuote" rows="3">${p.quote || ''}</textarea></div>
       </div>
       <div class="field-row">
@@ -1757,6 +1762,7 @@ async function loadProfile() {
           method: 'PATCH',
           body: JSON.stringify({
             bio: document.getElementById('editBio').value,
+            tags: document.getElementById('editTags').value,
             quote: document.getElementById('editQuote').value,
             contactEmail: document.getElementById('editEmail').value,
             contactPhone: document.getElementById('editPhone').value,
@@ -3462,6 +3468,9 @@ function muFillForm() {
   document.getElementById('muUsername').value = p.username || '';
   document.getElementById('muDisplayName').value = p.display_name || '';
   document.getElementById('muAbout').value = p.about_me || '';
+  // Filled in on load, or saving an unrelated edit would send an empty box and
+  // wipe the tags the member had already chosen.
+  document.getElementById('muTags').value = (p.tags || []).join(', ');
   document.getElementById('muCountry').value = p.country || 'South Africa';
   document.getElementById('muProvince').value = p.province || '';
   document.getElementById('muCity').value = p.city || '';
@@ -3540,6 +3549,7 @@ document.getElementById('muSaveBtn').addEventListener('click', async () => {
         username: document.getElementById('muUsername').value.trim(),
         displayName: document.getElementById('muDisplayName').value.trim(),
         aboutMe: document.getElementById('muAbout').value.trim(),
+        tags: document.getElementById('muTags').value,
         avatarUrl: UnplugUpload.valueOf(document.getElementById('mu-avatar-upload')) || undefined,
         country: document.getElementById('muCountry').value.trim(),
         province: document.getElementById('muProvince').value.trim(),

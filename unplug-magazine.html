@@ -3640,7 +3640,8 @@ function profileDetailHtml(profile, socials, gallery) {
       <div class="profile-grid">
         <div>
           <h3 class="profile-section-title">About</h3>
-          <div class="rich-bio" style="color:var(--slate); line-height:1.7;">${profile.bio ? renderRichText(profile.bio) : 'No bio provided yet.'}</div>`;
+          <div class="rich-bio" style="color:var(--slate); line-height:1.7;">${profile.bio ? renderRichText(profile.bio) : 'No bio provided yet.'}</div>
+          ${tagChipsHtml(profile.tags, 'Tagged')}`;
 
   if (showExtras && profile.achievements) {
     html += `
@@ -4751,6 +4752,19 @@ function articleCtaHtml(a) {
 // Keywords double as navigation: each one runs the site search, so a reader
 // who cares about a topic can find the rest of it. Tags are shown alongside
 // because they read better to a person than the raw keywords do.
+// Tag chips, shared by articles and Directory listings. The same .art-keyword
+// class on purpose: one delegated click handler already opens search for the
+// term AND records the tap for the topics report, so a listing's tags behave
+// exactly like an article's without a second code path.
+function tagChipsHtml(tags, label) {
+  const terms = (tags || []).filter(Boolean);
+  if (terms.length === 0) return '';
+  return `<div class="art-keywords" style="margin-top:18px;">
+    <span class="art-keywords-label">${escapeHtml(label || 'Tags')}</span>
+    ${terms.map((k) => `<button type="button" class="art-keyword" data-term="${escapeHtml(k)}">${escapeHtml(k)}</button>`).join('')}
+  </div>`;
+}
+
 function articleKeywordsHtml(a) {
   const terms = (a.tags && a.tags.length ? a.tags : a.keywords) || [];
   if (terms.length === 0) return '';
@@ -7603,7 +7617,8 @@ function setupDcPassportModal() {
       // already published.
       if (window.UnplugAnalytics) {
         const r = data.results || {};
-        const found = (r.articles || []).length + (r.profiles || []).length + (r.editions || []).length;
+        const found = (r.articles || []).length + (r.profiles || []).length
+          + (r.editions || []).length + (r.members || []).length;
         window.UnplugAnalytics.event('site_search', { label: q });
         if (found === 0) window.UnplugAnalytics.event('site_search_empty', { label: q });
       }
@@ -7613,7 +7628,8 @@ function setupDcPassportModal() {
   }
 
   function renderResults(r) {
-    const total = (r.articles.length + r.profiles.length + r.editions.length);
+    const total = (r.articles.length + r.profiles.length + r.editions.length
+      + ((r.members || []).length));
     if (total === 0) { resultsEl.innerHTML = '<p class="site-search-hint">No matches. Try a different word.</p>'; return; }
     resultsEl.innerHTML = '';
 
@@ -7638,6 +7654,16 @@ function setupDcPassportModal() {
         escapeHtml(ed.title), 'Issue #' + ed.issue_number, () => {
           close(); goToPage('editions');
         })));
+    }
+    // Members were not searchable at all until tags arrived. The subtitle
+    // shows the tags that matched, so it is obvious WHY someone came up for a
+    // word that is nowhere in their name.
+    if ((r.members || []).length) {
+      resultsEl.appendChild(groupTitle('Members'));
+      r.members.forEach((m) => resultsEl.appendChild(resultBtn(
+        escapeHtml(m.display_name || m.username || 'Member'),
+        (m.tags && m.tags.length ? m.tags.slice(0, 3).map(escapeHtml).join(' · ') : '@' + escapeHtml(m.username || '')),
+        () => { close(); goToPage('members'); })));
     }
   }
 
