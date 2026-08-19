@@ -216,6 +216,8 @@ window.UnplugAnalytics = (function () {
       visitorId: visitorId(),
       entityType: o.entityType || null,
       entityId: o.entityId || null,
+      // A tag that was tapped, or the words typed into search.
+      label: o.label || null,
     }, attribution()));
   }
 

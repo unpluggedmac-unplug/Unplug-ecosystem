@@ -68,19 +68,22 @@ async function touchSession({ sessionId, visitorId, pagePath, context, userId, i
   }
 }
 
-async function recordEvent({ sessionId, visitorId, eventName, pagePath, entityType, entityId, userId, valueCents }) {
+async function recordEvent({ sessionId, visitorId, eventName, pagePath, entityType, entityId, userId, valueCents, label }) {
   if (!eventName) return;
   try {
     await pool.query(
       `INSERT INTO analytics_events
-         (session_id, visitor_id, event_name, page_path, entity_type, entity_id, user_id, value_cents)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+         (session_id, visitor_id, event_name, page_path, entity_type, entity_id, user_id, value_cents, label)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [sessionId || null, visitorId || null, eventName,
         pagePath ? String(pagePath).slice(0, 500) : null,
         entityType || null,
         Number.isInteger(entityId) ? entityId : null,
         userId || null,
-        Number.isInteger(valueCents) ? valueCents : null]
+        Number.isInteger(valueCents) ? valueCents : null,
+        // A tag, or what somebody typed into search. Bounded to the column
+        // rather than rejected: a long search string is still a real signal.
+        label ? String(label).trim().slice(0, 160) : null]
     );
   } catch (err) {
     console.error('[analytics] event write failed:', err.message);

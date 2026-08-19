@@ -284,4 +284,132 @@ router.get('/funnel', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// GET /analytics-reports/topics — what subjects people actually read, tap and
+// search for, and which of them bring paying customers.
+//
+// TWO DIMENSIONS, and they are not equally trustworthy.
+//   category — chosen by a person for every article. Reliable from day one, so
+//     "Health & Wellness outperforms Motoring" is a finding you can commission
+//     against.
+//   tag — derived from word frequency unless an editor has rewritten it. Finer
+//     grained and genuinely useful, but early numbers describe the extraction
+//     as much as the readers. The report returns both rather than pretending
+//     they carry the same weight.
+//
+// THREE SIGNALS, in ascending order of what they tell you:
+//   a read  — attention, derived from page views already being captured
+//   a tap   — a reader asking for MORE of this subject
+//   a search — what somebody wanted, including when we did not have it
+router.get('/topics', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { from, to } = windowFrom(req);
+    const limit = limitFrom(req);
+
+    // Reads by curated category.
+    const categories = await pool.query(
+      `SELECT c.name AS label,
+              COUNT(*)::int AS reads,
+              COUNT(DISTINCT e.session_id)::int AS sessions,
+              COUNT(DISTINCT e.entity_id)::int AS articles
+         FROM analytics_events e
+         JOIN articles a ON a.id = e.entity_id
+         JOIN categories c ON c.id = a.category_id
+        WHERE e.event_name = 'page_view' AND e.entity_type = 'article'
+          AND e.occurred_at BETWEEN $1 AND $2
+        GROUP BY c.name
+        ORDER BY reads DESC`,
+      [from, to]
+    );
+
+    // Reads by tag. unnest because articles.tags is an array, and a piece
+    // carrying five tags is genuinely a read of all five subjects.
+    const tagReads = await pool.query(
+      `SELECT t.tag AS label,
+              COUNT(*)::int AS reads,
+              COUNT(DISTINCT e.session_id)::int AS sessions
+         FROM analytics_events e
+         JOIN articles a ON a.id = e.entity_id
+         CROSS JOIN LATERAL unnest(a.tags) AS t(tag)
+        WHERE e.event_name = 'page_view' AND e.entity_type = 'article'
+          AND e.occurred_at BETWEEN $1 AND $2
+          AND a.tags IS NOT NULL
+        GROUP BY t.tag
+        ORDER BY reads DESC
+        LIMIT $3`,
+      [from, to, limit]
+    );
+
+    // Taps on a topic chip. A far stronger signal than a read — the reader is
+    // asking for more of this — so it is reported alongside rather than added
+    // into the read count, where its small numbers would vanish.
+    const tagTaps = await pool.query(
+      `SELECT label, COUNT(*)::int AS taps,
+              COUNT(DISTINCT COALESCE(visitor_id, session_id))::int AS people
+         FROM analytics_events
+        WHERE event_name = 'topic_click' AND label IS NOT NULL
+          AND occurred_at BETWEEN $1 AND $2
+        GROUP BY label ORDER BY taps DESC LIMIT $3`,
+      [from, to, limit]
+    );
+
+    // What people typed. The empty ones matter most: a search that found
+    // nothing is a subject the audience wanted and the publication does not
+    // cover, which is the one thing traffic figures can never tell you.
+    const searches = await pool.query(
+      `SELECT label,
+              COUNT(*) FILTER (WHERE event_name = 'site_search')::int AS searches,
+              COUNT(*) FILTER (WHERE event_name = 'site_search_empty')::int AS found_nothing
+         FROM analytics_events
+        WHERE event_name IN ('site_search', 'site_search_empty')
+          AND label IS NOT NULL AND occurred_at BETWEEN $1 AND $2
+        GROUP BY label ORDER BY searches DESC LIMIT $3`,
+      [from, to, limit]
+    );
+
+    // REVENUE BY SUBJECT.
+    //
+    // Credited to the FIRST article topic a customer read, matching how source
+    // attribution already works. Splitting revenue across every category they
+    // ever read would inflate the totals past what was actually earned, and
+    // crediting the last one before paying would hand every sale to whatever
+    // they happened to be reading at the time.
+    //
+    // A customer who paid without ever reading an article is 'No article read'
+    // rather than dropped, so the columns still sum to real revenue.
+    const revenue = await pool.query(
+      `WITH first_article AS (
+         SELECT DISTINCT ON (e.user_id) e.user_id, a.category_id
+           FROM analytics_events e
+           JOIN articles a ON a.id = e.entity_id
+          WHERE e.event_name = 'page_view' AND e.entity_type = 'article'
+            AND e.user_id IS NOT NULL
+          ORDER BY e.user_id, e.occurred_at ASC
+       )
+       SELECT COALESCE(c.name, 'No article read') AS label,
+              COUNT(DISTINCT p.user_id)::int AS customers,
+              COALESCE(SUM(p.value_cents), 0)::bigint AS revenue_cents
+         FROM analytics_events p
+         LEFT JOIN first_article fa ON fa.user_id = p.user_id
+         LEFT JOIN categories c ON c.id = fa.category_id
+        WHERE p.event_name = 'payment' AND p.occurred_at BETWEEN $1 AND $2
+        GROUP BY 1 ORDER BY revenue_cents DESC`,
+      [from, to]
+    );
+
+    res.json({
+      window: { from, to },
+      categories: categories.rows,
+      tags: tagReads.rows,
+      tagTaps: tagTaps.rows,
+      searches: searches.rows,
+      revenueByCategory: revenue.rows.map((r) => ({ ...r, revenue_cents: Number(r.revenue_cents) })),
+      note: 'Categories are chosen by an editor and reliable immediately. Tags are '
+        + 'derived from the text unless someone has edited them, so read them as a hint '
+        + 'rather than a verdict until the tags themselves have been curated.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

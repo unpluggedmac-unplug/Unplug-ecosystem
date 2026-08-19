@@ -806,6 +806,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Topics &mdash; what subjects people read, tap and search for</h3></div>
+        <div class="panel-body" style="padding:0;"><div id="anTopics">Loading&hellip;</div></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
         <div class="panel-head"><h3>Audience</h3></div>
         <div class="panel-body" style="padding:0;"><div id="anAudience">Loading&hellip;</div></div>
       </div>
@@ -9864,6 +9869,54 @@ async function loadAnalyticsReports() {
         { label: 'Page', render: (r) => escapeHtmlAdmin(r.page_path) },
         { label: 'Visits', render: (r) => anNum(r.sessions) },
       ]);
+  });
+
+  panel('anTopics', 'topics', (d) => {
+    const section = (title, hint, body) =>
+      `<div style="padding:14px 16px 4px;"><h4 style="margin:0; font-size:13px;">${title}</h4>`
+      + (hint ? `<p style="font-size:11.5px; color:var(--slate); margin:3px 0 0;">${hint}</p>` : '')
+      + '</div>' + body;
+
+    // Categories first: they are chosen by an editor for every article, so
+    // they are the half of this report that can be trusted from day one.
+    let html = section('By category', 'Chosen by an editor for every article — the dependable view.',
+      anBars(d.categories, 'label', 'reads', (r) => anNum(r.reads) + ' reads'));
+
+    html += section('By tag',
+      'Generated from the text unless someone has edited them, so read these as a hint rather than a verdict.',
+      anBars(d.tags, 'label', 'reads', (r) => anNum(r.reads) + ' reads'));
+
+    html += section('Topics readers tapped',
+      'Someone tapping a topic is asking for more of it — a stronger signal than a read, and rarer.',
+      anTable(d.tagTaps, [
+        { label: 'Topic', render: (r) => escapeHtmlAdmin(r.label) },
+        { label: 'Taps', render: (r) => anNum(r.taps) },
+        { label: 'People', render: (r) => anNum(r.people) },
+      ]));
+
+    // The one thing no traffic report can tell you: what readers wanted and
+    // did not find.
+    const empties = (d.searches || []).filter((s) => Number(s.found_nothing) > 0);
+    html += section('What people searched for',
+      empties.length
+        ? `${empties.length} search${empties.length === 1 ? '' : 'es'} found nothing — subjects your readers wanted and the site does not cover.`
+        : 'Every search found something.',
+      anTable(d.searches, [
+        { label: 'Searched for', render: (r) => escapeHtmlAdmin(r.label) },
+        { label: 'Times', render: (r) => anNum(r.searches) },
+        { label: 'Found nothing', render: (r) => (Number(r.found_nothing)
+            ? `<strong style="color:var(--red);">${anNum(r.found_nothing)}</strong>` : '—') },
+      ]));
+
+    html += section('Revenue by subject',
+      'Credited to the FIRST subject a customer read — the piece that found them, not the page they happened to pay on.',
+      anTable(d.revenueByCategory, [
+        { label: 'Subject', render: (r) => escapeHtmlAdmin(r.label) },
+        { label: 'Customers', render: (r) => anNum(r.customers) },
+        { label: 'Revenue', render: (r) => anRands(r.revenue_cents) },
+      ]));
+
+    return html;
   });
 
   panel('anAudience', 'audience', (d) => {

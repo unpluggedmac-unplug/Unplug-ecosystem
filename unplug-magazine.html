@@ -4655,6 +4655,10 @@ document.addEventListener('click', (e) => {
   const chip = e.target.closest('.art-keyword');
   if (!chip) return;
   const term = chip.getAttribute('data-term') || '';
+  // The strongest topic signal there is: a read is attention, a tap is a
+  // request for more of this subject. Recorded before the search opens so a
+  // slow network cannot lose it.
+  if (window.UnplugAnalytics) window.UnplugAnalytics.event('topic_click', { label: term });
   const openBtn = document.getElementById('searchOpenBtn');
   const input = document.getElementById('siteSearchInput');
   if (!openBtn || !input) return;
@@ -7591,6 +7595,18 @@ function setupDcPassportModal() {
     try {
       const data = await api('/search?q=' + encodeURIComponent(q));
       renderResults(data.results);
+
+      // What somebody wanted. A search that found NOTHING is recorded
+      // separately because it is the most useful editorial signal on the site:
+      // a subject the audience asked for and the publication does not cover.
+      // Traffic figures can never tell you that — they only describe what was
+      // already published.
+      if (window.UnplugAnalytics) {
+        const r = data.results || {};
+        const found = (r.articles || []).length + (r.profiles || []).length + (r.editions || []).length;
+        window.UnplugAnalytics.event('site_search', { label: q });
+        if (found === 0) window.UnplugAnalytics.event('site_search_empty', { label: q });
+      }
     } catch (err) {
       resultsEl.innerHTML = '<p class="site-search-hint">Search is unavailable right now.</p>';
     }

@@ -389,6 +389,159 @@ test('the real GA property is seeded, and a re-deploy never overrides a change',
   assert.equal(res.body.ga4MeasurementId, null, 'and no tag is served while it is empty');
 });
 
+// ---------------------------------------------------------------------------
+// TOPICS — what subjects get read, tapped and searched for
+// ---------------------------------------------------------------------------
+
+async function makeArticleWith(title, categoryName, tags) {
+  // categories.name carries no unique constraint, so look before inserting
+  // rather than relying on ON CONFLICT.
+  let cat = await pool.query('SELECT id FROM categories WHERE name = $1', [categoryName]);
+  if (cat.rows.length === 0) {
+    cat = await pool.query('INSERT INTO categories (name) VALUES ($1) RETURNING id', [categoryName]);
+  }
+  const owner = await makeUser();
+  const a = await pool.query(
+    `INSERT INTO articles (author_user_id, title, body, status, category_id, tags, published_at)
+     VALUES ($1, $2, 'Body text for a real article about the subject.', 'approved', $3, $4, now())
+     RETURNING id`,
+    [owner, title, cat.rows[0].id, tags]
+  );
+  return a.rows[0].id;
+}
+
+test('reads are grouped by the CURATED category, not just the page path', async () => {
+  const health = await makeArticleWith('Health Piece', 'Health & Wellness', ['Wellness', 'Clinics']);
+  const motor = await makeArticleWith('Motoring Piece', 'Motoring', ['Bakkies']);
+
+  for (let i = 0; i < 3; i++) {
+    await req('POST', '/analytics/track', {
+      body: { pagePath: '/?p=article&id=' + health, sessionId: 'tp-' + i, visitorId: 'tpv-' + i,
+        entityType: 'article', entityId: health },
+    });
+  }
+  await req('POST', '/analytics/track', {
+    body: { pagePath: '/?p=article&id=' + motor, sessionId: 'tp-m', visitorId: 'tpv-m',
+      entityType: 'article', entityId: motor },
+  });
+
+  const res = await req('GET', '/analytics-reports/topics', { token: adminToken });
+  assert.equal(res.status, 200);
+  const healthRow = res.body.categories.find((c) => c.label === 'Health & Wellness');
+  const motorRow = res.body.categories.find((c) => c.label === 'Motoring');
+  assert.equal(healthRow.reads, 3);
+  assert.equal(motorRow.reads, 1);
+  assert.ok(res.body.categories.indexOf(healthRow) < res.body.categories.indexOf(motorRow),
+    'the most-read subject must come first');
+});
+
+test('an article carrying several tags counts as a read of each of them', async () => {
+  const res = await req('GET', '/analytics-reports/topics', { token: adminToken });
+  const wellness = res.body.tags.find((t) => t.label === 'Wellness');
+  const clinics = res.body.tags.find((t) => t.label === 'Clinics');
+  assert.equal(wellness.reads, 3);
+  assert.equal(clinics.reads, 3, 'a piece tagged with several subjects is a read of each of them');
+});
+
+test('A TAP ON A TOPIC IS COUNTED SEPARATELY FROM A READ', async () => {
+  // A read is attention; a tap is a reader asking for MORE of this subject.
+  // Folding them together would bury the stronger signal in the larger number.
+  await req('POST', '/analytics/event', {
+    body: { eventName: 'topic_click', label: 'Wellness', sessionId: 'tp-1', visitorId: 'tpv-1' },
+  });
+  await req('POST', '/analytics/event', {
+    body: { eventName: 'topic_click', label: 'Wellness', sessionId: 'tp-2', visitorId: 'tpv-2' },
+  });
+
+  const res = await req('GET', '/analytics-reports/topics', { token: adminToken });
+  const tap = res.body.tagTaps.find((t) => t.label === 'Wellness');
+  assert.equal(tap.taps, 2);
+  assert.equal(tap.people, 2, 'two different readers, not one reader twice');
+
+  const read = res.body.tags.find((t) => t.label === 'Wellness');
+  assert.equal(read.reads, 3, 'the read count is untouched by the taps');
+});
+
+test('A SEARCH THAT FOUND NOTHING IS RECORDED AS SUCH', async () => {
+  // The most useful editorial signal on the site: a subject the audience asked
+  // for and the publication does not cover. No traffic report can show it,
+  // because traffic only describes what was already published.
+  await req('POST', '/analytics/event', {
+    body: { eventName: 'site_search', label: 'rugby', sessionId: 'tp-s', visitorId: 'tpv-s' },
+  });
+  await req('POST', '/analytics/event', {
+    body: { eventName: 'site_search_empty', label: 'rugby', sessionId: 'tp-s', visitorId: 'tpv-s' },
+  });
+  await req('POST', '/analytics/event', {
+    body: { eventName: 'site_search', label: 'health', sessionId: 'tp-s2', visitorId: 'tpv-s2' },
+  });
+
+  const res = await req('GET', '/analytics-reports/topics', { token: adminToken });
+  const rugby = res.body.searches.find((s) => s.label === 'rugby');
+  const health = res.body.searches.find((s) => s.label === 'health');
+  assert.equal(rugby.searches, 1);
+  assert.equal(rugby.found_nothing, 1, 'nobody covers rugby here, and the report must say so');
+  assert.equal(health.found_nothing, 0);
+});
+
+test('a very long search string is stored, not rejected', async () => {
+  const long = 'x'.repeat(400);
+  const res = await req('POST', '/analytics/event', {
+    body: { eventName: 'site_search', label: long, sessionId: 'tp-s3', visitorId: 'tpv-s3' },
+  });
+  assert.equal(res.status, 201, 'a rambling search is still a real signal');
+  const row = await pool.query(
+    "SELECT length(label) AS n FROM analytics_events WHERE session_id = 'tp-s3'"
+  );
+  assert.equal(Number(row.rows[0].n), 160, 'trimmed to the column rather than dropped');
+});
+
+test('REVENUE IS CREDITED TO THE FIRST SUBJECT A CUSTOMER READ', async () => {
+  // Splitting revenue across every category someone ever read would report
+  // more money than was actually earned. Crediting the last thing they read
+  // hands every sale to whatever they happened to have open at the time.
+  const buyer = await makeUser();
+  const fashion = await makeArticleWith('Fashion Piece', 'Fashion & Style', ['Runway']);
+  const finance = await makeArticleWith('Finance Piece', 'Finance & Wealth', ['Saving']);
+
+  await pool.query(
+    `INSERT INTO analytics_events (event_name, entity_type, entity_id, user_id, occurred_at)
+     VALUES ('page_view', 'article', $1, $2, now() - interval '2 days')`,
+    [fashion, buyer]
+  );
+  await pool.query(
+    `INSERT INTO analytics_events (event_name, entity_type, entity_id, user_id, occurred_at)
+     VALUES ('page_view', 'article', $1, $2, now() - interval '1 day')`,
+    [finance, buyer]
+  );
+  const payment = await makePayment(buyer, 400);
+  await recorder.recordPaymentOnce(payment);
+
+  const res = await req('GET', '/analytics-reports/topics', { token: adminToken });
+  const f = res.body.revenueByCategory.find((r) => r.label === 'Fashion & Style');
+  const fin = res.body.revenueByCategory.find((r) => r.label === 'Finance & Wealth');
+  assert.ok(f && f.revenue_cents >= 40000, 'the subject that FOUND them gets the credit');
+  assert.ok(!fin || fin.revenue_cents === 0, 'the last thing they read must not also be credited');
+});
+
+test('a customer who never read an article is shown, not dropped', async () => {
+  // Otherwise the revenue column silently stops adding up to real revenue.
+  const buyer = await makeUser();
+  const payment = await makePayment(buyer, 150);
+  await recorder.recordPaymentOnce(payment);
+
+  const res = await req('GET', '/analytics-reports/topics', { token: adminToken });
+  const none = res.body.revenueByCategory.find((r) => r.label === 'No article read');
+  assert.ok(none, 'a payment with no reading behind it still belongs in the totals');
+  assert.ok(none.revenue_cents >= 15000);
+});
+
+test('the topics report is admin-only', async () => {
+  const memberToken = tokenFor(await makeUser());
+  assert.equal((await req('GET', '/analytics-reports/topics')).status, 401);
+  assert.equal((await req('GET', '/analytics-reports/topics', { token: memberToken })).status, 403);
+});
+
 test('every report is admin-only', async () => {
   const memberToken = tokenFor(await makeUser());
   for (const p of ['overview', 'sources', 'content', 'audience', 'funnel']) {

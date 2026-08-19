@@ -98,6 +98,8 @@ router.post('/event', attachUser, async (req, res, next) => {
       entityType: req.body.entityType || null,
       entityId: req.body.entityId || null,
       userId: req.user ? req.user.id : null,
+      // The tag tapped, or the words typed into search.
+      label: req.body.label || null,
       // Never trusted from the browser. Money is only ever recorded by the
       // server, from a real payment row.
       valueCents: null,
