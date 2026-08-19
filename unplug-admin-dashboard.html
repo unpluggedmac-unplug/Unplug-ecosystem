@@ -4926,7 +4926,10 @@ document.getElementById('artDraftBtn').addEventListener('click', () => artSave(t
 document.getElementById('artDeleteBtn').addEventListener('click', async () => {
   if (!ART_EDITING_ID) return;
   const title = document.getElementById('artTitle').value.trim();
-  if (!confirm(`Delete "${title}"? This removes the article, its sections and its comments for good.`)) return;
+  // Articles cost R95 to publish, so this needs the same money check as the
+  // generic content delete — deleting a paid article refunds nobody.
+  if (!(await confirmContentDelete('articles', ART_EDITING_ID,
+        `Delete "${title}"? This removes the article, its sections and its comments for good.`))) return;
   try {
     await api('/articles/' + ART_EDITING_ID, { method: 'DELETE' });
     showToast('Article deleted.');
@@ -5339,7 +5342,7 @@ async function loadManageContent() {
         addDeclineWithCreditButton(tr.querySelector('.row-actions'), resource, item.id, loadManageContent);
       }
       tr.querySelector('.reject').addEventListener('click', async () => {
-        if (!confirm('Delete this permanently? This cannot be undone. To hide it instead, reject it from the Approval Queue.')) return;
+        if (!(await confirmContentDelete(resource, item.id))) return;
         try {
           await api(`/admin/content/${resource}/${item.id}`, { method: 'DELETE' });
           showToast('Deleted.');
@@ -5354,6 +5357,43 @@ async function loadManageContent() {
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
+}
+
+// DELETING SOMETHING SOMEONE PAID FOR IS NOT A REFUND.
+//
+// payments.linked_id has no foreign key, so the payment record deliberately
+// survives the item being deleted — the money did change hands and the books
+// should say so. The consequence is that deleting a paid submission takes the
+// member's work away and leaves them out of pocket, silently. The old dialog
+// said "cannot be undone" and never mentioned money.
+//
+// So the amount is looked up FIRST, from the endpoint that already exists for
+// the Decline & credit button, and named in the warning. If the lookup fails
+// the delete still goes ahead behind the normal warning — an admin must not be
+// locked out of deleting because a price check timed out.
+async function confirmContentDelete(resource, id, plainMessage) {
+  const plain = plainMessage || ('Delete this permanently? This cannot be undone. '
+    + 'To hide it instead, reject it from the Approval Queue.');
+
+  let paid = null;
+  try {
+    const info = await api(`/admin/content/${resource}/${id}/payment`);
+    if (info && info.payable && info.payment && !info.payment.alreadyCredited) paid = info.payment;
+  } catch (err) {
+    return confirm(plain); // price check failed — do not block the delete
+  }
+
+  if (!paid) return confirm(plain);
+
+  const amount = "R" + Number(paid.amount).toFixed(2);
+  return confirm(
+    "THIS WAS PAID FOR — " + amount + ".\n\n"
+    + "Deleting it does NOT refund that money and does NOT give them credit. "
+    + "The payment record stays, their submission is gone, and they are left out of pocket.\n\n"
+    + "If you are turning it down, use ‘Decline & credit’ instead — that refunds the "
+    + amount + " to their Unplug Credit in one step.\n\n"
+    + "Delete anyway, with no refund?"
+  );
 }
 
 // Only the fields the server said it will accept get an input, so the form
