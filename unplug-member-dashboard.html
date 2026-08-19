@@ -169,6 +169,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   .ms-sidebar{ position:static; width:100%; flex-basis:auto; display:none; margin-bottom:16px; }
   .ms-sidebar.open{ display:flex; }
 }
+
+/* Tapping a field on an iPhone zooms the page in, and it does not zoom back,
+   for any form control under 16px. That is the whole reason for this rule. It
+   applies only on small screens — the desktop sizing is deliberate and has no
+   zoom behaviour to defend against. */
+@media(max-width:640px){
+  input, select, textarea{ font-size:16px; }
+  input[type="checkbox"], input[type="radio"]{ font-size:inherit; }
+  button, .btn{ min-height:44px; }
+}
 </style>
 </head>
 <body>

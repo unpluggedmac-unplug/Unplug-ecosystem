@@ -1289,6 +1289,61 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .proj-lb-btn:hover{ background:rgba(255,255,255,0.28); }
 .proj-lb-prev{ left:18px; } .proj-lb-next{ right:18px; } .proj-lb-close{ top:18px; right:18px; width:46px; height:46px; font-size:24px; }
 .proj-lb-cap{ position:absolute; bottom:20px; left:0; right:0; text-align:center; color:#fff; font-size:13px; padding:0 16px; }
+
+/* ===========================================================================
+   MOBILE. Measured on a 375px viewport against the live site, not guessed at.
+   Placed last so these rules win without needing !important.
+
+   The content pages were already sound — news, directory, Top 10, editions,
+   gallery, about and contact all measured zero overflow. Three specific
+   things were not.
+   =========================================================================== */
+
+/* 1. THE PAGE SCROLLED SIDEWAYS, and the footer alone was doing it.
+      Hiding the footer took the document from 409px back to exactly 375px.
+
+      A grid column is min-content wide by default, so a long link or an email
+      address cannot shrink and forces the whole grid past the screen. Two
+      columns plus a 40px gap never fitted 375px. One column below 640px, and
+      min-width:0 so a long word can wrap instead of pushing. */
+.footer-grid > *{ min-width:0; }
+.footer-grid a, .footer-grid li, .footer-grid p{ overflow-wrap:anywhere; }
+
+@media(max-width:640px){
+  .footer-grid{ grid-template-columns:1fr; gap:26px; margin-bottom:28px; }
+  .footer-social{ flex-wrap:wrap; }
+}
+
+/* 2. TAPPING ANY FIELD ZOOMED THE PAGE IN ON AN iPHONE, AND IT NEVER ZOOMED
+      BACK. iOS Safari does that to every form control under 16px, and 49 of
+      the 50 controls on this site were between 12.5px and 15px — every
+      newsletter signup, contact form, shout-out nomination, job post,
+      passport submission and edition purchase.
+
+      16px is the threshold, so this is the whole fix. Applied only on small
+      screens: the desktop sizing is a deliberate design choice and there is no
+      zoom behaviour to defend against there. */
+@media(max-width:640px){
+  input, select, textarea{ font-size:16px; }
+  /* A checkbox has no text to zoom, and 16px would just make it clumsy. */
+  input[type="checkbox"], input[type="radio"]{ font-size:inherit; }
+}
+
+/* 3. TAP TARGETS. The language picker stood 28px tall; a finger needs about
+      44px. Comfortable height without changing how anything looks on desktop. */
+@media(max-width:640px){
+  #langPicker{ min-height:44px; padding:8px 10px; }
+  .btn{ min-height:44px; }
+  .consent-actions .btn{ min-height:48px; }
+}
+
+/* A last line of defence rather than a fix: if any future block overhangs the
+   screen, the page still must not slide sideways. The real cause is always
+   worth finding — this only stops one from making the whole site feel broken
+   while nobody has noticed it yet. */
+@media(max-width:640px){
+  html, body{ overflow-x:hidden; }
+}
 </style>
 </head>
 <body>

@@ -30,6 +30,16 @@ body{ min-height:100vh; }
 .tier-option .price{ font-family:'Playfair Display',serif; color:var(--red); font-size:20px; font-weight:700; margin-top:4px; }
 
 .step-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--red); font-weight:700; margin-bottom:8px; }
+
+/* Tapping a field on an iPhone zooms the page in, and it does not zoom back,
+   for any form control under 16px. That is the whole reason for this rule. It
+   applies only on small screens — the desktop sizing is deliberate and has no
+   zoom behaviour to defend against. */
+@media(max-width:640px){
+  input, select, textarea{ font-size:16px; }
+  input[type="checkbox"], input[type="radio"]{ font-size:inherit; }
+  button, .btn{ min-height:44px; }
+}
 </style>
 </head>
 <body>
