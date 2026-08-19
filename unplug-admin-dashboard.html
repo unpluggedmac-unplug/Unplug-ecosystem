@@ -10198,7 +10198,11 @@ async function loadTop10MonthlyRankings() {
       const tr = document.createElement('tr');
       tr.innerHTML =
         `<td><strong>${escapeHtmlAdmin(m.period_label)}</strong></td>`
-        + `<td>${m.winner_name ? '🥇 ' + escapeHtmlAdmin(m.winner_name) : '<span style="color:var(--slate);">no contestants</span>'}</td>`
+        // The server withholds the winner for a month in which nobody voted,
+        // because rank 1 on an all-zero board was decided by entry order.
+        + `<td>${m.winner_name
+              ? '🥇 ' + escapeHtmlAdmin(m.winner_name)
+              : `<span style="color:var(--slate);">${Number(m.entry_count) === 0 ? 'no contestants' : 'no votes cast'}</span>`}</td>`
         + `<td>${Number(m.entry_count).toLocaleString()}</td>`
         + `<td>${Number(m.total_votes).toLocaleString()}</td>`
         + `<td style="font-size:11.5px; color:var(--slate);">${new Date(m.captured_at).toLocaleDateString('en-ZA')}`

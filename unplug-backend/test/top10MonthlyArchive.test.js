@@ -498,6 +498,46 @@ test('re-capturing a corrected month MOVES the badge', async () => {
 // The archive as a permanent record
 // ---------------------------------------------------------------------------
 
+test('A MONTH NOBODY VOTED IN HAS NO WINNER AND AWARDS NO BADGES', async () => {
+  // Not hypothetical. The first automatic capture on the live site ran for a
+  // month whose votes had all been backfilled into the current period, so it
+  // recorded a full board on which every contestant sat on zero. The board is
+  // still ranked — the ordering rules always produce a rank 1 — but that
+  // position was decided by who entered first. Presenting them as the champion
+  // would put a title on a real person that they did not win.
+  const a = await makeEntry(top10Id, 'Quiet Month One', '2025-05-02');
+  const b = await makeEntry(top10Id, 'Quiet Month Two', '2025-05-02');
+
+  const r = await capture.captureMonth({ year: 2025, month: 5, adminUserId: adminId, auto: false });
+  assert.equal(r.captured, true, 'the month is still captured, or the job retries it for ever');
+  assert.equal(r.totalVotes, 0);
+  assert.deepEqual(r.awardedBadges, [], 'NOBODY VOTED, SO NOBODY WON');
+
+  assert.deepEqual(await badgesHeldBy(a.userId), []);
+  assert.deepEqual(await badgesHeldBy(b.userId), []);
+
+  // The board is recorded, so the month is on file as having happened.
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM top10_monthly_rankings WHERE period_year = 2025 AND period_month = 5`
+  );
+  assert.ok(rows.rows[0].n > 0, 'the ranking is still archived');
+
+  // But the months list must not name a winner for it.
+  const list = await req('GET', '/top10/monthly-rankings', { token: adminToken });
+  const may = list.body.months.find((m) => m.period_year === 2025 && m.period_month === 5);
+  assert.ok(may, 'the month is listed');
+  assert.equal(may.total_votes, 0);
+  assert.equal(may.winner_name, null, 'a month with no votes must not display a winner');
+});
+
+test('a month that DID have votes still names its winner', async () => {
+  // The guard above must not suppress real results.
+  const list = await req('GET', '/top10/monthly-rankings', { token: adminToken });
+  const april = list.body.months.find((m) => m.period_year === 2026 && m.period_month === 4);
+  assert.ok(april.total_votes > 0);
+  assert.equal(april.winner_name, 'Full Board 0');
+});
+
 test('the archive survives the contestant being deleted afterwards', async () => {
   const doomed = await makeEntry(top10Id, 'Since Deleted', '2025-11-02');
   await addVotes(doomed.entryId, 250, PERIOD(2025, 11));

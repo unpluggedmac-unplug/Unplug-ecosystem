@@ -202,7 +202,22 @@ async function captureMonth({ year, month, adminUserId = null, auto = true, forc
   let awardedBadges = [];
   let badgeError = null;
   try {
-    awardedBadges = await awardPlacementBadges(rows, month, year, adminUserId);
+    // NOBODY VOTED, SO NOBODY WON. The board still has a rank 1 — the ordering
+    // rules always produce one — but on an all-zero board that position was
+    // decided by who entered first. Awarding a Champion badge for it would put
+    // a title on a real person's public profile that they did not win.
+    const totalVotes = rows.reduce((sum, r) => sum + r.vote_count, 0);
+    if (totalVotes > 0) {
+      awardedBadges = await awardPlacementBadges(rows, month, year, adminUserId);
+    } else {
+      // Any badge from a previous capture of this month is cleared, so a month
+      // corrected down to zero does not leave a champion behind.
+      await pool.query(
+        `DELETE FROM user_badges
+          WHERE badge_code = ANY($1) AND award_month = $2 AND award_year = $3`,
+        [Object.values(PLACEMENT_BADGES), month, year]
+      );
+    }
   } catch (err) {
     // Reported, never thrown. The month is captured and that must stand.
     console.error('[top10] placement badges failed for', `${month}/${year}:`, err.message);

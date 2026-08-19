@@ -1150,9 +1150,17 @@ router.get('/top10/monthly-rankings', requireRole('admin'), async (req, res, nex
               c.captured_at, c.captured_auto,
               u.email AS captured_by_email,
               to_char(make_date(c.period_year, c.period_month, 1), 'FMMonth YYYY') AS period_label,
-              (SELECT display_name FROM top10_monthly_rankings r
-                WHERE r.period_year = c.period_year AND r.period_month = c.period_month
-                  AND r.rank = 1) AS winner_name
+              -- A month in which nobody voted has NO winner. The board is
+              -- still ranked, because the ordering rules always produce one,
+              -- but rank 1 on an all-zero board was decided by entry order and
+              -- presenting that person as the winner would be inventing a
+              -- result. This is not hypothetical: the first automatic capture
+              -- ran for a month whose votes all belong to the current period.
+              CASE WHEN c.total_votes > 0 THEN
+                (SELECT display_name FROM top10_monthly_rankings r
+                  WHERE r.period_year = c.period_year AND r.period_month = c.period_month
+                    AND r.rank = 1)
+              END AS winner_name
          FROM top10_monthly_captures c
          LEFT JOIN users u ON u.id = c.captured_by
         ORDER BY c.period_year DESC, c.period_month DESC`
