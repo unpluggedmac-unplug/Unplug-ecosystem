@@ -4132,9 +4132,17 @@ window.showConsentDialog = (function setupConsentDialog() {
 
   // The welcome gate owns the first moment of a homepage visit and calls this
   // itself once it closes. Everywhere else, ask straight away.
-  if (!document.getElementById('welcomeOverlay') || document.getElementById('welcomeOverlay').hasAttribute('hidden')) {
-    show();
-  }
+  //
+  // Decided on the next tick rather than inline. Reading the gate's state
+  // while the page is still executing depends on which of the two blocks the
+  // browser happens to have reached, and getting that wrong puts BOTH dialogs
+  // on screen at once — which is exactly what it did. By the next tick the
+  // gate has definitively either shown itself or not.
+  setTimeout(function () {
+    const gate = document.getElementById('welcomeOverlay');
+    const gateShowing = gate && !gate.hasAttribute('hidden');
+    if (!gateShowing) show();
+  }, 0);
 
   return show;
 })();
