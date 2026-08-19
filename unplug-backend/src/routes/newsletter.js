@@ -1,4 +1,5 @@
 const express = require('express');
+const { recordConversionAsync } = require('../utils/analyticsRecorder');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
@@ -18,6 +19,7 @@ router.post('/subscribe', publicSubmitLimiter, honeypot, async (req, res, next) 
       `INSERT INTO newsletter_subscribers (email) VALUES ($1) ON CONFLICT (email) DO NOTHING`,
       [email]
     );
+    recordConversionAsync({ userId: req.user ? req.user.id : null, eventName: 'newsletter_signup' });
     res.status(201).json({ message: 'Subscribed — welcome to Unplug! You\'ll get our stories every Friday.' });
   } catch (err) {
     next(err);

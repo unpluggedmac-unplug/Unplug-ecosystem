@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
+const { recordPaymentOnce } = require('../utils/analyticsRecorder');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor, historyFor } = require('../utils/accountCredit');
 const { priceFor, packagesFor, highlightServiceKey } = require('../utils/servicePackages');
@@ -269,6 +270,13 @@ async function recordVoucherRedemption(voucherId, userId, linkedType, linkedId, 
 // a package upgrade. Called by both webhooks and the manual EFT route so
 // the effect is identical regardless of payment method.
 async function applyPaymentEffect(payment) {
+  // Recorded FIRST, and independently of everything below. The money is
+  // confirmed at this point whatever happens to the downstream effect — and
+  // orders.js deliberately swallows a failing effect so one bad cart item
+  // cannot block the rest, which would otherwise mean a real payment silently
+  // missing from the revenue figures.
+  await recordPaymentOnce(payment);
+
   if (payment.linked_type === 'profile_package') {
     await pool.query(
       `UPDATE profiles SET status = 'pending', updated_at = now()

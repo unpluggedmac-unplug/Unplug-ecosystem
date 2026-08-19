@@ -786,6 +786,50 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Top Pages</h3></div>
         <div class="panel-body" id="topPagesBody" style="padding:0;"></div>
       </div>
+
+      <!-- Everything below reads the richer analytics tables (migration 118).
+           These only have data from the day that shipped onwards — the older
+           counters above run on the original page_views table. -->
+      <div class="panel" style="margin-top:26px;">
+        <div class="panel-head"><h3>Visitors</h3></div>
+        <div class="panel-body" id="anOverview" style="display:flex; gap:26px; flex-wrap:wrap;">Loading&hellip;</div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Where visitors come from</h3></div>
+        <div class="panel-body" style="padding:0;"><div id="anSources">Loading&hellip;</div></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>What people read</h3></div>
+        <div class="panel-body" style="padding:0;"><div id="anContent">Loading&hellip;</div></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Audience</h3></div>
+        <div class="panel-body" style="padding:0;"><div id="anAudience">Loading&hellip;</div></div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Visitors &rarr; Leads &rarr; Customers &rarr; Revenue</h3></div>
+        <div class="panel-body" style="padding:0;">
+          <p style="font-size:13px; color:var(--slate); padding:12px 16px 0; margin:0;">Revenue is credited to the channel that <strong>first</strong> brought a customer to the site, not the page they happened to pay on. This is the part Google Analytics cannot do, because the payments are in your database and not in theirs.</p>
+          <div id="anFunnel">Loading&hellip;</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Google Analytics</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin:0 0 12px;">Paste your GA4 Measurement ID to switch Google Analytics on across the site. It looks like <code>G-XXXXXXXXXX</code> and comes from Google Analytics &rarr; Admin &rarr; Data Streams. Leave it blank and no Google tag is loaded at all. It only ever runs for visitors who accept the cookie bar.</p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="field" style="flex:1; min-width:220px;"><label for="anGaId">GA4 Measurement ID</label><input id="anGaId" placeholder="G-XXXXXXXXXX"></div>
+            <button class="btn btn-solid" id="anGaSaveBtn" style="width:auto;">Save</button>
+            <button class="btn btn-line" id="anGeoCheckBtn" style="width:auto;">Check country tracking</button>
+          </div>
+          <span id="anGaNote" style="font-size:12px; color:var(--slate); display:block; margin-top:10px;"></span>
+        </div>
+      </div>
     </div>
 
     <!-- INQUIRIES -->
@@ -2743,7 +2787,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'users') loadUsers();
     if (section === 'consultants') { loadConsultants(); loadConsultantLinks(); }
     if (section === 'notifications') loadNotifications();
-    if (section === 'analytics') loadAnalytics(7);
+    if (section === 'analytics') { loadAnalytics(7); loadAnalyticsReports(); }
     if (section === 'comments') loadPendingComments();
     if (section === 'dirprofiles') { loadDirProfiles(); loadProfileLinks(); }
     if (section === 'pagecms') loadPageCms();
@@ -9697,6 +9741,217 @@ async function adjustTop10Votes(entry) {
     showToast(err.message, true);
   }
 }
+
+// ---------------------------------------------------------------------------
+// ANALYTICS REPORTS (migration 118 tables)
+// ---------------------------------------------------------------------------
+
+// The range is shared with the older counters above, so the whole screen always
+// describes one period. Two different windows answering two different questions
+// on one page is how people end up quoting the wrong number.
+let AN_RANGE_DAYS = 7;
+
+function anRangeQuery() {
+  const to = new Date();
+  const from = new Date(Date.now() - AN_RANGE_DAYS * 864e5);
+  return `?from=${from.toISOString()}&to=${to.toISOString()}`;
+}
+
+const anRands = (cents) => 'R' + (Number(cents || 0) / 100).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const anNum = (n) => Number(n || 0).toLocaleString();
+
+function anStat(label, value, hint) {
+  return `<div><div style="font-size:24px; font-weight:700;">${value}</div>`
+    + `<div style="font-size:11.5px; color:var(--slate); text-transform:uppercase; letter-spacing:0.4px;">${label}</div>`
+    + (hint ? `<div style="font-size:11px; color:var(--slate);">${hint}</div>` : '') + '</div>';
+}
+
+// A share-of-total bar list, used for every breakdown on the screen so they all
+// read the same way.
+function anBars(rows, labelKey, valueKey, formatter) {
+  if (!rows || !rows.length) return '<div class="empty-state">Nothing recorded in this period yet.</div>';
+  const total = rows.reduce((sum, r) => sum + Number(r[valueKey] || 0), 0) || 1;
+  return '<div style="padding:12px 16px;">' + rows.map((r) => {
+    const value = Number(r[valueKey] || 0);
+    const pct = Math.round((value / total) * 100);
+    return `<div style="margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:3px;">
+        <span>${escapeHtmlAdmin(String(r[labelKey] || 'Unknown'))}</span>
+        <span style="color:var(--slate);">${formatter ? formatter(r) : anNum(value)} &middot; ${pct}%</span>
+      </div>
+      <div style="height:6px; background:var(--paper); border-radius:3px; overflow:hidden;">
+        <div style="height:100%; width:${pct}%; background:var(--red);"></div>
+      </div>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+function anTable(rows, columns) {
+  if (!rows || !rows.length) return '<div class="empty-state">Nothing recorded in this period yet.</div>';
+  return '<table><tr>' + columns.map((c) => `<th>${c.label}</th>`).join('') + '</tr>'
+    + rows.map((r) => '<tr>' + columns.map((c) => `<td>${c.render(r)}</td>`).join('') + '</tr>').join('')
+    + '</table>';
+}
+
+async function loadAnalyticsReports() {
+  const q = anRangeQuery();
+
+  // Each report loads and renders on its own. One failing query must not blank
+  // the whole screen — a broken funnel still leaves the traffic numbers worth
+  // looking at.
+  const panel = async (elementId, path, render) => {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    try {
+      el.innerHTML = render(await api('/analytics-reports/' + path + q));
+    } catch (e) {
+      el.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load.')}</div>`;
+    }
+  };
+
+  panel('anOverview', 'overview', (d) => {
+    const t = d.totals || {};
+    const onePagePct = t.sessions ? Math.round((t.single_page_sessions / t.sessions) * 100) : 0;
+    const seconds = Number(t.avg_seconds || 0);
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return anStat('Visitors', anNum(t.visitors), 'unique people')
+      + anStat('Visits', anNum(t.sessions))
+      + anStat('New visits', anNum(t.new_sessions))
+      + anStat('Returning visits', anNum(t.returning_sessions))
+      + anStat('Page views', anNum(t.page_views))
+      + anStat('Pages per visit', Number(t.pages_per_session || 0).toFixed(2))
+      + anStat('Avg time on site', `${mins}m ${secs}s`)
+      + anStat('Left after one page', onePagePct + '%');
+  });
+
+  panel('anSources', 'sources', (d) => {
+    let html = anBars(d.sources, 'source', 'sessions', (r) => anNum(r.sessions) + ' visits');
+    if (d.referrers && d.referrers.length) {
+      html += '<div style="padding:0 16px 8px;"><h4 style="margin:8px 0 6px; font-size:13px;">Individual websites</h4></div>'
+        + anTable(d.referrers, [
+          { label: 'Website', render: (r) => escapeHtmlAdmin(r.referrer_host) },
+          { label: 'Visits', render: (r) => anNum(r.sessions) },
+        ]);
+    }
+    if (d.campaigns && d.campaigns.length) {
+      html += '<div style="padding:0 16px 8px;"><h4 style="margin:8px 0 6px; font-size:13px;">Campaigns</h4></div>'
+        + anTable(d.campaigns, [
+          { label: 'Campaign', render: (r) => escapeHtmlAdmin(r.campaign) },
+          { label: 'Source', render: (r) => escapeHtmlAdmin(r.source) },
+          { label: 'Visits', render: (r) => anNum(r.sessions) },
+        ]);
+    }
+    return html;
+  });
+
+  panel('anContent', 'content', (d) => {
+    const section = (title, rows, cols) =>
+      `<div style="padding:12px 16px 4px;"><h4 style="margin:0; font-size:13px;">${title}</h4></div>` + anTable(rows, cols);
+    return section('Most read articles', d.articles, [
+        { label: 'Article', render: (r) => escapeHtmlAdmin(r.title || '-') },
+        { label: 'Views', render: (r) => anNum(r.views) },
+      ])
+      + section('Most visited pages', d.pages, [
+        { label: 'Page', render: (r) => escapeHtmlAdmin(r.page_path) },
+        { label: 'Views', render: (r) => anNum(r.views) },
+      ])
+      + section('Pages people arrive on', d.entryPages, [
+        { label: 'Page', render: (r) => escapeHtmlAdmin(r.page_path) },
+        { label: 'Visits', render: (r) => anNum(r.sessions) },
+      ])
+      + section('Pages people leave from', d.exitPages, [
+        { label: 'Page', render: (r) => escapeHtmlAdmin(r.page_path) },
+        { label: 'Visits', render: (r) => anNum(r.sessions) },
+      ]);
+  });
+
+  panel('anAudience', 'audience', (d) => {
+    const block = (title, rows) =>
+      `<div style="padding:12px 16px 0;"><h4 style="margin:0; font-size:13px;">${title}</h4></div>`
+      + anBars(rows, 'label', 'sessions', (r) => anNum(r.sessions) + ' visits');
+    return block('Device', d.devices) + block('Browser', d.browsers)
+      + block('Operating system', d.systems) + block('Country', d.countries)
+      + block('How often people come back', (d.loyalty || []).map((r) => ({ label: r.label, sessions: r.visitors })));
+  });
+
+  panel('anFunnel', 'funnel', (d) => {
+    const f = d.funnel || {};
+    const steps = '<div style="padding:14px 16px; display:flex; gap:26px; flex-wrap:wrap;">'
+      + anStat('Visitors', anNum(f.visitors))
+      + anStat('Leads', anNum(f.leads), f.visitorToLeadPct + '% of visitors')
+      + anStat('Customers', anNum(f.customers), f.leadToCustomerPct + '% of leads')
+      + anStat('Revenue', anRands(f.revenueCents))
+      + '</div>';
+
+    const bySource = '<div style="padding:4px 16px 0;"><h4 style="margin:0; font-size:13px;">Revenue by the channel that found them</h4></div>'
+      + anTable(d.bySource, [
+        { label: 'Source', render: (r) => escapeHtmlAdmin(r.source) },
+        { label: 'Customers', render: (r) => anNum(r.customers) },
+        { label: 'Revenue', render: (r) => anRands(r.revenue_cents) },
+      ]);
+
+    const byEvent = '<div style="padding:12px 16px 0;"><h4 style="margin:0; font-size:13px;">Every tracked action</h4></div>'
+      + anTable(d.byEvent, [
+        { label: 'Action', render: (r) => escapeHtmlAdmin(r.event_name) },
+        { label: 'Times', render: (r) => anNum(r.count) },
+        { label: 'People', render: (r) => anNum(r.people) },
+        { label: 'Value', render: (r) => (r.value_cents ? anRands(r.value_cents) : '-') },
+      ]);
+
+    return steps + bySource + byEvent;
+  });
+
+  // Show the saved GA id, so the field reflects what is actually live rather
+  // than sitting blank next to a working tag.
+  try {
+    const cfg = await api('/analytics/config');
+    const field = document.getElementById('anGaId');
+    if (field && cfg.ga4MeasurementId) field.value = cfg.ga4MeasurementId;
+  } catch (e) { /* the field simply stays empty */ }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const save = document.getElementById('anGaSaveBtn');
+  if (save) {
+    save.addEventListener('click', async () => {
+      const value = document.getElementById('anGaId').value.trim();
+      const note = document.getElementById('anGaNote');
+      // Checked here as well as on the server, so a typo is caught before it is
+      // saved and then quietly does nothing.
+      if (value && !/^G-[A-Z0-9]+$/i.test(value)) {
+        note.textContent = 'That does not look like a GA4 Measurement ID. It should start with G- .';
+        showToast('Check the Measurement ID format.', true);
+        return;
+      }
+      try {
+        await api('/admin/settings/ga4_measurement_id', {
+          method: 'PATCH', body: JSON.stringify({ value }),
+        });
+        note.textContent = value
+          ? 'Saved. Google Analytics will load for visitors who accept the cookie bar.'
+          : 'Cleared. No Google tag will be loaded.';
+        showToast('Saved.');
+      } catch (err) {
+        note.textContent = err.message;
+        showToast(err.message, true);
+      }
+    });
+  }
+
+  const geo = document.getElementById('anGeoCheckBtn');
+  if (geo) {
+    geo.addEventListener('click', async () => {
+      const note = document.getElementById('anGaNote');
+      try {
+        const d = await api('/analytics/admin/geo-check');
+        note.textContent = `${d.note} (${d.sessions.with_country} of ${d.sessions.total} visits have a country.)`;
+      } catch (err) {
+        note.textContent = err.message;
+      }
+    });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // CONTRIBUTORS

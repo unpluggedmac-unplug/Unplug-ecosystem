@@ -1,4 +1,5 @@
 const express = require('express');
+const { recordConversionAsync } = require('../utils/analyticsRecorder');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -75,6 +76,10 @@ router.post('/register', registerLimiter, async (req, res, next) => {
       emailSent = false;
       console.error('[auth] signup verification email failed to send:', mailErr.message);
     }
+
+    // A new account is the first step past anonymous reading. Fire-and-forget:
+    // a reporting write must never delay or fail a registration.
+    recordConversionAsync({ userId: user.id, eventName: 'signup', entityType: 'user', entityId: user.id });
 
     res.status(201).json({
       user,

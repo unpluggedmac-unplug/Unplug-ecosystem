@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { recordConversionAsync } = require('../utils/analyticsRecorder');
 const { requireAuth, requireRole, requireOwnerOrAdmin } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { SA_PROVINCES } = require('../utils/saPlaces');
@@ -249,6 +250,11 @@ const { type, categoryId, secondaryCategoryId, packageTier, displayName, bio, ac
         (province || '').trim() || null,
         (country || '').trim() || null]
     );
+
+    recordConversionAsync({
+      userId: req.user.id, eventName: 'listing_submitted',
+      entityType: 'profile', entityId: result.rows[0].id,
+    });
 
     res.status(201).json({
       profile: result.rows[0],

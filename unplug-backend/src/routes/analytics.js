@@ -1,6 +1,8 @@
 const express = require('express');
 const pool = require('../db');
-const { requireRole } = require('../middleware/auth');
+const { requireRole, attachUser } = require('../middleware/auth');
+const { contextFrom, COUNTRY_HEADERS } = require('../utils/analyticsContext');
+const { recordEvent, touchSession } = require('../utils/analyticsRecorder');
 
 const router = express.Router();
 
@@ -28,17 +30,147 @@ router.get('/public-stats', async (req, res, next) => {
 // snippet on the public site. No login required, no personal data stored
 // — session_id is just a random ID the visitor's own browser generates
 // (e.g. via localStorage), not tied to any account.
-router.post('/track', async (req, res, next) => {
+router.post('/track', attachUser, async (req, res, next) => {
   try {
-    const { pagePath, sessionId } = req.body;
+    const { pagePath, sessionId, visitorId } = req.body;
     if (!pagePath) {
       return res.status(400).json({ error: 'pagePath is required.' });
     }
+
+    // The original table still gets its row. Other code reads it and it holds
+    // real history — the richer tables below sit alongside it rather than
+    // replacing it, so nothing that works today stops working.
     await pool.query(
       `INSERT INTO page_views (page_path, session_id) VALUES ($1, $2)`,
       [pagePath, sessionId || null]
     );
+
+    if (sessionId && visitorId) {
+      const context = contextFrom(req, req.body);
+      await touchSession({
+        sessionId, visitorId, pagePath, context,
+        userId: req.user ? req.user.id : null,
+        isPageView: true,
+      });
+      await recordEvent({
+        sessionId, visitorId,
+        eventName: 'page_view',
+        pagePath,
+        entityType: req.body.entityType || null,
+        entityId: req.body.entityId || null,
+        userId: req.user ? req.user.id : null,
+      });
+    }
+
     res.status(201).json({ tracked: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /analytics/event — anything worth counting that is not a page view.
+// Conversions that happen in the browser (a newsletter signup, an enquiry
+// sent) come through here; conversions the SERVER performs are recorded by
+// the server itself, which is the only way to be sure they really happened.
+router.post('/event', attachUser, async (req, res, next) => {
+  try {
+    const eventName = String(req.body.eventName || '').trim();
+    if (!eventName) return res.status(400).json({ error: 'eventName is required.' });
+    // Free text, but bounded — this is an unauthenticated endpoint and the
+    // column is 60 characters.
+    if (eventName.length > 60) return res.status(400).json({ error: 'eventName is too long.' });
+
+    const { sessionId, visitorId } = req.body;
+    if (sessionId && visitorId) {
+      await touchSession({
+        sessionId, visitorId,
+        pagePath: req.body.pagePath || null,
+        context: contextFrom(req, req.body),
+        userId: req.user ? req.user.id : null,
+        isPageView: false,
+      });
+    }
+    await recordEvent({
+      sessionId: sessionId || null,
+      visitorId: visitorId || null,
+      eventName,
+      pagePath: req.body.pagePath || null,
+      entityType: req.body.entityType || null,
+      entityId: req.body.entityId || null,
+      userId: req.user ? req.user.id : null,
+      // Never trusted from the browser. Money is only ever recorded by the
+      // server, from a real payment row.
+      valueCents: null,
+    });
+    res.status(201).json({ tracked: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /analytics/identify — binds the anonymous visit to the account that
+// just signed in. This is the join that lets "Instagram brought us R2,400"
+// exist at all: without it a payment has a user but no idea which visit
+// brought that person to the site.
+router.post('/identify', attachUser, async (req, res, next) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Sign-in required.' });
+    const { sessionId, visitorId } = req.body;
+    if (!sessionId) return res.status(400).json({ error: 'sessionId is required.' });
+
+    await pool.query(
+      `UPDATE analytics_sessions SET user_id = $1 WHERE session_id = $2 AND user_id IS NULL`,
+      [req.user.id, sessionId]
+    );
+    // Their earlier visits in this browser belong to them too — that is what
+    // makes first-touch attribution possible for someone who read for a week
+    // before signing up.
+    if (visitorId) {
+      await pool.query(
+        `UPDATE analytics_sessions SET user_id = $1 WHERE visitor_id = $2 AND user_id IS NULL`,
+        [req.user.id, visitorId]
+      );
+    }
+    res.json({ identified: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /analytics/config — public. Tells the site whether a Google Analytics
+// property is configured. An empty id means the tag is never loaded at all,
+// which is the right state until someone pastes a real one in.
+router.get('/config', async (req, res, next) => {
+  try {
+    const r = await pool.query(`SELECT value FROM settings WHERE key = 'ga4_measurement_id'`);
+    const id = (r.rows[0] && r.rows[0].value || '').trim();
+    res.json({ ga4MeasurementId: /^G-[A-Z0-9]+$/i.test(id) ? id : null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /analytics/admin/geo-check — which edge headers actually arrive.
+// Whether the country header survives the path from Cloudflare to Render
+// cannot be proven from a developer machine, so this reports what the server
+// really receives instead of anybody assuming.
+router.get('/admin/geo-check', requireRole('admin'), async (req, res, next) => {
+  try {
+    const present = {};
+    COUNTRY_HEADERS.forEach((h) => { if (req.headers[h]) present[h] = req.headers[h]; });
+    const stored = await pool.query(
+      `SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE country IS NOT NULL)::int AS with_country
+         FROM analytics_sessions`
+    );
+    res.json({
+      headersPresent: present,
+      anyHeaderPresent: Object.keys(present).length > 0,
+      sessions: stored.rows[0],
+      note: Object.keys(present).length === 0
+        ? 'No country header is reaching the server, so country will read Unknown. Nothing else is affected.'
+        : 'Country headers are arriving normally.',
+    });
   } catch (err) {
     next(err);
   }

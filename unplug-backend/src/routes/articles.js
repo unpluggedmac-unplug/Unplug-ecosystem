@@ -3,6 +3,7 @@ const pool = require('../db');
 const { requireAuth, requireOwnerOrAdmin, requireRole } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { deriveMetadata, slugify, cleanTopicTerms } = require('../utils/articleMeta');
+const { recordConversionAsync } = require('../utils/analyticsRecorder');
 const { publishesFree, statusForNewSubmission } = require('../utils/publishingRights');
 const { recordParticipationAsync } = require('../utils/participation');
 
@@ -324,6 +325,11 @@ router.post('/', requireAuth, async (req, res, next) => {
     );
     const article = result.rows[0];
     const sectionCount = await replaceSections(client, article.id, sections);
+
+    recordConversionAsync({
+      userId: req.user.id, eventName: 'article_submitted',
+      entityType: 'article', entityId: article.id,
+    });
 
     if (profileId) {
       await client.query('UPDATE profiles SET free_article_credits = free_article_credits - 1 WHERE id = $1', [profileId]);

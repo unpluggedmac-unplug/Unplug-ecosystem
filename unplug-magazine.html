@@ -4033,7 +4033,13 @@ function setConsent(choice) {
   const bar = document.getElementById('consentBar');
   if (bar) bar.hidden = true;
   // Accepting mid-visit should count this visit, not silently start next time.
-  if (choice === 'accepted') trackPageView('home');
+  // Google Analytics is started here too: it is deliberately not loaded until
+  // consent exists, so accepting has to be what switches it on rather than the
+  // visitor having to reload the page for it to take effect.
+  if (choice === 'accepted') {
+    trackPageView('home');
+    if (window.UnplugAnalytics) window.UnplugAnalytics.loadGoogleAnalytics();
+  }
 }
 
 (function setupConsentBar() {
@@ -5108,7 +5114,7 @@ async function loadArticleDetail(id) {
   // Which article the reader is on, so the read/listen signals know what to
   // report. Set before the fetch so it is never stale from the last article.
   window.__currentArticleId = Number(id) || null;
-  trackPageView('article-' + id);
+  trackPageView('article-' + id, { entityType: 'article', entityId: Number(id) });
   try {
     const data = await api('/articles/' + id);
     const a = data.article;
@@ -7479,11 +7485,20 @@ function setupDcPassportModal() {
   }
 })();
 
-  function trackPageView(pageId) {
+  function trackPageView(pageId, opts) {
   // POPIA: analytics is optional processing, so it only runs once someone has
   // actively accepted. No choice yet, or a decline, means no tracking call at
   // all — not a call with a flag on it.
   if (!analyticsAllowed()) return;
+  // Delegated to the shared tracker so a page view from this SPA carries the
+  // same visitor, visit and source as one from any other page on the site.
+  // Without this, every in-app navigation would arrive with no attribution and
+  // the entire site would look like Direct traffic.
+  if (window.UnplugAnalytics) {
+    window.UnplugAnalytics.pageView(pageId, opts || {});
+    if (window.gtag) window.gtag('event', 'page_view', { page_path: pageId });
+    return;
+  }
   api('/analytics/track', {
     method: 'POST',
     body: JSON.stringify({ pagePath: pageId, sessionId: guestSessionId() }),
