@@ -79,6 +79,7 @@ app.use('/articles', articleRoutes);
 app.use('/contributors', require('./routes/contributors'));
 app.use('/analytics-reports', require('./routes/analyticsReports'));
 app.use('/admin/tags', require('./routes/adminTags'));
+app.use('/share-cards', require('./routes/shareCards'));
 app.use('/events', eventRoutes);
 app.use('/birthdays', birthdayRoutes);
 app.use('/', competitionRoutes); // exposes /competitions, /entries/:id/vote, /top10

@@ -50,6 +50,7 @@ const TYPES = {
   service_payment:     { label: 'Service Payment',     group: 'payment' },
   edition_purchase:    { label: 'Edition Purchase',    group: 'payment' },
   cancellation:        { label: 'Cancellation Request', group: 'access'  },
+  share_card:          { label: 'Share Card',           group: 'content' },
 };
 
 // Comments are deliberately NOT here. Every comment on the site is reviewed
@@ -143,6 +144,26 @@ const SOURCES = [
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/articles/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/articles/${r.id}/reject` },
+    }),
+  },
+  {
+    // An "As Featured in Unplug" card somebody made for themselves. The
+    // masthead goes on it, so an editor sees it before it can be downloaded
+    // clean — and that decision belongs in THIS queue with every other one,
+    // not in an inbox with its own separate audit trail.
+    type: 'share_card',
+    sql: `SELECT sc.id, sc.name AS title,
+                 COALESCE(sc.role_line, sc.category) AS subtitle,
+                 sc.name AS customer_name, sc.submitter_email AS customer_email,
+                 NULL::integer AS user_id, sc.created_at AS submitted_at,
+                 sc.status AS item_status,
+                 NULL AS reference, NULL AS pay_status, NULL::numeric AS pay_amount,
+                 NULL AS pop_url, NULL AS invoice_url
+            FROM share_cards sc
+           WHERE sc.status = 'pending'`,
+    actions: (r) => ({
+      approve: { method: 'PATCH', path: `/share-cards/admin/${r.id}/approve` },
+      reject: { method: 'PATCH', path: `/share-cards/admin/${r.id}/reject` },
     }),
   },
   {

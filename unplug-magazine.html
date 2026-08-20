@@ -2677,6 +2677,66 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
      A real page rather than a bolted-on file, so it carries the site's header,
      nav, fonts, mobile rules, consent gate and analytics without any of that
      being rebuilt. Linkable from a social bio as ?p=nominate . -->
+<!-- SHARE CARD — "As Featured in Unplug".
+     Someone we featured makes a card for their own social accounts. The
+     preview is watermarked; the clean version only exists after an admin
+     approves it, and only the API can hand over the fields to draw it. -->
+<main class="page" id="page-card">
+  <div class="wrap" style="padding-top:56px; max-width:900px;">
+    <span class="eyebrow" data-cms="card.eyebrow">Share Your Feature</span>
+    <h1 style="font-size:clamp(30px,4.2vw,46px); margin:14px 0 10px;" data-cms="card.title">Make your &ldquo;As Featured in Unplug&rdquo; card</h1>
+    <p class="lede" data-cms="card.lede">Been featured in Unplug? Make a card to post on your own accounts. Fill it in, see how it looks, and send it to us &mdash; we check every card before it goes out with our name on it, then email you the finished one.</p>
+
+    <div id="cardApproved" hidden style="margin-top:24px; padding:16px 18px; border:1px solid var(--paper-line); background:var(--paper);"></div>
+
+    <div id="cardMaker" style="display:grid; grid-template-columns:1fr 1fr; gap:34px; margin-top:32px; align-items:start;">
+      <div>
+        <div class="field" style="margin-bottom:14px;">
+          <label for="cardName">Name <span style="color:var(--red);">*</span></label>
+          <input id="cardName" type="text" maxlength="160" placeholder="e.g. Naledi Mokoena">
+        </div>
+        <div class="field" style="margin-bottom:14px;">
+          <label for="cardRole">Role or town</label>
+          <input id="cardRole" type="text" maxlength="160" placeholder="e.g. Baker, Bo-Kaap">
+        </div>
+        <div class="field" style="margin-bottom:14px;">
+          <label for="cardQuote">A line from your story</label>
+          <textarea id="cardQuote" rows="3" maxlength="400" placeholder="Something you said, or what you do in a sentence."></textarea>
+        </div>
+        <div class="field" style="margin-bottom:14px;">
+          <label for="cardCategory">Category</label>
+          <input id="cardCategory" type="text" maxlength="80" placeholder="e.g. Community Impact">
+        </div>
+        <div class="field" style="margin-bottom:14px;">
+          <label for="cardFormat">Shape</label>
+          <select id="cardFormat">
+            <option value="post">Post &mdash; square-ish (4:5)</option>
+            <option value="story">Story &mdash; full screen (9:16)</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:6px;">
+          <label for="cardEmail">Your email <span style="color:var(--red);">*</span></label>
+          <input id="cardEmail" type="email" placeholder="Where we send the approved card">
+        </div>
+        <input type="text" id="cardWebsite" tabindex="-1" autocomplete="off" aria-hidden="true"
+               style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+        <button class="btn btn-solid" id="cardSubmit" style="width:auto; margin-top:16px;">Send for approval</button>
+        <p id="cardMsg" style="font-size:13px; margin:12px 0 0; min-height:18px;"></p>
+        <p class="consent-note">We store your name and email so we can send you the card. <a href="?p=privacy">Privacy Policy</a>.</p>
+      </div>
+
+      <div>
+        <canvas id="cardCanvas" width="1080" height="1350"
+                style="width:100%; height:auto; border:1px solid var(--paper-line); background:var(--ink);"></canvas>
+        <p style="font-size:12px; color:var(--slate); margin-top:8px;" id="cardPreviewNote">
+          Preview only &mdash; the watermark comes off once we have approved it.
+        </p>
+        <button class="btn btn-line" id="cardDownload" style="width:auto; margin-top:6px; display:none;">Download your card</button>
+      </div>
+    </div>
+  </div>
+</main>
+
 <main class="page" id="page-nominate">
   <div class="wrap cms-blocks" data-cms-blocks="nominate"></div>
   <div class="wrap" style="padding-top:56px; max-width:760px;">
@@ -6912,6 +6972,7 @@ function routeFromUrl(){
     else if (p === 'project' && params.get('id')) { goToPage('project'); loadProject(params.get('id')); }
     else if (p === 'profile' && params.get('slug')) { goToPage('directoryprofile'); loadProfileDetail(params.get('slug')); }
     else if (p === 'contributor' && params.get('slug')) { goToPage('contributor'); loadContributor(params.get('slug')); }
+    else if (p === 'card' && params.get('token')) { goToPage('card'); loadApprovedCard(params.get('token')); }
     else if (p && document.getElementById('page-' + p)) { goToPage(p); }
     else { goToPage('home'); }
   } finally { window.__seoSuppress = false; }
@@ -6962,6 +7023,197 @@ async function loadContributor(slug) {
     el.innerHTML = `<p style="color:var(--slate);">${escapeHtml(e.message || 'Could not load this contributor.')}</p>`;
   }
 }
+
+// ---- "As Featured in Unplug" share card (?p=card) ----
+//
+// The card is drawn from its fields, here, in the browser. Nothing is stored
+// as an image anywhere: the same code draws the watermarked preview and, once
+// an admin has approved it, the clean one. Storing the picture as well as the
+// facts that produce it would be storing the same thing twice, and the copy is
+// the expensive one.
+//
+// The gate is on the SERVER. This page cannot draw a clean card for a
+// submission it has not been given the fields for, and the API only hands
+// those over for a card whose status is 'approved'.
+(function setupShareCard() {
+  const canvas = document.getElementById('cardCanvas');
+  if (!canvas) return;
+
+  const FORMATS = {
+    post:  { w: 1080, h: 1350 },
+    story: { w: 1080, h: 1920 },
+  };
+
+  function wrapLines(ctx, text, maxWidth) {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    words.forEach((word) => {
+      const attempt = line ? line + ' ' + word : word;
+      if (ctx.measureText(attempt).width > maxWidth && line) { lines.push(line); line = word; }
+      else { line = attempt; }
+    });
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  // watermarked=true is the ONLY thing that differs between a preview and the
+  // real card, so the two can never drift into looking like different designs.
+  function draw(card, watermarked) {
+    const size = FORMATS[card.format] || FORMATS.post;
+    canvas.width = size.w;
+    canvas.height = size.h;
+    const ctx = canvas.getContext('2d');
+    const W = size.w, H = size.h;
+
+    ctx.fillStyle = '#161412';
+    ctx.fillRect(0, 0, W, H);
+
+    // Masthead rule
+    ctx.fillStyle = '#d20709';
+    ctx.fillRect(72, 96, 120, 8);
+
+    ctx.fillStyle = '#faf6f0';
+    ctx.font = '600 34px Georgia, serif';
+    ctx.fillText('UNPLUG', 72, 176);
+    ctx.fillStyle = 'rgba(250,246,240,0.55)';
+    ctx.font = '400 22px Inter, Arial, sans-serif';
+    ctx.fillText('AS FEATURED IN UNPLUG MAGAZINE', 72, 214);
+
+    if (card.category) {
+      ctx.fillStyle = '#d4a537';
+      ctx.font = '600 22px Inter, Arial, sans-serif';
+      ctx.fillText(String(card.category).toUpperCase(), 72, H - 232);
+    }
+
+    // Name, wrapped — a long one must not run off the edge.
+    ctx.fillStyle = '#faf6f0';
+    const nameSize = W > 1000 && String(card.name || '').length > 22 ? 68 : 88;
+    ctx.font = `700 ${nameSize}px Georgia, serif`;
+    const nameLines = wrapLines(ctx, card.name || '', W - 144);
+    let y = H - 168 - (nameLines.length - 1) * (nameSize + 8);
+    nameLines.forEach((l) => { ctx.fillText(l, 72, y); y += nameSize + 8; });
+
+    if (card.role_line) {
+      ctx.fillStyle = 'rgba(250,246,240,0.7)';
+      ctx.font = 'italic 30px Georgia, serif';
+      ctx.fillText(card.role_line, 72, H - 104);
+    }
+
+    if (card.quote) {
+      ctx.fillStyle = 'rgba(250,246,240,0.9)';
+      ctx.font = '400 38px Georgia, serif';
+      const quoteLines = wrapLines(ctx, '“' + card.quote + '”', W - 144).slice(0, 6);
+      let qy = Math.round(H * 0.36);
+      quoteLines.forEach((l) => { ctx.fillText(l, 72, qy); qy += 54; });
+    }
+
+    ctx.fillStyle = 'rgba(250,246,240,0.45)';
+    ctx.font = '400 22px Inter, Arial, sans-serif';
+    ctx.fillText('unplugnews.com', 72, H - 52);
+
+    if (watermarked) {
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(-Math.PI / 9);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(210,7,9,0.30)';
+      ctx.font = '700 84px Inter, Arial, sans-serif';
+      ctx.fillText('PENDING APPROVAL', 0, 0);
+      ctx.font = '400 34px Inter, Arial, sans-serif';
+      ctx.fillStyle = 'rgba(250,246,240,0.35)';
+      ctx.fillText('not for sharing yet', 0, 62);
+      ctx.restore();
+    }
+  }
+
+  function currentFields() {
+    return {
+      name: document.getElementById('cardName').value.trim() || 'Your name',
+      role_line: document.getElementById('cardRole').value.trim(),
+      quote: document.getElementById('cardQuote').value.trim(),
+      category: document.getElementById('cardCategory').value.trim(),
+      format: document.getElementById('cardFormat').value,
+    };
+  }
+
+  function redraw() { draw(currentFields(), true); }
+
+  ['cardName', 'cardRole', 'cardQuote', 'cardCategory'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', redraw);
+  });
+  document.getElementById('cardFormat').addEventListener('change', redraw);
+  redraw();
+
+  function downloadCanvas(filename) {
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  document.getElementById('cardDownload').addEventListener('click', () => {
+    downloadCanvas('unplug-card.png');
+    if (window.UnplugAnalytics) window.UnplugAnalytics.event('share_card_downloaded');
+  });
+
+  const msg = document.getElementById('cardMsg');
+  function show(text, isError) {
+    msg.textContent = text;
+    msg.style.color = isError ? 'var(--red)' : 'green';
+  }
+
+  document.getElementById('cardSubmit').addEventListener('click', async () => {
+    const f = currentFields();
+    const name = document.getElementById('cardName').value.trim();
+    const submitterEmail = document.getElementById('cardEmail').value.trim();
+    if (!name) { show('Please enter the name that should appear on the card.', true); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(submitterEmail)) {
+      show('We need a valid email address — it is where the approved card is sent.', true); return;
+    }
+
+    const btn = document.getElementById('cardSubmit');
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      const d = await api('/share-cards', {
+        method: 'POST',
+        body: JSON.stringify({
+          name, roleLine: f.role_line, quote: f.quote, category: f.category,
+          format: f.format, submitterEmail,
+          website: document.getElementById('cardWebsite').value,
+        }),
+      });
+      show(d.message || 'Sent for approval.', false);
+      if (window.UnplugAnalytics) window.UnplugAnalytics.event('share_card_submitted');
+    } catch (err) {
+      show(err.message || 'Something went wrong. Please try again.', true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send for approval';
+    }
+  });
+
+  // Arriving from the approval email with ?p=card&token=... — fetch the card
+  // and, if the server says it is approved, draw it clean and offer the
+  // download. The maker form is hidden: they are here to collect, not design.
+  window.loadApprovedCard = async function loadApprovedCard(token) {
+    const box = document.getElementById('cardApproved');
+    const maker = document.getElementById('cardMaker');
+    try {
+      const d = await api('/share-cards/' + encodeURIComponent(token));
+      draw(d.card, false);
+      box.hidden = false;
+      box.innerHTML = '<strong>Approved.</strong> Here is your card &mdash; press Download and post it wherever you like.';
+      maker.style.gridTemplateColumns = '1fr';
+      Array.from(maker.children)[0].style.display = 'none';
+      document.getElementById('cardPreviewNote').textContent = 'Approved by the Unplug team.';
+      document.getElementById('cardDownload').style.display = '';
+    } catch (err) {
+      box.hidden = false;
+      box.innerHTML = escapeHtml(err.message || 'That card link is not valid.');
+    }
+  };
+})();
 
 // ---- Nominate page (?p=nominate) ----
 //
@@ -7240,6 +7492,7 @@ function goToPage(pageId){
     investors: 'Investor Relations — Unplug Magazine',
     brandplacement: 'Marketplace — Unplug Magazine',
     nominate: 'Nominate Someone — Unplug Magazine',
+    card: 'Your Unplug Card — Unplug Magazine',
     members: 'Members — Unplug Magazine',
     about: 'About Us — Unplug Magazine',
     contact: 'Contact Us — Unplug Magazine',

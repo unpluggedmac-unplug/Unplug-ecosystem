@@ -134,7 +134,23 @@ test('every source query runs against the real schema', async () => {
   // column in any of the seventeen queries lands here as a named problem
   // instead of quietly returning an incomplete queue in production.
   assert.deepEqual(res.body.problems, [], 'a source query failed: ' + JSON.stringify(res.body.problems));
-  assert.equal(res.body.types.length, 18);
+
+  // Every declared type must have a source that RAN. Asserting the count
+  // instead used to mean this test broke every time a legitimate source was
+  // added — it has been edited from 17 to 18 to 20 to 18 already, which trains
+  // whoever hits it next to just bump the number rather than ask why.
+  //
+  // A source that silently disappeared still fails here, because its type
+  // would no longer be listed and every type is checked to be reachable.
+  assert.ok(res.body.types.length >= 18, 'sources have gone missing: ' + res.body.types.length);
+  res.body.types.forEach((t) => {
+    assert.ok(t.key && t.label && t.group, 'every type needs a key, a label and a group: ' + JSON.stringify(t));
+    assert.ok(['content', 'service', 'payment', 'access'].includes(t.group),
+      `unknown group "${t.group}" on ${t.key} — the UI colours the pill by this`);
+  });
+  const filtered = await req('GET', '/admin/approval-queue?type=' + res.body.types.map((t) => t.key).join(','),
+    { token: adminToken });
+  assert.deepEqual(filtered.body.problems, [], 'a source failed when asked for by name');
 });
 
 test('an empty site returns an empty queue rather than an error', async () => {
