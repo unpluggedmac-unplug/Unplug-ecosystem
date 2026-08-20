@@ -1349,6 +1349,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media(max-width:640px){
   html, body{ overflow-x:hidden; }
 }
+
+/* GET THE APP — the install section between the social links and the
+   shout-out banner. Deliberately quiet: it is an offer, not an advert. */
+.get-app{ display:flex; gap:28px; align-items:flex-start; border:1px solid var(--paper-line);
+  border-radius:14px; padding:28px 26px; background:var(--paper); }
+.get-app-icon{ width:88px; height:88px; border-radius:18px; flex:none;
+  border:1px solid var(--paper-line); background:#fff; }
+.get-app-body{ flex:1; min-width:0; }
+.get-app-body h2{ font-size:clamp(21px,2.4vw,27px); margin:8px 0 8px; }
+.get-app-body p{ color:var(--slate); line-height:1.7; margin:0 0 18px; max-width:56ch; }
+.get-app-actions{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+.get-app-note{ font-size:13.5px; color:var(--slate); }
+.get-app-how{ margin-top:14px; }
+.get-app-how ol{ margin:0; padding-left:20px; color:var(--slate); font-size:14px; line-height:1.9; }
+.get-app-how strong{ color:var(--ink); }
+@media(max-width:640px){
+  .get-app{ flex-direction:column; gap:18px; padding:22px 18px; align-items:center; text-align:center; }
+  .get-app-body p{ margin-left:auto; margin-right:auto; }
+  .get-app-actions{ justify-content:center; }
+  .get-app-how ol{ text-align:left; }
+}
 </style>
 </head>
 <body>
@@ -1550,6 +1571,31 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.48-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.87 1.22 3.07.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z"/><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.29A10 10 0 1 0 12 2zm0 18.13a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.06.8.82-3-.19-.31A8.13 8.13 0 1 1 12 20.13z"/></svg>
           <span>WhatsApp</span>
         </a>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- GET THE APP — sits between the social links and the shout-out banner,
+       filling the gap that was there. A permanent home for installing, as
+       opposed to the floating bar, which appears once and stays dismissed. -->
+  <section class="home-section" id="getAppSection">
+    <div class="wrap">
+      <div class="get-app">
+        <img class="get-app-icon" src="/icons/icon-192.png" width="88" height="88"
+             alt="Unplug Magazine app icon" loading="lazy">
+        <div class="get-app-body">
+          <span class="eyebrow" data-cms="getapp.eyebrow">Get the app</span>
+          <h2 data-cms="getapp.title">Keep Unplug one tap away</h2>
+          <p data-cms="getapp.lede">Add Unplug to your phone or computer and it opens like any other app &mdash; no typing the address, no hunting for the link. It is the same Unplug, just always there.</p>
+          <div class="get-app-actions">
+            <button class="btn btn-solid" id="getAppBtn" type="button">Add to my device</button>
+            <span id="getAppNote" class="get-app-note"></span>
+          </div>
+          <!-- Filled in per device: what to tap on an iPhone, where the button
+               is on a computer. Hidden until it has something to say. -->
+          <div id="getAppHow" class="get-app-how" hidden></div>
+        </div>
       </div>
     </div>
   </section>
@@ -7307,6 +7353,114 @@ async function loadContributor(slug) {
   });
 })();
 
+// ---- "Get the app" section on the homepage ----
+//
+// The floating bar appears once and stays dismissed, which is right for a
+// prompt and wrong for a feature: somebody who said "not now" in March has no
+// way back to it. This section is that way back.
+//
+// It has to describe THREE different realities honestly, because installing a
+// web app is genuinely different on each:
+//
+//   Android / Chrome / Edge — the browser hands us a prompt we can fire, so
+//     the button really does install it.
+//   iPhone / iPad — Safari supports adding to the home screen but gives no
+//     event and no API at all. The only honest thing is to say where the
+//     button is. A button claiming to install would simply do nothing.
+//   Already installed — say so, rather than offering it again.
+(function setupGetAppSection() {
+  const section = document.getElementById('getAppSection');
+  if (!section) return;
+
+  const btn = document.getElementById('getAppBtn');
+  const note = document.getElementById('getAppNote');
+  const how = document.getElementById('getAppHow');
+
+  function steps(list) {
+    how.hidden = false;
+    how.innerHTML = '<ol>' + list.map((li) => '<li>' + li + '</li>').join('') + '</ol>';
+  }
+
+  function render() {
+    const api = window.UnplugInstall;
+    if (!api) return;
+
+    if (api.installed()) {
+      btn.hidden = true;
+      how.hidden = true;
+      note.textContent = 'Installed — you can open Unplug straight from your home screen.';
+      return;
+    }
+
+    const platform = api.platform();
+
+    // The browser has offered us a real prompt: the button does the whole job.
+    if (api.available()) {
+      btn.hidden = false;
+      btn.textContent = platform === 'desktop' ? 'Install on this computer' : 'Add to my home screen';
+      note.textContent = '';
+      how.hidden = true;
+      return;
+    }
+
+    // No prompt available. Explain rather than offering a button that cannot work.
+    btn.hidden = true;
+    if (platform === 'ios') {
+      note.textContent = 'On iPhone and iPad it takes two taps:';
+      steps([
+        'Tap the <strong>Share</strong> button at the bottom of Safari (the square with an arrow).',
+        'Scroll down and tap <strong>Add to Home Screen</strong>.',
+        'Tap <strong>Add</strong>. The Unplug icon appears with your other apps.',
+      ]);
+      return;
+    }
+
+    if (platform === 'desktop') {
+      note.textContent = 'To install it on this computer:';
+      steps([
+        'Look at the right-hand end of the address bar for the small <strong>install</strong> icon (a screen with an arrow).',
+        'Click it, then click <strong>Install</strong>.',
+        'Unplug opens in its own window and appears in your Start menu.',
+        'No icon there? Open the browser menu (&#8942;) and look for <strong>Install Unplug Magazine</strong> or <strong>Apps &rarr; Install this site</strong>.',
+      ]);
+      return;
+    }
+
+    note.textContent = 'To add it to your home screen:';
+    steps([
+      'Open the browser menu (&#8942;) at the top right.',
+      'Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.',
+      'Confirm, and the Unplug icon appears with your other apps.',
+    ]);
+  }
+
+  btn.addEventListener('click', async () => {
+    const api = window.UnplugInstall;
+    if (!api) return;
+    btn.disabled = true;
+    try {
+      const outcome = await api.prompt();
+      if (outcome === 'accepted') {
+        note.textContent = 'Installing — look for the Unplug icon with your other apps.';
+        btn.hidden = true;
+        how.hidden = true;
+      } else if (outcome === 'dismissed') {
+        note.textContent = 'No problem — the button stays here whenever you want it.';
+      } else {
+        // The browser never offered a prompt; fall through to instructions.
+        render();
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Re-render when the browser decides it can offer an install, which often
+  // happens a moment after the page loads rather than immediately.
+  if (window.UnplugInstall) window.UnplugInstall.onChange(render);
+  render();
+})();
+
 // ---- Install as an app (Progressive Web App) ----
 //
 // Two jobs: register the service worker, and offer people a way to install
@@ -7370,10 +7524,44 @@ async function loadContributor(slug) {
   // ANDROID / WINDOWS / CHROMEBOOK — the browser tells us it can install, and
   // hands us a prompt to fire when the person asks for it.
   let deferred = null;
+
+  // Shared with the "Install" section on the homepage. There is only ONE
+  // beforeinstallprompt event per page load and it can only be used once, so
+  // both the floating bar and the section have to go through the same object
+  // rather than each keeping their own copy.
+  const listeners = [];
+  window.UnplugInstall = {
+    installed: alreadyInstalled,
+    available: () => !!deferred,
+    platform: () => {
+      const ua = navigator.userAgent;
+      if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return 'ios';
+      if (/Android/.test(ua)) return 'android';
+      return 'desktop';
+    },
+    // Returns 'accepted', 'dismissed', or 'unavailable' when the browser
+    // never offered a prompt (iOS, or already installed).
+    prompt: async () => {
+      if (!deferred) return 'unavailable';
+      deferred.prompt();
+      try {
+        const choice = await deferred.userChoice;
+        deferred = null;
+        listeners.forEach((fn) => fn());
+        return choice && choice.outcome ? choice.outcome : 'dismissed';
+      } catch (e) {
+        deferred = null;
+        return 'dismissed';
+      }
+    },
+    onChange: (fn) => { listeners.push(fn); },
+  };
+
   window.addEventListener('beforeinstallprompt', (e) => {
     // Stop Chrome showing its own mini-infobar so there is only one ask.
     e.preventDefault();
     deferred = e;
+    listeners.forEach((fn) => fn()); // the homepage section can now offer it
     if (alreadyInstalled() || dismissed() || document.getElementById('installBar')) return;
 
     const el = bar(
@@ -7406,6 +7594,7 @@ async function loadContributor(slug) {
   // Someone installed it (possibly via the browser's own menu).
   window.addEventListener('appinstalled', () => {
     remember();
+    listeners.forEach((fn) => fn());
     const el = document.getElementById('installBar');
     if (el) el.remove();
     if (window.UnplugAnalytics) window.UnplugAnalytics.event('app_installed');
