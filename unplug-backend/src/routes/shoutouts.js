@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { EVENTS, trackAsync } = require('../utils/marketingEvents');
+const { parseSocialHandle } = require('../utils/socialHandle');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { recordParticipationAsync } = require('../utils/participation');
@@ -91,7 +92,7 @@ router.get('/today', async (req, res, next) => {
 // admin approves it, so unauthenticated submission is safe.
 router.post('/nominate', publicSubmitLimiter, honeypot, async (req, res, next) => {
   try {
-    const { nomineeName, message, email } = req.body;
+    const { nomineeName, message, email, nomineeSocial } = req.body;
     const name = (nomineeName || '').trim();
     if (!name) {
       return res.status(400).json({ error: 'A name and surname are required.' });
@@ -100,10 +101,17 @@ router.post('/nominate', publicSubmitLimiter, honeypot, async (req, res, next) =
       return res.status(400).json({ error: 'That name is too long.' });
     }
 
+    // Optional. Kept verbatim, with a clickable link only when one can be
+    // built honestly — see utils/socialHandle.js for why a bare handle is
+    // never guessed into a platform.
+    const social = parseSocialHandle(nomineeSocial);
+
     await pool.query(
-      `INSERT INTO shoutout_nominations (nominee_name, message, submitted_by_email)
-       VALUES ($1, $2, $3)`,
-      [name, (message || '').trim() || null, (email || '').trim() || null]
+      `INSERT INTO shoutout_nominations
+         (nominee_name, message, submitted_by_email, nominee_social, nominee_social_url)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [name, (message || '').trim() || null, (email || '').trim() || null,
+        social.text, social.url]
     );
 
     // Nominating is open to anyone, signed in or not — only a member can be

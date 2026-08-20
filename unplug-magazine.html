@@ -2821,6 +2821,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <label for="nomWhy">Why them?</label>
         <textarea id="nomWhy" rows="4" placeholder="A sentence or two about what they do and why it matters. Anything you know helps."></textarea>
       </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="nomSocial">Their social media <span style="color:var(--slate); font-weight:400;">(optional)</span></label>
+        <input id="nomSocial" type="text" maxlength="200" placeholder="@theirhandle or a link to their page">
+        <span style="display:block; font-size:12.5px; color:var(--slate); margin-top:5px;"
+              data-cms="nominate.socialhint">Facebook, Instagram, TikTok &mdash; whatever you have. It helps us find the right person.</span>
+      </div>
       <div class="field" style="margin-bottom:6px;">
         <label for="nomEmail">Your email</label>
         <input id="nomEmail" type="email" placeholder="So we can tell you when their story goes live">
@@ -7665,6 +7671,7 @@ async function loadContributor(slug) {
   btn.addEventListener('click', async () => {
     const nomineeName = document.getElementById('nomName').value.trim();
     const message = document.getElementById('nomWhy').value.trim();
+    const nomineeSocial = document.getElementById('nomSocial').value.trim();
     const email = document.getElementById('nomEmail').value.trim();
     const subscribe = document.getElementById('nomSubscribe').checked;
     const website = document.getElementById('nomWebsite').value;
@@ -7679,7 +7686,7 @@ async function loadContributor(slug) {
     try {
       const data = await api('/shoutouts/nominate', {
         method: 'POST',
-        body: JSON.stringify({ nomineeName, message, email, website }),
+        body: JSON.stringify({ nomineeName, message, nomineeSocial, email, website }),
       });
 
       // Only when they actually ticked the box AND gave an address. Adding
@@ -7694,7 +7701,7 @@ async function loadContributor(slug) {
       }
 
       show(data.message || 'Thank you - a real person reads every one of these.', false);
-      ['nomName', 'nomWhy', 'nomEmail'].forEach((id) => { document.getElementById(id).value = ''; });
+      ['nomName', 'nomWhy', 'nomSocial', 'nomEmail'].forEach((id) => { document.getElementById(id).value = ''; });
 
       // The action this page exists for, so it is worth counting as a
       // conversion rather than just another page view.

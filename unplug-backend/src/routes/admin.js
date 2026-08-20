@@ -1302,7 +1302,8 @@ router.patch('/top10-entries/:id/reject', requireRole('admin'), async (req, res,
 router.get('/shoutouts/pending', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, nominee_name, message, submitted_by_email, created_at
+      `SELECT id, nominee_name, message, submitted_by_email,
+              nominee_social, nominee_social_url, created_at
        FROM shoutout_nominations
        WHERE status = 'pending'
        ORDER BY created_at ASC`

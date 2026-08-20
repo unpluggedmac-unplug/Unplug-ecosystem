@@ -6320,11 +6320,18 @@ async function loadShoutoutNominations() {
       return;
     }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Name</th><th>Why / note</th><th>Submitted by</th><th></th></tr>';
+    table.innerHTML = '<tr><th>Name</th><th>Why / note</th><th>Their social</th><th>Submitted by</th><th></th></tr>';
     noms.forEach((n) => {
       const tr = document.createElement('tr');
+      // Clickable only when the server built a real https link. A bare
+      // handle shows as text — it is a clue, not a destination, and linking a
+      // guessed platform would send the desk to the wrong person.
+      const social = n.nominee_social_url
+        ? `<a href="${escapeAttrAdmin(n.nominee_social_url)}" target="_blank" rel="noopener noreferrer">${escapeHtmlAdmin(n.nominee_social)}</a>`
+        : (n.nominee_social ? escapeHtmlAdmin(n.nominee_social) : '—');
       tr.innerHTML = `<td>${escapeHtmlAdmin(n.nominee_name)}</td>`
         + `<td>${escapeHtmlAdmin(n.message || '—')}</td>`
+        + `<td>${social}</td>`
         + `<td>${escapeHtmlAdmin(n.submitted_by_email || '—')}</td>`
         + `<td><div class="row-actions"><button class="approve">Approve</button><button class="reject">Reject</button></div></td>`;
       tr.querySelector('.approve').addEventListener('click', async () => {
