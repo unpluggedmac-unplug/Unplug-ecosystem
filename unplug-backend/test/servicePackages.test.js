@@ -111,6 +111,45 @@ test('re-running migrations does NOT revert an admin price change', async () => 
   );
 });
 
+// ---------------------------------------------------------------------------
+// Package naming (migration 124)
+// ---------------------------------------------------------------------------
+
+test('directory highlights are called Homepage Highlight', async () => {
+  // The wording on the member's buy-form dropdown. It changed by accident once
+  // — when the packages endpoint stopped serving its own hardcoded list, the
+  // names came from the table instead and the table said "Profile Highlight".
+  const list = await packages.packagesFor('highlight_directory');
+  assert.ok(list.length > 0);
+  list.forEach((p) => {
+    assert.match(p.name, /Homepage Highlight$/,
+      `"${p.name}" is what a member reads before paying — it must say Homepage`);
+  });
+});
+
+test('THE RENAME DOES NOT RE-APPLY ITSELF ON THE NEXT DEPLOY', async () => {
+  // migrate.js re-runs every .sql every deploy, and these names are
+  // admin-editable. A bare UPDATE in migration 124 would undo an admin's
+  // rename on the next push — silently, and only in production.
+  await pool.query(
+    `UPDATE service_packages SET name = 'Front Page Feature'
+      WHERE service_key = 'highlight_directory' AND duration_days = 7`
+  );
+
+  await runMigrations();
+
+  const list = await packages.packagesFor('highlight_directory');
+  const renamed = list.find((p) => p.durationDays === 7);
+  assert.equal(renamed.name, 'Front Page Feature',
+    'the migration overwrote a name the admin had chosen — it must only match the old wording');
+
+  // Put it back so the assertion above about naming still describes the seed.
+  await pool.query(
+    `UPDATE service_packages SET name = '7-Day Homepage Highlight'
+      WHERE service_key = 'highlight_directory' AND duration_days = 7`
+  );
+});
+
 test('a deactivated package is not sellable', async () => {
   await pool.query(
     `UPDATE service_packages SET active = false
