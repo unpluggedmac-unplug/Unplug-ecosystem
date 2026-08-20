@@ -1403,7 +1403,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         meant for WhatsApp would open Facebook. At gap:14px the pitch is
         exactly 44, so the areas meet without ever overlapping. Six circles
         then measure 250px, which still fits one row on a 375px screen. */
-  .share-row{ gap:14px; }
+  /* Both containers that hold these circles. .footer-social is a separate
+     row with its own 10px gap, so fixing only .share-row left the footer
+     icons overlapping by 4px — the same mis-tap, just further down the page. */
+  .share-row, .footer-social{ gap:14px; }
   .share-btn, .view-all{ position:relative; }
   .view-all{ display:inline-block; }
   .share-btn::after, .view-all::after{
