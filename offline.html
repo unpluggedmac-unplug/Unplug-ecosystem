@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>No connection — Unplug Magazine</title>
+  <style>
+    /* Self-contained on purpose: this page is shown when the network is gone,
+       so it cannot depend on a stylesheet, a font or an image being fetched. */
+    :root { --ink:#0F0E0E; --cream:#FAF6F0; --red:#D20709; --slate:#6d6a66; }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+      background:var(--ink); color:var(--cream); padding:28px;
+      font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      text-align:center; line-height:1.6;
+    }
+    .wrap{ max-width:420px; }
+    .mark{ width:64px; height:8px; background:var(--red); margin:0 auto 26px; }
+    h1{ font-family:Georgia,'Times New Roman',serif; font-size:28px; margin:0 0 12px; font-weight:700; }
+    p{ color:#c7c4c1; margin:0 0 22px; font-size:16px; }
+    button{
+      font:inherit; font-size:16px; font-weight:600; cursor:pointer;
+      background:var(--red); color:#fff; border:none; border-radius:8px;
+      padding:14px 26px; min-height:48px;
+    }
+    .small{ font-size:13px; color:var(--slate); margin-top:26px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="mark"></div>
+    <h1>You're offline</h1>
+    <p>Unplug needs a connection to fetch the latest stories. Anything you have already read is still available &mdash; go back and try again once you have signal.</p>
+    <button type="button" onclick="location.reload()">Try again</button>
+    <p class="small">Unplug Magazine &mdash; Real People. Real Impact.</p>
+  </div>
+</body>
+</html>

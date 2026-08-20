@@ -3438,6 +3438,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0F0E0E">
+<!-- iOS has no manifest support worth relying on; these are what make an
+     added-to-home-screen icon look right on an iPhone. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Unplug">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
 <script src="unplug-shared.js"></script>
 <script src="unplug-participation-sdk.js"></script>
 <script>
@@ -7296,6 +7305,130 @@ async function loadContributor(slug) {
       btn.disabled = false; btn.textContent = 'Send enquiry';
     }
   });
+})();
+
+// ---- Install as an app (Progressive Web App) ----
+//
+// Two jobs: register the service worker, and offer people a way to install
+// that they will actually notice. Chrome and Edge do show their own install
+// icon in the address bar, but almost nobody spots it, so the feature exists
+// and goes unused.
+//
+// The prompt is deliberately quiet: it appears only on a device that can
+// genuinely install, only when they have not already, and once dismissed it
+// stays dismissed. Nagging somebody to install a magazine is a good way to
+// make them close it.
+(function setupInstallPrompt() {
+  const DISMISSED_KEY = 'unplug_install_dismissed';
+
+  function alreadyInstalled() {
+    // Both are needed: Android reports standalone via matchMedia, older iOS
+    // via navigator.standalone.
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+  }
+
+  function dismissed() {
+    try { return localStorage.getItem(DISMISSED_KEY) === '1'; } catch (e) { return false; }
+  }
+
+  function remember() {
+    try { localStorage.setItem(DISMISSED_KEY, '1'); } catch (e) { /* private mode */ }
+  }
+
+  // Registering the worker is what makes the site installable at all.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        // Not fatal: the site works exactly as before, it just cannot be
+        // installed and has no offline page.
+      });
+    });
+  }
+
+  if (alreadyInstalled() || dismissed()) return;
+
+  function bar(innerHtml) {
+    const el = document.createElement('div');
+    el.id = 'installBar';
+    el.setAttribute('role', 'region');
+    el.setAttribute('aria-label', 'Install Unplug');
+    el.style.cssText =
+      'position:fixed; left:12px; right:12px; bottom:12px; z-index:9998;'
+      + 'background:var(--ink,#0F0E0E); color:var(--cream,#FAF6F0);'
+      + 'border-radius:12px; padding:14px 16px; display:flex; gap:12px;'
+      + 'align-items:center; justify-content:space-between; flex-wrap:wrap;'
+      + 'box-shadow:0 8px 30px rgba(0,0,0,0.35); font-size:14px; line-height:1.5;'
+      + 'max-width:520px; margin:0 auto;';
+    el.innerHTML = innerHtml;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function closeBar(el) { remember(); el.remove(); }
+
+  // ANDROID / WINDOWS / CHROMEBOOK — the browser tells us it can install, and
+  // hands us a prompt to fire when the person asks for it.
+  let deferred = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // Stop Chrome showing its own mini-infobar so there is only one ask.
+    e.preventDefault();
+    deferred = e;
+    if (alreadyInstalled() || dismissed() || document.getElementById('installBar')) return;
+
+    const el = bar(
+      '<span style="flex:1; min-width:180px;"><strong>Add Unplug to your home screen</strong><br>'
+      + '<span style="opacity:0.75;">Open it like an app &mdash; no typing the address.</span></span>'
+      + '<span style="display:flex; gap:8px;">'
+      + '<button type="button" id="installNo" style="font:inherit; background:none; border:none; color:inherit; opacity:0.7; cursor:pointer; padding:10px; min-height:44px;">Not now</button>'
+      + '<button type="button" id="installYes" style="font:inherit; font-weight:600; background:var(--red,#D20709); color:#fff; border:none; border-radius:8px; padding:10px 18px; cursor:pointer; min-height:44px;">Add</button>'
+      + '</span>'
+    );
+
+    el.querySelector('#installNo').addEventListener('click', () => closeBar(el));
+    el.querySelector('#installYes').addEventListener('click', async () => {
+      el.remove();
+      if (!deferred) return;
+      deferred.prompt();
+      try {
+        const choice = await deferred.userChoice;
+        // Either way this ask is finished. Accepting means it is installed;
+        // declining the browser's own dialog means they have said no twice.
+        remember();
+        if (choice && choice.outcome === 'accepted' && window.UnplugAnalytics) {
+          window.UnplugAnalytics.event('app_installed');
+        }
+      } catch (e) { /* the dialog was dismissed */ }
+      deferred = null;
+    });
+  });
+
+  // Someone installed it (possibly via the browser's own menu).
+  window.addEventListener('appinstalled', () => {
+    remember();
+    const el = document.getElementById('installBar');
+    if (el) el.remove();
+    if (window.UnplugAnalytics) window.UnplugAnalytics.event('app_installed');
+  });
+
+  // iPHONE AND iPAD — Safari supports adding to the home screen but fires no
+  // beforeinstallprompt event and gives no API, so the only thing that works
+  // is telling people where the button is. Shown after a short delay so it
+  // does not land on top of the privacy dialog.
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+  if (isIOS && isSafari) {
+    setTimeout(() => {
+      if (alreadyInstalled() || dismissed() || document.getElementById('installBar')) return;
+      const el = bar(
+        '<span style="flex:1; min-width:180px;"><strong>Add Unplug to your Home Screen</strong><br>'
+        + '<span style="opacity:0.75;">Tap the Share button, then &ldquo;Add to Home Screen&rdquo;.</span></span>'
+        + '<button type="button" id="installNo" style="font:inherit; background:none; border:none; color:inherit; opacity:0.7; cursor:pointer; padding:10px; min-height:44px;">Got it</button>'
+      );
+      el.querySelector('#installNo').addEventListener('click', () => closeBar(el));
+    }, 6000);
+  }
 })();
 
 // ---- Nominate page (?p=nominate) ----
