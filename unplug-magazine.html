@@ -1997,8 +1997,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <span class="story-tag">The next issue</span>
       <h2 class="feature-edition-title">Let's feature you in our upcoming edition</h2>
       <p>Your story, your milestone, your business online. Reach out and let's put you in the next Unplug edition.</p>
-      <div class="feature-edition-thumb">
-        <img src="feature-edition.jpeg" alt="Let's feature you in our upcoming edition" loading="lazy" decoding="async">
+      <!-- The picture is admin-swappable: applyPageCms() fills the src from
+           the CMS key. It starts hidden and is only shown once a real image
+           has loaded, because the file this used to point at was never
+           committed and the site rendered a broken-image icon on the homepage
+           instead. An empty space says nothing; a broken icon says the site is
+           broken. -->
+      <div class="feature-edition-thumb" hidden>
+        <img data-cms-img="home.feature_edition.image" alt="Let's feature you in our upcoming edition"
+             loading="lazy" decoding="async">
       </div>
       <a href="mailto:info@unplugnews.com?subject=Feature%20me%20in%20your%20upcoming%20edition" class="btn btn-solid feature-edition-btn">Get featured →</a>
     </div>
@@ -4697,6 +4704,26 @@ async function applyPageCms() {
       el.setAttribute('data-cms-applied', '1');
     }
   });
+  // Pictures the admin can swap. Separate from the text mechanism above
+  // because that one sets textContent on purpose — an address has to go into
+  // a src, which is exactly the place a bad value would matter, so it is
+  // checked here as well as when it was saved.
+  //
+  // The wrapper stays hidden until the image actually loads. A src that 404s
+  // renders as a broken icon, which is what this block was doing on the live
+  // homepage; an empty gap is honest, a broken icon looks like a fault.
+  document.querySelectorAll('[data-cms-img]').forEach((img) => {
+    const value = content[img.getAttribute('data-cms-img')];
+    if (typeof value !== 'string' || !value.trim()) return;
+    const url = value.trim();
+    const safe = /^https:\/\/[^/\s]+\//i.test(url) || /^\/[^/\s]/.test(url);
+    if (!safe) return;
+    const wrap = img.closest('[hidden]') || img.parentElement;
+    img.addEventListener('load', () => { if (wrap) wrap.hidden = false; }, { once: true });
+    img.addEventListener('error', () => { if (wrap) wrap.hidden = true; }, { once: true });
+    img.src = url;
+  });
+
   const blocks = cms.blocks || {};
   document.querySelectorAll('[data-cms-blocks]').forEach((wrap) => {
     const list = blocks[wrap.getAttribute('data-cms-blocks')] || [];

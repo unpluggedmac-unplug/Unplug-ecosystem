@@ -1168,6 +1168,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div id="cmsContentBody" style="margin-top:16px;"></div>
         </div>
       </div>
+
+      <!-- Pictures on the site that can be swapped without a developer. The
+           list comes from the server, so a new one appears here on its own. -->
+      <div class="panel">
+        <div class="panel-head"><h3>Site images</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:14px;">
+            Pictures built into the pages that you can change whenever you like. Upload a new one and it is live straight away. Clear it and that spot on the page is simply left empty &mdash; the page still works.
+          </p>
+          <div id="siteImagesBody"><div class="loading-state">Loading&hellip;</div></div>
+        </div>
+      </div>
     </div>
 
     <!-- PUBLISH (admin-only, no payment step) -->
@@ -2961,7 +2973,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'analytics') { loadAnalytics(7); loadAnalyticsReports(); }
     if (section === 'comments') loadPendingComments();
     if (section === 'dirprofiles') { loadDirProfiles(); loadProfileLinks(); }
-    if (section === 'pagecms') loadPageCms();
+    if (section === 'pagecms') { loadPageCms(); loadSiteImages(); }
     if (section === 'adbanners') loadAdBanners();
     if (section === 'publish') { loadPublishSection(); loadEmailStatus(); }
     if (section === 'polls') loadPolls();
@@ -4340,6 +4352,53 @@ async function loadAdBanners() {
 }
 
 // Page Content (CMS) — image blocks and wording overrides.
+// The swappable site pictures. The list of them lives on the server, so
+// this screen never needs to know which pictures exist — adding one there
+// puts a new upload field here with no change to this file.
+async function loadSiteImages() {
+  const body = document.getElementById('siteImagesBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/page-cms/admin/site-images');
+    const list = data.images || [];
+    if (!list.length) {
+      body.innerHTML = '<div class="empty-state">No swappable images are set up yet.</div>';
+      return;
+    }
+    body.innerHTML = list.map((img, i) => `
+      <div style="padding:14px 0; border-bottom:1px solid var(--paper-line);" data-site-image="${escapeAttrAdmin(img.key)}">
+        <div style="font-weight:700; margin-bottom:4px;">${escapeHtmlAdmin(img.label)}</div>
+        <div style="font-size:12.5px; color:var(--slate); margin-bottom:10px;">${escapeHtmlAdmin(img.hint || '')}</div>
+        <div id="siteImgField-${i}"></div>
+        <button class="approve" style="padding:5px 12px; margin-top:10px;"
+                onclick="saveSiteImage('${escapeAttrAdmin(img.key)}', ${i})">Save</button>
+        <span style="font-size:12px; color:var(--slate); margin-left:10px;">${img.value ? 'An image is set.' : 'Nothing set — this spot is empty on the page.'}</span>
+      </div>`).join('');
+
+    // Upload widgets mount after the rows exist, same as everywhere else.
+    list.forEach((img, i) => {
+      const host = document.getElementById(`siteImgField-${i}`);
+      if (host) host.innerHTML = UnplugUpload.fieldHtml(`siteImg-${i}`, img.value || '', '',
+        img.ratio ? { w: img.ratio.w, h: img.ratio.h, label: img.ratio.label } : {});
+    });
+  } catch (e) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(e.message || 'unknown error')}</div>`;
+  }
+}
+
+async function saveSiteImage(key, index) {
+  const host = document.getElementById(`siteImgField-${index}`);
+  const value = UnplugUpload.valueOf(host) || '';
+  try {
+    const res = await api('/page-cms/admin/site-images', {
+      method: 'PUT', body: JSON.stringify({ key, value }),
+    });
+    showToast(res.message || 'Saved.');
+    loadSiteImages();
+  } catch (e) { showToast(e.message || 'Could not save.', true); }
+}
+
 async function loadPageCms() {
   if (!document.querySelector("#cmsBlockImgUpload .img-upload")) document.getElementById("cmsBlockImgUpload").innerHTML = UnplugUpload.fieldHtml("blockImage", "");
   const blocksBody = document.getElementById('cmsBlocksBody');

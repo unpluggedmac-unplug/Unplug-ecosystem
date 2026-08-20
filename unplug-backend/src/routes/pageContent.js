@@ -1,4 +1,5 @@
 const express = require('express');
+const { SITE_IMAGES, splitKey, isKnownImageKey, isSafeImageUrl } = require('../utils/siteImages');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
@@ -102,6 +103,64 @@ router.put('/admin/content', requireRole('admin'), async (req, res, next) => {
     );
     logActivity(req.user.id, 'cms_content_changed', `${pageKey}.${contentKey}`);
     res.json({ saved: true, message: 'Saved — the change is live on the site.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /page-cms/admin/site-images — admin. The pictures that can be swapped,
+// each with whatever is currently set, so the screen can render an upload
+// field per image without knowing any of the keys itself.
+router.get('/admin/site-images', requireRole('admin'), async (req, res, next) => {
+  try {
+    const rows = await pool.query('SELECT page_key, content_key, value FROM page_content');
+    const current = {};
+    rows.rows.forEach((r) => { current[`${r.page_key}.${r.content_key}`] = r.value; });
+    res.json({
+      images: SITE_IMAGES.map((i) => ({ ...i, value: current[i.key] || null })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /page-cms/admin/site-images — admin sets or clears one picture.
+//
+// Deliberately NOT the generic content route: that one takes any key and any
+// string, which is right for wording but wrong for something that becomes an
+// <img src>. This accepts only keys on the known list and only addresses that
+// pass isSafeImageUrl, so a stored value cannot be a javascript: URL waiting
+// for a template that forgets to check.
+router.put('/admin/site-images', requireRole('admin'), async (req, res, next) => {
+  try {
+    const key = (req.body.key || '').trim();
+    if (!isKnownImageKey(key)) {
+      return res.status(404).json({ error: 'That is not a picture this site knows how to change.' });
+    }
+    const parts = splitKey(key);
+    const raw = req.body.value === undefined || req.body.value === null ? '' : String(req.body.value).trim();
+
+    // Empty clears it, matching how the wording editor reverts to built-in copy.
+    if (!raw) {
+      await pool.query('DELETE FROM page_content WHERE page_key = $1 AND content_key = $2',
+        [parts.pageKey, parts.contentKey]);
+      logActivity(req.user.id, 'site_image_cleared', key);
+      return res.json({ cleared: true, message: 'Removed — that spot on the page is now empty.' });
+    }
+    if (!isSafeImageUrl(raw)) {
+      return res.status(400).json({
+        error: 'That does not look like an image address. Upload a file, or paste a link starting with https://',
+      });
+    }
+    await pool.query(
+      `INSERT INTO page_content (page_key, content_key, value)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (page_key, content_key)
+       DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [parts.pageKey, parts.contentKey, raw]
+    );
+    logActivity(req.user.id, 'site_image_changed', key);
+    res.json({ saved: true, message: 'Saved — the new picture is live on the site.' });
   } catch (err) {
     next(err);
   }
