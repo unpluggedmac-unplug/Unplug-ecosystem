@@ -1463,6 +1463,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button data-page="competitions" data-i18n="nav.competitions">Competitions</button>
       <button data-page="investors" data-i18n="nav.investors">Investors</button>
       <button data-page="brandplacement" data-i18n="nav.marketplace">Marketplace</button>
+      <button data-page="nominate" data-i18n="nav.nominate">Nominate</button>
       <button data-page="members" data-i18n="nav.members">Members</button>
       <button data-page="deafcommunity" data-i18n="nav.deafcommunity">Deaf Community</button>
       <button data-page="about" data-i18n="nav.about">About</button>
@@ -2672,12 +2673,63 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 </main>
 
 <!-- ============ BRAND PLACEMENT ============ -->
+<!-- NOMINATE — the lead-capture page the growth strategy is built around.
+     A real page rather than a bolted-on file, so it carries the site's header,
+     nav, fonts, mobile rules, consent gate and analytics without any of that
+     being rebuilt. Linkable from a social bio as ?p=nominate . -->
+<main class="page" id="page-nominate">
+  <div class="wrap cms-blocks" data-cms-blocks="nominate"></div>
+  <div class="wrap" style="padding-top:56px; max-width:760px;">
+    <span class="eyebrow" data-cms="nominate.eyebrow">Nominate Someone</span>
+    <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 10px;" data-cms="nominate.title">Know someone who deserves to be seen?</h1>
+    <p class="lede" data-cms="nominate.lede">Every week we tell the story of an ordinary South African doing something worth noticing. Most of them would never put themselves forward. That is usually why they are worth writing about &mdash; and why it takes someone like you to point us to them.</p>
+
+    <div style="margin-top:32px; border:1px solid var(--paper-line); padding:26px 24px; background:var(--paper);">
+      <div class="field" style="margin-bottom:14px;">
+        <label for="nomName">Who are they? <span style="color:var(--red);">*</span></label>
+        <input id="nomName" type="text" maxlength="200" placeholder="Name and surname">
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="nomWhy">Why them?</label>
+        <textarea id="nomWhy" rows="4" placeholder="A sentence or two about what they do and why it matters. Anything you know helps."></textarea>
+      </div>
+      <div class="field" style="margin-bottom:6px;">
+        <label for="nomEmail">Your email</label>
+        <input id="nomEmail" type="email" placeholder="So we can tell you when their story goes live">
+      </div>
+      <label style="display:flex; gap:9px; align-items:flex-start; font-size:13.5px; color:var(--slate); margin:12px 0 4px; cursor:pointer;">
+        <input type="checkbox" id="nomSubscribe" checked style="margin-top:3px; flex:none;">
+        <span data-cms="nominate.optin">Also send me the Unplug newsletter &mdash; one email, once a week, real stories from around the country.</span>
+      </label>
+      <!-- Honeypot: a real person never fills this in. Matches the field the
+           API's honeypot middleware already checks. -->
+      <input type="text" id="nomWebsite" tabindex="-1" autocomplete="off" aria-hidden="true"
+             style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+      <button class="btn btn-solid" id="nomSubmit" style="width:auto; margin-top:16px;">Send nomination</button>
+      <p id="nomMsg" style="font-size:13px; margin:12px 0 0; min-height:18px;"></p>
+      <p class="consent-note">Nominations are read by a person before anything is published. We never publish an email address. <a href="?p=privacy">Privacy Policy</a>.</p>
+    </div>
+
+    <div style="margin-top:44px;">
+      <h2 style="font-size:22px; margin:0 0 10px;" data-cms="nominate.how.title">What happens next</h2>
+      <ol style="color:var(--slate); line-height:1.9; padding-left:20px;">
+        <li data-cms="nominate.how.1">We read every nomination ourselves &mdash; there is no algorithm here.</li>
+        <li data-cms="nominate.how.2">If it is a fit, we get in touch and take the time to do the story properly.</li>
+        <li data-cms="nominate.how.3">It goes live on Unplug, and we send them a card they can share with their own people.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
 <main class="page" id="page-brandplacement">
   <div class="wrap cms-blocks" data-cms-blocks="brandplacement"></div>
   <div class="wrap" style="padding-top:56px;">
     <span class="eyebrow">Advertise With Us</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Marketplace</h1>
-    <p class="lede">Put your brand in front of thousands of engaged readers. From homepage banners to sponsored editorial, we have a placement that fits your goals.</p>
+    <p class="lede">Put your brand alongside stories South Africans actually want to read. From homepage banners to sponsored editorial, there is a placement that fits your goals.</p>
+    <!-- REAL figures from the analytics tables, never typed in by hand.
+         See loadMediaKitStats. -->
+    <div id="mediaKitStats" style="margin:26px 0 8px;"></div>
   </div>
   <div class="divider wrap"><div class="line"></div><span class="print-mark"></span><div class="line"></div></div>
 
@@ -6911,6 +6963,121 @@ async function loadContributor(slug) {
   }
 }
 
+// ---- Nominate page (?p=nominate) ----
+//
+// Two things happen on one click, deliberately in this order: the nomination
+// goes first, the newsletter subscription second. If the second fails the
+// nomination is still safely in — losing somebody's tip-off because a mailing
+// list insert had a bad moment would be the wrong trade.
+(function setupNominatePage() {
+  const btn = document.getElementById('nomSubmit');
+  if (!btn) return;
+  const msg = document.getElementById('nomMsg');
+
+  function show(text, isError) {
+    msg.textContent = text;
+    msg.style.color = isError ? 'var(--red)' : 'green';
+  }
+
+  btn.addEventListener('click', async () => {
+    const nomineeName = document.getElementById('nomName').value.trim();
+    const message = document.getElementById('nomWhy').value.trim();
+    const email = document.getElementById('nomEmail').value.trim();
+    const subscribe = document.getElementById('nomSubscribe').checked;
+    const website = document.getElementById('nomWebsite').value;
+
+    if (!nomineeName) { show('Please tell us who you are nominating.', true); return; }
+    if (subscribe && email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      show('That email address does not look right.', true); return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    try {
+      const data = await api('/shoutouts/nominate', {
+        method: 'POST',
+        body: JSON.stringify({ nomineeName, message, email, website }),
+      });
+
+      // Only when they actually ticked the box AND gave an address. Adding
+      // somebody to a mailing list because they tipped us off about a friend
+      // is not consent.
+      if (subscribe && email) {
+        try {
+          await api('/newsletter/subscribe', {
+            method: 'POST', body: JSON.stringify({ email, website }),
+          });
+        } catch (e) { /* the nomination is what matters; the list can wait */ }
+      }
+
+      show(data.message || 'Thank you - a real person reads every one of these.', false);
+      ['nomName', 'nomWhy', 'nomEmail'].forEach((id) => { document.getElementById(id).value = ''; });
+
+      // The action this page exists for, so it is worth counting as a
+      // conversion rather than just another page view.
+      if (window.UnplugAnalytics) window.UnplugAnalytics.event('nomination_submitted');
+    } catch (err) {
+      show(err.message || 'Something went wrong. Please try again in a moment.', true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Send nomination';
+    }
+  });
+})();
+
+// ---- Real audience figures on the Advertise page ----
+//
+// The media kit as handed over carried "500+", "25-44" and "100%" as
+// placeholders to be filled in by hand. A number typed into a sales page is a
+// number nobody can check, including the person quoting it, and the first
+// advertiser who asks "how do you know?" is owed an answer.
+//
+// These come from the analytics tables. They will be smaller than invented
+// ones. They are also defensible, and an advertiser who later finds out the
+// audience was a guess does not come back.
+async function loadMediaKitStats() {
+  const el = document.getElementById('mediaKitStats');
+  if (!el) return;
+  try {
+    const d = await api('/analytics/media-kit');
+    const a = d.audience || {};
+
+    // Nothing measured yet: say so plainly rather than printing zeros, which
+    // read as a dead site.
+    if (!a.readers) {
+      el.innerHTML = '<p style="color:var(--slate); font-size:13.5px; margin:0;">' + escapeHtml(d.note || '') + '</p>';
+      return;
+    }
+
+    const stat = (n, label, sub) =>
+      `<div style="min-width:118px;">
+        <div style="font-size:30px; font-weight:700; line-height:1.1;">${n}</div>
+        <div style="font-size:11.5px; text-transform:uppercase; letter-spacing:0.08em; color:var(--slate); margin-top:4px;">${label}</div>
+        ${sub ? `<div style="font-size:11.5px; color:var(--slate);">${sub}</div>` : ''}
+      </div>`;
+
+    const mobile = (d.devices || []).find((x) => x.label === 'mobile');
+    const topCountry = (d.countries || [])[0];
+
+    el.innerHTML =
+      '<div style="display:flex; gap:34px; flex-wrap:wrap; margin-bottom:14px;">'
+      + stat(a.readers.toLocaleString(), 'Readers', 'last 30 days')
+      + stat(a.pageViews.toLocaleString(), 'Pages read', 'last 30 days')
+      + stat(a.returningPct + '%', 'Come back', 'returning visits')
+      + (mobile ? stat(mobile.pct + '%', 'On mobile', '') : '')
+      + (topCountry ? stat(escapeHtml(topCountry.label), 'Top country', topCountry.visits.toLocaleString() + ' visits') : '')
+      + '</div>'
+      + ((d.topTopics || []).length
+          ? '<p style="font-size:13px; color:var(--slate); margin:0 0 8px;"><strong>Most read subjects:</strong> '
+            + d.topTopics.slice(0, 4).map((t) => escapeHtml(t.label)).join(' &middot; ') + '</p>'
+          : '')
+      + '<p style="font-size:12px; color:var(--slate); margin:0;">' + escapeHtml(d.note || '') + '</p>';
+  } catch (e) {
+    // A sales page must never show a broken number. Showing nothing is fine.
+    el.innerHTML = '';
+  }
+}
+
 // ---- Homepage Investor Spotlight (references a live project by ID) ----
 async function loadSpotlight(){
   const card = document.getElementById('spotlightProjectCard');
@@ -7058,6 +7225,10 @@ function goToPage(pageId){
   document.getElementById('mainNav').classList.remove('open');
   window.scrollTo({top:0, behavior:'auto'});
   trackPageView(pageId);
+  // Real audience figures, fetched when the Advertise page is actually opened
+  // rather than on every page load — an advertiser is the only person who
+  // needs them.
+  if (pageId === 'brandplacement' && typeof loadMediaKitStats === 'function') loadMediaKitStats();
   const PAGE_TITLES = {
     home: 'Unplug Magazine — Real People. Real Impact.',
     news: 'Latest News — Unplug Magazine',
@@ -7068,6 +7239,7 @@ function goToPage(pageId){
     competitions: 'Competitions — Unplug Magazine',
     investors: 'Investor Relations — Unplug Magazine',
     brandplacement: 'Marketplace — Unplug Magazine',
+    nominate: 'Nominate Someone — Unplug Magazine',
     members: 'Members — Unplug Magazine',
     about: 'About Us — Unplug Magazine',
     contact: 'Contact Us — Unplug Magazine',

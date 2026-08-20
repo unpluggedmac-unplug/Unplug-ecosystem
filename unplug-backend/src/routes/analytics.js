@@ -26,6 +26,102 @@ router.get('/public-stats', async (req, res, next) => {
   }
 });
 
+// GET /analytics/media-kit — the audience figures an advertiser is shown.
+//
+// PUBLIC AND REAL. The media kit as handed over carried "500+", "25-44" and
+// "100%" as placeholders, to be replaced by hand. A number typed into a sales
+// page is a number nobody can check — including the person quoting it — and
+// the first advertiser who asks "how do you know?" is owed an answer.
+//
+// So these come from the analytics tables and nowhere else. Small honest
+// numbers beat impressive invented ones: an advertiser who later discovers the
+// audience was a guess does not come back, and the ones who buy on a real
+// number of the right people are the ones worth having.
+//
+// A 30-day window, because that is what "monthly audience" means and it is the
+// unit media kits are written in.
+//
+// Age and income brackets are DELIBERATELY ABSENT. That data does not exist —
+// it comes from an advertising profile of each visitor, which this site does
+// not collect and should not. A blank is honest; "25-44" would not be.
+router.get('/media-kit', async (req, res, next) => {
+  try {
+    const since = new Date(Date.now() - 30 * 864e5);
+
+    const [audience, devices, countries, topics, catalogue] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(DISTINCT visitor_id)::int AS readers,
+                COUNT(*)::int AS visits,
+                COALESCE(SUM(page_count), 0)::int AS page_views,
+                COUNT(*) FILTER (WHERE is_returning)::int AS returning_visits
+           FROM analytics_sessions WHERE started_at >= $1`,
+        [since]
+      ),
+      pool.query(
+        `SELECT COALESCE(device_type, 'unknown') AS label, COUNT(*)::int AS visits
+           FROM analytics_sessions WHERE started_at >= $1
+          GROUP BY 1 ORDER BY visits DESC`,
+        [since]
+      ),
+      pool.query(
+        `SELECT country AS label, COUNT(*)::int AS visits
+           FROM analytics_sessions
+          WHERE started_at >= $1 AND country IS NOT NULL
+          GROUP BY 1 ORDER BY visits DESC LIMIT 6`,
+        [since]
+      ),
+      pool.query(
+        `SELECT c.name AS label, COUNT(*)::int AS reads
+           FROM analytics_events e
+           JOIN articles a ON a.id = e.entity_id
+           JOIN categories c ON c.id = a.category_id
+          WHERE e.event_name = 'page_view' AND e.entity_type = 'article'
+            AND e.occurred_at >= $1
+          GROUP BY 1 ORDER BY reads DESC LIMIT 6`,
+        [since]
+      ),
+      // What the publication IS, which does not depend on traffic at all and
+      // is worth stating plainly while the audience numbers are still young.
+      Promise.all([
+        pool.query(`SELECT COUNT(*)::int AS c FROM articles WHERE status = 'approved'`),
+        pool.query(`SELECT COUNT(*)::int AS c FROM profiles WHERE status = 'approved'`),
+        pool.query(`SELECT COUNT(*)::int AS c FROM users`),
+        pool.query(`SELECT COUNT(*)::int AS c FROM newsletter_subscribers`),
+      ]),
+    ]);
+
+    const a = audience.rows[0];
+    const totalDeviceVisits = devices.rows.reduce((sum, r) => sum + r.visits, 0);
+    const [articles, listings, members, subscribers] = catalogue.map((r) => r.rows[0].c);
+
+    res.json({
+      windowDays: 30,
+      audience: {
+        readers: a.readers,
+        visits: a.visits,
+        pageViews: a.page_views,
+        returningPct: a.visits ? Math.round((a.returning_visits / a.visits) * 100) : 0,
+      },
+      devices: devices.rows.map((r) => ({
+        label: r.label,
+        visits: r.visits,
+        pct: totalDeviceVisits ? Math.round((r.visits / totalDeviceVisits) * 100) : 0,
+      })),
+      countries: countries.rows,
+      topTopics: topics.rows,
+      catalogue: { articles, listings, members, subscribers },
+      // Said out loud in the response so the page can never present a number
+      // as more solid than it is.
+      measuredFrom: since.toISOString(),
+      note: a.readers === 0
+        ? 'No audience data yet for this window. Analytics began recording recently, and only for visitors who accept the cookie bar.'
+        : 'Measured on unplugnews.com over the last 30 days. Counts only visitors who accepted analytics, so the true audience is larger.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /analytics/track — public, called once per page view by a small
 // snippet on the public site. No login required, no personal data stored
 // — session_id is just a random ID the visitor's own browser generates
