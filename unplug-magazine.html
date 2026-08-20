@@ -1367,6 +1367,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([aria-hidden="true"]),
   select,
   textarea{ min-height:44px !important; }
+
+  /* The two icon buttons in the header, which carry no .btn class and so were
+     missed by the rule above them. The hamburger was 24x28 — the single
+     most-tapped control on the mobile site, and smaller than a fingertip.
+
+     Both are transparent with only an SVG inside, so growing the box is
+     invisible: the icon does not change size, the area you can hit does. The
+     flex centring keeps the icon in the middle of the larger box instead of
+     pinned to its top-left corner. */
+  .nav-toggle, .header-search-btn{
+    min-width:44px; min-height:44px;
+    display:flex; align-items:center; justify-content:center;
+  }
 }
 
 /* A last line of defence rather than a fix: if any future block overhangs the
