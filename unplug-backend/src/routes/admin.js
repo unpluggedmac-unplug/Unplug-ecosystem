@@ -4,6 +4,7 @@ const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { balanceFor, historyFor } = require('../utils/accountCredit');
 const { sendEmail, isConfigured, verifyConnection, config: emailConfig } = require('../utils/email');
+const { marketingStatus } = require('../utils/marketingEvents');
 const { probe } = require('../utils/portProbe');
 
 const router = express.Router();
@@ -1442,6 +1443,7 @@ router.get('/email-status', requireRole('admin'), async (req, res) => {
       configured: false,
       connectionOk: false,
       message: 'SMTP is not set up. Verification codes and password resets are being written to the server log instead of sent, so new members cannot verify their accounts.',
+      marketing: marketingStatus(),
     });
   }
   const cfg = emailConfig();
@@ -1455,6 +1457,7 @@ router.get('/email-status', requireRole('admin'), async (req, res) => {
       configured: true,
       connectionOk: true,
       config: cfg,
+      marketing: marketingStatus(),
       message: cfg.provider === 'smtp'
         ? 'SMTP is configured and the mail server accepted our credentials.'
         : `${label} is configured and accepted our key.`,
@@ -1467,6 +1470,7 @@ router.get('/email-status', requireRole('admin'), async (req, res) => {
       configured: true,
       connectionOk: false,
       config: cfg,
+      marketing: marketingStatus(),
       message: `${label} is configured but failed: ${err.message}`,
     });
   }

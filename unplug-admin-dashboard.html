@@ -4654,9 +4654,31 @@ async function loadEmailStatus() {
     } else if (c.provider) {
       settings = `<br><span style="color:var(--slate); font-size:12px;">Using the <strong>${escapeHtmlAdmin(c.provider)}</strong> API over HTTPS, sending as <code>${escapeHtmlAdmin(c.from || '—')}</code></span>`;
     }
+    // The automation path is reported separately because it fails separately.
+    // Transactional email can be perfectly healthy while the nurture sequences
+    // silently send nothing — see marketingStatus() for the three states.
+    const m = s.marketing;
+    let marketing = '';
+    if (m) {
+      const tone = m.state === 'ok' ? 'var(--green, #2e7d32)'
+        : (m.state === 'broken' ? 'var(--red)' : 'var(--slate)');
+      const headline = m.state === 'ok' ? '✓ Automations can reach people'
+        : (m.state === 'broken' ? '✕ Automations are switched on but cannot email anyone'
+                                : '— Automations are not sending');
+      marketing = `<div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--paper-line);">`
+        + `<strong style="color:${tone};">${headline}</strong>`
+        + `<br><span style="color:var(--slate); font-size:12.5px;">${escapeHtmlAdmin(m.message)}</span>`
+        + `<br><span style="color:var(--slate); font-size:12px;">API key ${m.hasKey ? 'set' : 'NOT set'}`
+        + ` · Audience ${m.hasAudience ? 'set' : 'NOT set'}</span>`
+        + `<br><span style="color:var(--slate); font-size:12px;">Trigger names Resend must match exactly: `
+        + (m.events || []).map((e) => `<code>${escapeHtmlAdmin(e)}</code>`).join(', ')
+        + `</span></div>`;
+    }
+
     box.innerHTML = `<strong style="color:${ok ? 'var(--green, #2e7d32)' : 'var(--red)'};">`
       + (ok ? '✓ Email is working' : '✕ Email is not working')
-      + `</strong><br><span style="color:var(--slate);">${escapeHtmlAdmin(s.message)}</span>${settings}`;
+      + `</strong><br><span style="color:var(--slate);">${escapeHtmlAdmin(s.message)}</span>${settings}`
+      + marketing;
   } catch (err) {
     // Name the address we actually called. Every failure mode here (mixed
     // content, a stale saved address, a sleeping server) looks identical

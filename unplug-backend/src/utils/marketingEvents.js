@@ -91,4 +91,49 @@ async function track(eventName, { email, firstName, lastName, payload } = {}) {
   return { sent: true };
 }
 
-module.exports = { EVENTS, track, trackAsync, isConfigured };
+// WHAT STATE IS THE AUTOMATION PATH ACTUALLY IN?
+//
+// There are three ways for these sequences to do nothing, and from the outside
+// all three look identical to "nobody has signed up yet":
+//
+//   * no API key      — nothing is sent at all;
+//   * key but no audience — the event fires, but ensureContact() returns early,
+//     so there is no contact for the sequence to email. This is the nasty one:
+//     the automation is switched on in Resend, events arrive, and not a single
+//     email goes out;
+//   * both set — the path is capable of working, and anything still wrong is
+//     on the Resend side (sequence not enabled, wrong trigger name).
+//
+// Reported rather than inferred, so an admin can see which one they are in.
+function marketingStatus() {
+  const hasKey = Boolean(RESEND_API_KEY);
+  const hasAudience = Boolean(RESEND_AUDIENCE_ID);
+  let state;
+  let message;
+  if (!hasKey) {
+    state = 'off';
+    message = 'RESEND_API_KEY is not set, so no automation events are being sent at all. '
+      + 'Signups and advertising enquiries are recorded on the site but Resend never hears about them.';
+  } else if (!hasAudience) {
+    state = 'broken';
+    message = 'RESEND_API_KEY is set but RESEND_AUDIENCE_ID is not. Events are sent, but no contact '
+      + 'is created first — so an enabled sequence in Resend has nobody to email and silently sends '
+      + 'nothing. Set RESEND_AUDIENCE_ID to the audience the sequences run against.';
+  } else {
+    state = 'ok';
+    message = 'Both the API key and the audience are set. Contacts are created and events are sent, '
+      + 'so if a sequence still is not arriving the cause is on the Resend side — check the automation '
+      + 'is enabled and that its trigger matches the event name exactly.';
+  }
+  return {
+    state,
+    hasKey,
+    hasAudience,
+    message,
+    // Named so they can be compared character-for-character against the
+    // trigger configured in Resend. A trigger that almost matches fires never.
+    events: Object.values(EVENTS),
+  };
+}
+
+module.exports = { EVENTS, track, trackAsync, isConfigured, marketingStatus };

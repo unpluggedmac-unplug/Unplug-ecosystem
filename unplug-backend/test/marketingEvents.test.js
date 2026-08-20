@@ -253,3 +253,59 @@ test('re-running every migration is idempotent', async () => {
   const bad = await pool.query(`SELECT COUNT(*)::int AS n FROM inquiries WHERE enquiry_type IS NULL`);
   assert.equal(bad.rows[0].n, 0);
 });
+
+// ---------------------------------------------------------------------------
+// Reporting which state the automation path is in
+// ---------------------------------------------------------------------------
+
+test('THE THREE FAILURE STATES ARE REPORTED APART', () => {
+  // From the outside all three look like "nobody has signed up yet". The whole
+  // point of this is that an admin can tell them apart.
+  const keyBefore = process.env.RESEND_API_KEY;
+  const audBefore = process.env.RESEND_AUDIENCE_ID;
+  const load = () => {
+    delete require.cache[require.resolve('../src/utils/marketingEvents')];
+    return require('../src/utils/marketingEvents').marketingStatus();
+  };
+
+  try {
+    delete process.env.RESEND_API_KEY;
+    delete process.env.RESEND_AUDIENCE_ID;
+    const off = load();
+    assert.equal(off.state, 'off');
+    assert.equal(off.hasKey, false);
+    assert.match(off.message, /no automation events are being sent/i);
+
+    // The dangerous one: switched on in Resend, events arriving, nobody emailed.
+    process.env.RESEND_API_KEY = 'test-key';
+    delete process.env.RESEND_AUDIENCE_ID;
+    const broken = load();
+    assert.equal(broken.state, 'broken');
+    assert.equal(broken.hasKey, true);
+    assert.equal(broken.hasAudience, false);
+    assert.match(broken.message, /RESEND_AUDIENCE_ID/,
+      'the message must name the exact variable to set');
+
+    process.env.RESEND_AUDIENCE_ID = 'aud_123';
+    const ok = load();
+    assert.equal(ok.state, 'ok');
+    assert.match(ok.message, /Resend side/i,
+      'when the path is healthy it should point at where the fault must be instead');
+  } finally {
+    if (keyBefore === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = keyBefore;
+    if (audBefore === undefined) delete process.env.RESEND_AUDIENCE_ID;
+    else process.env.RESEND_AUDIENCE_ID = audBefore;
+    delete require.cache[require.resolve('../src/utils/marketingEvents')];
+  }
+});
+
+test('the status names the exact trigger strings Resend has to match', () => {
+  // A trigger that almost matches fires never, and comparing by eye against
+  // a screenshot is how "almost" happens.
+  const { marketingStatus, EVENTS } = require('../src/utils/marketingEvents');
+  const status = marketingStatus();
+  assert.deepEqual(status.events.sort(), Object.values(EVENTS).sort());
+  assert.ok(status.events.includes('unplug.nominator.joined'));
+  assert.ok(status.events.includes('unplug.advertiser.enquired'));
+});
