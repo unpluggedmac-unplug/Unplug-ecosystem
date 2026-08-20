@@ -201,6 +201,12 @@ nav.main-nav .nav-account[hidden]{ display:none; }
 .lede{ font-size:17px; line-height:1.65; color:var(--slate); max-width:70ch; margin-bottom:16px; }
 .hero p.lede{ font-size:18px; line-height:1.6; color:var(--slate); max-width:52ch; margin-bottom:28px; }
 .btn-row{ display:flex; gap:14px; flex-wrap:wrap; }
+/* `hidden` is only display:none in the user-agent stylesheet, so ANY rule
+   setting display overrides it — .btn below sets inline-flex, which meant a
+   button marked hidden stayed visible. This makes the attribute mean what it
+   says, everywhere. */
+[hidden]{ display:none !important; }
+
 .btn{
   display:inline-flex; align-items:center; gap:8px; padding:14px 24px;
   font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;
@@ -1361,14 +1367,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .get-app-body p{ color:var(--slate); line-height:1.7; margin:0 0 18px; max-width:56ch; }
 .get-app-actions{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
 .get-app-note{ font-size:13.5px; color:var(--slate); }
-.get-app-how{ margin-top:14px; }
-.get-app-how ol{ margin:0; padding-left:20px; color:var(--slate); font-size:14px; line-height:1.9; }
-.get-app-how strong{ color:var(--ink); }
 @media(max-width:640px){
   .get-app{ flex-direction:column; gap:18px; padding:22px 18px; align-items:center; text-align:center; }
   .get-app-body p{ margin-left:auto; margin-right:auto; }
   .get-app-actions{ justify-content:center; }
-  .get-app-how ol{ text-align:left; }
 }
 </style>
 </head>
@@ -1587,14 +1589,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <div class="get-app-body">
           <span class="eyebrow" data-cms="getapp.eyebrow">Get the app</span>
           <h2 data-cms="getapp.title">Keep Unplug one tap away</h2>
-          <p data-cms="getapp.lede">Add Unplug to your phone or computer and it opens like any other app &mdash; no typing the address, no hunting for the link. It is the same Unplug, just always there.</p>
+          <p data-cms="getapp.lede">Add Unplug to your phone or computer and it opens like any other app.</p>
           <div class="get-app-actions">
             <button class="btn btn-solid" id="getAppBtn" type="button">Add to my device</button>
             <span id="getAppNote" class="get-app-note"></span>
           </div>
-          <!-- Filled in per device: what to tap on an iPhone, where the button
-               is on a computer. Hidden until it has something to say. -->
-          <div id="getAppHow" class="get-app-how" hidden></div>
+          <!-- One short line, shown only if the browser refuses to install on
+               this device. Not a standing list of instructions. -->
+          <p id="getAppFallback" class="get-app-note" hidden></p>
         </div>
       </div>
     </div>
@@ -7368,17 +7370,27 @@ async function loadContributor(slug) {
 //     event and no API at all. The only honest thing is to say where the
 //     button is. A button claiming to install would simply do nothing.
 //   Already installed — say so, rather than offering it again.
+// ---- "Get the app" section on the homepage ----
+//
+// ONE CLICK INSTALLS IT, wherever the browser allows that at all.
+//
+// It cannot be made to happen without the click. No browser lets a page
+// install itself: beforeinstallprompt can only be fired from a real user
+// gesture, and the browser then shows its OWN confirmation that no site can
+// skip or style. That is deliberate on their part — otherwise any page could
+// put an icon on your phone. So "one tap, then confirm" is the floor, and
+// this gets as close to it as exists.
 (function setupGetAppSection() {
   const section = document.getElementById('getAppSection');
   if (!section) return;
 
   const btn = document.getElementById('getAppBtn');
   const note = document.getElementById('getAppNote');
-  const how = document.getElementById('getAppHow');
+  const fallback = document.getElementById('getAppFallback');
 
-  function steps(list) {
-    how.hidden = false;
-    how.innerHTML = '<ol>' + list.map((li) => '<li>' + li + '</li>').join('') + '</ol>';
+  function say(text) {
+    fallback.hidden = !text;
+    fallback.textContent = text || '';
   }
 
   function render() {
@@ -7387,68 +7399,49 @@ async function loadContributor(slug) {
 
     if (api.installed()) {
       btn.hidden = true;
-      how.hidden = true;
-      note.textContent = 'Installed — you can open Unplug straight from your home screen.';
+      note.textContent = 'Installed — open Unplug from your home screen.';
+      say('');
       return;
     }
 
-    const platform = api.platform();
-
-    // The browser has offered us a real prompt: the button does the whole job.
-    if (api.available()) {
-      btn.hidden = false;
-      btn.textContent = platform === 'desktop' ? 'Install on this computer' : 'Add to my home screen';
-      note.textContent = '';
-      how.hidden = true;
-      return;
-    }
-
-    // No prompt available. Explain rather than offering a button that cannot work.
-    btn.hidden = true;
-    if (platform === 'ios') {
-      note.textContent = 'On iPhone and iPad it takes two taps:';
-      steps([
-        'Tap the <strong>Share</strong> button at the bottom of Safari (the square with an arrow).',
-        'Scroll down and tap <strong>Add to Home Screen</strong>.',
-        'Tap <strong>Add</strong>. The Unplug icon appears with your other apps.',
-      ]);
-      return;
-    }
-
-    if (platform === 'desktop') {
-      note.textContent = 'To install it on this computer:';
-      steps([
-        'Look at the right-hand end of the address bar for the small <strong>install</strong> icon (a screen with an arrow).',
-        'Click it, then click <strong>Install</strong>.',
-        'Unplug opens in its own window and appears in your Start menu.',
-        'No icon there? Open the browser menu (&#8942;) and look for <strong>Install Unplug Magazine</strong> or <strong>Apps &rarr; Install this site</strong>.',
-      ]);
-      return;
-    }
-
-    note.textContent = 'To add it to your home screen:';
-    steps([
-      'Open the browser menu (&#8942;) at the top right.',
-      'Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.',
-      'Confirm, and the Unplug icon appears with your other apps.',
-    ]);
+    // The button is ALWAYS offered. Nothing is explained up front: most people
+    // are on a device where one click is genuinely all it takes, and a standing
+    // list of instructions for the ones who are not made the section look like
+    // a manual.
+    btn.hidden = false;
+    btn.textContent = api.platform() === 'desktop' ? 'Install on this computer' : 'Add to my device';
+    note.textContent = '';
+    say('');
   }
 
   btn.addEventListener('click', async () => {
     const api = window.UnplugInstall;
     if (!api) return;
+
     btn.disabled = true;
     try {
       const outcome = await api.prompt();
+
       if (outcome === 'accepted') {
-        note.textContent = 'Installing — look for the Unplug icon with your other apps.';
         btn.hidden = true;
-        how.hidden = true;
-      } else if (outcome === 'dismissed') {
-        note.textContent = 'No problem — the button stays here whenever you want it.';
+        note.textContent = 'Installing — look for the Unplug icon with your other apps.';
+        say('');
+        return;
+      }
+      if (outcome === 'dismissed') {
+        note.textContent = 'No problem — it is here whenever you want it.';
+        return;
+      }
+
+      // The browser never offered a prompt. Rather than a button that appears
+      // to do nothing, say the one thing that actually works on this device.
+      const platform = api.platform();
+      if (platform === 'ios') {
+        say('On iPhone, tap the Share button below, then "Add to Home Screen".');
+      } else if (platform === 'desktop') {
+        say('Use the install icon at the right-hand end of the address bar, or the browser menu.');
       } else {
-        // The browser never offered a prompt; fall through to instructions.
-        render();
+        say('Open the browser menu and tap "Install app" or "Add to Home screen".');
       }
     } finally {
       btn.disabled = false;
@@ -7457,12 +7450,8 @@ async function loadContributor(slug) {
 
   // WAIT FOR THE API RATHER THAN ASSUMING IT IS THERE. This block sits above
   // the one that defines window.UnplugInstall, so on first load it does not
-  // exist yet — the first version of this simply returned, leaving a button
-  // with its placeholder text that did nothing at all.
-  //
-  // Polling briefly is deliberate rather than reordering the two blocks: the
-  // order of unrelated code in one very large file is not something the next
-  // edit should have to preserve.
+  // exist yet — the first version simply returned, leaving a button with its
+  // placeholder text that did nothing at all.
   (function waitForApi(attempt) {
     if (window.UnplugInstall) {
       window.UnplugInstall.onChange(render);
@@ -7474,17 +7463,6 @@ async function loadContributor(slug) {
   })(0);
 })();
 
-// ---- Install as an app (Progressive Web App) ----
-//
-// Two jobs: register the service worker, and offer people a way to install
-// that they will actually notice. Chrome and Edge do show their own install
-// icon in the address bar, but almost nobody spots it, so the feature exists
-// and goes unused.
-//
-// The prompt is deliberately quiet: it appears only on a device that can
-// genuinely install, only when they have not already, and once dismissed it
-// stays dismissed. Nagging somebody to install a magazine is a good way to
-// make them close it.
 (function setupInstallPrompt() {
   const DISMISSED_KEY = 'unplug_install_dismissed';
 

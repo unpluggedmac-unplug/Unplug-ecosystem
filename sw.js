@@ -16,7 +16,7 @@
 // The cost is that opening the app is exactly as fast as the site is. That is
 // the right trade here.
 
-const VERSION = 'unplug-v2';
+const VERSION = 'unplug-v3';
 const OFFLINE_URL = '/offline.html';
 
 // The bare minimum needed to show something rather than a browser error page.
