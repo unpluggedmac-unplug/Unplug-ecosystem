@@ -4733,7 +4733,7 @@ async function loadPublishSection() {
   }
   artLoadPickList();
   // Needs TOP10_COMPETITION_ID, which is resolved above.
-  loadTop10Entries();
+  renderTop10EntriesInto('top10EntriesBody');
 }
 
 // ---------------------------------------------------------------------------
@@ -9191,8 +9191,37 @@ const TOP10_ENTRY_STATUS = {
   awaiting_payment: 'Awaiting payment — not shown',
 };
 
-async function loadTop10Entries() {
-  const body = document.getElementById('top10EntriesBody');
+// Adjust votes from the merged panel, which has the entry id rather than the
+// whole row object the old table passed around.
+async function adjustTop10VotesById(id) {
+  try {
+    const data = await api(`/competitions/${TOP10_COMPETITION_ID}/entries/admin`);
+    const entry = (data.entries || []).find((x) => x.id === id);
+    if (!entry) { showToast('That entry no longer exists.', true); return; }
+    await adjustTop10Votes(entry);
+  } catch (e) { showToast(e.message || 'Could not load that entry.', true); }
+}
+
+// Refreshes whichever Top 10 panels are currently on the page. Called after a
+// save or delete so the two screens can never show different states of the
+// same entry.
+function refreshTop10Panels() {
+  if (document.getElementById('top10EntriesBody')) renderTop10EntriesInto('top10EntriesBody');
+  if (document.getElementById('t10EntriesBody')) loadTop10Entries();
+}
+
+// ONE renderer, two screens.
+//
+// There were two functions called loadTop10Entries. JavaScript keeps the last
+// definition, so this one — the richer of the pair — never ran, and the
+// "Current Top 10 entries" panel under Publish sat on "Loading…" for ever.
+// The controls it offers (rename a manual entry, change its status, upload its
+// photo, delete it) were unreachable the whole time.
+//
+// It now takes the element to fill, so the Publish screen and the Top 10
+// screen share one implementation instead of drifting into two.
+async function renderTop10EntriesInto(elementId) {
+  const body = document.getElementById(elementId);
   if (!body) return;
   if (!TOP10_COMPETITION_ID) {
     body.innerHTML = '<div style="padding:16px; color:#666;">Could not find the Top 10 list.</div>';
@@ -9239,7 +9268,12 @@ function top10EntryRowHtml(e, index) {
           : '<span style="font-weight:400; font-size:11px; color:var(--slate); border:1px solid var(--paper-line); padding:1px 6px; margin-left:6px;">Directory profile</span>'}
       </div>
       <div style="font-size:12px; color:#666;">
-        ${e.vote_count} ${e.vote_count === 1 ? 'vote' : 'votes'}${e.has_payment ? ' · paid entry' : ''}
+        ${e.vote_count} ${e.vote_count === 1 ? 'vote' : 'votes'} this month${
+          e.all_time_vote_count !== undefined && e.all_time_vote_count !== e.vote_count
+            ? ` · ${e.all_time_vote_count} all time` : ''}${e.has_payment ? ' · paid entry' : ''}
+        ${e.entry_code
+          ? `<br>Entry Code <code style="font-size:12px;">${escapeHtmlAdmin(e.entry_code)}</code>`
+          : '<br><span style="color:var(--slate);">entry code assigned on approval</span>'}
       </div>
     </div>
     <div class="grid-2">
@@ -9254,6 +9288,7 @@ function top10EntryRowHtml(e, index) {
       ? `<div class="field"><label>Photo</label><div id="t10Img-${e.id}"></div></div>`
       : `<div class="field"><label>Photo</label><span style="font-size:12px; color:var(--slate);">Uses the Directory profile's feature image.</span></div>`}
     <button class="approve" style="padding:5px 12px;" onclick="saveTop10Entry(${e.id})">Save changes</button>
+    <button class="approve" style="padding:5px 12px;" onclick="adjustTop10VotesById(${e.id})">Adjust votes</button>
     ${deleteBtn}
   </div>`;
 }
@@ -9272,7 +9307,7 @@ async function saveTop10Entry(id) {
   try {
     await api(`/entries/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
     showToast('Entry saved.');
-    loadTop10Entries();
+    refreshTop10Panels();
   } catch (e) { showToast(e.message || 'Could not save.', true); }
 }
 
@@ -9284,7 +9319,7 @@ async function deleteTop10Entry(id) {
   try {
     await api(`/entries/${id}`, { method: 'DELETE' });
     showToast('Entry removed.');
-    loadTop10Entries();
+    refreshTop10Panels();
   } catch (e) { showToast(e.message || 'Could not remove.', true); }
 }
 
@@ -9694,79 +9729,20 @@ const VB_STATUS_LABEL = {
 // the sum of the votes rows — so an adjustment here writes a correction row
 // rather than overwriting a number, and stays visible in the audit log.
 // ---------------------------------------------------------------------------
+// The Top 10 screen shows the SAME panel as the Publish screen. It used to
+// have its own read-mostly table, which meant a name corrected on one screen
+// still looked wrong on the other until a reload.
 async function loadTop10Entries() {
-  const body = document.getElementById('t10EntriesBody');
-  body.innerHTML = '<div class="loading-state">Loading…</div>';
-  try {
-    // The Top 10 is a competition like any other, identified by its slug.
-    const comp = await api('/competitions/top-10');
-    const competitionId = comp.competition && comp.competition.id;
-    if (!competitionId) {
-      body.innerHTML = '<div class="empty-state">The Top 10 competition has not been set up yet.</div>';
-      return;
-    }
-    const data = await api(`/competitions/${competitionId}/entries/admin`);
-    const entries = data.entries || [];
-    if (!entries.length) {
-      body.innerHTML = '<div class="empty-state">No entries yet.</div>';
-      return;
-    }
-
-    const table = document.createElement('table');
-    const head = document.createElement('tr');
-    // Two vote columns since the Top 10 resets monthly: what shows on the
-    // public board right now, and every vote the entry has ever received —
-    // which is what a bulk purchase from an earlier month is counted in.
-    head.innerHTML = '<th style="width:52px;"></th><th>Name</th><th>Entry Code</th><th>Votes this month</th><th>All time</th><th>Status</th><th></th>';
-    table.appendChild(head);
-
-    entries.forEach((e) => {
-      const tr = document.createElement('tr');
-
-      const imgTd = document.createElement('td');
-      imgTd.innerHTML = e.image_url
-        ? `<img src="${escapeHtmlAdmin(e.image_url)}" alt="" style="width:40px; height:40px; border-radius:50%; object-fit:cover; background:var(--paper);">`
-        : '<div style="width:40px; height:40px; border-radius:50%; background:var(--paper);"></div>';
-      tr.appendChild(imgTd);
-
-      const nameTd = document.createElement('td');
-      nameTd.innerHTML = `<strong>${escapeHtmlAdmin(e.display_name || '—')}</strong>`
-        + (e.profile_slug ? `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtmlAdmin(e.profile_slug)}</span>` : '');
-      tr.appendChild(nameTd);
-
-      const codeTd = document.createElement('td');
-      // Entry codes are only assigned once an entry is approved, so saying so
-      // is more use than an empty cell an admin would otherwise report as a bug.
-      codeTd.innerHTML = e.entry_code
-        ? `<code style="font-size:12px;">${escapeHtmlAdmin(e.entry_code)}</code>`
-        : '<span style="font-size:11.5px; color:var(--slate);">assigned on approval</span>';
-      tr.appendChild(codeTd);
-
-      const votesTd = document.createElement('td');
-      votesTd.innerHTML = `<strong style="font-size:15px;">${Number(e.vote_count).toLocaleString()}</strong>`;
-      tr.appendChild(votesTd);
-
-      const allTimeTd = document.createElement('td');
-      allTimeTd.innerHTML = `<span style="color:var(--slate);">${Number(e.all_time_vote_count != null ? e.all_time_vote_count : e.vote_count).toLocaleString()}</span>`;
-      tr.appendChild(allTimeTd);
-
-      const statusTd = document.createElement('td');
-      statusTd.textContent = e.status;
-      tr.appendChild(statusTd);
-
-      const actionTd = document.createElement('td');
-      actionTd.innerHTML = '<div class="row-actions"><button class="approve">Adjust votes</button></div>';
-      actionTd.querySelector('button').addEventListener('click', () => adjustTop10Votes(e));
-      tr.appendChild(actionTd);
-
-      table.appendChild(tr);
-    });
-
-    body.innerHTML = '';
-    body.appendChild(table);
-  } catch (err) {
-    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  // The Top 10 screen can be opened before the Publish screen has ever run,
+  // so the competition id may not have been resolved yet. Resolve it here
+  // rather than rendering an unhelpful "could not find the list".
+  if (!TOP10_COMPETITION_ID) {
+    try {
+      const comp = await api('/competitions/top-10');
+      TOP10_COMPETITION_ID = (comp.competition && comp.competition.id) || null;
+    } catch (e) { /* renderTop10EntriesInto reports the failure below */ }
   }
+  await renderTop10EntriesInto('t10EntriesBody');
 }
 
 // A reason is required by the endpoint, not just asked for politely here —
@@ -9790,7 +9766,7 @@ async function adjustTop10Votes(entry) {
       method: 'POST', body: JSON.stringify({ delta, reason: reason.trim() }),
     });
     showToast(res.message || 'Votes adjusted.');
-    loadTop10Entries();
+    refreshTop10Panels();
   } catch (err) {
     showToast(err.message, true);
   }

@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { packagesFor } = require('../utils/servicePackages');
 
 const router = express.Router();
 
@@ -130,27 +131,27 @@ router.delete('/admin/:id', requireRole('admin'), async (req, res, next) => {
   }
 });
 
-// Homepage highlight packages. Mirrors HIGHLIGHT_PRICES in routes/payments.js,
-// which is what actually gets charged — served from here so the dashboard shows
-// the real prices instead of hardcoding its own copy.
-const HIGHLIGHT_PACKAGES = {
-  directory: [
-    { durationDays: 7,  price: 100.00, name: '7-Day Homepage Highlight' },
-    { durationDays: 14, price: 150.00, name: '14-Day Homepage Highlight' },
-    { durationDays: 21, price: 200.00, name: '21-Day Homepage Highlight' },
-    { durationDays: 28, price: 250.00, name: '28-Day Homepage Highlight' },
-  ],
-  article: [
-    { durationDays: 7,  price: 150.00, name: '7-Day Article Highlight' },
-    { durationDays: 14, price: 250.00, name: '14-Day Article Highlight' },
-    { durationDays: 21, price: 300.00, name: '21-Day Article Highlight' },
-    { durationDays: 28, price: 450.00, name: '28-Day Article Highlight' },
-  ],
-};
-
 // GET /highlights/packages — public. The packages + prices for the buy form.
-router.get('/packages', (req, res) => {
-  res.json({ packages: HIGHLIGHT_PACKAGES });
+//
+// These come from the admin-managed service_packages table, which is the SAME
+// place resolveAmount() charges from. This used to be a hardcoded table here
+// that a comment claimed "mirrors" the price list — and a mirror is only ever
+// correct until someone changes one side. An admin changing a highlight price
+// changed what checkout charged while this form went on quoting the old
+// number, which is a member being shown one price and billed another.
+//
+// packagesFor() falls back to the known-good constants if the table cannot be
+// read, so a database problem quotes the original price rather than nothing.
+router.get('/packages', async (req, res, next) => {
+  try {
+    const [article, directory] = await Promise.all([
+      packagesFor('highlight_article'),
+      packagesFor('highlight_directory'),
+    ]);
+    res.json({ packages: { article, directory } });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /highlights/mine — the member's own highlight promotions, at any status,

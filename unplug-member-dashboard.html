@@ -1935,133 +1935,14 @@ async function loadProfile() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// My Articles
-// ---------------------------------------------------------------------------
-async function loadArticles() {
-  const content = document.getElementById('articlesContent');
-  try {
-    const data = await api('/articles/mine');
-    if (!data.articles || data.articles.length === 0) {
-      content.innerHTML = '<div class="empty-state">You haven\'t submitted any stories yet.</div>';
-      return;
-    }
-    const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Title</th><th>Category</th><th>Status</th><th>Submitted</th></tr>';
-    data.articles.forEach((a) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${a.title}</td><td>${a.category || '—'}</td><td><span class="status-pill ${a.status}">${a.status}</span></td><td>${new Date(a.created_at).toLocaleDateString()}</td>`;
-      table.appendChild(tr);
-    });
-    content.innerHTML = '';
-    content.appendChild(table);
-  } catch (err) {
-    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// My Gallery
-// ---------------------------------------------------------------------------
-async function loadGallery() {
-  const content = document.getElementById('galleryContent');
-  try {
-    const data = await api('/gallery/mine');
-    if (!data.images || data.images.length === 0) {
-      content.innerHTML = '<div class="empty-state">You haven\'t submitted any photos yet.</div>';
-      return;
-    }
-    const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Caption</th><th>Status</th><th>Submitted</th></tr>';
-    data.images.forEach((img) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${img.caption || '—'}</td><td><span class="status-pill ${img.status}">${img.status}</span></td><td>${new Date(img.created_at).toLocaleDateString()}</td>`;
-      table.appendChild(tr);
-    });
-    content.innerHTML = '';
-    content.appendChild(table);
-  } catch (err) {
-    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// My Competition Entries
-// ---------------------------------------------------------------------------
-async function loadEntries() {
-  const content = document.getElementById('entriesContent');
-  try {
-    const data = await api('/entries/mine');
-    if (!data.entries || data.entries.length === 0) {
-      content.innerHTML = '<div class="empty-state">You haven\'t entered any competitions yet.</div>';
-      return;
-    }
-    const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Competition</th><th>Status</th><th>Votes</th><th>Entered</th></tr>';
-    data.entries.forEach((e) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${e.competition_name}</td><td><span class="status-pill ${e.status}">${e.status.replace('_',' ')}</span></td><td>${e.vote_count}</td><td>${new Date(e.created_at).toLocaleDateString()}</td>`;
-      table.appendChild(tr);
-    });
-    content.innerHTML = '';
-    content.appendChild(table);
-  } catch (err) {
-    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
-  }
-}
-
-// Reading list — stories saved from the magazine's article reader. Each row
-// links back to the article and can be removed without leaving the dashboard.
-async function loadReadingList() {
-  const content = document.getElementById('readingListContent');
-  if (!content) return;
-  try {
-    const data = await api('/saved');
-    const saved = data.saved || [];
-    if (saved.length === 0) {
-      content.innerHTML = '<div class="empty-state">Nothing saved yet — tap ☆ Save on any story to keep it here.</div>';
-      return;
-    }
-    content.innerHTML = '';
-    const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Story</th><th>Category</th><th>Saved</th><th></th></tr>';
-    saved.forEach((a) => {
-      const tr = document.createElement('tr');
-      const link = document.createElement('a');
-      link.href = 'unplug-magazine.html?p=article&id=' + a.id;
-      link.target = '_blank';
-      link.rel = 'noopener';
-      link.textContent = a.title;
-      const tdTitle = document.createElement('td');
-      tdTitle.appendChild(link);
-      const tdCat = document.createElement('td');
-      tdCat.textContent = a.category || '—';
-      const tdWhen = document.createElement('td');
-      tdWhen.textContent = new Date(a.saved_at).toLocaleDateString();
-      const tdAct = document.createElement('td');
-      const rm = document.createElement('button');
-      rm.className = 'btn-line';
-      rm.textContent = 'Remove';
-      rm.addEventListener('click', async () => {
-        rm.disabled = true;
-        try {
-          await api('/saved/' + a.id, { method: 'DELETE' });
-          tr.remove();
-          if (!table.querySelector('tr:nth-child(2)')) loadReadingList();
-        } catch (e) {
-          rm.disabled = false;
-          showToast('Could not remove: ' + e.message);
-        }
-      });
-      tdAct.appendChild(rm);
-      tr.append(tdTitle, tdCat, tdWhen, tdAct);
-      table.appendChild(tr);
-    });
-    content.appendChild(table);
-  } catch (err) {
-    content.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
-  }
-}
+// NOTE: four functions were removed from here — loadArticles, loadGallery,
+// loadEntries and an earlier loadReadingList.
+//
+// The first three targeted elements (#articlesContent, #galleryContent,
+// #entriesContent) that do not exist on this page, and nothing called them;
+// they would have thrown on null if anything had. The fourth was a second
+// definition of loadReadingList, which JavaScript overwrote with the card-grid
+// version further down — so it never ran either.
 // ---------------------------------------------------------------------------
 // Submit & Pay — one form covering Article, Event, Gallery, Top 10, Marketplace
 // ---------------------------------------------------------------------------
