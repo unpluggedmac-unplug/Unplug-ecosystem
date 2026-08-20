@@ -1,5 +1,6 @@
 const express = require('express');
 const { recordConversionAsync } = require('../utils/analyticsRecorder');
+const { EVENTS, trackAsync } = require('../utils/marketingEvents');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
@@ -20,6 +21,9 @@ router.post('/subscribe', publicSubmitLimiter, honeypot, async (req, res, next) 
       [email]
     );
     recordConversionAsync({ userId: req.user ? req.user.id : null, eventName: 'newsletter_signup' });
+    // Starts the reader nurture sequence in Resend. Fire-and-forget: a
+    // marketing sequence is not worth failing a signup over.
+    trackAsync(EVENTS.NOMINATOR_JOINED, { email, payload: { source: 'newsletter' } });
     res.status(201).json({ message: 'Subscribed — welcome to Unplug! You\'ll get our stories every Friday.' });
   } catch (err) {
     next(err);

@@ -15,6 +15,7 @@
 
 const express = require('express');
 const pool = require('../db');
+const { normaliseTags } = require('../utils/tags');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const myUnplugRouter = require('./myUnplug');
@@ -98,6 +99,14 @@ router.patch('/profiles/:userId', requireRole('admin'), async (req, res, next) =
         sets.push(`${column} = $${values.length}`);
       }
     }
+    // Tags too, so an admin can correct or remove what a member wrote about
+    // themselves without having to sign in as them. Cleaned through the same
+    // shared rules as every other tag write.
+    if (req.body.tags !== undefined) {
+      values.push(normaliseTags(req.body.tags));
+      sets.push(`tags = $${values.length}`);
+    }
+
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
 
     values.push(userId);

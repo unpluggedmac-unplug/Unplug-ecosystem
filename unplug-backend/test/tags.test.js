@@ -104,6 +104,7 @@ before(async () => {
   app.use('/my-unplug', require('../src/routes/myUnplug'));
   app.use('/search', require('../src/routes/search'));
   app.use('/admin/tags', require('../src/routes/adminTags'));
+  app.use('/admin/my-unplug', require('../src/routes/adminMyUnplug'));
   app.use((err, _req, res, _next) => res.status(500).json({ error: err.message }));
   await new Promise((resolve) => { server = app.listen(0, resolve); });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -376,6 +377,130 @@ test('the tag admin is admin-only', async () => {
   assert.equal((await req('GET', '/admin/tags', { token: memberToken })).status, 403);
   assert.equal((await req('POST', '/admin/tags/backfill', { token: memberToken, body: {} })).status, 403);
   assert.equal((await req('POST', '/admin/tags/rename', { token: memberToken, body: { from: 'a', to: 'b' } })).status, 403);
+});
+
+// ---------------------------------------------------------------------------
+// Full admin control: add, inspect, remove from one item
+// ---------------------------------------------------------------------------
+
+test('ADMIN CAN ADD A TAG to several items at once', async () => {
+  // Until this existed a tag could only be added by opening each item's own
+  // editor, which is fine for one and useless for twenty.
+  const u1 = await makeUser();
+  const u2 = await makeUser();
+  const a = await makeListing(u1, 'Bulk One');
+  const b = await makeListing(u2, 'Bulk Two');
+
+  const res = await req('POST', '/admin/tags/apply', {
+    token: adminToken,
+    body: { tag: 'Artisanal', items: [{ kind: 'directory', id: a }, { kind: 'directory', id: b }] },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.added, 2);
+
+  for (const id of [a, b]) {
+    const row = await pool.query('SELECT tags FROM profiles WHERE id = $1', [id]);
+    assert.ok(row.rows[0].tags.includes('Artisanal'));
+  }
+});
+
+test('adding a tag something already has is reported, not duplicated', async () => {
+  const u = await makeUser();
+  const id = await makeListing(u, 'Already Has It');
+  await pool.query('UPDATE profiles SET tags = $1 WHERE id = $2', [['Artisanal'], id]);
+
+  const res = await req('POST', '/admin/tags/apply', {
+    token: adminToken, body: { tag: 'artisanal', items: [{ kind: 'directory', id }] },
+  });
+  assert.equal(res.body.added, 0);
+  assert.equal(res.body.alreadyHadIt, 1, 'a different casing is the same tag');
+
+  const row = await pool.query('SELECT tags FROM profiles WHERE id = $1', [id]);
+  assert.equal(row.rows[0].tags.length, 1);
+});
+
+test('AN ITEM AT TEN TAGS IS REPORTED, never silently trimmed', async () => {
+  // Dropping one of their tags to make room, or dropping the new one without
+  // saying so, would both be worse than saying "this one is full".
+  const u = await makeUser();
+  const id = await makeListing(u, 'Completely Full');
+  await pool.query('UPDATE profiles SET tags = $1 WHERE id = $2',
+    [Array.from({ length: 10 }, (_, i) => 'full' + i), id]);
+
+  const res = await req('POST', '/admin/tags/apply', {
+    token: adminToken, body: { tag: 'One Too Many', items: [{ kind: 'directory', id }] },
+  });
+  assert.equal(res.body.added, 0);
+  assert.equal(res.body.full.length, 1);
+  assert.match(res.body.message, /already had 10 tags/);
+
+  const row = await pool.query('SELECT tags FROM profiles WHERE id = $1', [id]);
+  assert.equal(row.rows[0].tags.length, 10, 'their existing tags are untouched');
+  assert.ok(!row.rows[0].tags.includes('One Too Many'));
+});
+
+test('admin can see exactly which items carry a tag', async () => {
+  const res = await req('GET', '/admin/tags/items?tag=Artisanal', { token: adminToken });
+  assert.equal(res.status, 200);
+  assert.ok(res.body.items.length >= 3);
+  res.body.items.forEach((i) => {
+    assert.ok(i.kind && i.id && i.name !== undefined);
+    assert.ok(i.tags.some((t) => t.toLowerCase() === 'artisanal'));
+  });
+});
+
+test('admin can remove a tag from ONE item without touching the rest', async () => {
+  const before = await req('GET', '/admin/tags/items?tag=Artisanal', { token: adminToken });
+  const target = before.body.items[0];
+
+  const res = await req('POST', '/admin/tags/remove-from', {
+    token: adminToken, body: { tag: 'Artisanal', kind: target.kind, id: target.id },
+  });
+  assert.equal(res.status, 200);
+  assert.ok(!res.body.tags.some((t) => t.toLowerCase() === 'artisanal'));
+
+  const after = await req('GET', '/admin/tags/items?tag=Artisanal', { token: adminToken });
+  assert.equal(after.body.items.length, before.body.items.length - 1,
+    'only that one item lost the tag');
+});
+
+test('the picker finds things to tag by name', async () => {
+  const u = await makeUser();
+  await makeListing(u, 'Findable Bakery');
+  const res = await req('GET', '/admin/tags/search?q=Findable&kind=directory', { token: adminToken });
+  assert.ok(res.body.items.some((i) => i.name === 'Findable Bakery'));
+  const short = await req('GET', '/admin/tags/search?q=F', { token: adminToken });
+  assert.deepEqual(short.body.items, [], 'one letter would match half the site');
+});
+
+test('ADMIN CAN EDIT THE TAGS ON A MEMBER PROFILE', async () => {
+  // Correcting what somebody wrote about themselves must not require signing
+  // in as them.
+  const userId = await makeUser();
+  await req('PUT', '/my-unplug/me', {
+    token: tokenFor(userId),
+    body: { username: 'admedit' + userId, displayName: 'Admin Edited', tags: ['Typo Tagg'] },
+  });
+
+  const res = await req('PATCH', `/admin/my-unplug/profiles/${userId}`, {
+    token: adminToken, body: { tags: ['Poetry', 'Cape Town'] },
+  });
+  assert.equal(res.status, 200);
+  const row = await pool.query('SELECT tags FROM my_unplug_profiles WHERE user_id = $1', [userId]);
+  assert.deepEqual(row.rows[0].tags, ['Poetry', 'Cape Town']);
+});
+
+test('the new tag controls are admin-only', async () => {
+  const memberToken = tokenFor(await makeUser());
+  for (const [m, u, b] of [
+    ['GET', '/admin/tags/items?tag=x', null],
+    ['GET', '/admin/tags/search?q=xx', null],
+    ['POST', '/admin/tags/apply', { tag: 'x', items: [] }],
+    ['POST', '/admin/tags/remove-from', { tag: 'x', kind: 'directory', id: 1 }],
+  ]) {
+    assert.equal((await req(m, u, { body: b })).status, 401, `${m} ${u}`);
+    assert.equal((await req(m, u, { token: memberToken, body: b })).status, 403, `${m} ${u}`);
+  }
 });
 
 test('re-running every migration is idempotent', async () => {

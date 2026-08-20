@@ -2895,7 +2895,39 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
     <a href="https://vnkdigital.co.za" target="_blank" class="btn btn-solid vnk-btn">Get In Touch →</a>
   </div>
-</main>
+
+    <!-- ADVERTISING ENQUIRY. The page sold the idea and then offered no way to
+         act on it — the only contact form on the site was on the Contact page,
+         with a free-text subject, so an advertiser and a reader arrived
+         indistinguishable. This posts enquiryType 'advertising', which is what
+         starts the advertiser sequence. -->
+    <div id="advertiseEnquire" style="margin-top:44px; border:1px solid var(--paper-line); padding:26px 24px; background:var(--paper); max-width:720px;">
+      <h2 style="font-size:22px; margin:0 0 6px;" data-cms="advertise.enquire.title">Talk to us about a placement</h2>
+      <p style="font-size:14px; color:var(--slate); margin:0 0 18px;" data-cms="advertise.enquire.lede">Tell us a little about your business and what you are hoping for. A person reads these &mdash; you will get a reply, not an autoresponder.</p>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="advName">Your name <span style="color:var(--red);">*</span></label>
+        <input id="advName" type="text" maxlength="160" placeholder="Name and surname">
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="advEmail">Email <span style="color:var(--red);">*</span></label>
+        <input id="advEmail" type="email" placeholder="Where we should reply">
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="advBusiness">Business name</label>
+        <input id="advBusiness" type="text" maxlength="200" placeholder="e.g. Bo-Kaap Bakery">
+      </div>
+      <div class="field" style="margin-bottom:6px;">
+        <label for="advMessage">What are you hoping for? <span style="color:var(--red);">*</span></label>
+        <textarea id="advMessage" rows="4" placeholder="A banner, a Directory listing, a sponsored feature — or just tell us the goal and we will suggest something."></textarea>
+      </div>
+      <input type="text" id="advWebsite" tabindex="-1" autocomplete="off" aria-hidden="true"
+             style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+      <button class="btn btn-solid" id="advSubmit" style="width:auto; margin-top:16px;">Send enquiry</button>
+      <p id="advMsg" style="font-size:13px; margin:12px 0 0; min-height:18px;"></p>
+      <p class="consent-note">We will email you about advertising with Unplug. Unsubscribe any time. <a href="?p=privacy">Privacy Policy</a>.</p>
+    </div>
+
+  </main>
 
 <!-- ============ CONTACT ============ -->
 <main class="page" id="page-contact">
@@ -7213,6 +7245,57 @@ async function loadContributor(slug) {
       box.innerHTML = escapeHtml(err.message || 'That card link is not valid.');
     }
   };
+})();
+
+// ---- Advertising enquiry (on the Advertise page) ----
+//
+// Posts enquiryType 'advertising', which is what starts the advertiser
+// sequence. The general Contact form deliberately does NOT set it: somebody
+// asking where to find an article must never be enrolled in a five-email sales
+// sequence.
+(function setupAdvertiseEnquiry() {
+  const btn = document.getElementById('advSubmit');
+  if (!btn) return;
+  const msg = document.getElementById('advMsg');
+
+  function show(text, isError) {
+    msg.textContent = text;
+    msg.style.color = isError ? 'var(--red)' : 'green';
+  }
+
+  btn.addEventListener('click', async () => {
+    const name = document.getElementById('advName').value.trim();
+    const email = document.getElementById('advEmail').value.trim();
+    const business = document.getElementById('advBusiness').value.trim();
+    const message = document.getElementById('advMessage').value.trim();
+
+    if (!name) { show('Please tell us your name.', true); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { show('That email address does not look right.', true); return; }
+    if (!message) { show('Tell us briefly what you are hoping for.', true); return; }
+
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      const data = await api('/inquiries', {
+        method: 'POST',
+        body: JSON.stringify({
+          name, email,
+          // The business name rides in as the subject, which is what the
+          // advertiser sequence shows and what an admin sees in the queue.
+          subject: business || 'Advertising enquiry',
+          message,
+          enquiryType: 'advertising',
+          website: document.getElementById('advWebsite').value,
+        }),
+      });
+      show(data.message || 'Thank you — we will be in touch.', false);
+      ['advName', 'advEmail', 'advBusiness', 'advMessage'].forEach((id) => { document.getElementById(id).value = ''; });
+      if (window.UnplugAnalytics) window.UnplugAnalytics.event('advertising_enquiry');
+    } catch (err) {
+      show(err.message || 'Could not send that right now. Please try again.', true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send enquiry';
+    }
+  });
 })();
 
 // ---- Nominate page (?p=nominate) ----

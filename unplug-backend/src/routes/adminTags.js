@@ -167,4 +167,154 @@ router.post('/backfill', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// The three tables tags live on. Kept as one table so every endpoint below
+// speaks the same language, and so adding a fourth taggable thing is one line
+// rather than three switch statements.
+//
+// `key` is the primary key column, which differs: my_unplug_profiles is keyed
+// by user_id, not id.
+const TAGGABLE = {
+  article: { table: 'articles', key: 'id', label: 'title', where: '' },
+  directory: { table: 'profiles', key: 'id', label: 'display_name', where: '' },
+  member: { table: 'my_unplug_profiles', key: 'user_id', label: 'display_name', where: '' },
+};
+
+// GET /admin/tags/items?tag=Coffee — everything carrying one tag.
+//
+// Without this the tag list can say "used 7 times" and give no way to find
+// those seven, which makes "remove this from the one listing that has it
+// wrong" impossible without a database client.
+router.get('/items', requireRole('admin'), async (req, res, next) => {
+  try {
+    const tag = String(req.query.tag || '').trim();
+    if (!tag) return res.status(400).json({ error: 'Which tag?' });
+
+    const out = [];
+    for (const [kind, t] of Object.entries(TAGGABLE)) {
+      // Case-insensitive, because the list groups spellings together and an
+      // admin clicking "Coffee" means every casing of it.
+      const r = await pool.query(
+        `SELECT ${t.key} AS id, ${t.label} AS name, tags
+           FROM ${t.table}
+          WHERE tags IS NOT NULL
+            AND EXISTS (SELECT 1 FROM unnest(tags) x WHERE lower(x) = lower($1))
+          ORDER BY ${t.label} ASC LIMIT 200`,
+        [tag]
+      );
+      r.rows.forEach((row) => out.push({ kind, id: row.id, name: row.name, tags: row.tags }));
+    }
+    res.json({ tag, items: out, total: out.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/tags/apply — body { tag, items: [{ kind, id }] }
+//
+// ADDING a tag to things that already exist. Until now a tag could only be
+// added by opening each item's own editor, which is fine for one and useless
+// for twenty.
+//
+// Reads the current tags and writes them back rather than using array_append,
+// because the ten-tag ceiling and the de-duplication rules live in one place
+// (utils/tags.js) and this must not grow a second, slightly different copy.
+router.post('/apply', requireRole('admin'), async (req, res, next) => {
+  try {
+    const cleaned = normaliseTags(req.body.tag);
+    const tag = cleaned && cleaned.length ? cleaned[0] : null;
+    if (!tag) return res.status(400).json({ error: 'Give a tag to add.' });
+
+    const items = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!items.length) return res.status(400).json({ error: 'Choose at least one item to tag.' });
+
+    const result = { added: 0, alreadyHadIt: 0, full: [] };
+
+    for (const item of items) {
+      const t = TAGGABLE[item.kind];
+      const id = Number(item.id);
+      if (!t || !Number.isInteger(id)) continue;
+
+      const current = await pool.query(`SELECT tags, ${t.label} AS name FROM ${t.table} WHERE ${t.key} = $1`, [id]);
+      if (!current.rows.length) continue;
+
+      const existing = current.rows[0].tags || [];
+      if (existing.some((x) => x.toLowerCase() === tag.toLowerCase())) { result.alreadyHadIt++; continue; }
+
+      // At the ceiling: reported rather than silently dropping the tag or
+      // silently dropping one of theirs to make room.
+      if (existing.length >= MAX_TAGS) {
+        result.full.push({ kind: item.kind, id, name: current.rows[0].name });
+        continue;
+      }
+
+      await pool.query(`UPDATE ${t.table} SET tags = $1 WHERE ${t.key} = $2`,
+        [normaliseTags([...existing, tag]), id]);
+      result.added++;
+    }
+
+    await logActivity(req.user.id, 'tag_applied',
+      `Added tag "${tag}" to ${result.added} item(s)`).catch(() => {});
+
+    res.json({
+      tag, ...result,
+      message: `Added "${tag}" to ${result.added} item(s).`
+        + (result.alreadyHadIt ? ` ${result.alreadyHadIt} already had it.` : '')
+        + (result.full.length ? ` ${result.full.length} already had ${MAX_TAGS} tags and were left alone.` : ''),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/tags/remove-from — body { tag, kind, id }
+// Takes a tag off ONE item, as opposed to /rename with no target which takes
+// it off everything.
+router.post('/remove-from', requireRole('admin'), async (req, res, next) => {
+  try {
+    const tag = String(req.body.tag || '').trim();
+    const t = TAGGABLE[req.body.kind];
+    const id = Number(req.body.id);
+    if (!tag || !t || !Number.isInteger(id)) {
+      return res.status(400).json({ error: 'A tag, a kind and a valid id are required.' });
+    }
+
+    const current = await pool.query(`SELECT tags FROM ${t.table} WHERE ${t.key} = $1`, [id]);
+    if (!current.rows.length) return res.status(404).json({ error: 'That item no longer exists.' });
+
+    const kept = (current.rows[0].tags || []).filter((x) => x.toLowerCase() !== tag.toLowerCase());
+    await pool.query(`UPDATE ${t.table} SET tags = $1 WHERE ${t.key} = $2`, [kept, id]);
+
+    await logActivity(req.user.id, 'tag_removed_from_item',
+      `Removed tag "${tag}" from ${req.body.kind} ${id}`).catch(() => {});
+
+    res.json({ removed: true, tags: kept });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/tags/search?q=bak&kind=directory — find things to tag.
+// The picker behind "add this tag to…".
+router.get('/search', requireRole('admin'), async (req, res, next) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json({ items: [] });
+    const kinds = TAGGABLE[req.query.kind] ? [req.query.kind] : Object.keys(TAGGABLE);
+
+    const out = [];
+    for (const kind of kinds) {
+      const t = TAGGABLE[kind];
+      const r = await pool.query(
+        `SELECT ${t.key} AS id, ${t.label} AS name, tags FROM ${t.table}
+          WHERE ${t.label} ILIKE $1 ORDER BY ${t.label} ASC LIMIT 15`,
+        [`%${q}%`]
+      );
+      r.rows.forEach((row) => out.push({ kind, id: row.id, name: row.name, tags: row.tags || [] }));
+    }
+    res.json({ items: out });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

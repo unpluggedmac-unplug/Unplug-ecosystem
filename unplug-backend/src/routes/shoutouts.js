@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { EVENTS, trackAsync } = require('../utils/marketingEvents');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { recordParticipationAsync } = require('../utils/participation');
@@ -109,6 +110,20 @@ router.post('/nominate', publicSubmitLimiter, honeypot, async (req, res, next) =
     // credited for it. Capped at 5/day by the action, so the form cannot be
     // submitted repeatedly for points.
     if (req.user) recordParticipationAsync(req.user.id, 'recognition_nominate');
+
+    // Starts the reader nurture sequence. The nominee's name is carried so the
+    // first email can say who it was about — that variable is why Sequence A
+    // email 1 reads as a thank-you rather than a form letter. Only fires when
+    // an address was actually given: nominating a friend anonymously is not
+    // consent to be emailed.
+    const nominatorEmail = (email || '').trim();
+    if (nominatorEmail) {
+      trackAsync(EVENTS.NOMINATOR_JOINED, {
+        email: nominatorEmail,
+        payload: { NOMINEE_NAME: name, source: 'nomination' },
+      });
+    }
+
     res.status(201).json({
       // Says the week out loud. Someone who nominates a friend and sees
       // nothing for days should know that's the process working, not a

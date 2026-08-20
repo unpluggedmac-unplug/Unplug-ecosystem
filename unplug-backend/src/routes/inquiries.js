@@ -3,6 +3,7 @@ const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
+const { EVENTS, trackAsync } = require('../utils/marketingEvents');
 
 const router = express.Router();
 
@@ -13,10 +14,23 @@ router.post('/', publicSubmitLimiter, honeypot, async (req, res, next) => {
     if (!name || !email || !message) {
       return res.status(400).json({ error: 'name, email, and message are required.' });
     }
+    // Only two kinds exist, and anything unrecognised is 'general'. An
+    // advertising enquiry starts a five-email sales sequence, so this must
+    // never be inferred from words somebody happened to type.
+    const enquiryType = req.body.enquiryType === 'advertising' ? 'advertising' : 'general';
+
     await pool.query(
-      `INSERT INTO inquiries (name, email, subject, message) VALUES ($1, $2, $3, $4)`,
-      [name, email, subject || null, message]
+      `INSERT INTO inquiries (name, email, subject, message, enquiry_type) VALUES ($1, $2, $3, $4, $5)`,
+      [name, email, subject || null, message, enquiryType]
     );
+    if (enquiryType === 'advertising') {
+      const firstName = String(name).trim().split(/[ ]+/)[0];
+      trackAsync(EVENTS.ADVERTISER_ENQUIRED, {
+        email, firstName,
+        payload: { businessName: subject || '', source: 'advertise-page' },
+      });
+    }
+
     res.status(201).json({ message: 'Thanks — we\'ll get back to you soon.' });
   } catch (err) {
     next(err);

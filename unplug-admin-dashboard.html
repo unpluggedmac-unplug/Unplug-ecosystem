@@ -2113,6 +2113,22 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="panel" style="margin-top:16px;">
+        <div class="panel-head"><h3>Add a tag to things</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin:0 0 12px;">Search for articles, listings or member profiles, tick the ones you mean, and add a tag to all of them at once. Anything already at 10 tags is left alone and reported rather than having one of its tags dropped to make room.</p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;">
+            <div class="field" style="min-width:180px;"><label for="tagApplyTag">Tag to add</label><input id="tagApplyTag" placeholder="e.g. Coffee"></div>
+            <div class="field" style="flex:1; min-width:200px;"><label for="tagApplySearch">Find items</label><input id="tagApplySearch" placeholder="Search by name or title&hellip;"></div>
+            <button class="btn btn-line" id="tagApplySearchBtn" style="width:auto;">Search</button>
+          </div>
+          <div id="tagApplyResults" style="max-height:220px; overflow:auto; border:1px solid var(--paper-line); padding:8px 12px; margin-bottom:12px;"></div>
+          <div id="tagApplyChosen" style="margin-bottom:12px;"></div>
+          <button class="btn btn-solid" id="tagApplyBtn" style="width:auto;">Add tag to selected</button>
+          <span id="tagApplyNote" style="font-size:12px; color:var(--slate); display:block; margin-top:10px;"></span>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
         <div class="panel-head"><h3>All tags</h3></div>
         <div class="panel-body" id="tagsBody" style="padding:0;">Loading&hellip;</div>
       </div>
@@ -10043,6 +10059,125 @@ document.addEventListener('DOMContentLoaded', () => {
 // TAGS — every tag in use, across articles, listings and member profiles
 // ---------------------------------------------------------------------------
 
+// Expands a tag row to show exactly what carries it, with a per-item remove.
+// The count alone ("used 7 times") is not actionable — "take this off the one
+// listing that has it wrong" needs the list.
+async function tagShowItems(tag, hostRow) {
+  let panel = hostRow.nextElementSibling;
+  if (panel && panel.classList.contains('tag-items-row')) { panel.remove(); return; }
+
+  panel = document.createElement('tr');
+  panel.className = 'tag-items-row';
+  panel.innerHTML = '<td colspan="6" style="background:var(--paper);">Loading&hellip;</td>';
+  hostRow.parentNode.insertBefore(panel, hostRow.nextSibling);
+
+  try {
+    const d = await api('/admin/tags/items?tag=' + encodeURIComponent(tag));
+    const cell = panel.firstChild;
+    if (!d.items.length) { cell.textContent = 'Nothing carries this tag any more.'; return; }
+
+    const KIND = { article: 'Article', directory: 'Directory listing', member: 'Member' };
+    cell.innerHTML = '<div style="padding:10px 16px;">'
+      + d.items.map((i) =>
+        `<div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:5px 0; border-bottom:1px solid var(--paper-line);">
+           <span><strong>${escapeHtmlAdmin(i.name || '(untitled)')}</strong>
+             <span style="font-size:11.5px; color:var(--slate);"> &middot; ${KIND[i.kind] || i.kind}</span></span>
+           <button class="reject" style="padding:3px 10px;" data-kind="${i.kind}" data-id="${i.id}">Remove tag</button>
+         </div>`).join('')
+      + '</div>';
+
+    cell.querySelectorAll('button[data-kind]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/admin/tags/remove-from', {
+            method: 'POST',
+            body: JSON.stringify({ tag, kind: btn.dataset.kind, id: Number(btn.dataset.id) }),
+          });
+          showToast('Tag removed from that item.');
+          panel.remove();
+          loadTagsAdmin();
+        } catch (err) { showToast(err.message, true); }
+      });
+    });
+  } catch (e) {
+    panel.firstChild.textContent = e.message || 'Could not load.';
+  }
+}
+
+// The "add a tag to things" picker. Search, tick what you mean, apply.
+(function setupTagApply() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const searchBtn = document.getElementById('tagApplySearchBtn');
+    if (!searchBtn) return;
+
+    const chosen = new Map(); // "kind:id" -> {kind,id,name}
+
+    function renderChosen() {
+      const el = document.getElementById('tagApplyChosen');
+      if (!chosen.size) { el.innerHTML = '<span style="color:var(--slate); font-size:12.5px;">Nothing selected yet.</span>'; return; }
+      el.innerHTML = Array.from(chosen.values()).map((c) =>
+        `<span style="display:inline-block; border:1px solid var(--paper-line); border-radius:100px; padding:3px 10px; margin:0 6px 6px 0; font-size:12.5px;">
+           ${escapeHtmlAdmin(c.name)} <button type="button" data-key="${c.kind}:${c.id}" style="border:none; background:none; cursor:pointer; color:var(--red);">&times;</button>
+         </span>`).join('');
+      el.querySelectorAll('button[data-key]').forEach((b) => {
+        b.addEventListener('click', () => { chosen.delete(b.dataset.key); renderChosen(); });
+      });
+    }
+    renderChosen();
+
+    async function runSearch() {
+      const q = document.getElementById('tagApplySearch').value.trim();
+      const results = document.getElementById('tagApplyResults');
+      if (q.length < 2) { results.innerHTML = '<span style="color:var(--slate); font-size:12.5px;">Type at least two letters.</span>'; return; }
+      results.innerHTML = 'Searching&hellip;';
+      try {
+        const d = await api('/admin/tags/search?q=' + encodeURIComponent(q));
+        if (!d.items.length) { results.innerHTML = '<span style="color:var(--slate); font-size:12.5px;">Nothing matched.</span>'; return; }
+        const KIND = { article: 'Article', directory: 'Directory', member: 'Member' };
+        results.innerHTML = d.items.map((i, n) =>
+          `<div style="padding:4px 0;"><label style="cursor:pointer; font-size:13px;">
+             <input type="checkbox" data-n="${n}"> ${escapeHtmlAdmin(i.name || '(untitled)')}
+             <span style="color:var(--slate); font-size:11.5px;">&middot; ${KIND[i.kind]} &middot; ${i.tags.length}/10 tags</span>
+           </label></div>`).join('');
+        results.querySelectorAll('input[data-n]').forEach((cb) => {
+          cb.addEventListener('change', () => {
+            const item = d.items[Number(cb.dataset.n)];
+            const key = item.kind + ':' + item.id;
+            if (cb.checked) chosen.set(key, item); else chosen.delete(key);
+            renderChosen();
+          });
+        });
+      } catch (e) { results.innerHTML = escapeHtmlAdmin(e.message); }
+    }
+
+    searchBtn.addEventListener('click', runSearch);
+    document.getElementById('tagApplySearch').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runSearch();
+    });
+
+    document.getElementById('tagApplyBtn').addEventListener('click', async () => {
+      const tag = document.getElementById('tagApplyTag').value.trim();
+      const note = document.getElementById('tagApplyNote');
+      if (!tag) { note.textContent = 'Type the tag to add.'; return; }
+      if (!chosen.size) { note.textContent = 'Search and tick at least one item first.'; return; }
+      try {
+        const d = await api('/admin/tags/apply', {
+          method: 'POST',
+          body: JSON.stringify({ tag, items: Array.from(chosen.values()).map((c) => ({ kind: c.kind, id: c.id })) }),
+        });
+        note.textContent = d.message;
+        showToast(d.message);
+        chosen.clear(); renderChosen();
+        document.getElementById('tagApplyResults').innerHTML = '';
+        loadTagsAdmin();
+      } catch (err) {
+        note.textContent = err.message;
+        showToast(err.message, true);
+      }
+    });
+  });
+})();
+
 async function loadTagsAdmin() {
   const body = document.getElementById('tagsBody');
   const totals = document.getElementById('tagsTotals');
@@ -10080,7 +10215,9 @@ async function loadTagsAdmin() {
         + `<td>${Number(r.articles).toLocaleString()}</td>`
         + `<td>${Number(r.directory).toLocaleString()}</td>`
         + `<td>${Number(r.members).toLocaleString()}</td>`
-        + '<td><div class="row-actions"><button class="approve">Rename</button><button class="reject">Remove</button></div></td>';
+        + '<td><div class="row-actions"><button class="btn-see">See items</button><button class="approve">Rename</button><button class="reject">Remove</button></div></td>';
+
+      tr.querySelector('.btn-see').addEventListener('click', () => tagShowItems(r.tag, tr));
 
       tr.querySelector('.approve').addEventListener('click', async () => {
         const to = prompt(`Rename "${r.tag}" to what?\n\nEverything tagged with it is updated. Renaming it to an existing tag merges the two.`, r.tag);
