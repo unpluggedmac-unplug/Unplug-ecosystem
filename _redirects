@@ -22,4 +22,7 @@
 # index.html is deliberately left in place. If this rule ever fails to apply,
 # the old stub still answers and the site still works — a broken homepage is
 # not a risk worth taking for a tidier tree.
-/    /unplug-magazine.html    200
+# The target is the EXTENSIONLESS path. Pages serves /unplug-magazine.html
+# as a 308 to /unplug-magazine, and a rewrite whose destination is itself
+# a redirect is not one Pages will follow.
+/    /unplug-magazine    200
