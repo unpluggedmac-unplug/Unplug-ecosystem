@@ -7455,10 +7455,23 @@ async function loadContributor(slug) {
     }
   });
 
-  // Re-render when the browser decides it can offer an install, which often
-  // happens a moment after the page loads rather than immediately.
-  if (window.UnplugInstall) window.UnplugInstall.onChange(render);
-  render();
+  // WAIT FOR THE API RATHER THAN ASSUMING IT IS THERE. This block sits above
+  // the one that defines window.UnplugInstall, so on first load it does not
+  // exist yet — the first version of this simply returned, leaving a button
+  // with its placeholder text that did nothing at all.
+  //
+  // Polling briefly is deliberate rather than reordering the two blocks: the
+  // order of unrelated code in one very large file is not something the next
+  // edit should have to preserve.
+  (function waitForApi(attempt) {
+    if (window.UnplugInstall) {
+      window.UnplugInstall.onChange(render);
+      render();
+      return;
+    }
+    if (attempt > 40) return; // ~4 seconds; the API is simply not present
+    setTimeout(() => waitForApi(attempt + 1), 100);
+  })(0);
 })();
 
 // ---- Install as an app (Progressive Web App) ----
