@@ -9223,11 +9223,21 @@ function refreshTop10Panels() {
 async function renderTop10EntriesInto(elementId) {
   const body = document.getElementById(elementId);
   if (!body) return;
+  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
+  // Resolve the competition id here rather than relying on whoever called us
+  // having done it first. The Publish screen does resolve it before calling,
+  // but it swallows a failed lookup — which left this panel saying "Could not
+  // find the Top 10 list" with no way back except a full reload.
   if (!TOP10_COMPETITION_ID) {
-    body.innerHTML = '<div style="padding:16px; color:#666;">Could not find the Top 10 list.</div>';
+    try {
+      const comp = await api('/competitions/top-10');
+      TOP10_COMPETITION_ID = (comp.competition && comp.competition.id) || null;
+    } catch (e) { /* reported below */ }
+  }
+  if (!TOP10_COMPETITION_ID) {
+    body.innerHTML = '<div style="padding:16px; color:#666;">Could not find the Top 10 list. Reload the page to try again.</div>';
     return;
   }
-  body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
   try {
     const d = await api(`/competitions/${TOP10_COMPETITION_ID}/entries/admin`);
     const rows = d.entries || [];
@@ -9733,15 +9743,6 @@ const VB_STATUS_LABEL = {
 // have its own read-mostly table, which meant a name corrected on one screen
 // still looked wrong on the other until a reload.
 async function loadTop10Entries() {
-  // The Top 10 screen can be opened before the Publish screen has ever run,
-  // so the competition id may not have been resolved yet. Resolve it here
-  // rather than rendering an unhelpful "could not find the list".
-  if (!TOP10_COMPETITION_ID) {
-    try {
-      const comp = await api('/competitions/top-10');
-      TOP10_COMPETITION_ID = (comp.competition && comp.competition.id) || null;
-    } catch (e) { /* renderTop10EntriesInto reports the failure below */ }
-  }
   await renderTop10EntriesInto('t10EntriesBody');
 }
 
