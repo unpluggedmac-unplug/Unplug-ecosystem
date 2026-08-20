@@ -87,15 +87,80 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .toast.show{ display:block; }
 .toast.error{ background:var(--maroon); }
 /* ---- responsive ---- */
+/* The mobile bar and its backdrop do not exist on desktop. */
+.m-topbar, .m-backdrop{ display:none; }
+
 @media (max-width:800px){
   .app-shell.active{ grid-template-columns:1fr; }
-  .sidebar{ display:flex; flex-direction:row; flex-wrap:wrap; overflow-x:auto; gap:14px; padding:14px 16px; align-items:center; }
-  .sidebar .brand{ width:100%; margin-bottom:0; }
-  .sidebar .foot{ margin-top:0; margin-left:auto; }
   .main{ padding:20px 16px; }
   .form-row{ grid-template-columns:1fr; }
   .panel-body{ overflow-x:auto; }
   table{ min-width:480px; }
+
+  /* ---- THE NAV DRAWER ----------------------------------------------------
+     The sidebar used to lay itself out as a wrapping row here, which cost 526
+     of the 812 pixels on a phone: two thirds of the screen was navigation
+     before a single row of content. It also asked for flex-wrap:wrap AND
+     overflow-x:auto together, which cancel out — wrapping grows downward, so
+     the horizontal scroll it was reaching for never happened.
+
+     It is now a drawer that sits off-screen until the menu button is pressed,
+     so content starts at the top of the screen where it belongs. */
+  .m-topbar{
+    display:flex; align-items:center; gap:12px;
+    position:sticky; top:0; z-index:1000;
+    background:var(--ink); color:var(--cream);
+    padding:8px 12px; min-height:56px;
+  }
+  .m-menu-btn{
+    background:none; border:none; color:var(--cream);
+    font-size:24px; line-height:1; cursor:pointer;
+    min-width:44px; min-height:44px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .m-topbar-title{
+    font-family:'Playfair Display',serif; font-weight:700;
+    font-size:16px; color:var(--red);
+  }
+
+  .sidebar{
+    position:fixed; top:0; left:0; bottom:0;
+    width:min(82vw, 300px);
+    flex-direction:column; flex-wrap:nowrap;
+    overflow-y:auto; overflow-x:hidden;
+    gap:2px; padding:20px 14px;
+    transform:translateX(-100%);
+    transition:transform .22s ease;
+    z-index:1100;
+  }
+  .sidebar.m-open{ transform:translateX(0); }
+  .sidebar .brand{ width:auto; margin-bottom:16px; }
+  .sidebar .foot{ margin-top:auto; margin-left:0; }
+
+  .m-backdrop{
+    display:block; position:fixed; inset:0;
+    background:rgba(0,0,0,0.45); z-index:1050;
+  }
+  .m-backdrop[hidden]{ display:none; }
+
+  /* ---- READABLE AND TAPPABLE ---------------------------------------------
+     Every one of the 170 typing fields on this dashboard was under 16px, so
+     tapping any of them zoomed iOS in and never zoomed back — on the screen
+     used to approve payments. 258 of 270 controls were under 44px.
+
+     !important for the reason written in the other two files: a media query
+     adds no specificity, so a bare `input` selector loses to `.field input`
+     and the rest. Checkboxes and radios keep their size; their label is the
+     tap target. */
+  input, select, textarea{ font-size:16px !important; }
+  input[type="checkbox"], input[type="radio"]{ font-size:inherit !important; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  select, textarea, button, .btn{ min-height:44px !important; }
+
+  /* Table cells stay dense on purpose — a table is for reading, and 44px rows
+     would mean scrolling four times as far through a payment queue. The
+     buttons inside them are the things you tap, and those are covered above. */
+  td button, td .btn, th button{ min-height:36px !important; }
 }
 .chart-bars{ display:flex; align-items:flex-end; gap:4px; height:160px; min-width:100%; padding-top:10px; }
 .chart-bar-col{ flex:1; min-width:16px; display:flex; flex-direction:column; align-items:center; gap:4px; }
@@ -204,7 +269,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
 <!-- ============ APP SHELL ============ -->
 <div class="app-shell" id="appShell">
-  <div class="sidebar">
+  <!-- Mobile only. Both are display:none above 800px, so the desktop layout
+       never sees them. -->
+  <div class="m-topbar">
+    <button class="m-menu-btn" id="admMenuBtn" aria-label="Open menu"
+            aria-expanded="false" aria-controls="admSidebar">&#9776;</button>
+    <span class="m-topbar-title">Unplug Admin</span>
+  </div>
+  <div class="m-backdrop" id="admBackdrop" hidden></div>
+  <div class="sidebar" id="admSidebar">
     <div class="brand">Unplug Admin</div>
     <input type="search" class="nav-search" id="navSearch" placeholder="Search admin sections…" aria-label="Search admin sections">
 
@@ -2792,6 +2865,52 @@ document.addEventListener('click', async (e) => {
     btn.disabled = false;
   }
 });
+
+// ---------------------------------------------------------------------------
+// The mobile nav drawer.
+//
+// Everything here is a no-op on desktop: the button and backdrop are
+// display:none above 800px, so nothing can be clicked and the class the
+// drawer responds to has no styling to apply.
+//
+// It closes on every way out a person will reach for — picking a section,
+// tapping the dimmed area, or Escape — because a nav drawer you cannot
+// dismiss is worse than no drawer.
+// ---------------------------------------------------------------------------
+(function setupAdminDrawer() {
+  const btn = document.getElementById('admMenuBtn');
+  const sidebar = document.getElementById('admSidebar');
+  const backdrop = document.getElementById('admBackdrop');
+  if (!btn || !sidebar || !backdrop) return;
+
+  function setOpen(open) {
+    sidebar.classList.toggle('m-open', open);
+    backdrop.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    // Stops the page behind the drawer scrolling under your finger.
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+
+  btn.addEventListener('click', () => setOpen(!sidebar.classList.contains('m-open')));
+  backdrop.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar.classList.contains('m-open')) setOpen(false);
+  });
+
+  // Picking a section is the commonest way out. Delegated, because the nav
+  // links are re-rendered by the search filter and the group toggles.
+  sidebar.addEventListener('click', (e) => {
+    if (e.target.closest('[data-section]')) setOpen(false);
+  });
+
+  // Rotating to landscape can cross the 800px line with the drawer still
+  // open, which would leave the body locked and unscrollable on a layout
+  // that has no drawer.
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 800 && sidebar.classList.contains('m-open')) setOpen(false);
+  });
+})();
 
 document.querySelectorAll('[data-section]').forEach((link) => {
   link.addEventListener('click', () => {
