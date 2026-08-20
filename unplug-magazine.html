@@ -1406,6 +1406,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   /* Both containers that hold these circles. .footer-social is a separate
      row with its own 10px gap, so fixing only .share-row left the footer
      icons overlapping by 4px — the same mis-tap, just further down the page. */
+  /* The dismiss on the welcome overlay: 31x34, and the first thing every
+     visitor has to hit. Centred flex so the x stays where it looks now. */
+  .welcome-close{
+    min-width:44px; min-height:44px;
+    display:flex; align-items:center; justify-content:center; padding:0;
+  }
+
   .share-row, .footer-social{ gap:14px; }
   .share-btn, .view-all{ position:relative; }
   .view-all{ display:inline-block; }
