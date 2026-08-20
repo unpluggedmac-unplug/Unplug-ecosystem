@@ -180,6 +180,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   input, select, textarea{ font-size:16px !important; }
   input[type="checkbox"], input[type="radio"]{ font-size:inherit !important; }
   button, .btn{ min-height:44px; }
+
+  /* The buttons got their 44px and the typing fields did not, so every input
+     on this dashboard stood at 40px. Members fill these in on phones.
+     min-height rather than padding keeps the text on the baseline the design
+     puts it on; !important for the same specificity reason as above.
+     Checkboxes and radios keep their size — their label is the tap target. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([aria-hidden="true"]),
+  select,
+  textarea{ min-height:44px !important; }
 }
 </style>
 </head>

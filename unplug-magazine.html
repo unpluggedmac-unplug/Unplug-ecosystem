@@ -1346,6 +1346,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   #langPicker{ min-height:44px; padding:8px 10px; }
   .btn{ min-height:44px; }
   .consent-actions .btn{ min-height:48px; }
+
+  /* The typing fields were missed the first time round. Buttons and the
+     language picker got their 44px, but every text input, select and textarea
+     stood at 40px — including the name, social and email boxes on the
+     nominate form, which is a page whose entire job is getting a stranger on
+     a phone to finish a form.
+
+     min-height rather than padding: padding would move the text off the
+     baseline the design puts it on, and with box-sizing:border-box a
+     min-height simply stops the box shrinking below a finger.
+
+     !important for the same reason it is on the font-size rule above — a
+     media query adds no specificity, so a bare `input` selector loses to
+     `.field input`, `.ed-field input` and the rest, which is how 41 controls
+     were left untouched last time. Checkboxes and radios are excluded: they
+     have no text, and a 44px tick box looks broken rather than generous —
+     their label is the tap target. The honeypot is excluded because it is
+     meant to be invisible. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([aria-hidden="true"]),
+  select,
+  textarea{ min-height:44px !important; }
 }
 
 /* A last line of defence rather than a fix: if any future block overhangs the
