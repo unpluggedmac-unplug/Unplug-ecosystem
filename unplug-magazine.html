@@ -1608,7 +1608,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <h2 data-cms="getapp.title">Keep Unplug one tap away</h2>
           <p data-cms="getapp.lede">Add Unplug to your phone or computer and it opens like any other app.</p>
           <div class="get-app-actions">
-            <button class="btn btn-solid" id="getAppBtn" type="button">Add to my device</button>
+            <button class="btn btn-solid" id="getAppBtn" type="button">Install on this device / computer</button>
             <span id="getAppNote" class="get-app-note"></span>
           </div>
           <!-- One short line, shown only if the browser refuses to install on
@@ -7440,7 +7440,9 @@ async function loadContributor(slug) {
     // is left guessing, not so much that it reads like a manual.
     const platform = api.platform();
     btn.hidden = false;
-    btn.textContent = platform === 'desktop' ? 'Install on this computer' : 'Add to my device';
+    // One label for every device. The line underneath is what varies, so the
+    // button no longer needs to.
+    btn.textContent = 'Install on this device / computer';
     note.textContent = '';
     say('');
     hint.textContent = HINTS[platform] || HINTS.desktop;
