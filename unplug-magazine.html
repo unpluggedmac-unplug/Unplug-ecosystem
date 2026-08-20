@@ -1358,10 +1358,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 /* GET THE APP — the install section between the social links and the
    shout-out banner. Deliberately quiet: it is an offer, not an advert. */
-.get-app{ display:flex; gap:28px; align-items:flex-start; border:1px solid var(--paper-line);
-  border-radius:14px; padding:28px 26px; background:var(--paper); }
+/* Red, using the same gradient as the shout-out banner so the two read as one
+   family rather than two different reds. Everything inside has to flip to
+   light: the eyebrow, the heading and the body all default to dark ink, which
+   would be close to unreadable here. */
+.get-app{ display:flex; gap:28px; align-items:flex-start;
+  border-radius:14px; padding:28px 26px; color:var(--cream);
+  background: linear-gradient(120deg, #6B0E00 0%, #d20709 40%, #b50608 70%, #6B0E00 100%); }
+.get-app .eyebrow{ color:var(--cream); opacity:0.85; }
+.get-app .eyebrow::before{ background:var(--cream); }
+.get-app-body h2{ color:var(--cream); }
+.get-app-body p{ color:rgba(255,255,255,0.92); }
+/* The dark default button would disappear into the gradient; inverted, it is
+   the brightest thing in the block, which is what it should be. */
+.get-app .btn{ background:var(--cream); color:#8f0507; border-color:var(--cream); }
+.get-app .btn:hover{ background:#ffffff; color:var(--red); border-color:#ffffff; }
+.get-app .get-app-note{ color:rgba(255,255,255,0.9); }
+/* The standing one-liner under the button. Quiet, but readable on red —
+   anything under about 0.7 opacity stops being legible against this. */
+.get-app-hint{ font-size:13px; color:rgba(255,255,255,0.85); margin:12px 0 0; }
 .get-app-icon{ width:88px; height:88px; border-radius:18px; flex:none;
-  border:1px solid var(--paper-line); background:#fff; }
+  border:1px solid rgba(255,255,255,0.35); background:#fff; }
 .get-app-body{ flex:1; min-width:0; }
 .get-app-body h2{ font-size:clamp(21px,2.4vw,27px); margin:8px 0 8px; }
 .get-app-body p{ color:var(--slate); line-height:1.7; margin:0 0 18px; max-width:56ch; }
@@ -1597,6 +1614,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <!-- One short line, shown only if the browser refuses to install on
                this device. Not a standing list of instructions. -->
           <p id="getAppFallback" class="get-app-note" hidden></p>
+          <!-- A single standing hint, written for whichever device is looking.
+               Filled in by script so an iPhone is never told to click. -->
+          <p id="getAppHint" class="get-app-hint"></p>
         </div>
       </div>
     </div>
@@ -7387,6 +7407,16 @@ async function loadContributor(slug) {
   const btn = document.getElementById('getAppBtn');
   const note = document.getElementById('getAppNote');
   const fallback = document.getElementById('getAppFallback');
+  const hint = document.getElementById('getAppHint');
+
+  // One line, written for the device actually looking at it. An iPhone being
+  // told to "click Install" would be worse than no hint at all, and every
+  // platform genuinely does confirm in a different place.
+  const HINTS = {
+    android: 'Tap the button, then tap Install when your phone asks — it takes a second.',
+    desktop: 'Click the button, then click Install in the small box your browser shows.',
+    ios: 'On iPhone, tap the Share button in Safari, then choose Add to Home Screen.',
+  };
 
   function say(text) {
     fallback.hidden = !text;
@@ -7401,17 +7431,19 @@ async function loadContributor(slug) {
       btn.hidden = true;
       note.textContent = 'Installed — open Unplug from your home screen.';
       say('');
+      hint.textContent = '';
       return;
     }
 
-    // The button is ALWAYS offered. Nothing is explained up front: most people
-    // are on a device where one click is genuinely all it takes, and a standing
-    // list of instructions for the ones who are not made the section look like
-    // a manual.
+    // The button is ALWAYS offered, with a single line under it saying what
+    // happens next on this device. One line, not a list — enough that nobody
+    // is left guessing, not so much that it reads like a manual.
+    const platform = api.platform();
     btn.hidden = false;
-    btn.textContent = api.platform() === 'desktop' ? 'Install on this computer' : 'Add to my device';
+    btn.textContent = platform === 'desktop' ? 'Install on this computer' : 'Add to my device';
     note.textContent = '';
     say('');
+    hint.textContent = HINTS[platform] || HINTS.desktop;
   }
 
   btn.addEventListener('click', async () => {
@@ -7426,6 +7458,7 @@ async function loadContributor(slug) {
         btn.hidden = true;
         note.textContent = 'Installing — look for the Unplug icon with your other apps.';
         say('');
+        hint.textContent = '';
         return;
       }
       if (outcome === 'dismissed') {
