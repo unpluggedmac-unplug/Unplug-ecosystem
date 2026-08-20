@@ -1,0 +1,25 @@
+# Cloudflare Pages routing.
+#
+# SERVE THE MAGAZINE AT THE ROOT, with no redirect at all.
+#
+# The site used to answer "/" with a stub page whose JavaScript then sent the
+# browser on to /unplug-magazine. That hop cost three things:
+#
+#   1. SEO. Search engines were told the homepage was a redirect to somewhere
+#      else, so the address people actually share was never the indexed one.
+#   2. The query string. The stub had to be taught to carry "?" through by
+#      hand, and a campaign link pointing at the bare domain arrived with its
+#      utm tags already stripped until that was fixed.
+#   3. The referrer. After the hop, the next page's referrer was OUR OWN
+#      domain, so a click from Instagram to unplugnews.com was recorded as
+#      Direct — under-reporting every social channel.
+#
+# A 200 here is a REWRITE, not a redirect: Cloudflare serves the magazine's
+# bytes at "/" while the address bar, the query string and the referrer all
+# stay exactly as the visitor arrived with them. Nothing to carry through by
+# hand, because nothing is being handed anywhere.
+#
+# index.html is deliberately left in place. If this rule ever fails to apply,
+# the old stub still answers and the site still works — a broken homepage is
+# not a risk worth taking for a tidier tree.
+/    /unplug-magazine.html    200
