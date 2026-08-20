@@ -1380,6 +1380,37 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     min-width:44px; min-height:44px;
     display:flex; align-items:center; justify-content:center;
   }
+
+  /* THE CARD CONTROLS. Like/comment pills stood at 23px, the social circles
+     at 30px and "View all" at 21px — the things a reader actually taps on the
+     homepage were the smallest targets on it.
+
+     Two different treatments, because one size does not fit these:
+
+     1. The pills GROW. They are text pills, so a taller pill reads as
+        deliberate rather than swollen. They are already 46px wide. */
+  .int-btn,
+  .int-bar-compact .int-btn{ min-height:44px; }
+
+  /*  2. The share circles and "View all" KEEP their size and gain an
+        invisible hit area instead. Growing them for real would turn every
+        card into a row of six fat coloured circles, and "View all" wears its
+        red underline tight under the text — a taller box would drop that
+        underline 12px away from the words it belongs to.
+
+        The gap widening is not cosmetic. The circles sat on a 38px pitch, so
+        a 44px hit area would have overlapped its neighbour by 6px and a tap
+        meant for WhatsApp would open Facebook. At gap:14px the pitch is
+        exactly 44, so the areas meet without ever overlapping. Six circles
+        then measure 250px, which still fits one row on a 375px screen. */
+  .share-row{ gap:14px; }
+  .share-btn, .view-all{ position:relative; }
+  .view-all{ display:inline-block; }
+  .share-btn::after, .view-all::after{
+    content:''; position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:100%; min-width:44px; height:44px;
+  }
 }
 
 /* A last line of defence rather than a fix: if any future block overhangs the
