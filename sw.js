@@ -16,7 +16,7 @@
 // The cost is that opening the app is exactly as fast as the site is. That is
 // the right trade here.
 
-const VERSION = 'unplug-v1';
+const VERSION = 'unplug-v2';
 const OFFLINE_URL = '/offline.html';
 
 // The bare minimum needed to show something rather than a browser error page.
@@ -62,6 +62,23 @@ function shouldIgnore(request) {
   return false;
 }
 
+// WHAT TO FILE A RESPONSE UNDER.
+//
+// This site is a single page whose query string picks what to render on the
+// client — /?p=news and /?p=directory are the SAME HTML. Filing each under its
+// own key meant every distinct query string became another copy of an
+// identical document, so ordinary browsing (and any link carrying a utm tag)
+// grew the cache without limit.
+//
+// Navigations are therefore filed under the path alone. Everything else — a
+// script, an icon — keeps its full URL, because there the query really can
+// identify a different file.
+function cacheKeyFor(request) {
+  if (request.mode !== 'navigate') return request;
+  const url = new URL(request.url);
+  return new Request(url.origin + url.pathname, { method: 'GET' });
+}
+
 self.addEventListener('fetch', (event) => {
   if (shouldIgnore(event.request)) return; // let the browser handle it normally
 
@@ -74,12 +91,13 @@ self.addEventListener('fetch', (event) => {
       // it back later as though it were the page.
       if (fresh && fresh.status === 200 && fresh.type === 'basic') {
         const cache = await caches.open(VERSION);
-        cache.put(event.request, fresh.clone());
+        cache.put(cacheKeyFor(event.request), fresh.clone());
       }
       return fresh;
     } catch (err) {
-      // Offline, or the network failed.
-      const cached = await caches.match(event.request);
+      // Offline, or the network failed. Looked up under the same normalised
+      // key it was stored under, or a navigation would never find its copy.
+      const cached = await caches.match(cacheKeyFor(event.request));
       if (cached) return cached;
 
       // A page request with nothing cached: show the offline page rather than
