@@ -7523,19 +7523,19 @@ async function loadContributor(slug) {
   const fallback = document.getElementById('getAppFallback');
   const hint = document.getElementById('getAppHint');
 
-  // One line, written for the device actually looking at it. An iPhone being
-  // told to "click Install" would be worse than no hint at all, and every
-  // platform genuinely does confirm in a different place.
-  const HINTS = {
-    // The owner's wording, used on both desktop and Android.
-    android: 'Click install then at your browser options select install and create shortcut.',
-    desktop: 'Click install then at your browser options select install and create shortcut.',
-    // iPhone keeps its own line because Safari has no Install button at all —
-    // the only route is Share → Add to Home Screen. Telling an iPhone user to
-    // "click install" sends them looking for something that does not exist,
-    // which is worse than no hint.
-    ios: 'On iPhone, tap the Share button in Safari, then choose Add to Home Screen.',
-  };
+  // ONE LINE FOR EVERY DEVICE, by the owner's decision.
+  //
+  // This used to vary per platform, because Safari has no Install button at
+  // all — on iPhone the only route is Share → Add to Home Screen. The reason
+  // one line is safe anyway is the click handler below: when the browser never
+  // offers an install prompt, which is always the case on iPhone, it replies
+  // with the Share → Add to Home Screen instruction. So an iPhone reader gets
+  // this line first and the correct route the moment they tap.
+  //
+  // Kept as a single constant rather than three identical map entries, so
+  // nobody later reads a per-platform map and assumes the wording is meant to
+  // differ. If it ever should differ again, that is the place to reintroduce.
+  const INSTALL_HINT = 'Click install then at your browser options select install and create shortcut.';
 
   function say(text) {
     fallback.hidden = !text;
@@ -7557,14 +7557,13 @@ async function loadContributor(slug) {
     // The button is ALWAYS offered, with a single line under it saying what
     // happens next on this device. One line, not a list — enough that nobody
     // is left guessing, not so much that it reads like a manual.
-    const platform = api.platform();
     btn.hidden = false;
-    // One label for every device. The line underneath is what varies, so the
-    // button no longer needs to.
+    // One label and now one hint for every device. The click handler is what
+    // still varies, and only when the browser declines to offer a prompt.
     btn.textContent = 'Install on this device / computer';
     note.textContent = '';
     say('');
-    hint.textContent = HINTS[platform] || HINTS.desktop;
+    hint.textContent = INSTALL_HINT;
   }
 
   btn.addEventListener('click', async () => {
