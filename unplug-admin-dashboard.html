@@ -169,9 +169,17 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .top-page-row{ display:flex; align-items:center; justify-content:space-between; padding:10px 18px; border-bottom:1px solid var(--paper-line); font-size:13px; }
 .top-page-row:last-child{ border-bottom:none; }
 .top-page-row .views{ font-weight:700; color:var(--red); }
-.pill{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:3px 9px; border-radius:20px; display:inline-block; }
-.pill.pending{ background:rgba(210,7,9,0.1); color:var(--red); }
-.pill.approved{ background:rgba(46,125,50,0.1); color:var(--green, #2e7d32); }
+/* .status-pill is used in five places in this dashboard and had no CSS at
+   all, so those pills rendered as plain text. The polls list needs three
+   states to be tellable apart at a glance — Open, Scheduled, Ended — which
+   only works if the class is actually styled. Aliased onto .pill rather
+   than given its own look, so every pill on every screen matches. */
+.pill, .status-pill{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:3px 9px; border-radius:20px; display:inline-block; }
+.pill.pending, .status-pill.pending{ background:rgba(210,7,9,0.1); color:var(--red); }
+.pill.approved, .status-pill.approved{ background:rgba(46,125,50,0.1); color:var(--green, #2e7d32); }
+/* Ended / closed: grey, because it is a finished state rather than a
+   problem — red here would read as something needing attention. */
+.pill.rejected, .status-pill.rejected{ background:rgba(0,0,0,0.06); color:var(--slate); }
 
 /* .stat-card / .stat-row are used on the Analytics screen already (num/label
    inside), but had never been given rules — they rendered as unstyled divs.
@@ -1363,8 +1371,23 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Create a poll</h3></div>
         <div class="panel-body">
           <div class="form-row">
-            <div style="grid-column:1/-2;"><label for="pollQuestion">Question</label><input id="pollQuestion" placeholder="What should we cover next?"></div>
-            <div><label for="pollArticleId">Article ID (optional)</label><input id="pollArticleId" type="number" min="1" placeholder="Site-wide if blank"></div>
+            <div style="grid-column:1/-1;"><label for="pollQuestion">Question</label><input id="pollQuestion" placeholder="What should we cover next?"></div>
+          </div>
+          <div class="form-row">
+            <!-- A picker, not a number. Nobody knows an article's database id,
+                 and typing the wrong one silently attaches the poll to the
+                 wrong story. -->
+            <div style="grid-column:1/-2;">
+              <label for="pollArticleId">Show it inside which article?</label>
+              <select id="pollArticleId"><option value="">Site-wide — not attached to a story</option></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div><label for="pollStartsAt">Runs from</label><input id="pollStartsAt" type="date"></div>
+            <div><label for="pollEndsAt">Until</label><input id="pollEndsAt" type="date"></div>
+            <div style="grid-column:1/-2; align-self:end;">
+              <span style="font-size:12.5px; color:var(--slate);">Leave both blank and the poll runs until you close it. The end date counts — a poll ending on the 7th still takes votes all day on the 7th.</span>
+            </div>
           </div>
           <div id="pollOptionsWrap" style="margin-top:12px;"></div>
           <button class="btn btn-line" style="width:auto; margin-top:8px;" id="addPollOptionBtn">+ Add option</button>
@@ -3603,11 +3626,15 @@ document.getElementById('createPollBtn').addEventListener('click', async () => {
         question,
         options,
         articleId: articleIdRaw ? Number(articleIdRaw) : null,
+        startsAt: document.getElementById('pollStartsAt').value || null,
+        endsAt: document.getElementById('pollEndsAt').value || null,
       }),
     });
     showToast('Poll created.');
     document.getElementById('pollQuestion').value = '';
     document.getElementById('pollArticleId').value = '';
+    document.getElementById('pollStartsAt').value = '';
+    document.getElementById('pollEndsAt').value = '';
     document.getElementById('pollOptionsWrap').innerHTML = '';
     addPollOptionInput(); addPollOptionInput();
     loadPolls();
@@ -5434,9 +5461,64 @@ function addPollOptionInput(value) {
   wrap.appendChild(row);
 }
 
+// Fills the article picker. Every status, because a poll is often set up
+// alongside a story that is still a draft.
+async function loadPollArticlePicker() {
+  const sel = document.getElementById('pollArticleId');
+  if (!sel || sel.options.length > 1) return;   // already filled
+  try {
+    const d = await api('/articles/admin/all');
+    (d.articles || []).forEach((a) => {
+      const o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = a.title + (a.status && a.status !== 'approved' ? ` (${a.status})` : '');
+      sel.appendChild(o);
+    });
+  } catch (e) {
+    // The poll can still be created site-wide, so this is not fatal.
+    const o = document.createElement('option');
+    o.disabled = true;
+    o.textContent = 'Could not load articles — you can still create a site-wide poll';
+    sel.appendChild(o);
+  }
+}
+
+// How a poll's state reads on the list. The label is the EFFECTIVE state from
+// the server, not the is_open flag: a poll flagged open whose end date has
+// passed is not running, and calling it "Open" would be a lie to whoever is
+// checking whether their poll is live.
+const POLL_STATE = {
+  open:      { label: 'Open',      cls: 'approved' },
+  scheduled: { label: 'Scheduled', cls: 'pending'  },
+  ended:     { label: 'Ended',     cls: 'rejected' },
+  closed:    { label: 'Closed',    cls: 'rejected' },
+};
+
+function pollWhen(p) {
+  if (!p.starts_at && !p.ends_at) return 'Until closed by hand';
+  if (p.starts_at && p.ends_at) return `${p.starts_at} → ${p.ends_at}`;
+  if (p.starts_at) return `From ${p.starts_at}`;
+  return `Until ${p.ends_at}`;
+}
+
+// The results, inline. The list used to show a total only, which tells you a
+// poll was answered but not what readers actually said.
+function pollResultsHtml(p) {
+  if (!p.options || !p.options.length) return '<span style="color:var(--slate);">No options</span>';
+  return p.options.map((o) => `
+    <div style="display:flex; align-items:center; gap:8px; margin:3px 0;">
+      <span style="min-width:120px; font-size:12px;">${escapeHtmlAdmin(o.label)}</span>
+      <span style="flex:1; background:var(--paper); height:9px; position:relative; min-width:60px;">
+        <span style="position:absolute; inset:0 auto 0 0; width:${Number(o.percent) || 0}%; background:var(--red);"></span>
+      </span>
+      <span style="font-size:12px; min-width:64px; text-align:right;">${o.votes} · ${Number(o.percent) || 0}%</span>
+    </div>`).join('');
+}
+
 async function loadPolls() {
   const body = document.getElementById('pollsBody');
   if (!body) return;
+  loadPollArticlePicker();
   const wrap = document.getElementById('pollOptionsWrap');
   if (wrap && wrap.children.length === 0) { addPollOptionInput(); addPollOptionInput(); }
   body.innerHTML = '<div class="loading-state">Loading…</div>';
@@ -5445,13 +5527,16 @@ async function loadPolls() {
     const list = data.polls || [];
     if (list.length === 0) { body.innerHTML = '<div class="empty-state">No polls yet.</div>'; return; }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Question</th><th>Article</th><th>Votes</th><th>Status</th><th></th></tr>';
+    table.innerHTML = '<tr><th>Question</th><th>Article</th><th>Runs</th><th>Results</th><th>Status</th><th></th></tr>';
     list.forEach((p) => {
       const tr = document.createElement('tr');
+      const st = POLL_STATE[p.state] || POLL_STATE.closed;
       tr.innerHTML = `<td>${escapeHtmlAdmin(p.question)}</td>`
         + `<td>${p.article_id ? escapeHtmlAdmin(p.article_title || ('#' + p.article_id)) : '<span style="color:var(--slate);">Site-wide</span>'}</td>`
-        + `<td>${p.total_votes}</td>`
-        + `<td><span class="status-pill ${p.is_open ? 'approved' : 'rejected'}">${p.is_open ? 'Open' : 'Closed'}</span></td>`
+        + `<td style="font-size:12px; white-space:nowrap;">${escapeHtmlAdmin(pollWhen(p))}</td>`
+        + `<td style="min-width:240px;">${pollResultsHtml(p)}`
+        + `<div style="font-size:11.5px; color:var(--slate); margin-top:4px;">${p.total_votes} ${p.total_votes === 1 ? 'vote' : 'votes'} in total</div></td>`
+        + `<td><span class="status-pill ${st.cls}">${st.label}</span></td>`
         + `<td><div class="row-actions"><button class="toggle">${p.is_open ? 'Close' : 'Reopen'}</button><button class="reject">Delete</button></div></td>`;
       tr.querySelector('.toggle').addEventListener('click', async () => {
         try { await api(`/polls/${p.id}`, { method: 'PATCH', body: JSON.stringify({ isOpen: !p.is_open }) }); showToast(p.is_open ? 'Poll closed.' : 'Poll reopened.'); loadPolls(); }

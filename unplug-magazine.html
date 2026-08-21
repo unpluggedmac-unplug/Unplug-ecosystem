@@ -5140,17 +5140,23 @@ function pollHtml(poll, showResults) {
     if (!showResults) {
       return `<button class="poll-opt" type="button" data-option-id="${o.id}">${escapeHtml(o.label)}</button>`;
     }
-    const pct = total > 0 ? Math.round((o.votes / total) * 100) : 0;
+    // The server works the share out, so the article and the admin screen
+    // cannot round the same poll differently. The local sum is only a
+    // fallback for a response from before that existed.
+    const pct = o.percent !== undefined ? o.percent : (total > 0 ? Math.round((o.votes / total) * 100) : 0);
     return `<div class="poll-res">
       <div class="poll-res-top"><span>${escapeHtml(o.label)}</span><span class="poll-pct">${pct}%</span></div>
       <div class="poll-bar"><span style="width:${pct}%"></span></div>
     </div>`;
   }).join('');
+  // votingOpen accounts for the schedule as well as the switch; is_open on
+  // its own would call a poll open on the day after it ended.
+  const stillOpen = poll.votingOpen !== undefined ? poll.votingOpen : poll.is_open;
   const foot = showResults
-    ? `<p class="poll-foot">${total} ${total === 1 ? 'vote' : 'votes'}${poll.is_open ? '' : ' · voting closed'}</p>`
+    ? `<p class="poll-foot">${total} ${total === 1 ? 'vote' : 'votes'}${stillOpen ? '' : ' · voting closed'}</p>`
     : '<p class="poll-foot">Pick one to see what everyone else thinks.</p>';
   return `<div class="poll" data-poll-id="${poll.id}">
-    <span class="poll-kicker">Reader poll</span>
+    <span class="poll-kicker">Reader poll${stillOpen ? '' : ' · closed'}</span>
     <h3 class="poll-q">${escapeHtml(poll.question)}</h3>
     <div class="poll-body">${body}</div>
     ${foot}
@@ -5170,9 +5176,17 @@ async function loadPoll(articleId) {
   }
   if (!poll) { wrap.innerHTML = ''; return; }
 
+  // A poll scheduled to start later is not shown at all. Showing it early
+  // means a reader taps it, is refused, and reads that as the site being
+  // broken rather than as a poll that has not begun.
+  if (poll.closedReason === 'not_started') { wrap.innerHTML = ''; return; }
+
   const render = (p) => {
     const alreadyVoted = votedPolls().indexOf(p.id) !== -1;
-    wrap.innerHTML = pollHtml(p, alreadyVoted || !p.is_open);
+    // votingOpen, not is_open: a poll past its end date is closed even though
+    // the flag still says open, and its results are what the article shows.
+    const open = p.votingOpen !== undefined ? p.votingOpen : p.is_open;
+    wrap.innerHTML = pollHtml(p, alreadyVoted || !open);
     wrap.querySelectorAll('.poll-opt').forEach((btn) => {
       btn.addEventListener('click', async () => {
         wrap.querySelectorAll('.poll-opt').forEach((b) => { b.disabled = true; });
