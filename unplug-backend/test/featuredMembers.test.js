@@ -27,11 +27,18 @@ let pg;
 let pool;
 let server;
 let baseUrl;
+let jwt;
+let adminToken;
+let memberToken;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-featmem-'));
 const port = 34800 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 
-async function req(method, urlPath) {
-  const res = await fetch(baseUrl + urlPath, { method });
+async function req(method, urlPath, { token, body } = {}) {
+  const res = await fetch(baseUrl + urlPath, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
   let json = null;
   try { json = await res.json(); } catch (e) { /* no body */ }
   return { status: res.status, body: json };
@@ -95,6 +102,7 @@ before(async () => {
     await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', f), 'utf8'));
   }
 
+  jwt = require('jsonwebtoken');
   const express = require('express');
   const { attachUser } = require('../src/middleware/auth');
   const app = express();
@@ -104,6 +112,10 @@ before(async () => {
   app.use((err, _req, res, _next) => res.status(500).json({ error: err.message }));
   await new Promise((resolve) => { server = app.listen(0, resolve); });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  const tokenFor = (id, role) => jwt.sign({ id, email: `fm${id}@test.com`, role }, process.env.JWT_SECRET);
+  adminToken = tokenFor(await makeUser('admin'), 'admin');
+  memberToken = tokenFor(await makeUser(), 'member');
 });
 
 after(async () => {
@@ -136,16 +148,18 @@ test('SOMEBODY WITH NO PROFILE IS NEVER FEATURED', async () => {
     'every card carries something to link to');
 });
 
-test('a business is featured through its Directory listing', async () => {
+test('A DIRECTORY BUSINESS IS NOT FEATURED — this row is Unplug members', async () => {
+  // 129 featured businesses too; the owner's instruction is that this row is
+  // members. A business with a Directory listing but no My Unplug profile is
+  // no longer eligible, however active it is.
   const uid = await makeUser();
   await giveBusiness(uid, 'Kagiso Motors');
   await givePoints(uid, 500);
 
   const rows = await featured();
-  const row = rows.find((r) => r.display_name === 'Kagiso Motors');
-  assert.ok(row, 'the business is eligible');
-  assert.equal(row.kind, 'business');
-  assert.ok(row.ref, 'and it has a slug to link to');
+  assert.ok(!rows.some((r) => r.display_name === 'Kagiso Motors'),
+    'a Directory listing alone does not put somebody in the members row');
+  assert.ok(rows.every((r) => r.kind === 'member'), 'every card is a member');
 });
 
 test('an individual is featured through their My Unplug profile', async () => {
@@ -160,9 +174,7 @@ test('an individual is featured through their My Unplug profile', async () => {
   assert.ok(row.ref, 'and it has a username to link to');
 });
 
-test('NOBODY TAKES TWO OF THE PLACES', async () => {
-  // Someone who is both an individual and a business would otherwise appear
-  // twice and use up two of only five slots.
+test('somebody who is BOTH a member and a business gets exactly one card', async () => {
   const uid = await makeUser();
   await giveBusiness(uid, 'Double Trouble Trading');
   await giveMyUnplug(uid, 'Double Trouble Person');
@@ -171,8 +183,7 @@ test('NOBODY TAKES TWO OF THE PLACES', async () => {
   const rows = await featured();
   const mine = rows.filter((r) => /Double Trouble/.test(r.display_name || ''));
   assert.equal(mine.length, 1, 'one person, one card');
-  assert.equal(mine[0].kind, 'business',
-    'the Directory listing wins, being the richer public page');
+  assert.equal(mine[0].kind, 'member', 'and it is their member card, not the business');
 });
 
 // ---------------------------------------------------------------------------
@@ -181,11 +192,11 @@ test('NOBODY TAKES TWO OF THE PLACES', async () => {
 
 test('THE MOST ACTIVE COME FIRST', async () => {
   const quiet = await makeUser();
-  await giveBusiness(quiet, 'Quiet Trader');
+  await giveMyUnplug(quiet, 'Quiet Trader');
   await givePoints(quiet, 1);
 
   const busy = await makeUser();
-  await giveBusiness(busy, 'Busy Trader');
+  await giveMyUnplug(busy, 'Busy Trader');
   await givePoints(busy, 100000);
 
   const rows = await featured();
@@ -198,7 +209,7 @@ test('THE MOST ACTIVE COME FIRST', async () => {
 test('activity older than 30 days does not count', async () => {
   // The row is meant to show who is active NOW, not who once was.
   const old = await makeUser();
-  await giveBusiness(old, 'Once Busy Trader');
+  await giveMyUnplug(old, 'Once Busy Trader');
   await givePoints(old, 50000, 90);   // three months ago
 
   const rows = await featured();
@@ -209,7 +220,7 @@ test('activity older than 30 days does not count', async () => {
 
 test('a reversed action cannot buy a place on the homepage', async () => {
   const cheat = await makeUser();
-  await giveBusiness(cheat, 'Reversed Trader');
+  await giveMyUnplug(cheat, 'Reversed Trader');
   const action = await pool.query('SELECT code FROM participation_actions LIMIT 1');
   if (action.rowCount === 0) return;
   await pool.query(
@@ -225,7 +236,7 @@ test('AN ADMIN IS NEVER FEATURED', async () => {
   // Same reason they came off the leaderboard: running the site is not taking
   // part in it.
   const adminId = await makeUser('admin');
-  await giveBusiness(adminId, 'The Admin Business');
+  await giveMyUnplug(adminId, 'The Admin Business');
   await givePoints(adminId, 999999);
 
   const rows = await featured();
@@ -249,7 +260,7 @@ test('IT SHOWS FIVE BY DEFAULT AND THE ADMIN CAN MAKE IT TEN', async () => {
   // Make sure there are more than ten eligible people to choose from.
   for (let i = 0; i < 12; i += 1) {
     const uid = await makeUser();
-    await giveBusiness(uid, `Filler Business ${i}`);
+    await giveMyUnplug(uid, `Filler Member ${i}`);
     await givePoints(uid, 100 + i);
   }
 
@@ -288,8 +299,14 @@ test('re-running the migrations does not reset a count the admin changed', async
   // migrate.js re-runs every .sql on every deploy; the seed is ON CONFLICT DO
   // NOTHING for the same reason the service prices are.
   await pool.query(`UPDATE settings SET value = '8' WHERE key = 'featured_members_count'`);
-  const file = path.join(__dirname, '..', 'db', 'migrations', '129_featured_members.sql');
-  await pool.query(fs.readFileSync(file, 'utf8'));
+  // ALL of them, in order — which is exactly what a deploy does. Re-running
+  // one file alone would not have caught that 129 and 130 both declare
+  // get_featured_members with different shapes, and that running 129 second
+  // fails outright.
+  const dir = path.join(__dirname, '..', 'db', 'migrations');
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) {
+    await pool.query(fs.readFileSync(path.join(dir, f), 'utf8'));
+  }
   const after = await pool.query(`SELECT value FROM settings WHERE key = 'featured_members_count'`);
   assert.equal(after.rows[0].value, '8', 'a deploy must not undo the admin');
   await pool.query(`UPDATE settings SET value = '5' WHERE key = 'featured_members_count'`);
@@ -299,4 +316,106 @@ test('the endpoint is public — it renders on the homepage for signed-out reade
   const anon = await req('GET', '/participation/featured-members');
   assert.equal(anon.status, 200);
   assert.ok(Array.isArray(anon.body.members));
+});
+
+// ---------------------------------------------------------------------------
+// The admin's final say
+// ---------------------------------------------------------------------------
+
+test('A PINNED MEMBER APPEARS ABOVE MORE ACTIVE PEOPLE', async () => {
+  const busy = await makeUser();
+  await giveMyUnplug(busy, 'Very Busy Person');
+  await givePoints(busy, 500000);
+
+  const quiet = await makeUser();
+  await giveMyUnplug(quiet, 'Quiet But Pinned');
+
+  const pinned = await req('PUT', `/participation/admin/featured-members/${quiet}`, {
+    token: adminToken, body: { state: 'pinned' },
+  });
+  assert.equal(pinned.status, 200);
+
+  const rows = await featured(10);
+  assert.equal(rows[0].display_name, 'Quiet But Pinned',
+    'the admin decision beats the ranking');
+  assert.equal(rows[0].is_pinned, true);
+});
+
+test('A REMOVED MEMBER NEVER APPEARS, HOWEVER ACTIVE', async () => {
+  const uid = await makeUser();
+  await giveMyUnplug(uid, 'Should Not Appear');
+  await givePoints(uid, 999999);
+
+  await req('PUT', `/participation/admin/featured-members/${uid}`, {
+    token: adminToken, body: { state: 'removed' },
+  });
+
+  const rows = await featured(50);
+  assert.ok(!rows.some((r) => r.display_name === 'Should Not Appear'),
+    'the most active person on the site stays off the homepage');
+});
+
+test('REMOVING IS REVERSIBLE — restore hands them back to the ranking', async () => {
+  const uid = await makeUser();
+  await giveMyUnplug(uid, 'Removed Then Restored');
+  await givePoints(uid, 250000);
+
+  await req('PUT', `/participation/admin/featured-members/${uid}`, {
+    token: adminToken, body: { state: 'removed' },
+  });
+  assert.ok(!(await featured(50)).some((r) => r.display_name === 'Removed Then Restored'));
+
+  await req('PUT', `/participation/admin/featured-members/${uid}`, {
+    token: adminToken, body: { state: 'auto' },
+  });
+  assert.ok((await featured(50)).some((r) => r.display_name === 'Removed Then Restored'),
+    'a removal the admin cannot undo would be a trap');
+});
+
+test('the admin list shows removed people too, so a removal can be undone', async () => {
+  const uid = await makeUser();
+  await giveMyUnplug(uid, 'Hidden From Homepage');
+  await req('PUT', `/participation/admin/featured-members/${uid}`, {
+    token: adminToken, body: { state: 'removed' },
+  });
+
+  const list = await req('GET', '/participation/admin/featured-members', { token: adminToken });
+  const row = list.body.members.find((m) => m.user_id === uid);
+  assert.ok(row, 'a removal you cannot see is a removal you cannot reverse');
+  assert.equal(row.state, 'removed');
+});
+
+test('somebody with no Unplug profile cannot be pinned', async () => {
+  // An override on a member who can never be featured would sit in the table
+  // doing nothing, and look to an admin like it had worked.
+  const uid = await makeUser();
+  const bad = await req('PUT', `/participation/admin/featured-members/${uid}`, {
+    token: adminToken, body: { state: 'pinned' },
+  });
+  assert.equal(bad.status, 404);
+  assert.match(bad.body.error, /no Unplug profile/i);
+});
+
+test('an unknown state is refused', async () => {
+  const uid = await makeUser();
+  await giveMyUnplug(uid, 'State Check');
+  const bad = await req('PUT', `/participation/admin/featured-members/${uid}`, {
+    token: adminToken, body: { state: 'featured-ish' },
+  });
+  assert.equal(bad.status, 400);
+});
+
+test('only an admin can pin or remove', async () => {
+  const uid = await makeUser();
+  await giveMyUnplug(uid, 'Auth Check');
+  const asMember = await req('PUT', `/participation/admin/featured-members/${uid}`, {
+    token: memberToken, body: { state: 'removed' },
+  });
+  assert.equal(asMember.status, 403);
+  const asAnon = await req('PUT', `/participation/admin/featured-members/${uid}`, {
+    body: { state: 'removed' },
+  });
+  assert.equal(asAnon.status, 401);
+  const listAsMember = await req('GET', '/participation/admin/featured-members', { token: memberToken });
+  assert.equal(listAsMember.status, 403);
 });

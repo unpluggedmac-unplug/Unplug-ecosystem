@@ -10,6 +10,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
@@ -103,6 +104,90 @@ router.get('/featured-members', async (req, res, next) => {
     const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 24) : 5;
     const result = await pool.query('SELECT * FROM get_featured_members($1)', [limit]);
     res.json({ members: result.rows, limit });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ADMIN: who is featured in "Unplug Members worth checking out".
+//
+// The row fills itself, so these endpoints only record the EXCEPTIONS — pin
+// somebody so they always appear, or remove somebody so they never do. That
+// keeps the row working with no upkeep while giving the admin the final say.
+// ---------------------------------------------------------------------------
+
+// GET /participation/admin/featured-members — every member who could appear,
+// with what is currently overriding the ranking. Includes removed people, so
+// a removal can be undone; a removal you cannot see is a removal you cannot
+// reverse.
+router.get('/admin/featured-members', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT mp.user_id, mp.username, mp.display_name, mp.avatar_url,
+              COALESCE(o.state, 'auto') AS state,
+              COALESCE(act.score, 0)::int AS activity
+         FROM my_unplug_profiles mp
+         JOIN users u ON u.id = mp.user_id
+         LEFT JOIN featured_member_overrides o ON o.user_id = mp.user_id
+         LEFT JOIN (
+           SELECT user_id, SUM(total_points) AS score
+             FROM participation_points
+            WHERE is_reversed = FALSE AND earned_at >= now() - INTERVAL '30 days'
+            GROUP BY user_id
+         ) act ON act.user_id = mp.user_id
+        WHERE COALESCE(u.role, 'member') <> 'admin'
+        ORDER BY (COALESCE(o.state, 'auto') = 'pinned') DESC,
+                 COALESCE(act.score, 0) DESC, mp.display_name ASC`
+    );
+    const setting = await pool.query(
+      `SELECT value FROM settings WHERE key = 'featured_members_count'`);
+    res.json({
+      members: result.rows,
+      count: setting.rowCount ? Number(setting.rows[0].value) : 5,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /participation/admin/featured-members/:userId — pin, remove, or hand
+// somebody back to the automatic ranking.
+router.put('/admin/featured-members/:userId', requireRole('admin'), async (req, res, next) => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A valid member is required.' });
+    }
+    const state = String(req.body.state || '').trim();
+    if (!['pinned', 'removed', 'auto'].includes(state)) {
+      return res.status(400).json({ error: 'state must be pinned, removed or auto.' });
+    }
+    // Only somebody who could be featured at all. Pinning a member with no
+    // My Unplug profile would record an override that can never take effect.
+    const eligible = await pool.query(
+      'SELECT 1 FROM my_unplug_profiles WHERE user_id = $1', [userId]);
+    if (eligible.rowCount === 0) {
+      return res.status(404).json({ error: 'That member has no Unplug profile, so they cannot be featured.' });
+    }
+
+    if (state === 'auto') {
+      // Deleting the override is what restores somebody, which is why a
+      // removal is recorded as a row rather than as a flag on the member.
+      await pool.query('DELETE FROM featured_member_overrides WHERE user_id = $1', [userId]);
+      logActivity(req.user.id, 'featured_member_auto', `user ${userId}`);
+      return res.json({ state: 'auto' });
+    }
+    await pool.query(
+      `INSERT INTO featured_member_overrides (user_id, state, created_by)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id) DO UPDATE SET state = EXCLUDED.state,
+                                           created_by = EXCLUDED.created_by,
+                                           created_at = now()`,
+      [userId, state, req.user.id]
+    );
+    logActivity(req.user.id, 'featured_member_' + state, `user ${userId}`);
+    res.json({ state });
   } catch (err) {
     next(err);
   }

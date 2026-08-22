@@ -23,6 +23,14 @@
 -- The count is a parameter rather than a constant so an admin can move it from
 -- 5 to 10 without a deploy — see the featured_members_count setting below.
 
+-- DROPPED FIRST. migrate.js re-runs every .sql on every deploy, in order, so
+-- on the deploy AFTER 130 shipped this file runs while the function already
+-- has 130's nine-column shape. CREATE OR REPLACE cannot change a return type
+-- — Postgres raises 42P13 and the deploy fails. Dropping first makes this file
+-- safe to re-run whatever shape the function is currently in; 130 then runs
+-- immediately after and leaves the final version in place.
+DROP FUNCTION IF EXISTS get_featured_members(INTEGER);
+
 CREATE OR REPLACE FUNCTION get_featured_members(p_limit INTEGER DEFAULT 5)
 RETURNS TABLE (
   kind          TEXT,     -- 'member' | 'business'

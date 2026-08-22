@@ -652,6 +652,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <input id="featuredMembersCount" type="number" min="1" max="24" step="1">
           </div>
           <button class="btn btn-solid" style="width:auto;" id="saveFeaturedCountBtn">Save</button>
+
+          <div style="margin-top:22px; padding-top:18px; border-top:1px solid var(--paper-line);">
+            <h4 style="font-size:13px; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">Who appears</h4>
+            <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">
+              The row fills itself with the most active members, so it needs no upkeep. Use <strong>Pin</strong> to make sure somebody always appears, or <strong>Remove</strong> to keep somebody out however active they are. Removing is reversible &mdash; <strong>Restore</strong> hands them back to the automatic ranking. Only members with an Unplug profile can be featured, because a card needs a picture and a page to open.
+            </p>
+            <div id="featuredMembersAdminBody"><div class="loading-state">Loading&hellip;</div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -3004,7 +3012,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'edcal') loadEdcalDates();
     if (section === 'deafjobs') loadDeafJobs();
     if (section === 'deafpassports') loadDeafPassports();
-    if (section === 'sitesettings') loadSiteSettings();
+    if (section === 'sitesettings') { loadSiteSettings(); loadFeaturedMembersAdmin(); }
     if (section === 'halloffame') { loadHallOfFame(); populateHofUserPicker(); }
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payqueue') loadPaymentQueue();
@@ -7047,6 +7055,75 @@ async function loadHallOfFame() {
 // ---------------------------------------------------------------------------
 // Site Settings — e.g. the homepage YouTube section image
 // ---------------------------------------------------------------------------
+// Who is featured in the homepage members row. The list shows everyone who
+// COULD appear, not only those currently showing, because a removal you
+// cannot see is a removal you cannot undo.
+const FEATURED_STATE = {
+  pinned:  { label: 'Pinned',  cls: 'approved' },
+  removed: { label: 'Removed', cls: 'rejected' },
+  auto:    { label: 'Automatic', cls: 'pending' },
+};
+
+async function loadFeaturedMembersAdmin() {
+  const body = document.getElementById('featuredMembersAdminBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/participation/admin/featured-members');
+    const list = data.members || [];
+    if (!list.length) {
+      body.innerHTML = '<div class="empty-state">No members have an Unplug profile yet, so there is nobody to feature. The row stays hidden until somebody does.</div>';
+      return;
+    }
+    const shown = data.count || 5;
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Member</th><th>Activity (30 days)</th><th>Status</th><th></th></tr>';
+    // Only the first N automatic entries are actually on the homepage; saying
+    // which makes the difference between "featured" and "eligible" visible.
+    let autoSeen = 0;
+    list.forEach((m) => {
+      const state = m.state || 'auto';
+      if (state !== 'removed') autoSeen += 1;
+      const onHomepage = state !== 'removed' && autoSeen <= shown;
+      const st = FEATURED_STATE[state] || FEATURED_STATE.auto;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><strong>${escapeHtmlAdmin(m.display_name)}</strong>`
+        + `<div style="font-size:11.5px; color:var(--slate);">@${escapeHtmlAdmin(m.username)}`
+        + `${onHomepage ? ' · <span style="color:var(--green,#2e7d32);">on the homepage now</span>' : ''}</div></td>`
+        + `<td>${m.activity}</td>`
+        + `<td><span class="status-pill ${st.cls}">${st.label}</span></td>`
+        + `<td><div class="row-actions">`
+        + (state === 'pinned'
+            ? '<button class="toggle" data-act="auto">Unpin</button>'
+            : '<button class="approve" data-act="pinned">Pin</button>')
+        + (state === 'removed'
+            ? '<button class="toggle" data-act="auto">Restore</button>'
+            : '<button class="reject" data-act="removed">Remove</button>')
+        + '</div></td>';
+      tr.querySelectorAll('button[data-act]').forEach((btn) => {
+        btn.addEventListener('click', () => setFeaturedMemberState(m.user_id, btn.getAttribute('data-act')));
+      });
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (e) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(e.message || 'unknown error')}</div>`;
+  }
+}
+
+async function setFeaturedMemberState(userId, state) {
+  try {
+    await api(`/participation/admin/featured-members/${userId}`, {
+      method: 'PUT', body: JSON.stringify({ state }),
+    });
+    showToast(state === 'pinned' ? 'Pinned — they will always appear.'
+      : (state === 'removed' ? 'Removed from the homepage row.'
+        : 'Back in the automatic ranking.'));
+    loadFeaturedMembersAdmin();
+  } catch (e) { showToast(e.message || 'Could not save.', true); }
+}
+
 async function loadSiteSettings() {
   try {
     const data = await api('/admin/settings');
