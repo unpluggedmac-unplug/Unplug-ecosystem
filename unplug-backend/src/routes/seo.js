@@ -1,145 +1,22 @@
-// Sitemaps, redirect lookup and the 404 log.
+// Redirects, and a log of what people asked for and did not find.
 //
-// SERVED FROM HERE, PRESENTED BY CLOUDFLARE. www.unplugnews.com is Cloudflare
-// Pages and this API is a different origin, so a sitemap served only from here
-// would live at the wrong domain for Search Console. A Pages Function fetches
-// these and returns them under the public domain — see functions/ in the repo
-// root. Everything in this file is therefore public and read-only except the
-// admin section at the bottom.
+// SITEMAPS AND ROBOTS ARE NOT HERE. routes/sitemap.js already owns
+// /sitemap.xml and /robots.txt and is mounted first; adding a second copy here
+// produced dead code that Express never reached. This file is only the parts
+// that did not already exist.
+//
+// APPLIED BY CLOUDFLARE, NOT EXPRESS. www.unplugnews.com is Cloudflare Pages
+// and this API is a different origin, so Express never sees a request for a
+// moved page on the public site. A Pages Function asks this table only when the
+// static asset was a genuine 404, which keeps the happy path free of any
+// backend round-trip.
 
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
-const {
-  siteOrigin, absoluteUrl, PAGE_URLS, STATIC_PAGES,
-  lastmod, urlSet, sitemapIndex,
-} = require('../utils/siteUrls');
 
 const router = express.Router();
-
-// Sitemaps are a snapshot, not a live query — a crawler asking twice a minute
-// should not run the whole set again. Short enough that publishing something
-// shows up quickly, long enough that a crawl cannot become a load problem.
-const XML_CACHE_SECONDS = 900;
-
-function sendXml(res, body) {
-  res.set('Content-Type', 'application/xml; charset=utf-8');
-  res.set('Cache-Control', `public, max-age=${XML_CACHE_SECONDS}`);
-  res.send(body);
-}
-
-// ---------------------------------------------------------------------------
-// The index, and one child per content type.
-//
-// Split rather than one big file because a sitemap is capped at 50,000 URLs
-// and 50MB, and because a crawler can then see which SECTION changed from the
-// index alone instead of re-reading everything.
-// ---------------------------------------------------------------------------
-
-router.get('/sitemap.xml', async (req, res, next) => {
-  try {
-    // lastmod per child, so a crawler reading the index knows which parts are
-    // worth re-fetching. Each is the newest thing in that section.
-    const [articles, profiles, projects] = await Promise.all([
-      pool.query(`SELECT MAX(GREATEST(published_at, created_at)) AS m FROM articles
-                   WHERE status = 'approved'
-                     AND (scheduled_for IS NULL OR scheduled_for <= CURRENT_DATE)`),
-      pool.query(`SELECT MAX(updated_at) AS m FROM profiles WHERE status = 'approved'`),
-      pool.query(`SELECT MAX(updated_at) AS m FROM projects WHERE status = 'published'`),
-    ]);
-
-    sendXml(res, sitemapIndex([
-      { loc: absoluteUrl('/sitemap-pages.xml') },
-      { loc: absoluteUrl('/sitemap-articles.xml'), lastmod: lastmod(articles.rows[0].m) },
-      { loc: absoluteUrl('/sitemap-directory.xml'), lastmod: lastmod(profiles.rows[0].m) },
-      { loc: absoluteUrl('/sitemap-projects.xml'), lastmod: lastmod(projects.rows[0].m) },
-    ]));
-  } catch (err) { next(err); }
-});
-
-router.get('/sitemap-pages.xml', (req, res) => {
-  sendXml(res, urlSet(STATIC_PAGES.map((p) => ({
-    loc: absoluteUrl(PAGE_URLS.page(p.key)),
-    priority: p.priority,
-  }))));
-});
-
-router.get('/sitemap-articles.xml', async (req, res, next) => {
-  try {
-    // Exactly what a reader can open: approved AND past its scheduled date.
-    // A sitemap listing a future-dated article invites a crawl that 404s and
-    // teaches the crawler the site is unreliable.
-    const result = await pool.query(
-      `SELECT id, published_at, created_at
-         FROM articles
-        WHERE status = 'approved'
-          AND (scheduled_for IS NULL OR scheduled_for <= CURRENT_DATE)
-        ORDER BY COALESCE(published_at, created_at) DESC
-        LIMIT 50000`
-    );
-    sendXml(res, urlSet(result.rows.map((a) => ({
-      loc: absoluteUrl(PAGE_URLS.article(a.id)),
-      lastmod: lastmod(a.published_at || a.created_at),
-      priority: '0.8',
-    }))));
-  } catch (err) { next(err); }
-});
-
-router.get('/sitemap-directory.xml', async (req, res, next) => {
-  try {
-    const result = await pool.query(
-      `SELECT slug, updated_at FROM profiles
-        WHERE status = 'approved' AND slug IS NOT NULL
-        ORDER BY updated_at DESC LIMIT 50000`
-    );
-    sendXml(res, urlSet(result.rows.map((p) => ({
-      loc: absoluteUrl(PAGE_URLS.profile(p.slug)),
-      lastmod: lastmod(p.updated_at),
-      priority: '0.7',
-    }))));
-  } catch (err) { next(err); }
-});
-
-router.get('/sitemap-projects.xml', async (req, res, next) => {
-  try {
-    const result = await pool.query(
-      `SELECT id, updated_at FROM projects
-        WHERE status = 'published' ORDER BY updated_at DESC LIMIT 50000`
-    );
-    sendXml(res, urlSet(result.rows.map((p) => ({
-      loc: absoluteUrl(PAGE_URLS.project(p.id)),
-      lastmod: lastmod(p.updated_at),
-      priority: '0.6',
-    }))));
-  } catch (err) { next(err); }
-});
-
-// robots.txt — served from here so it can name the sitemap using the same
-// origin everything else uses, rather than a copy that drifts.
-router.get('/robots.txt', (req, res) => {
-  const origin = siteOrigin();
-  res.set('Content-Type', 'text/plain; charset=utf-8');
-  res.set('Cache-Control', 'public, max-age=3600');
-  res.send([
-    'User-agent: *',
-    'Allow: /',
-    '',
-    '# Screens that need a sign-in. Nothing here is secret — these are kept',
-    '# out of the index because a search result leading to a login form is a',
-    '# dead end for a reader, not because the pages are sensitive.',
-    'Disallow: /unplug-admin-dashboard',
-    'Disallow: /unplug-member-dashboard',
-    'Disallow: /unplug-checkout',
-    '',
-    '# Anything carrying a one-time token must never be indexed.',
-    'Disallow: /*token=',
-    'Disallow: /*reset=',
-    '',
-    `Sitemap: ${origin}/sitemap.xml`,
-    '',
-  ].join('\n'));
-});
 
 // ---------------------------------------------------------------------------
 // Redirects — the lookup a Pages Function makes when a path 404s.

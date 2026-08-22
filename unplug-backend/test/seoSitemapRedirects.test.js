@@ -97,6 +97,11 @@ before(async () => {
   const app = express();
   app.use(express.json());
   app.use(attachUser);
+  // Mounted in the same order as src/app.js: sitemap.js owns /sitemap.xml and
+  // /robots.txt, seo.js owns redirects and the 404 log. Testing them mounted
+  // the wrong way round would hide exactly the shadowing bug that made a
+  // duplicate set of routes look like it worked.
+  app.use('/', require('../src/routes/sitemap'));
   app.use('/', require('../src/routes/seo'));
   app.use((err, _req, res, _next) => res.status(500).json({ error: err.message }));
   await new Promise((resolve) => { server = app.listen(0, resolve); });
@@ -130,7 +135,7 @@ test('THE AMPERSAND IN EVERY URL IS ESCAPED', async () => {
   const uid = await makeUser();
   await makeArticle(uid);
 
-  const xml = await req('GET', '/sitemap-articles.xml');
+  const xml = await req('GET', '/sitemap.xml');
   assert.equal(xml.status, 200);
   assert.match(xml.type, /xml/);
   assert.match(xml.text, /&amp;id=/, 'the & is escaped');
@@ -138,11 +143,10 @@ test('THE AMPERSAND IN EVERY URL IS ESCAPED', async () => {
     'no unescaped ampersand survives anywhere in the document');
 });
 
-test('the sitemap index and children are well-formed', async () => {
+test('the sitemap is well-formed', async () => {
   // Parsed rather than eyeballed: a stray tag is invisible to a regex and
   // fatal to a crawler.
-  for (const p of ['/sitemap.xml', '/sitemap-pages.xml', '/sitemap-articles.xml',
-    '/sitemap-directory.xml', '/sitemap-projects.xml']) {
+  for (const p of ['/sitemap.xml']) {
     const r = await req('GET', p);
     assert.equal(r.status, 200, p);
     assert.match(r.text, /^<\?xml version="1\.0" encoding="UTF-8"\?>/, `${p} declares itself`);
@@ -157,7 +161,7 @@ test('the sitemap index and children are well-formed', async () => {
 test('every URL is absolute and on the public domain', async () => {
   // A relative or wrong-origin URL in a sitemap is ignored at best and treated
   // as a cross-submission at worst.
-  const r = await req('GET', '/sitemap-pages.xml');
+  const r = await req('GET', '/sitemap.xml');
   const locs = [...r.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
   assert.ok(locs.length > 0);
   assert.ok(locs.every((l) => l.startsWith('https://www.unplugnews.com/')),
@@ -174,7 +178,7 @@ test('DRAFTS, PENDING AND REJECTED ARTICLES ARE NOT LISTED', async () => {
   const pending = await makeArticle(uid, { title: 'Pending One', status: 'pending' });
   const rejected = await makeArticle(uid, { title: 'Rejected One', status: 'rejected' });
 
-  const r = await req('GET', '/sitemap-articles.xml');
+  const r = await req('GET', '/sitemap.xml');
   assert.ok(r.text.includes(`id=${live}`), 'the published one is there');
   assert.ok(!r.text.includes(`id=${pending}`), 'pending is not');
   assert.ok(!r.text.includes(`id=${rejected}`), 'rejected is not');
@@ -187,7 +191,7 @@ test('AN ARTICLE SCHEDULED FOR NEXT WEEK IS NOT LISTED', async () => {
   const future = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
   const id = await makeArticle(uid, { title: 'Next Week', scheduledFor: future });
 
-  const r = await req('GET', '/sitemap-articles.xml');
+  const r = await req('GET', '/sitemap.xml');
   assert.ok(!r.text.includes(`id=${id}`), 'a future-dated article stays out until it is live');
 });
 
@@ -198,18 +202,64 @@ test('only approved directory profiles are listed', async () => {
                     VALUES ($1, 'business', 'basic', 'seo-hidden', 'Hidden Business', 'pending')`,
     [await makeUser()]);
 
-  const r = await req('GET', '/sitemap-directory.xml');
+  const r = await req('GET', '/sitemap.xml');
   assert.ok(r.text.includes(slug), 'approved is listed');
   assert.ok(!r.text.includes('seo-hidden'), 'pending is not');
 });
 
-test('robots.txt names the sitemap and keeps sign-in screens out', async () => {
+test('published project showcases are listed, drafts are not', async () => {
+  const live = await pool.query(
+    `INSERT INTO projects (title, status) VALUES ('Listed Project', 'published') RETURNING id`);
+  const draft = await pool.query(
+    `INSERT INTO projects (title, status) VALUES ('Draft Project', 'draft') RETURNING id`);
+
+  const r = await req('GET', '/sitemap.xml');
+  assert.ok(r.text.includes(`p=project&amp;id=${live.rows[0].id}`), 'the published one is there');
+  assert.ok(!r.text.includes(`p=project&amp;id=${draft.rows[0].id}`), 'the draft is not');
+});
+
+test('SITEMAP URLS MATCH THE CANONICAL TAG, NOT THE UNDERLYING FILE', async () => {
+  // Pages declare <link rel="canonical" href="https://www.unplugnews.com/?p=...">.
+  // A sitemap offering /unplug-magazine.html?p=... instead sends a crawler to
+  // an address the page then disowns — wasted crawl, and two URLs competing
+  // for the credit of one page.
+  const uid = await makeUser();
+  await makeArticle(uid, { title: 'Canonical Check' });
+
+  const r = await req('GET', '/sitemap.xml');
+  const locs = [...r.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  assert.ok(locs.length > 0);
+  assert.ok(!locs.some((l) => l.includes('unplug-magazine.html')),
+    'no entry points at the file behind the page');
+  assert.ok(locs.includes('https://www.unplugnews.com/'), 'the homepage is the bare origin');
+});
+
+test("THE API'S robots.txt REFUSES THE API, AND MUST NEVER REACH THE SITE", async () => {
+  // This host serves JSON, not pages. "Disallow: /" is right for it — and
+  // catastrophic if it is ever proxied onto www.unplugnews.com, which would
+  // ask every crawler to drop the entire magazine from its index. The public
+  // robots.txt is the static file checked below; these two must not converge.
   const r = await req('GET', '/robots.txt');
   assert.equal(r.status, 200);
   assert.match(r.type, /text\/plain/);
-  assert.match(r.text, /Sitemap: https:\/\/www\.unplugnews\.com\/sitemap\.xml/);
-  assert.match(r.text, /Disallow: \/unplug-admin-dashboard/);
-  assert.match(r.text, /Allow: \//, 'the site itself is crawlable');
+  assert.match(r.text, /Disallow: \//, 'the API host asks not to be crawled');
+  assert.match(r.text, /Sitemap: https:\/\/www\.unplugnews\.com\/sitemap\.xml/,
+    'it still points a crawler at the real sitemap');
+});
+
+test('THE PUBLIC robots.txt ALLOWS THE SITE AND NAMES THE SITEMAP', async () => {
+  // Read off disk, because this one is a static file served by Cloudflare
+  // Pages rather than a route. If it goes missing, or someone pastes the API's
+  // version into it, the site quietly stops being indexed.
+  const publicRobots = path.join(__dirname, '..', '..', 'robots.txt');
+  assert.ok(fs.existsSync(publicRobots), 'the public robots.txt is in the repository');
+  const txt = fs.readFileSync(publicRobots, 'utf8');
+
+  assert.match(txt, /^\s*Allow: \/\s*$/m, 'the site itself is crawlable');
+  assert.ok(!/^\s*Disallow:\s*\/\s*$/m.test(txt),
+    'it does NOT carry the API\'s blanket Disallow: /');
+  assert.match(txt, /Sitemap: https:\/\/www\.unplugnews\.com\/sitemap\.xml/);
+  assert.match(txt, /Disallow: \/unplug-admin-dashboard/, 'admin screens stay out');
 });
 
 // ---------------------------------------------------------------------------
@@ -338,7 +388,7 @@ test('a miss can be dismissed without creating a redirect', async () => {
 test('the sitemap, robots and redirect lookup are public', async () => {
   // A crawler is never signed in, and the edge Function calls the lookup on
   // behalf of a signed-out reader.
-  for (const p of ['/sitemap.xml', '/robots.txt', '/sitemap-articles.xml']) {
+  for (const p of ['/sitemap.xml', '/robots.txt']) {
     assert.equal((await req('GET', p)).status, 200, p);
   }
   assert.equal((await req('GET', '/redirect?path=/anything')).status, 404,

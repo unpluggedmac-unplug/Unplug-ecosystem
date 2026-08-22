@@ -1,0 +1,31 @@
+# Unplug Magazine — www.unplugnews.com
+#
+# This is the PUBLIC site's robots.txt, served as a static file by Cloudflare
+# Pages. It is deliberately NOT the one the API serves.
+#
+# The API (unplug-ecosystem.onrender.com) serves "Disallow: /" for itself,
+# which is correct — nothing there is a page a reader should find in search
+# results. Proxying that file onto this domain would tell every crawler to
+# index nothing at all, so this file is kept static and separate on purpose.
+
+User-agent: *
+Allow: /
+
+# Admin, member and checkout screens are private tools, not content. Nothing
+# here is secret; they are kept out of the index because a search result
+# leading to a sign-in form is a dead end for a reader.
+Disallow: /unplug-admin-dashboard
+Disallow: /unplug-admin-dashboard.html
+Disallow: /unplug-member-dashboard
+Disallow: /unplug-member-dashboard.html
+Disallow: /unplug-checkout
+Disallow: /unplug-checkout.html
+
+# Anything carrying a one-time token must never be indexed.
+Disallow: /*token=
+Disallow: /*reset=
+
+# Generated from live content by the API and served on this domain by a
+# Cloudflare Pages Function, so stories and listings published since the last
+# deploy are still discoverable. This is the URL to submit in Search Console.
+Sitemap: https://www.unplugnews.com/sitemap.xml

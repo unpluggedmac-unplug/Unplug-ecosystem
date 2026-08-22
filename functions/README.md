@@ -12,7 +12,8 @@ by the Express backend alone, no matter how it is written:
 
 **A sitemap must live on the public domain.** Search Console will not accept a
 sitemap for unplugnews.com that is only reachable at onrender.com. The backend
-generates the XML; `sitemap.xml.js` serves it under the right domain.
+generates the XML from live content; `sitemap.xml.js` serves it under the right
+domain.
 
 **A redirect must be applied before the static site answers.** A request for
 `https://www.unplugnews.com/old-page` is handled by Cloudflare and never
@@ -23,10 +24,18 @@ in front of the static assets and can.
 
 | File | Responsibility |
 |---|---|
-| `sitemap.xml.js` | Serves the sitemap index from the backend |
-| `sitemap-[name].xml.js` | Serves each child sitemap (pages, articles, directory, projects) |
-| `robots.txt.js` | Serves robots.txt from the backend, so it names one origin |
+| `sitemap.xml.js` | Serves the sitemap from the backend |
 | `[[path]].js` | Catch-all: static asset first, then redirect lookup, then log the miss |
+
+## robots.txt is NOT a Function, on purpose
+
+There is no `robots.txt.js` here, and there must never be one. The API serves
+its own robots.txt saying `Disallow: /`, which is correct for a host that
+returns JSON — but proxying that file onto `www.unplugnews.com` would ask
+every crawler to drop the entire magazine from its index.
+
+The public `robots.txt` is a plain static file in the repository root. Static
+beats clever here: a file cannot fetch the wrong thing.
 
 ## The rule that matters in `[[path]].js`
 
