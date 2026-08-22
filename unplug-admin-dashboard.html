@@ -854,7 +854,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- NOTIFICATIONS -->
     <div class="admin-section" id="section-notifications">
-      <div class="main-head"><div><h1>Notifications</h1><p>Sales-consultant-linked payments show up here automatically once confirmed.</p></div></div>
+      <div class="main-head"><div><h1>Notifications</h1><p>Everything that happens on the site: new members and Unplug profiles, comments and reviews waiting for approval, payments, enquiries, listing claims, Deaf Community posts and system errors. Busy things like comments are grouped into one line with a count rather than filling the list. Unread show first, and the number beside Notifications in the menu is how many you have not read.</p></div></div>
       <div class="panel">
         <div class="panel-body" id="notificationsBody" style="padding:0;"></div>
       </div>
@@ -9070,11 +9070,33 @@ async function loadNotifications() {
       return;
     }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Message</th><th>Date</th><th></th></tr>';
+    table.innerHTML = '<tr><th>What happened</th><th>When</th><th></th></tr>';
     data.notifications.forEach((n) => {
       const tr = document.createElement('tr');
       tr.style.fontWeight = n.read ? 'normal' : '600';
-      tr.innerHTML = `<td>${n.message}</td><td>${new Date(n.created_at).toLocaleString()}</td><td>${n.read ? '' : '<div class="row-actions"><button class="approve">Mark Read</button></div>'}</td>`;
+      // ESCAPED. This used to interpolate n.message raw, which was harmless
+      // while payments were the only writer. Now notifications carry names
+      // people typed — a member called <script> would otherwise run here.
+      const count = Number(n.event_count) > 1
+        ? ` <span class="status-pill pending">${Number(n.event_count)}</span>` : '';
+      const detail = n.detail
+        ? `<div style="font-size:12px; color:var(--slate); font-weight:400; margin-top:3px;">${escapeHtmlAdmin(n.detail)}</div>` : '';
+      // Take me to it. A notification you have to go hunting after is only
+      // half a notification.
+      const go = n.link_section
+        ? `<button class="toggle" data-goto="${escapeAttrAdmin(n.link_section)}">Open</button>` : '';
+      const when = n.last_seen_at || n.created_at;
+      tr.innerHTML = `<td>${escapeHtmlAdmin(n.message)}${count}${detail}</td>`
+        + `<td style="white-space:nowrap;">${new Date(when).toLocaleString()}</td>`
+        + `<td><div class="row-actions">${go}${n.read ? '' : '<button class="approve">Mark Read</button>'}</div></td>`;
+      const goBtn = tr.querySelector('button[data-goto]');
+      if (goBtn) {
+        goBtn.addEventListener('click', () => {
+          const link = document.querySelector(`[data-section="${goBtn.getAttribute('data-goto')}"]`);
+          if (link) link.click();
+          else showToast('That section could not be found.', true);
+        });
+      }
       const markBtn = tr.querySelector('.approve');
       if (markBtn) {
         markBtn.addEventListener('click', async () => {

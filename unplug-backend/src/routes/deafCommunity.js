@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireRole } = require('../middleware/auth');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
@@ -80,6 +81,14 @@ router.post('/jobs', publicSubmitLimiter, honeypot, async (req, res, next) => {
        RETURNING id`,
       [businessName.trim(), title.trim(), description.trim(), applyEmail.trim(), province || null, salaryRange || null, cleanFilters]
     );
+
+    notifyAdminAsync({
+      type: NOTIFY.DEAF_JOB,
+      message: 'New Deaf Community vacancy awaiting approval',
+      plural: '%n new Deaf Community vacancies awaiting approval',
+      link: 'deafjobs',
+      dedupeKey: 'deafjobs:pending',
+    });
     res.status(201).json({
       id: result.rows[0].id,
       message: 'Vacancy submitted for review. Once approved it goes live for 14 days.',

@@ -1188,7 +1188,14 @@ router.get('/overview', requireRole('admin'), async (req, res, next) => {
 router.get('/notifications', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT * FROM admin_notifications ORDER BY read ASC, created_at DESC LIMIT 50`
+      // last_seen_at, not created_at: a rolled-up row's created_at is when the
+      // FIRST of its events arrived, so ordering by it would sink an active
+      // thread to the bottom while it was still filling up.
+      `SELECT id, type, message, detail, link_section, dedupe_key, event_count,
+              read, created_at, COALESCE(last_seen_at, created_at) AS last_seen_at
+         FROM admin_notifications
+        ORDER BY read ASC, COALESCE(last_seen_at, created_at) DESC
+        LIMIT 100`
     );
     res.json({ notifications: result.rows });
   } catch (err) {

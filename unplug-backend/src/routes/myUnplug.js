@@ -11,6 +11,7 @@
 
 const express = require('express');
 const pool = require('../db');
+const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { normaliseTags } = require('../utils/tags');
 const { requireAuth } = require('../middleware/auth');
 const { recordParticipationAsync } = require('../utils/participation');
@@ -152,7 +153,11 @@ router.put('/me', requireAuth, async (req, res, next) => {
          -- would otherwise wipe them every time somebody edited their bio.
          tags = COALESCE(EXCLUDED.tags, my_unplug_profiles.tags),
          updated_at = now()
-       RETURNING *`,
+       -- xmax = 0 on a row this statement INSERTED; non-zero when the
+       -- ON CONFLICT branch updated an existing one. This route saves the
+       -- whole profile, so without it the admin would be told "new Unplug
+       -- profile" every time somebody edited their bio.
+       RETURNING *, (xmax = 0) AS was_created`,
       [
         req.user.id, check.username, displayName.slice(0, 60),
         aboutMe || null, b.avatarUrl || null,
@@ -160,8 +165,24 @@ router.put('/me', requireAuth, async (req, res, next) => {
         b.tags === undefined ? null : normaliseTags(b.tags),
       ]
     );
+
+    // was_created is ours, not part of the profile — pulled off before the
+    // row is sent so the response shape is unchanged.
+    const { was_created: wasCreated, ...profile } = result.rows[0];
+
+    // Only on creation, and each one individually: a new Unplug profile is
+    // exactly what the owner asked to hear about, and they are not frequent
+    // enough to need rolling up.
+    if (wasCreated) {
+      notifyAdminAsync({
+        type: NOTIFY.PROFILE_CREATED,
+        message: `New Unplug profile: ${displayName}`,
+        detail: '@' + check.username,
+        link: 'myunplugprofiles',
+      });
+    }
     const taxonomies = await loadTaxonomies(req.user.id);
-    res.json({ profile: result.rows[0], taxonomies, completion: computeCompletion(result.rows[0], taxonomies) });
+    res.json({ profile, taxonomies, completion: computeCompletion(profile, taxonomies) });
   } catch (err) {
     // The lowercase unique index is the real guard against a race between two
     // people claiming the same handle — the availability check above is only

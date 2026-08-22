@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
@@ -93,6 +94,14 @@ router.post('/profile/:profileId', requireAuth, publicSubmitLimiter, honeypot, a
              reviewed_at = NULL`,
       [profileId, req.user.id, rating, body || null]
     );
+
+    notifyAdminAsync({
+      type: NOTIFY.REVIEW_POSTED,
+      message: 'New review awaiting approval',
+      plural: '%n new reviews awaiting approval',
+      link: 'reviews',
+      dedupeKey: 'reviews:pending',
+    });
     res.status(201).json({ message: 'Thanks — your review has been sent for review and will appear once approved.' });
   } catch (err) {
     next(err);

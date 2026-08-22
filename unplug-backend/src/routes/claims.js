@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
@@ -30,6 +31,12 @@ router.post('/profile/:profileId', requireAuth, publicSubmitLimiter, async (req,
          SET message = EXCLUDED.message, status = 'pending', created_at = now(), reviewed_at = NULL`,
       [profileId, req.user.id, message || null]
     );
+
+    notifyAdminAsync({
+      type: NOTIFY.LISTING_CLAIM,
+      message: 'Someone has claimed a Directory listing',
+      link: 'claims',
+    });
     res.status(201).json({ message: 'Thanks — we\'ve received your claim and will be in touch once it\'s reviewed.' });
   } catch (err) {
     next(err);

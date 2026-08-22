@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
@@ -102,6 +103,16 @@ router.post('/:targetType/:targetId', requireAuth, publicSubmitLimiter, honeypot
        VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
       [targetType, targetId, req.user.id, body]
     );
+
+    // Rolled up: on a busy article this fires constantly, and one row per
+    // comment would bury everything else in the list.
+    notifyAdminAsync({
+      type: NOTIFY.COMMENT_POSTED,
+      message: 'New comment awaiting approval',
+      plural: '%n new comments awaiting approval',
+      link: 'comments',
+      dedupeKey: 'comments:pending',
+    });
     res.status(201).json({
       comment: result.rows[0],
       message: 'Thanks — your comment has been sent for review and will appear once approved.',

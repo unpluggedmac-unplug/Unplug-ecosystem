@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const { notifyAdminAsync, NOTIFY } = require('./utils/adminNotify');
 const cors = require('cors');
 const path = require('path');
 
@@ -142,6 +143,30 @@ app.use((req, res) => {
 // leaking stack traces to clients.
 app.use((err, req, res, next) => {
   console.error(err);
+
+  // The admin is told about it as well as the log. A 500 that only reaches
+  // the server log is a fault nobody finds until a reader reports it.
+  //
+  // RATE LIMITED BY THE DEDUPE KEY, and that is the important part. A broken
+  // endpoint can throw thousands of times a minute; without rolling the same
+  // fault into one row, the error would flood the notification list and hide
+  // everything else — the outage would erase the very screen you would use to
+  // notice it. The key is the route plus the message, so a genuinely
+  // different fault still gets its own row.
+  const where = (req.method || 'GET') + ' ' + (req.route && req.route.path
+    ? (req.baseUrl || '') + req.route.path
+    : (req.originalUrl || '').split('?')[0]);
+  const reason = String((err && err.message) || 'unknown error');
+  notifyAdminAsync({
+    type: NOTIFY.SYSTEM_ERROR,
+    message: `Something failed on ${where}`,
+    plural: `Something failed on ${where} (%n times)`,
+    detail: reason,
+    link: 'notifications',
+    // Same route + same message = same problem, however many times it fires.
+    dedupeKey: 'err:' + where + ':' + reason.slice(0, 60),
+  });
+
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 

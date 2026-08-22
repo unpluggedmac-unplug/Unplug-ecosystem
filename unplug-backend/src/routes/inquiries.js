@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireRole } = require('../middleware/auth');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
@@ -23,6 +24,15 @@ router.post('/', publicSubmitLimiter, honeypot, async (req, res, next) => {
       `INSERT INTO inquiries (name, email, subject, message, enquiry_type) VALUES ($1, $2, $3, $4, $5)`,
       [name, email, subject || null, message, enquiryType]
     );
+
+    // Each enquiry is its own row: a business asking about advertising is a
+    // person waiting for a reply, not a statistic.
+    notifyAdminAsync({
+      type: NOTIFY.ENQUIRY,
+      message: `New ${(enquiryType || 'general')} enquiry from ${name || 'someone'}`,
+      detail: subject || null,
+      link: 'inquiries',
+    });
     if (enquiryType === 'advertising') {
       const firstName = String(name).trim().split(/[ ]+/)[0];
       trackAsync(EVENTS.ADVERTISER_ENQUIRED, {

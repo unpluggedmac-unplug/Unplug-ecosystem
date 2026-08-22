@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
+const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { recordPaymentOnce } = require('../utils/analyticsRecorder');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor, historyFor } = require('../utils/accountCredit');
@@ -1017,6 +1018,23 @@ router.post('/ozow/webhook', async (req, res, next) => {
   }
 });
 
+// EVERY confirmed payment is announced, not only the consultant-linked ones.
+// Money arriving is the single thing an owner most wants to be told about, and
+// until now it was silent unless a consultant happened to be attached.
+//
+// Its own row every time — never rolled up. Two payments of R95 are two
+// different people who each paid, and a line reading "2 payments" would hide
+// which.
+function notifyPaymentConfirmed(payment) {
+  notifyAdminAsync({
+    type: NOTIFY.PAYMENT_CONFIRMED,
+    message: `Payment confirmed — R${Number(payment.amount).toFixed(2)}`,
+    detail: payment.linked_type ? `For: ${payment.linked_type}` : null,
+    link: 'payments',
+    paymentId: payment.id,
+  });
+}
+
 // Creates an admin notification when a confirmed payment is attributed to
 // a sales consultant, so commission-relevant activity surfaces without an
 // admin having to go looking for it in the full payments table.
@@ -1042,6 +1060,7 @@ async function handleGatewayCallback(reference, status) {
 
   if (newStatus === 'confirmed') {
     await applyPaymentEffect({ ...payment, status: newStatus });
+    notifyPaymentConfirmed(payment);
     await notifySalesConsultantPayment(payment);
   }
 }
@@ -1067,6 +1086,7 @@ router.patch('/:id/confirm-eft', requireRole('admin'), async (req, res, next) =>
 
     await pool.query('UPDATE payments SET status = $1, confirmed_at = now() WHERE id = $2', ['confirmed', payment.id]);
     await applyPaymentEffect(payment);
+    notifyPaymentConfirmed(payment);
     await notifySalesConsultantPayment(payment);
 
     res.json({ message: 'EFT payment confirmed and applied.' });

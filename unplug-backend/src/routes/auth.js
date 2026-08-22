@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../db');
+const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireAuth } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
 const { loginLimiter, registerLimiter, emailActionLimiter } = require('../middleware/rateLimit');
@@ -54,6 +55,17 @@ router.post('/register', registerLimiter, async (req, res, next) => {
       [email, phone || null, altEmail || null, passwordHash, finalRole, finalName, finalMemberType]
     );
     const user = result.rows[0];
+
+    // A new member is exactly what the owner asked to be told about, and each
+    // is worth its own row. The name is carried; the address is not — the
+    // notification list is a screen, and an email address does not need to be
+    // sitting on it.
+    notifyAdminAsync({
+      type: NOTIFY.MEMBER_JOINED,
+      message: `New member: ${finalName || 'someone'}`,
+      detail: finalMemberType ? `Signed up as ${finalMemberType}` : null,
+      link: 'users',
+    });
 
     const code = generateCode();
     await pool.query(
