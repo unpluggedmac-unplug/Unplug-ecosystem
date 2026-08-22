@@ -165,7 +165,9 @@ router.get('/mine', requireAuth, async (req, res, next) => {
               CASE WHEN h.target_type = 'article' THEN a.title ELSE p.display_name END AS target_title,
               CASE WHEN h.target_type = 'article' THEN a.banner_image_url ELSE p.feature_image_url END AS target_image,
               pay.amount AS amount_paid, pay.status AS payment_status,
-              pay.gateway_reference AS payment_reference
+              pay.gateway_reference AS payment_reference,
+              -- The database's today, carried on every row. See below.
+              to_char(CURRENT_DATE, 'YYYY-MM-DD') AS today
          FROM highlights h
          LEFT JOIN articles a ON h.target_type = 'article'   AND a.id = h.target_id
          LEFT JOIN profiles p ON h.target_type = 'directory' AND p.id = h.target_id
@@ -178,7 +180,17 @@ router.get('/mine', requireAuth, async (req, res, next) => {
     );
     // Derive the display status the dashboard shows, so the same rules live in
     // one place rather than being re-guessed in the browser.
-    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    //
+    // TODAY COMES FROM THE DATABASE. Whether a highlight is live is decided in
+    // SQL against CURRENT_DATE (see the public query at the top of this file);
+    // working the label out from Node's UTC midnight instead was a second
+    // clock, and the two disagree for as long as the server's local date is
+    // ahead of UTC. A member would have been told "Scheduled, 5 days left"
+    // about a highlight the site was already showing.
+    const todayText = result.rows.length
+      ? result.rows[0].today
+      : new Date().toISOString().slice(0, 10);
+    const today = new Date(todayText + 'T00:00:00Z');
     const highlights = result.rows.map((h) => {
       const start = h.start_date ? new Date(h.start_date) : null;
       const end = h.end_date ? new Date(h.end_date) : null;
@@ -191,7 +203,10 @@ router.get('/mine', requireAuth, async (req, res, next) => {
       else label = 'Active';
       const daysLeft = (label === 'Active' && end)
         ? Math.max(0, Math.ceil((end - today) / 86400000)) : null;
-      return { ...h, statusLabel: label, daysLeft };
+      // `today` was carried for the calculation above; it is not part of a
+      // highlight and does not belong in the response.
+      const { today: _today, ...highlight } = h;
+      return { ...highlight, statusLabel: label, daysLeft };
     });
     res.json({ highlights });
   } catch (err) { next(err); }

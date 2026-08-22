@@ -56,8 +56,19 @@ async function makeUser(role = 'member') {
 }
 
 // Dates relative to today, so these tests do not rot.
+// Offsets are counted from the DATABASE's idea of today, not Node's.
+//
+// The route compares ends_at against CURRENT_DATE, which is the Postgres
+// server's local date. Deriving the test's dates from UTC instead meant that
+// between local midnight and UTC midnight — two hours every night in South
+// Africa — dayOffset(0) produced yesterday, and "a vote on the final day is
+// accepted" failed for reasons that had nothing to do with the code. Both
+// sides now read the same clock.
+let serverToday = null; // filled in before(), from SELECT CURRENT_DATE
+
 function dayOffset(n) {
-  const d = new Date(); d.setUTCHours(0, 0, 0, 0);
+  if (!serverToday) throw new Error('serverToday is read in before() — call dayOffset inside a test');
+  const d = new Date(serverToday + 'T00:00:00Z');
   return new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
 }
 
@@ -98,6 +109,8 @@ before(async () => {
   for (const f of fs.readdirSync(path.join(__dirname, '..', 'db', 'migrations')).filter((x) => x.endsWith('.sql')).sort()) {
     await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', f), 'utf8'));
   }
+
+  serverToday = (await pool.query("SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS d")).rows[0].d;
 
   jwt = require('jsonwebtoken');
 

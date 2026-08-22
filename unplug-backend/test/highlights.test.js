@@ -78,9 +78,19 @@ async function makeProfile(userId, name = 'A Business') {
   return r.rows[0].id;
 }
 
-// Dates relative to today, so these tests do not expire.
+// Dates relative to today, so these tests do not expire — and counted from
+// the DATABASE's today, not Node's.
+//
+// The route compares ends_at against CURRENT_DATE, the Postgres server's local
+// date. Deriving these from UTC meant that between local midnight and UTC
+// midnight — two hours every night in South Africa — dayOffset(0) was actually
+// yesterday, and "shown on its last day" failed for reasons unrelated to the
+// code. Both sides now read the same clock.
+let serverToday = null; // filled in before(), from SELECT CURRENT_DATE
+
 function dayOffset(n) {
-  const d = new Date(); d.setUTCHours(0, 0, 0, 0);
+  if (!serverToday) throw new Error('serverToday is read in before() — call dayOffset inside a test');
+  const d = new Date(serverToday + 'T00:00:00Z');
   return new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
 }
 
@@ -107,6 +117,8 @@ before(async () => {
   for (const f of fs.readdirSync(path.join(__dirname, '..', 'db', 'migrations')).filter((x) => x.endsWith('.sql')).sort()) {
     await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', f), 'utf8'));
   }
+
+  serverToday = (await pool.query("SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS d")).rows[0].d;
 
   jwt = require('jsonwebtoken');
 
