@@ -1099,6 +1099,23 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .artvid-live{ background:#000; }
 .artvid iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; }
 
+/* ---- breadcrumbs ----
+   Quiet by design: a trail is orientation, not decoration, and it sits above
+   a headline that should stay the loudest thing on the page. The separator is
+   drawn with a pseudo-element so it is never read aloud as a character by a
+   screen reader working through the list. */
+.breadcrumb{ margin:0 0 14px; }
+.breadcrumb-list{ list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap;
+  align-items:center; gap:4px 8px; font-size:12.5px; color:var(--slate); }
+.breadcrumb-item{ display:flex; align-items:center; gap:8px; }
+.breadcrumb-item + .breadcrumb-item::before{ content:'/'; color:var(--paper-line); }
+.breadcrumb-item a{ color:var(--slate); text-decoration:none; border-bottom:1px solid transparent; }
+.breadcrumb-item a:hover{ color:var(--red); border-bottom-color:var(--red); }
+.breadcrumb-item a:focus-visible{ outline:2px solid var(--red); outline-offset:2px; }
+/* The page you are on: darker, and not a link, matching aria-current="page". */
+.breadcrumb-item [aria-current="page"]{ color:var(--ink); font-weight:600; }
+#breadcrumb[hidden], #profileBreadcrumb[hidden]{ display:none; }
+
 /* ---- reader poll ---- */
 .poll-wrap:empty{ display:none; }
 .poll{ margin-top:34px; border:1px solid var(--paper-line); border-left:3px solid var(--red); padding:20px 22px; background:var(--paper); }
@@ -2441,6 +2458,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <main class="page" id="page-editions">
   <div class="wrap cms-blocks" data-cms-blocks="editions"></div>
   <div class="wrap" style="padding-top:56px;">
+    <div id="editionsBreadcrumb" hidden></div>
     <span class="eyebrow">The Archive</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Every Edition, In One Place</h1>
     <p class="lede">Browse and read every issue of Unplug Magazine — our full digital archive of impact, uplift, and unforgettable people.</p>
@@ -2589,6 +2607,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <main class="page" id="page-top10">
   <div class="wrap cms-blocks" data-cms-blocks="top10"></div>
   <div class="wrap" style="padding-top:56px;">
+    <div id="top10Breadcrumb" hidden></div>
     <span class="eyebrow">Verified Impact · Q3 2026</span>
     <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">The Top 10 Impact List</h1>
     <p class="lede">Ranked by readers, verified by our editorial team. Rankings update live as votes come in — vote for a New Entry and watch it climb toward the Top 10.</p>
@@ -2657,6 +2676,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <main class="page" id="page-competitions">
   <div class="wrap cms-blocks" data-cms-blocks="competitions"></div>
   <div class="wrap" style="padding-top:56px;">
+    <div id="competitionsBreadcrumb" hidden></div>
     <div class="comp-hero" id="arenaHero">
       <span class="print-mark"></span>
       <div class="dir-empty-state">Loading…</div>
@@ -3659,6 +3679,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
 <script src="unplug-shared.js"></script>
+<script src="unplug-seo-schema.js"></script>
 <script src="unplug-participation-sdk.js"></script>
 <script>
 const api = UnplugAPI.api;
@@ -3993,6 +4014,7 @@ function profileDetailHtml(profile, socials, gallery) {
     ? ` style="background-image:url('${escapeHtml(profile.feature_image_url)}'); background-size:cover; background-position:center;"`
     : '';
   let html = `
+    <div id="profileBreadcrumb" hidden></div>
     <div class="profile-header">
       <div class="profile-photo-lg"${heroPhotoStyle}></div>
       <div class="profile-header-copy">
@@ -4200,6 +4222,24 @@ async function loadProfileDetail(slug) {
     const data = await api('/profiles/' + encodeURIComponent(slug));
     container.innerHTML = profileDetailHtml(data.profile, data.socials, data.gallery)
       + '<div class="reviews-wrap" id="profileReviews"></div>';
+    // Person or LocalBusiness, decided by what the listing says it is, with
+    // its own social links as sameAs. No aggregateRating: the reviews exist,
+    // but a rating averaged from a handful of them is the kind of claim that
+    // gets structured data discounted rather than rewarded.
+    if (window.UnplugSchema) {
+      var pq = '?p=profile&slug=' + encodeURIComponent(data.profile.slug || slug);
+      var ptrail = [
+        { name: 'Home', url: '/' },
+        { name: 'Directory', url: '/?p=directory' },
+      ];
+      if (data.profile.category) ptrail.push({ name: data.profile.category, url: '/?p=directory' });
+      ptrail.push({ name: data.profile.display_name });
+      UnplugSchema.setGraph([
+        UnplugSchema.profile(Object.assign({}, data.profile, { social_links: data.socials }), pq),
+        UnplugSchema.breadcrumb(ptrail, 'profileBreadcrumb'),
+      ]);
+    }
+
     loadProfileReviews(data.profile);
     loadProfileFollowBar(data.profile.user_id);
     renderInteractionBar('profileInteractions', 'profile', data.profile.id);
@@ -5780,6 +5820,7 @@ async function loadArticleDetail(id) {
     const dateStr = a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
     const shareUrl = location.origin + '/?p=article&id=' + id;
     el.innerHTML = `
+      <div id="articleBreadcrumb" hidden></div>
       <div style="position:relative; margin-bottom:24px;"><img src="${a.banner_image_url ? escapeHtml(a.banner_image_url) : PLACEHOLDER_COVER}" alt="${escapeHtml(a.title)}" style="width:100%; max-height:420px; object-fit:cover; display:block;" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';"><div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>
       <span class="eyebrow">${escapeHtml(a.category || '')}</span>
       ${emotionBadge(a.emotion) ? `<div style="margin:10px 0 0;">${emotionBadge(a.emotion)}</div>` : ''}
@@ -5828,17 +5869,37 @@ async function loadArticleDetail(id) {
     const q = '?p=article&id=' + id;
     history.replaceState({ p: 'article', id }, '', q);
     seoSetUrl(q);
-    document.title = (a.seo_title || a.title) + ' — Unplug Magazine';
+    document.title = brandedTitle(a.seo_title || a.title);
     // Prefer the meta description an editor wrote or approved; only fall back
     // to raw body text when there isn't one, since a stripped opening
     // paragraph often reads badly as a social card summary.
     seoSetDescription(a.meta_description || (a.body || '').replace(/<[^>]*>/g, '').trim());
     seoSetTitle(a.seo_title || a.title);
     seoSetImage(a.banner_image_url);
+
+    // Structured data, written now that the story it describes is on the page.
+    // The trail and the BreadcrumbList come from the same array, so the thing
+    // a reader clicks and the thing a crawler reads cannot disagree.
+    if (window.UnplugSchema) {
+      var trail = [
+        { name: 'Home', url: '/' },
+        { name: 'Latest News', url: '/?p=news' },
+      ];
+      if (a.category) trail.push({ name: a.category, url: '/?p=news' });
+      // The story's own title. seo_title is written for the tab and the search
+      // snippet and carries the publication name; a breadcrumb reading
+      // "... | Unplug Magazine" while sitting under Home > Latest News says the
+      // same thing twice.
+      trail.push({ name: a.title || a.seo_title });
+      UnplugSchema.setGraph([
+        UnplugSchema.article(a, q),
+        UnplugSchema.breadcrumb(trail, 'articleBreadcrumb'),
+      ]);
+    }
   } catch (err) {
     // Logged, not just shown. This try covers eighty lines of rendering, so a
-    // mistake in here looks exactly like the API being down — and "couldn't
-    // load this story" sends anyone debugging it to the wrong place entirely.
+    // typo in here looks exactly like the API being down — and "couldn't load
+    // this story" sends anyone debugging it to the wrong place entirely.
     console.error('[article] failed to render article ' + id + ':', err);
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load this story right now.</div>';
   }
@@ -6245,6 +6306,33 @@ async function loadTop10(showLoading){
     top10CompetitionId = data.competition.id;
     top10Entries = data.entries;
     renderAll();
+
+    // The board as an ItemList, in the order it is actually displayed, and
+    // only for entries that are approved and therefore visible. A list
+    // describing rows a reader cannot see is the mismatch Google discounts.
+    if (window.UnplugSchema) {
+      // No status filter here: GET /competitions/:slug returns approved entries
+      // only, and it does not send a status field at all — filtering on one
+      // matched nothing and left the board with no ItemList whatsoever.
+      var shown = top10Entries || [];
+      UnplugSchema.setGraph([
+        UnplugSchema.itemList(
+          data.competition.name || 'Unplug Top 10',
+          shown.map(function (e) {
+            return {
+              name: e.display_name,
+              // Only entries with a Directory profile have somewhere to link.
+              url: e.profile_slug ? '/?p=profile&slug=' + encodeURIComponent(e.profile_slug) : null,
+            };
+          }),
+          '?p=top10'
+        ),
+        UnplugSchema.breadcrumb([
+          { name: 'Home', url: '/' },
+          { name: 'Top 10' },
+        ], 'top10Breadcrumb'),
+      ]);
+    }
     loadVoteBundleTiers(); // independent of entries loading; cached after first call
   } catch (err) {
     document.getElementById('top10List').innerHTML = '<div class="dir-empty-state">Couldn\'t load the Top 10 right now. Please try again shortly.</div>';
@@ -7041,6 +7129,25 @@ async function loadEditions(reset) {
       pastEl.insertAdjacentHTML('beforeend', data.editions.map(editionCardHtml).join(''));
     }
     loadMoreBtn.style.display = data.pagination.page < data.pagination.totalPages ? 'inline-flex' : 'none';
+
+    // Written only on the first page, and only after the covers are in the
+    // DOM: the schema describes what is on the screen, and page 2 appending
+    // more cards does not change what this page IS.
+    if (reset && window.UnplugSchema) {
+      UnplugSchema.setGraph([
+        // Names only: the cards have no per-edition anchor to link to, and a
+        // URL that lands nowhere is worse than no URL.
+        UnplugSchema.itemList('Unplug Magazine editions',
+          data.editions.map((ed) => ({ name: ed.title })), '/?p=editions'),
+        // The latest issue in its own right, so a search result for it can
+        // carry the cover and the date.
+        UnplugSchema.edition(data.editions[0], '/?p=editions'),
+        UnplugSchema.breadcrumb([
+          { name: 'Home', url: '/' },
+          { name: 'Editions', url: '/?p=editions' },
+        ], 'editionsBreadcrumb'),
+      ]);
+    }
   } catch (err) {
     document.getElementById('latestEdition').innerHTML = '<div class="dir-empty-state">Couldn\'t load editions right now.</div>';
   }
@@ -7271,6 +7378,36 @@ async function loadArena() {
     entriesEl.innerHTML = data.entries.length
       ? [...data.entries].sort((a, b) => b.vote_count - a.vote_count).map(arenaEntryCardHtml).join('')
       : '<div class="dir-empty-state">No entries yet — be the first to nominate someone.</div>';
+
+    if (window.UnplugSchema) {
+      const compUrl = '/?p=competitions';
+      UnplugSchema.setGraph([
+        UnplugSchema.event({
+          name: data.competition.name,
+          description: data.competition.description,
+          opens_at: data.competition.opens_at,
+          closes_at: data.competition.closes_at,
+        }, compUrl),
+        // The entries as a ranked list — this is what the page actually shows,
+        // and the order is the vote order the reader sees.
+        UnplugSchema.itemList(data.competition.name + ' entries',
+          [...data.entries]
+            .sort((a, b) => b.vote_count - a.vote_count)
+            .map((e) => ({
+              name: e.display_name,
+              // Entries can be manual names with no directory profile behind
+              // them; those get a name and nothing else.
+              url: e.profile_slug
+                ? '/?p=profile&slug=' + encodeURIComponent(e.profile_slug)
+                : null,
+            })),
+          compUrl),
+        UnplugSchema.breadcrumb([
+          { name: 'Home', url: '/' },
+          { name: 'Competitions', url: compUrl },
+        ], 'competitionsBreadcrumb'),
+      ]);
+    }
   } catch (err) {
     heroEl.innerHTML = '<div class="dir-empty-state">Couldn\'t load The Arena right now.</div>';
   }
@@ -7354,6 +7491,19 @@ function seoSetImage(url){
     const el = document.querySelector(sel);
     if (el) el.setAttribute('content', value);
   });
+}
+
+// Page title with the publication name on the end — once.
+//
+// seo_title is written by whoever published the piece, and a title written for
+// search usually already ends with the magazine's name. Appending it blindly
+// produced tabs and search results reading "... | Unplug Magazine — Unplug
+// Magazine", which looks like a broken site to the one person deciding whether
+// to click.
+function brandedTitle(title){
+  const t = String(title || '').trim();
+  if (!t) return 'Unplug Magazine';
+  return /unplug\s*magazine\s*$/i.test(t) ? t : t + ' — Unplug Magazine';
 }
 
 function seoSetTitle(title){
@@ -8172,7 +8322,7 @@ function renderProjectDetail(d){
     <h1 class="proj-detail-title">${escapeHtml(p.title)}</h1>
     <div class="proj-detail-desc">${escapeHtml(p.description || '')}</div>
     ${sponsorsBlock}${videoBlock}${galleryBlock}`;
-  try { document.title = (p.seo_title || p.title) + ' — Unplug Magazine'; } catch (e) {}
+  try { document.title = brandedTitle(p.seo_title || p.title); } catch (e) {}
   if (p.video_platform === 'instagram') ensureInstagramScript();
 }
 function openProjectLightbox(i){
@@ -8240,6 +8390,13 @@ function goToPage(pageId){
     history.pushState({ p: pageId }, '', url);
     seoSetUrl(url === '/' ? '' : url);
   }
+
+  // Drop the previous page's structured data. An article's NewsArticle markup
+  // left in the head would make the next page claim to be that article, which
+  // is the same mistake as a stale canonical tag. Deep pages write their own
+  // graph immediately after this runs, so there is no flicker of absence that
+  // matters — and a page with nothing to say says nothing, which is correct.
+  if (window.UnplugSchema) UnplugSchema.clear();
 
   if (pageId === 'directory' && !directoryLoadedOnce) {
     directoryLoadedOnce = true;
