@@ -1969,7 +1969,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </div>
       <button class="view-all" data-page="directory">View full directory →</button>
     </div>
-    <div class="dir-grid" style="grid-template-columns:repeat(4,1fr);" id="highlightedProfilesGrid">
+    <!-- No inline grid-template-columns here. It used to say repeat(4,1fr),
+         which is what .dir-grid already does on desktop — so it changed
+         nothing there, while OVERRIDING the mobile rules, because an inline
+         style beats a stylesheet rule. The result was four columns forced
+         onto a 375px phone: 60px cards with 60px photographs. Left to the
+         stylesheet, the same grid gives two columns and 144px cards. -->
+    <div class="dir-grid" id="highlightedProfilesGrid">
       <div class="dir-empty-state">Loading...</div>
     </div>
   </section>
