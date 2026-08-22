@@ -8,3 +8,6 @@ unplug-backend/uploads/*
 .claude/
 audit_unpacked/
 unplug-backend.zip
+
+# Local test-run logs (npm test output), never part of the project.
+unplug-backend/suite*.txt

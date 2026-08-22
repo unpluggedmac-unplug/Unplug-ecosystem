@@ -1073,6 +1073,32 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .art-keywords-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; color:var(--slate); width:100%; margin-bottom:2px; }
 .art-keyword{ background:none; border:1px solid var(--paper-line); border-radius:100px; padding:5px 13px; font-family:inherit; font-size:12.5px; color:var(--ink); cursor:pointer; transition:border-color .2s, background .2s; }
 .art-keyword:hover{ border-color:var(--red); background:rgba(210,7,9,0.05); }
+/* ---- article video ----
+   A 16:9 panel that becomes the real player on click. aspect-ratio rather
+   than a padding hack so the box is the right shape before anything loads and
+   the page does not jump when the frame arrives. */
+.artvid{ position:relative; width:100%; aspect-ratio:16/9; margin:0 0 24px;
+  background:#0F0E0E; overflow:hidden; }
+.artvid-play{ position:absolute; inset:0; width:100%; height:100%; padding:0;
+  border:none; background:none; cursor:pointer; display:flex;
+  align-items:center; justify-content:center; }
+.artvid-thumb{ position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; display:block; }
+/* The play glyph sits above the thumbnail; the label sits under it. Both need
+   to stay legible whether the backdrop is a bright thumbnail or flat black. */
+.artvid-btn{ position:relative; z-index:1; transition:transform .15s ease; }
+.artvid-play:hover .artvid-btn{ transform:scale(1.07); }
+.artvid-label{ position:absolute; left:0; right:0; bottom:14px; z-index:1;
+  color:#fff; font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
+  font-weight:700; text-shadow:0 1px 6px rgba(0,0,0,0.7); }
+/* Platforms with no public thumbnail get a tint instead of a blank black box,
+   so the panel reads as a video rather than as something that failed. */
+.artvid[data-platform="tiktok"]{ background:linear-gradient(135deg,#0f0f10,#25f4ee22,#fe2c5566,#0f0f10); }
+.artvid[data-platform="instagram"]{ background:linear-gradient(135deg,#0f0f10,#dc274355,#cc236655,#0f0f10); }
+.artvid[data-platform="gdrive"]{ background:linear-gradient(135deg,#0f0f10,#1a73e855,#0f0f10); }
+.artvid-live{ background:#000; }
+.artvid iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; }
+
 /* ---- reader poll ---- */
 .poll-wrap:empty{ display:none; }
 .poll{ margin-top:34px; border:1px solid var(--paper-line); border-left:3px solid var(--red); padding:20px 22px; background:var(--paper); }
@@ -1879,6 +1905,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
        new-ish business listings. Hidden entirely if all three lists come
        back empty (a brand-new/quiet site shouldn't show three "nothing
        here" boxes). -->
+  <!-- UNPLUG MEMBERS WORTH CHECKING OUT — the same card treatment as New
+       Stories and Highlighted Articles, so the homepage reads as one thing.
+       Individuals and Directory businesses ranked together by recent
+       participation. Hidden until there is somebody to show: a heading over an
+       empty space is worse than no section. How many cards is an admin
+       setting (featured_members_count), not a number baked in here. -->
+  <section class="wrap home-section" id="featuredMembersSection" hidden>
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">The people behind it</span>
+        <h2 data-cms="home.featuredmembers.title">Unplug Members worth checking out</h2>
+      </div>
+      <button class="view-all" data-page="members">View all members →</button>
+    </div>
+    <div class="grid-3" id="featuredMembersRow"></div>
+  </section>
+
   <section class="wrap home-section" id="discoverySection" hidden>
     <div class="section-head">
       <div>
@@ -3855,6 +3898,16 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// escapeHtml is NOT safe inside a quoted attribute: textContent -> innerHTML
+// escapes &, < and > but leaves quotes alone, so a value containing one would
+// close the attribute early. Anything going into src="..." or data-...="..."
+// uses this instead.
+function escapeAttr(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function dirCardHtml(profile) {
   const name = escapeHtml(profile.display_name);
   const category = escapeHtml(profile.category || '');
@@ -4416,6 +4469,8 @@ function initArticleReader(a, id, shareUrl) {
   }
 
   loadRelatedStories(a, id);
+  // The video panel is inert markup until this attaches its click handler.
+  wireArticleVideo(el);
   loadPoll(id);
   loadComments(id);
   renderInteractionBar('articleInteractions', 'article', id);
@@ -5031,6 +5086,68 @@ function articleSectionsHtml(sections) {
 // paragraph breaks. Rendered through escapeHtml first: this text was typed by
 // a member, and passing it through the rich-text path would let markup they
 // typed become live markup on the page.
+// THE ARTICLE VIDEO.
+//
+// Click to load, on purpose. The reader sees a panel with a play button and
+// nothing from YouTube, TikTok, Instagram or Google is fetched until they
+// press it. Embedding the real player straight away would pull third-party
+// scripts and cookies into every article view whether or not anybody watches
+// — slow on a phone, and it would set those cookies before the consent bar
+// has been answered.
+//
+// No cover image is ever chosen by hand. YouTube publishes a thumbnail at a
+// predictable address so its videos show their real frame; the other three do
+// not, so they get a branded panel carrying the platform name. Either way the
+// writer only ever pastes a link.
+const VIDEO_PLATFORM_LABEL = {
+  youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', gdrive: 'Google Drive',
+};
+
+function articleVideoHtml(a) {
+  if (!a || !a.video_embed_url || !a.video_platform) return '';
+  const label = VIDEO_PLATFORM_LABEL[a.video_platform] || 'video';
+  const thumb = a.video_thumbnail_url
+    ? `<img class="artvid-thumb" src="${escapeAttr(a.video_thumbnail_url)}" alt="" loading="lazy" onerror="this.remove();">`
+    : '';
+  return `<div class="artvid" data-embed="${escapeAttr(a.video_embed_url)}" data-platform="${escapeAttr(a.video_platform)}">
+    <button class="artvid-play" type="button" aria-label="Play the video">
+      ${thumb}
+      <span class="artvid-btn" aria-hidden="true">
+        <svg viewBox="0 0 68 48" width="68" height="48"><path d="M66.5 7.7a8 8 0 0 0-5.6-5.7C56 .7 34 .7 34 .7s-22 0-26.9 1.3A8 8 0 0 0 1.5 7.7 83 83 0 0 0 .2 24a83 83 0 0 0 1.3 16.3 8 8 0 0 0 5.6 5.7C12 47.3 34 47.3 34 47.3s22 0 26.9-1.3a8 8 0 0 0 5.6-5.7A83 83 0 0 0 67.8 24a83 83 0 0 0-1.3-16.3z" fill="rgba(0,0,0,0.72)"/><path d="M27 34V14l18 10z" fill="#fff"/></svg>
+      </span>
+      <span class="artvid-label">Watch on ${escapeHtml(label)}</span>
+    </button>
+  </div>`;
+}
+
+// Swaps the panel for the real player, and only then. autoplay is asked for
+// because the reader has already pressed play once — making them press a
+// second time inside the frame would be the cost of this approach showing.
+function wireArticleVideo(scope) {
+  (scope || document).querySelectorAll('.artvid').forEach((box) => {
+    const btn = box.querySelector('.artvid-play');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const src = box.getAttribute('data-embed');
+      if (!src) return;
+      const join = src.indexOf('?') === -1 ? '?' : '&';
+      const frame = document.createElement('iframe');
+      frame.src = src + join + 'autoplay=1';
+      frame.title = 'Video';
+      frame.loading = 'lazy';
+      frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+      frame.setAttribute('allowfullscreen', '');
+      // The frame is third-party content on our page. It gets no access to
+      // this document and cannot navigate the reader away on its own.
+      frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      frame.sandbox = 'allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox';
+      box.innerHTML = '';
+      box.classList.add('artvid-live');
+      box.appendChild(frame);
+    }, { once: true });
+  });
+}
+
 function articleBodyHtml(a) {
   if (a.body_format === 'text') {
     return String(a.body || '')
@@ -5675,6 +5792,7 @@ async function loadArticleDetail(id) {
         <button id="rdSave" type="button" data-article-id="${id}" aria-pressed="false">☆ Save</button>
         ${shareRowHtml(shareUrl, a.title)}
       </div>
+      ${articleVideoHtml(a)}
       <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${articleBodyHtml(a)}${articleSectionsHtml(data.sections)}${articleGalleryHtml(a)}${articleConclusionHtml(a)}</div>
       ${articleTakeawaysHtml(a)}
       ${articleLinksHtml(a)}
@@ -6366,6 +6484,49 @@ async function loadHighlightedProfiles() {
 // Platform stats (statReaders/statMembers/statArticles) are populated by
 // the centralized loader in unplug-shared.js — no per-page script needed.
 
+// "Unplug Members worth checking out" — the homepage card row.
+//
+// Individuals and Directory businesses ranked together by recent
+// participation. The server only returns people who have a profile, so every
+// card here opens a real page; nothing renders a grey box that goes nowhere.
+//
+// How many cards is an admin setting, not a constant here — the server sends
+// what it decided, and this just renders it.
+async function loadFeaturedMembers() {
+  const section = document.getElementById('featuredMembersSection');
+  const row = document.getElementById('featuredMembersRow');
+  if (!section || !row) return;
+  let list = [];
+  try {
+    const data = await api('/participation/featured-members');
+    list = data.members || [];
+  } catch (err) {
+    return; // the section stays hidden rather than showing an error on the homepage
+  }
+  // A brand-new site has nobody to feature yet. Hiding the whole section is
+  // better than a heading over an empty space.
+  if (!list.length) return;
+
+  row.innerHTML = list.map((m) => {
+    const href = m.kind === 'business'
+      ? '?p=profile&slug=' + encodeURIComponent(m.ref)
+      : '?p=myunplug&u=' + encodeURIComponent(m.ref);
+    const thumb = m.image_url
+      ? `<div class="story-thumb"><img src="${escapeAttr(m.image_url)}" alt="" loading="lazy" style="width:100%; height:100%; object-fit:cover;" onerror="this.remove();"></div>`
+      : '<div class="story-thumb"></div>';
+    const status = m.status_label
+      ? `<span class="story-meta">${m.status_emoji || '🌱'} ${escapeHtml(m.status_label)}</span>` : '';
+    return `<div class="card-shell"><a href="${href}" class="story-card">
+      ${thumb}
+      <span class="story-tag">${m.kind === 'business' ? 'Business' : 'Member'}</span>
+      <h3>${escapeHtml(m.display_name)}</h3>
+      <p>${escapeHtml(m.tagline || '')}</p>
+      ${status}
+    </a></div>`;
+  }).join('');
+  section.hidden = false;
+}
+
 // Discovery Engine (Stage M) — three under-exposed lists, GET
 // /participation/discovery. Public, no sign-in required. The section
 // stays hidden if every list is empty, rather than showing three
@@ -6390,26 +6551,10 @@ async function loadDiscovery() {
           </a>`).join('')}
         </div>`);
     }
-    if (members.length) {
-      blocks.push(`
-        <div>
-          <h4 style="font-size:14px; margin-bottom:10px;">🙌 Active, under the radar</h4>
-          ${members.map((m) => `<div style="padding:8px 0; border-bottom:1px solid var(--paper-line);">
-            <div style="font-weight:600; font-size:13.5px;">${escapeHtml(m.display_name)}</div>
-            <div style="font-size:11.5px; color:var(--slate);">${m.status_emoji || '🌱'} ${escapeHtml(m.status_label || 'Explorer')}</div>
-          </div>`).join('')}
-        </div>`);
-    }
-    if (businesses.length) {
-      blocks.push(`
-        <div>
-          <h4 style="font-size:14px; margin-bottom:10px;">🏪 New in the Directory</h4>
-          ${businesses.map((b) => `<a href="?p=profile&slug=${encodeURIComponent(b.slug)}" class="discovery-row" style="display:block; padding:8px 0; border-bottom:1px solid var(--paper-line); color:inherit; text-decoration:none;">
-            <div style="font-weight:600; font-size:13.5px;">${escapeHtml(b.display_name)}</div>
-            <div style="font-size:11.5px; color:var(--slate);">${escapeHtml(b.category || '')} · ${b.status_emoji} ${escapeHtml(b.status_label)}</div>
-          </a>`).join('')}
-        </div>`);
-    }
+    // The member and business lists that used to sit here as plain text rows
+    // are now one card row of their own — see loadFeaturedMembers(). Only the
+    // stories list remains in this section.
+
     content.innerHTML = blocks.join('');
   } catch (err) {
     // Discovery is a nice-to-have homepage extra, not core content — fail
@@ -6422,6 +6567,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadNewStories();
   loadHighlightedProfiles();
   loadSpotlight();
+  loadFeaturedMembers();
   loadDiscovery();
 });
 

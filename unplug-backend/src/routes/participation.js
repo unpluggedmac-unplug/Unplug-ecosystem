@@ -87,6 +87,27 @@ router.get('/discovery', async (req, res, next) => {
   }
 });
 
+// GET /participation/featured-members — public. The homepage card row,
+// "Unplug Members worth checking out". Individuals and Directory businesses
+// ranked together by recent participation; see migration 129 for why only
+// people with a profile are eligible.
+//
+// The count is an admin setting rather than a constant so it can go from 5 to
+// 10 without a deploy. Clamped because this renders on the homepage: a bad
+// value in the settings table must not put 500 cards on the front page.
+router.get('/featured-members', async (req, res, next) => {
+  try {
+    const setting = await pool.query(
+      `SELECT value FROM settings WHERE key = 'featured_members_count'`);
+    const raw = setting.rowCount ? parseInt(setting.rows[0].value, 10) : 5;
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 24) : 5;
+    const result = await pool.query('SELECT * FROM get_featured_members($1)', [limit]);
+    res.json({ members: result.rows, limit });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /participation/streak-tiers — the 7 streak milestones.
 router.get('/streak-tiers', async (req, res, next) => {
   try {

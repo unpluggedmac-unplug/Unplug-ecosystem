@@ -640,6 +640,20 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <button class="btn btn-solid" style="width:auto;" id="saveYtImageBtn">Save</button>
         </div>
       </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>&ldquo;Unplug Members worth checking out&rdquo;</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">
+            How many cards show in that row on the homepage. The people shown are chosen automatically &mdash; individuals and Directory businesses ranked by how active they have been in the last 30 days &mdash; and only those with a profile appear, so every card opens a real page.
+          </p>
+          <div class="field" style="max-width:220px;">
+            <label for="featuredMembersCount">Number of cards</label>
+            <input id="featuredMembersCount" type="number" min="1" max="24" step="1">
+          </div>
+          <button class="btn btn-solid" style="width:auto;" id="saveFeaturedCountBtn">Save</button>
+        </div>
+      </div>
     </div>
 
     <!-- DEAF JOBS -->
@@ -1262,6 +1276,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div style="margin-top:14px;"><label for="artBody">Opening / main story</label>
             <textarea id="artBody" rows="8" style="width:100%;" placeholder="Write the opening of the story here."></textarea>
             <label style="margin-top:8px;"><input type="checkbox" id="artPlainText" style="width:auto; margin-right:6px;">Plain text — turn my line breaks into paragraphs (leave off if you're pasting HTML)</label>
+          </div>
+
+          <div style="margin-top:14px;">
+            <label for="artVideo">Video link <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; optional; YouTube, TikTok, Instagram or Google Drive</span></label>
+            <input id="artVideo" type="url" style="width:100%;" placeholder="Paste the link to the video">
+            <span style="display:block; font-size:12px; color:var(--slate); margin-top:4px;">
+              The video shows at the top of the story with a play button. No cover picture to choose &mdash; YouTube supplies its own, and the rest get a branded panel. A Google Drive file must be shared as &ldquo;Anyone with the link&rdquo; or readers get a sign-in page.
+            </span>
           </div>
 
           <div class="form-row" style="margin-top:14px;">
@@ -5176,6 +5198,9 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     document.getElementById('artEmotion').value = a.emotion || '';
     document.getElementById('artBody').value = a.body || '';
     document.getElementById('artConclusion').value = a.conclusion || '';
+    // The RAW link, not the embed url — the editor edits what was pasted, and
+    // the server re-parses it on save.
+    document.getElementById('artVideo').value = a.video_url || '';
     document.getElementById('artCtaLabel').value = a.cta_label || '';
     document.getElementById('artCtaUrl').value = a.cta_url || '';
     document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', a.banner_image_url || '');
@@ -5220,6 +5245,8 @@ async function artSave(asDraft) {
     contributorId: document.getElementById('artContributor').value || null,
     emotion: document.getElementById('artEmotion').value || null,
     bannerImageUrl: UnplugUpload.valueOf(document.getElementById('artBannerUpload')) || null,
+    // Sent even when blank, so clearing the box removes the video from a story.
+    videoUrl: document.getElementById('artVideo').value.trim(),
     conclusion: document.getElementById('artConclusion').value.trim() || null,
     ctaLabel: document.getElementById('artCtaLabel').value.trim() || null,
     ctaUrl: document.getElementById('artCtaUrl').value.trim() || null,
@@ -7025,10 +7052,31 @@ async function loadSiteSettings() {
     const data = await api('/admin/settings');
     const yt = (data.settings || []).find((s) => s.key === 'youtube_image_url');
     document.getElementById('ytImageUpload').innerHTML = UnplugUpload.fieldHtml('ytImage', yt ? yt.value : '');
+    const fm = (data.settings || []).find((s) => s.key === 'featured_members_count');
+    document.getElementById('featuredMembersCount').value = fm ? fm.value : '5';
   } catch (err) {
     showToast(err.message, true);
   }
 }
+document.getElementById('saveFeaturedCountBtn').addEventListener('click', async () => {
+  const raw = document.getElementById('featuredMembersCount').value.trim();
+  const n = parseInt(raw, 10);
+  // Checked here as well as on the server. This renders on the homepage, and
+  // a stray keystroke should not put ninety cards on the front page.
+  if (!Number.isFinite(n) || n < 1 || n > 24) {
+    showToast('Enter a number between 1 and 24.', true);
+    return;
+  }
+  try {
+    await api('/admin/settings/featured_members_count', {
+      method: 'PATCH', body: JSON.stringify({ value: String(n) }),
+    });
+    showToast(`Saved — the homepage now shows ${n} cards.`);
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
 document.getElementById('saveYtImageBtn').addEventListener('click', async () => {
   const value = UnplugUpload.valueOf(document.getElementById('ytImageUpload'));
   try {

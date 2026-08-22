@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireOwnerOrAdmin, requireRole } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
+const { buildVideoEmbed } = require('../utils/videoEmbed');
 const { deriveMetadata, slugify, cleanTopicTerms } = require('../utils/articleMeta');
 const { recordConversionAsync } = require('../utils/analyticsRecorder');
 const { normaliseTags } = require('../utils/tags');
@@ -250,7 +251,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     const {
       title, body, categoryId, kickerSuppliedBy, bannerImageUrl, emotion,
       seoTitle, subtitle, metaDescription, conclusion, ctaLabel, ctaUrl, sections,
-      galleryImages, links, bodyFormat,
+      galleryImages, links, bodyFormat, videoUrl,
     } = req.body;
     if (!title || !body) {
       return res.status(400).json({ error: 'title and body are required.' });
@@ -261,6 +262,13 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (Array.isArray(galleryImages) && galleryImages.filter(Boolean).length > MAX_GALLERY_IMAGES) {
       return res.status(400).json({ error: `You can add up to ${MAX_GALLERY_IMAGES} images besides the cover image.` });
     }
+
+    // One pasted link; the platform is worked out from it. A link we cannot
+    // turn into a player is refused HERE rather than stored, because a stored
+    // dead link becomes an empty box on a published page that nobody notices
+    // until a reader says so.
+    const video = buildVideoEmbed(videoUrl);
+    if (video.error) return res.status(400).json({ error: video.error });
 
     // Derive the metadata from what was actually submitted, sections
     // included, so takeaways and keywords reflect the whole piece.
@@ -296,8 +304,9 @@ router.post('/', requireAuth, async (req, res, next) => {
         (author_user_id, category_id, title, body, kicker_supplied_by, banner_image_url, emotion,
          status, published_at, seo_title, subtitle, meta_description, conclusion, cta_label, cta_url,
          slug, key_takeaways, keywords, tags, suggested_category_id,
-         gallery_images, links, body_format, author_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+         gallery_images, links, body_format, author_name,
+         video_url, video_platform, video_embed_url, video_thumbnail_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
        RETURNING *`,
       [
         req.user.id, categoryId || null, title, body, kickerSuppliedBy || null,
@@ -322,6 +331,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         // Separate from kicker_supplied_by, which records who SUPPLIED the
         // story; see migration 117 for why the two are not the same fact.
         (req.body.authorName || '').trim() || null,
+        video.url, video.platform, video.embedUrl, video.thumbnailUrl,
       ]
     );
     const article = result.rows[0];
@@ -387,6 +397,17 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
     }
     if (categoryId !== undefined) { values.push(categoryId || null); setClauses.push(`category_id = $${values.length}`); }
     if (bannerImageUrl !== undefined) { values.push(bannerImageUrl || null); setClauses.push(`banner_image_url = $${values.length}`); }
+    // The video is four columns but ONE field to whoever is editing. Sending
+    // an empty string removes it, which is the only way to take a video off a
+    // story once it is on one.
+    if (req.body.videoUrl !== undefined) {
+      const v = buildVideoEmbed(req.body.videoUrl);
+      if (v.error) return res.status(400).json({ error: v.error });
+      values.push(v.url); setClauses.push(`video_url = $${values.length}`);
+      values.push(v.platform); setClauses.push(`video_platform = $${values.length}`);
+      values.push(v.embedUrl); setClauses.push(`video_embed_url = $${values.length}`);
+      values.push(v.thumbnailUrl); setClauses.push(`video_thumbnail_url = $${values.length}`);
+    }
     if (emotion !== undefined) {
       if (emotion && !ALLOWED_EMOTIONS.includes(emotion)) {
         return res.status(400).json({ error: 'emotion must be one of: ' + ALLOWED_EMOTIONS.join(', ') + '.' });

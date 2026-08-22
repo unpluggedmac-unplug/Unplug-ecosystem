@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
+const { buildVideoEmbed: sharedVideoEmbed } = require('../utils/videoEmbed');
 
 const router = express.Router();
 
@@ -14,32 +15,24 @@ function wordCount(text) {
   return (String(text || '').trim().match(/\S+/g) || []).length;
 }
 
-// Turn a supported YouTube/Instagram URL into a safe embed URL. Returns null for
-// anything unsupported — we never accept raw embed HTML from the admin, only a
-// URL we recognise and rebuild ourselves.
+// Projects use the SAME video parser as articles — utils/videoEmbed.js — so a
+// link that works on a story works on a project. This used to be a second
+// copy that understood only YouTube and Instagram; keeping two of these is
+// how one gains TikTok support and the other silently does not.
+//
+// The signature is kept for this route's callers: it still takes a platform
+// argument, which is now only used to check the pasted link is the platform
+// the admin said it was. Choosing "YouTube" and pasting a TikTok link is a
+// mistake worth naming rather than quietly accepting.
 function buildVideoEmbed(platform, url) {
   const u = String(url || '').trim();
   if (!platform || !u) return { platform: null, url: null, embedUrl: null };
-  if (platform === 'youtube') {
-    let id = null;
-    let m;
-    if ((m = u.match(/[?&]v=([\w-]{6,})/))) id = m[1];
-    else if ((m = u.match(/youtu\.be\/([\w-]{6,})/))) id = m[1];
-    else if ((m = u.match(/youtube\.com\/shorts\/([\w-]{6,})/))) id = m[1];
-    else if ((m = u.match(/youtube\.com\/embed\/([\w-]{6,})/))) id = m[1];
-    if (!id) return { error: 'Please provide a valid YouTube video link.' };
-    return { platform: 'youtube', url: u, embedUrl: `https://www.youtube.com/embed/${id}` };
+  const parsed = sharedVideoEmbed(u);
+  if (parsed.error) return { error: parsed.error };
+  if (platform !== 'none' && parsed.platform !== platform) {
+    return { error: `That looks like a ${parsed.platform} link, but ${platform} was selected.` };
   }
-  if (platform === 'instagram') {
-    // Instagram embeds are done client-side from the permalink; we just validate
-    // it's a real instagram reel/post URL and normalise it.
-    if (!/^https:\/\/(www\.)?instagram\.com\/(reel|reels|p|tv)\/[\w-]+/i.test(u)) {
-      return { error: 'Please provide a valid Instagram reel or post link.' };
-    }
-    const clean = u.split('?')[0].replace(/\/?$/, '/');
-    return { platform: 'instagram', url: u, embedUrl: clean };
-  }
-  return { error: 'Please provide a valid YouTube or Instagram video link.' };
+  return { platform: parsed.platform, url: parsed.url, embedUrl: parsed.embedUrl };
 }
 
 // Sponsor destination links: only https website / facebook / instagram, never

@@ -270,7 +270,10 @@ test('A YOUTUBE LINK IS REBUILT INTO AN EMBED URL WE CONSTRUCT', async () => {
     body: { videoPlatform: 'youtube', videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42' },
   });
   assert.equal(saved.status, 200);
-  assert.equal(saved.body.project.video_embed_url, 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+  // youtube-nocookie is YouTube's own privacy-preserving host, and projects
+  // now share the article video parser rather than keeping a second copy that
+  // understood only YouTube and Instagram.
+  assert.equal(saved.body.project.video_embed_url, 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
     'the embed URL is built from the id we extracted, not from what was pasted');
 });
 
@@ -279,7 +282,7 @@ test('the short youtu.be form works too', async () => {
   const saved = await req('PATCH', `/projects/admin/${id}`, {
     token: adminToken, body: { videoPlatform: 'youtube', videoUrl: 'https://youtu.be/abc123XYZ' },
   });
-  assert.equal(saved.body.project.video_embed_url, 'https://www.youtube.com/embed/abc123XYZ');
+  assert.equal(saved.body.project.video_embed_url, 'https://www.youtube-nocookie.com/embed/abc123XYZ');
 });
 
 test('embed HTML pasted into the video field is refused', async () => {
@@ -291,7 +294,9 @@ test('embed HTML pasted into the video field is refused', async () => {
     body: { videoPlatform: 'youtube', videoUrl: '<iframe src="https://evil.example/x"></iframe>' },
   });
   assert.equal(bad.status, 400);
-  assert.match(bad.body.error, /valid YouTube/i);
+  // The shared parser names the actual mistake instead of saying "invalid",
+  // because someone who pasted embed code will otherwise paste it again.
+  assert.match(bad.body.error, /embed code/i);
 });
 
 test('a non-Instagram link is refused for the Instagram platform', async () => {

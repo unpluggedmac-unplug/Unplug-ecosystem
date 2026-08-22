@@ -50,6 +50,11 @@ const RESOURCES = {
     // just its headline and body. Paste an image path/URL to swap the feature
     // image; to upload a brand-new file, the "Write an article" editor's
     // picklist opens the same article with a file-upload control.
+    // video_url is editable here as the RAW link; adminContent writes columns
+    // directly, so the other three video columns are deliberately NOT in this
+    // list — setting an embed url by hand would bypass the parser that is the
+    // only thing keeping unchecked addresses out of a frame. To change a video
+    // properly, use the article editor, which re-parses the link.
     editable: ['title', 'body', 'kicker_supplied_by', 'banner_image_url',
                'seo_title', 'subtitle', 'meta_description', 'conclusion',
                'cta_label', 'cta_url', 'slug'],
