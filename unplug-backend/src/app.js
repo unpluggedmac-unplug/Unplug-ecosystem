@@ -52,6 +52,7 @@ const profileAnalyticsRoutes = require('./routes/profileAnalytics');
 const badgeRoutes = require('./routes/badges');
 const orderRoutes = require('./routes/orders');
 const myUnplugRoutes = require('./routes/myUnplug');
+const seoRoutes = require('./routes/seo');
 
 const app = express();
 
@@ -131,6 +132,13 @@ app.use('/profile-analytics', profileAnalyticsRoutes);
 app.use('/badges', badgeRoutes);
 app.use('/orders', orderRoutes);
 app.use('/my-unplug', myUnplugRoutes);
+
+// SEO: sitemaps, robots.txt, redirect lookup and the 404 log.
+//
+// Mounted at the ROOT rather than under a prefix, because /sitemap.xml and
+// /robots.txt are addresses crawlers ask for by name — they cannot be moved
+// under /seo/. The admin and lookup endpoints inside carry their own paths.
+app.use('/', seoRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,
