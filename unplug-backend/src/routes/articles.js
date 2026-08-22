@@ -112,10 +112,19 @@ router.get('/', async (req, res, next) => {
     const result = await pool.query(
       `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at,
               a.banner_image_url, a.subtitle, c.name AS category,
-              a.author_name, con.name AS contributor_name, con.slug AS contributor_slug
+              a.author_name, con.name AS contributor_name, con.slug AS contributor_slug,
+              -- WHO IT IS PUBLISHED BY, decided once here rather than in each
+              -- front end. A typed byline wins; failing that, the name on the
+              -- account that submitted it. NULLIF keeps a blank string from
+              -- beating the fallback, and an account with no name saved yields
+              -- NULL so the page leaves the line off entirely rather than
+              -- printing an email address or a guess.
+              COALESCE(NULLIF(TRIM(a.author_name), ''),
+                       NULLIF(TRIM(au.full_name), '')) AS published_by
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
        LEFT JOIN contributors con ON con.id = a.contributor_id
+       LEFT JOIN users au ON au.id = a.author_user_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY a.published_at DESC NULLS LAST, a.created_at DESC
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -212,10 +221,19 @@ router.get('/:id', async (req, res, next) => {
     const result = await pool.query(
       `SELECT a.*, c.name AS category,
               con.name AS contributor_name, con.slug AS contributor_slug,
-              con.role_title AS contributor_role, con.photo_url AS contributor_photo
+              con.role_title AS contributor_role, con.photo_url AS contributor_photo,
+              -- WHO IT IS PUBLISHED BY, decided once here rather than in each
+              -- front end. A typed byline wins; failing that, the name on the
+              -- account that submitted it. NULLIF keeps a blank string from
+              -- beating the fallback, and an account with no name saved yields
+              -- NULL so the page leaves the line off entirely rather than
+              -- printing an email address or a guess.
+              COALESCE(NULLIF(TRIM(a.author_name), ''),
+                       NULLIF(TRIM(au.full_name), '')) AS published_by
        FROM articles a
        LEFT JOIN categories c ON c.id = a.category_id
        LEFT JOIN contributors con ON con.id = a.contributor_id
+       LEFT JOIN users au ON au.id = a.author_user_id
        WHERE a.id = $1
          AND ($2::boolean OR (a.status = 'approved'
               AND (a.scheduled_for IS NULL OR a.scheduled_for <= CURRENT_DATE)))`,

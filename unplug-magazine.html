@@ -5764,7 +5764,12 @@ async function loadArticleDetail(id) {
     // different labels. author_name is the byline; kicker_supplied_by records
     // who supplied the story. Collapsing them under one label was what made
     // the page read "Submitted by ..." over journalism nobody had credited.
-    const writer = a.contributor_name || a.author_name || '';
+    // published_by is worked out by the server: a typed byline first, then the
+    // name on the account that submitted it. A linked contributor still wins
+    // over both, because that is an explicit editorial credit with a page
+    // behind it. Falling back this way is what puts a line on the 17 articles
+    // that had no byline at all.
+    const writer = a.contributor_name || a.published_by || a.author_name || '';
     const writerLink = a.contributor_slug ? '?p=contributor&slug=' + encodeURIComponent(a.contributor_slug) : '';
     const submitter = a.kicker_supplied_by || '';
     const dateStr = a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
@@ -5776,7 +5781,7 @@ async function loadArticleDetail(id) {
       <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 10px;">${escapeHtml(a.title)}</h1>
       ${a.subtitle ? `<p class="article-subtitle">${escapeHtml(a.subtitle)}</p>` : ''}
       <div class="article-byline">
-        ${writer ? `<span>By ${writerLink
+        ${writer ? `<span>Published by ${writerLink
           ? `<a class="who" href="${writerLink}">${escapeHtml(writer)}</a>`
           : `<span class="who">${escapeHtml(writer)}</span>`}</span>` : ''}
         ${writer && submitter ? '<span>·</span>' : ''}
@@ -6379,9 +6384,9 @@ function homeStoryCardHtml(article, idPrefix) {
   // The card credits the WRITER when there is one, and falls back to who
   // supplied the story otherwise — the same two facts, same labels, as the
   // article page, so a card and the piece it opens never disagree.
-  const cardWriter = article.contributor_name || article.author_name || '';
+  const cardWriter = article.contributor_name || article.published_by || article.author_name || '';
   const kicker = cardWriter
-    ? `<span class="story-kicker">By <strong>${escapeHtml(cardWriter)}</strong></span>`
+    ? `<span class="story-kicker">Published by <strong>${escapeHtml(cardWriter)}</strong></span>`
     : (article.kicker_supplied_by
         ? `<span class="story-kicker">Supplied by <strong>${escapeHtml(article.kicker_supplied_by)}</strong></span>`
         : '');
