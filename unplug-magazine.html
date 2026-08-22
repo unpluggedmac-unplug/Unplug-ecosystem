@@ -4297,7 +4297,12 @@ function shareRowHtml(url, text) {
 
 // Wire up the reader toolbar: listen (speech), reading size/spacing/dyslexia,
 // scroll progress, copy-link, and load related stories.
-function initArticleReader(a, id, shareUrl) {
+// container is the element the article was just rendered into. It is passed in
+// rather than reached for: this function runs in its own scope, and the version
+// that called wireArticleVideo(el) — a variable belonging to loadArticleDetail
+// — threw a ReferenceError that the caller's catch reported as "couldn't load
+// this story", taking every article on the site down with it.
+function initArticleReader(a, id, shareUrl, container) {
   const body = document.getElementById('artBody');
   const bar = document.getElementById('artProgress');
   let fontStep = 0;
@@ -4476,7 +4481,7 @@ function initArticleReader(a, id, shareUrl) {
 
   loadRelatedStories(a, id);
   // The video panel is inert markup until this attaches its click handler.
-  wireArticleVideo(el);
+  wireArticleVideo(container);
   loadPoll(id);
   loadComments(id);
   renderInteractionBar('articleInteractions', 'article', id);
@@ -5817,7 +5822,7 @@ async function loadArticleDetail(id) {
       const badge = el.querySelector('.print-mark');
       if (badge) badge.innerHTML = svgMarkup;
     }
-    initArticleReader(a, id, shareUrl);
+    initArticleReader(a, id, shareUrl, el);
     // Deep-link this article: distinct, shareable, indexable URL + its own
     // title/description (replaceState overwrites the ?p=articledetail entry).
     const q = '?p=article&id=' + id;
@@ -5831,6 +5836,10 @@ async function loadArticleDetail(id) {
     seoSetTitle(a.seo_title || a.title);
     seoSetImage(a.banner_image_url);
   } catch (err) {
+    // Logged, not just shown. This try covers eighty lines of rendering, so a
+    // mistake in here looks exactly like the API being down — and "couldn't
+    // load this story" sends anyone debugging it to the wrong place entirely.
+    console.error('[article] failed to render article ' + id + ':', err);
     el.innerHTML = '<div class="dir-empty-state">Couldn\'t load this story right now.</div>';
   }
 }
