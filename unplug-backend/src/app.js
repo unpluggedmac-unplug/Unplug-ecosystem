@@ -28,6 +28,7 @@ const maintenanceRoutes = require('./routes/maintenance');
 const securityRoutes = require('./routes/security');
 const spamRoutes = require('./routes/spam');
 const backupRoutes = require('./routes/backups');
+const crmRoutes = require('./routes/crm');
 const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
@@ -129,6 +130,7 @@ app.use('/maintenance', maintenanceRoutes);
 app.use('/security', securityRoutes);
 app.use('/spam', spamRoutes);
 app.use('/backups', backupRoutes);
+app.use('/crm', crmRoutes);
 // Serves the actual uploaded files back out (GET /uploads/<filename>).
 // Mounting static alongside the POST-only uploadRoutes above is safe —
 // express.static only ever handles GET/HEAD, so it never intercepts the
