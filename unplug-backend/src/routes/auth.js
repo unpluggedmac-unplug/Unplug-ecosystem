@@ -9,6 +9,7 @@ const { requireAuth } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
 const { loginLimiter, registerLimiter, emailActionLimiter } = require('../middleware/rateLimit');
 const loginAttempts = require('../utils/loginAttempts');
+const twoFactor = require('../utils/twoFactor');
 
 const router = express.Router();
 
@@ -206,7 +207,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     }
 
     const result = await pool.query(
-      'SELECT id, email, role, password_hash, email_verified, full_name, member_type, is_suspended, suspended_reason FROM users WHERE email = $1',
+      'SELECT id, email, role, password_hash, email_verified, full_name, member_type, is_suspended, suspended_reason, two_factor_enabled FROM users WHERE email = $1',
       [email]
     );
     const user = result.rows[0];
@@ -233,6 +234,41 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     // a guessed password would otherwise have worked.
     if (user.is_suspended) {
       return res.status(403).json({ error: user.suspended_reason ? `Your account has been suspended: ${user.suspended_reason}` : 'Your account has been suspended. Contact Unplug support for details.' });
+    }
+
+    // SECOND FACTOR, checked after the password and after the suspension check.
+    //
+    // Order matters: asking for a code before the password is right would tell
+    // an attacker that the password WAS right for every account that has 2FA
+    // switched on, turning the feature into an oracle for guessing passwords.
+    //
+    // The failed-attempt record is NOT cleared here. Until the second factor
+    // is satisfied this is not a successful sign-in, and clearing it would let
+    // somebody with a correct password reset the backoff at will.
+    if (user.two_factor_enabled) {
+      const code = req.body.twoFactorCode;
+      if (!code) {
+        return res.status(401).json({
+          error: 'Enter the six-digit code from your authenticator app.',
+          twoFactorRequired: true,
+        });
+      }
+      const second = await twoFactor.verifySecondFactor(user.id, code);
+      if (!second.ok) {
+        await loginAttempts.recordFailure(email, req.ip);
+        return res.status(401).json({
+          error: second.replayed
+            ? 'That code has already been used. Wait for your app to show the next one.'
+            : 'That code is not right.',
+          twoFactorRequired: true,
+        });
+      }
+      if (second.usedRecoveryCode) {
+        // Worth saying out loud: a recovery code is a one-time way in, and
+        // running out of them without noticing is how somebody ends up locked
+        // out of their own site.
+        console.warn(`[auth] recovery code used by ${user.email}, ${second.remainingRecoveryCodes} left`);
+      }
     }
 
     // The failures were evidence of guessing only until the owner arrived.

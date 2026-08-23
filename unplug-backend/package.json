@@ -1,7 +1,7 @@
 {
   "name": "unplug-backend",
   "version": "0.1.0",
-  "description": "Unplug Ecosystem \u2014 Phase 3 backend starter (Step 1: Users, Auth, Roles)",
+  "description": "Unplug Ecosystem — Phase 3 backend starter (Step 1: Users, Auth, Roles)",
   "main": "src/app.js",
   "type": "commonjs",
   "scripts": {
@@ -20,6 +20,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^9.0.5",
+    "otplib": "^13.5.0",
     "pdfkit": "^0.19.1",
     "pg": "^8.11.5",
     "sharp": "^0.35.3"

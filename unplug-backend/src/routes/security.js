@@ -12,6 +12,9 @@ const accessControl = require('../middleware/accessControl');
 const requestContext = require('../middleware/requestContext');
 const { isValidIp, isValidCidr, inCidr, sameAddress } = require('../utils/ipMatch');
 const pool = require('../db');
+const twoFactor = require('../utils/twoFactor');
+const altcha = require('../utils/altcha');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -196,6 +199,104 @@ router.delete('/access-rules/:id', requireRole('admin'), async (req, res, next) 
       `${row.kind} ${row.value}`);
     res.json({ deleted: true });
   } catch (err) { next(err); }
+});
+
+
+// ---------------------------------------------------------------------------
+// Two-factor authentication
+//
+// requireAuth rather than requireRole('admin'): these act on the CALLER'S OWN
+// account, never on anyone else's. There is no route here that can enrol,
+// disable or reset a second factor for another person — an admin who could
+// switch off a colleague's 2FA would be a way around it.
+// ---------------------------------------------------------------------------
+
+// GET /security/two-factor — where the caller stands.
+router.get('/two-factor', requireAuth, async (req, res, next) => {
+  try {
+    const r = await pool.query(
+      `SELECT two_factor_enabled, two_factor_confirmed_at,
+              (SELECT count(*)::int FROM two_factor_recovery_codes
+                WHERE user_id = $1 AND used_at IS NULL) AS recovery_codes_left
+         FROM users WHERE id = $1`, [req.user.id]);
+    const row = r.rows[0] || {};
+    res.json({
+      enabled: row.two_factor_enabled === true,
+      confirmedAt: row.two_factor_confirmed_at || null,
+      recoveryCodesLeft: row.recovery_codes_left || 0,
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /security/two-factor/begin — produces a secret and the otpauth:// URI.
+// Nothing changes about signing in until it is confirmed.
+router.post('/two-factor/begin', requireAuth, async (req, res, next) => {
+  try {
+    if (await twoFactor.isEnabled(req.user.id)) {
+      return res.status(400).json({
+        error: 'Two-factor authentication is already on. Turn it off first if you want to set it up again.',
+      });
+    }
+    const { secret, uri } = await twoFactor.beginEnrolment(req.user.id, req.user.email);
+    // The secret is returned so it can be typed in by hand when a camera will
+    // not read the QR code — a normal thing to need, and the alternative is
+    // somebody who cannot enrol at all.
+    res.json({ secret, uri, issuer: twoFactor.ISSUER });
+  } catch (err) { next(err); }
+});
+
+// POST /security/two-factor/confirm — proves the app works, switches it on,
+// and returns the recovery codes ONCE.
+router.post('/two-factor/confirm', requireAuth, async (req, res, next) => {
+  try {
+    const result = await twoFactor.confirmEnrolment(req.user.id, req.body.code);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    logActivity(req.user.id, 'two_factor_enabled', req.user.email);
+    res.json({
+      enabled: true,
+      recoveryCodes: result.recoveryCodes,
+      note: 'Save these somewhere safe. Each one works once, and they are not shown again.',
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /security/two-factor/disable — requires a current code, so a stolen
+// session cannot simply remove the protection.
+router.post('/two-factor/disable', requireAuth, async (req, res, next) => {
+  try {
+    const result = await twoFactor.disable(req.user.id, req.body.code);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    logActivity(req.user.id, 'two_factor_disabled', req.user.email);
+    res.json({ enabled: false });
+  } catch (err) { next(err); }
+});
+
+// POST /security/two-factor/recovery-codes — a fresh set, which invalidates
+// the old ones. Requires a current code for the same reason as disabling.
+router.post('/two-factor/recovery-codes', requireAuth, async (req, res, next) => {
+  try {
+    const check = await twoFactor.verifySecondFactor(req.user.id, req.body.code);
+    if (!check.ok) return res.status(400).json({ error: 'That code is not right.' });
+    const codes = await twoFactor.regenerateRecoveryCodes(req.user.id);
+    logActivity(req.user.id, 'two_factor_recovery_codes_regenerated', req.user.email);
+    res.json({ recoveryCodes: codes, note: 'The previous codes no longer work.' });
+  } catch (err) { next(err); }
+});
+
+
+// ---------------------------------------------------------------------------
+// Bot defence
+// ---------------------------------------------------------------------------
+
+// GET /security/altcha-challenge — public, and it has to be.
+//
+// The form that needs it is used by people who are not signed in: a contact
+// enquiry, a nomination, a comment. Stateless, so requesting a million of
+// these costs a hash each and stores nothing.
+router.get('/altcha-challenge', (req, res) => {
+  res.set('Cache-Control', 'no-store'); // a reused challenge is a solved one
+  res.json(altcha.createChallenge());
 });
 
 module.exports = router;
