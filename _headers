@@ -17,8 +17,23 @@
 # year with no way to fix it, so nothing below is cached hard unless its
 # filename carries a content hash.
 #
-# Order matters: Pages applies the FIRST matching rule, so the specific paths
-# come before the catch-all.
+# PAGES APPLIES EVERY MATCHING RULE, NOT THE FIRST ONE.
+#
+# This was written the other way round, and the deploy proved it wrong. With a
+# Cache-Control on the /* catch-all as well as on the specific paths, sw.js came
+# back with all three concatenated:
+#
+#   Cache-Control: no-cache, no-store, must-revalidate, public, max-age=300,
+#                  must-revalidate, public, max-age=0, must-revalidate
+#
+# A header naming three different max-ages is not a stricter rule or a looser
+# one, it is an ambiguous one, and which directive wins is up to the browser.
+#
+# So the catch-all sets NO Cache-Control at all. Pages already defaults to
+# "public, max-age=0, must-revalidate", which is exactly what the HTML should
+# have, and every rule below adds a cache policy only where the default is
+# wrong. The security headers stay on /* because repeating an identical value
+# is harmless.
 
 # ---------------------------------------------------------------------------
 # Build output — hashed filenames, safe to cache forever.
@@ -52,29 +67,32 @@
   Cache-Control: no-cache, no-store, must-revalidate
 
 # ---------------------------------------------------------------------------
-# The shared JavaScript modules, while they still have unhashed names.
+# THERE IS NO /*.js RULE, and there must not be one.
 #
-# They cannot be cached hard: unplug-shared.js means something different after
-# every deploy and the URL does not change. Five minutes plus revalidation is
-# the compromise — a burst of page views inside one visit is served from
-# memory, and a deploy reaches everyone within minutes.
+# A five-minute cache for the unhashed shared modules looked like free speed.
+# But /*.js also matches /sw.js, and because Pages applies every matching rule,
+# the service worker came back asking to be cached for no time and for five
+# minutes in the same breath. A service worker is the file that decides what
+# every other file does; an ambiguous cache policy on it is the one mistake
+# here with no way to reach the affected reader afterwards.
 #
-# Once the build step is serving hashed copies of these from /assets/, this
-# section becomes a fallback for anything still loading the source files.
+# So the unhashed modules simply keep Pages' default: revalidated every time,
+# answered with a 304 when unchanged. They stop mattering entirely once the
+# build step serves hashed copies from /assets/, which are cached for a year.
 # ---------------------------------------------------------------------------
-/*.js
-  Cache-Control: public, max-age=300, must-revalidate
 
 # ---------------------------------------------------------------------------
 # Everything else — chiefly the HTML.
 #
-# Short and always revalidated, because the pages are the product: an edit to
-# a story or a price must be visible now, not in an hour. The ETag Pages sends
-# makes an unchanged page cost a 304 rather than the whole file.
+# Security headers only. The caching is Pages' own default, which is already
+# what the HTML needs, and the ETag it sends makes an unchanged page cost a 304
+# rather than the whole file.
 # ---------------------------------------------------------------------------
 /*
-  Cache-Control: public, max-age=0, must-revalidate
-  # Not a cache header, but it belongs with the things that apply to every
-  # response: browsers must not second-guess a declared content type.
+  # No Cache-Control here on purpose — see the note at the top of this file.
+  # Pages already answers with "public, max-age=0, must-revalidate" by default,
+  # which is right for the HTML: the pages are the product, and an edit to a
+  # story or a price must be visible now. Adding it here would append it to
+  # every rule above and make all of them ambiguous.
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
