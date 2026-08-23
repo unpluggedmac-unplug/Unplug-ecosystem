@@ -72,7 +72,12 @@ app.use(require('./middleware/requestContext').middleware);
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
-app.use(express.json());
+// 512kb. The largest honest JSON payload is a long article with its gallery
+// list; uploads are multipart and handled by multer, which has its own larger
+// limits. Express defaults to 100kb, which a long article can exceed — so this
+// is raised deliberately rather than left to chance, and bounded deliberately
+// rather than left open.
+app.use(express.json({ limit: require('./middleware/wafLite').MAX_JSON_BYTES }));
 app.use(securityHeaders);
 app.use(requestLogger);
 
@@ -80,6 +85,19 @@ app.use(requestLogger);
 // Individual routes then use requireAuth / requireRole to enforce access.
 app.use(attachUser);
 
+// AFTER attachUser, so an account block follows the person rather than the
+// machine they happen to be using, and BEFORE every route, so a refused
+// request costs a cached lookup instead of a query.
+//
+// Order between these two matters as well: the access list is consulted first,
+// so an address on the allow list is never refused by a pattern. Somebody
+// exempted has been exempted deliberately, and a filter second-guessing that
+// is how an admin gets locked out mid-incident.
+app.use(require('./middleware/accessControl').middleware);
+app.use(require('./middleware/wafLite').middleware);
+
+// Health stays reachable regardless — an uptime check must not be able to trip
+// a filter and report the site down when it is fine.
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 app.use('/auth', authRoutes);

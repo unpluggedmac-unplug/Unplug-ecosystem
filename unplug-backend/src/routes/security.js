@@ -8,6 +8,10 @@ const express = require('express');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const loginAttempts = require('../utils/loginAttempts');
+const accessControl = require('../middleware/accessControl');
+const requestContext = require('../middleware/requestContext');
+const { isValidIp, isValidCidr, inCidr, sameAddress } = require('../utils/ipMatch');
+const pool = require('../db');
 
 const router = express.Router();
 
@@ -53,6 +57,144 @@ router.delete('/login-attempts/:identifier', requireRole('admin'), async (req, r
     // Worth an audit entry: an admin removed a defence for a named account.
     logActivity(req.user.id, 'login_delay_cleared', identifier);
     res.json({ cleared: true });
+  } catch (err) { next(err); }
+});
+
+
+// ---------------------------------------------------------------------------
+// Access rules — who is kept out, and who can never be kept out
+// ---------------------------------------------------------------------------
+
+// GET /security/access-rules
+router.get('/access-rules', requireRole('admin'), async (req, res, next) => {
+  try {
+    const rules = await pool.query(
+      `SELECT r.*, u.email AS created_by_email,
+              (r.expires_at IS NOT NULL AND r.expires_at <= now()) AS expired
+         FROM access_rules r
+         LEFT JOIN users u ON u.id = r.created_by
+        ORDER BY r.effect, r.hit_count DESC, r.created_at DESC`);
+    const denials = await pool.query(
+      `SELECT ip_address, path, denied_by, count(*)::int AS n, max(created_at) AS last_seen
+         FROM access_denials
+        WHERE created_at > now() - INTERVAL '7 days'
+        GROUP BY ip_address, path, denied_by
+        ORDER BY n DESC LIMIT 100`);
+    res.json({
+      rules: rules.rows,
+      recentDenials: denials.rows,
+      // The address the admin is asking from, so the screen can warn before
+      // they block themselves rather than after.
+      yourAddress: requestContext.current().ip || null,
+    });
+  } catch (err) { next(err); }
+});
+
+function validateRule(body) {
+  const effect = String(body.effect || '').toLowerCase();
+  if (!['block', 'allow'].includes(effect)) {
+    return { error: 'Choose whether this rule blocks or allows.' };
+  }
+  const kind = String(body.kind || '').toLowerCase();
+  if (!['ip', 'cidr', 'account', 'country'].includes(kind)) {
+    return { error: 'Choose what to match: an address, a range, an account or a country.' };
+  }
+  const value = String(body.value || '').trim();
+  if (!value) return { error: 'Give the address, range, email or country code to match.' };
+
+  // Checked at the point somebody types it, so a rule that could never match
+  // is refused now rather than sitting in the table looking like protection.
+  if (kind === 'ip' && !isValidIp(value)) {
+    return { error: `"${value}" is not an IP address.` };
+  }
+  if (kind === 'cidr' && !isValidCidr(value)) {
+    return { error: `"${value}" is not a range. Ranges look like 41.0.0.0/8.` };
+  }
+  if (kind === 'account' && !value.includes('@')) {
+    return { error: 'An account rule needs an email address.' };
+  }
+  if (kind === 'country' && !/^[A-Za-z]{2}$/.test(value)) {
+    return { error: 'A country is a two-letter code, such as ZA.' };
+  }
+
+  const reason = String(body.reason || '').trim();
+  if (!reason) {
+    // Not politeness. An unexplained block is one nobody will dare remove, and
+    // the list turns into permanent scar tissue.
+    return { error: 'Say why. A rule nobody can explain is a rule nobody will ever remove.' };
+  }
+
+  let expiresAt = null;
+  if (body.expiresAt) {
+    const d = new Date(body.expiresAt);
+    if (Number.isNaN(d.getTime())) return { error: 'That expiry date could not be read.' };
+    expiresAt = d.toISOString();
+  }
+  return { effect, kind, value, reason: reason.slice(0, 500), expiresAt };
+}
+
+// POST /security/access-rules
+router.post('/access-rules', requireRole('admin'), async (req, res, next) => {
+  try {
+    const v = validateRule(req.body || {});
+    if (v.error) return res.status(400).json({ error: v.error });
+
+    // THE SELF-LOCKOUT GUARD.
+    //
+    // The realistic accident is not a clever attacker. It is an admin blocking
+    // a range that contains their own connection — a mobile network, an office
+    // — and losing the screen they would use to undo it. Refused outright,
+    // because there is no good version of this and the error costs nothing to
+    // recover from while the mistake could cost the site.
+    if (v.effect === 'block') {
+      const mine = requestContext.current().ip;
+      const wouldCatchMe =
+        (v.kind === 'ip' && mine && sameAddress(mine, v.value)) ||
+        (v.kind === 'cidr' && mine && inCidr(mine, v.value)) ||
+        (v.kind === 'account' && req.user && String(req.user.email).toLowerCase() === v.value.toLowerCase());
+      if (wouldCatchMe) {
+        return res.status(400).json({
+          error: 'That rule would block the connection you are using right now, '
+               + 'and this screen with it. Add an allow rule for yourself first, '
+               + 'or apply this from somewhere else.',
+        });
+      }
+    }
+
+    const result = await pool.query(
+      `INSERT INTO access_rules (effect, kind, value, reason, expires_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (effect, kind, LOWER(value)) DO UPDATE SET
+         reason = EXCLUDED.reason, expires_at = EXCLUDED.expires_at
+       RETURNING *`,
+      [v.effect, v.kind, v.value, v.reason, v.expiresAt, req.user.id]);
+
+    // The cache is fifteen seconds, which is fine for somebody else's change
+    // and infuriating for your own. Cleared so an admin's rule applies the
+    // moment they press the button.
+    accessControl.invalidate();
+    logActivity(req.user.id, v.effect === 'block' ? 'ip_blocked' : 'ip_allowed',
+      `${v.kind} ${v.value} — ${v.reason}`);
+    res.status(201).json({ rule: result.rows[0] });
+  } catch (err) { next(err); }
+});
+
+// DELETE /security/access-rules/:id
+router.delete('/access-rules/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid rule is required.' });
+    const r = await pool.query('DELETE FROM access_rules WHERE id = $1 RETURNING effect, kind, value', [id]);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'That rule no longer exists.' });
+
+    accessControl.invalidate();
+    const row = r.rows[0];
+    // Removing an ALLOW rule is the risky direction — it can expose somebody
+    // to a block that was previously overridden — so it is flagged high risk.
+    logActivity(req.user.id,
+      row.effect === 'allow' ? 'ip_block_removed' : 'ip_block_lifted',
+      `${row.kind} ${row.value}`);
+    res.json({ deleted: true });
   } catch (err) { next(err); }
 });
 
