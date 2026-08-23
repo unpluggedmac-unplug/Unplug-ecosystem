@@ -3,3 +3,6 @@
 # once in the source, once in the minified copy.
 /dist/
 node_modules/
+
+# Stray test-output captures. These have been committed by accident twice.
+unplug-backend/suite*.txt

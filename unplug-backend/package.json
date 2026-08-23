@@ -1,7 +1,7 @@
 {
   "name": "unplug-backend",
   "version": "0.1.0",
-  "description": "Unplug Ecosystem — Phase 3 backend starter (Step 1: Users, Auth, Roles)",
+  "description": "Unplug Ecosystem \u2014 Phase 3 backend starter (Step 1: Users, Auth, Roles)",
   "main": "src/app.js",
   "type": "commonjs",
   "scripts": {
@@ -9,7 +9,9 @@
     "dev": "nodemon src/app.js",
     "migrate": "node db/migrate.js",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
-    "audit": "npm audit --audit-level=moderate"
+    "audit": "npm audit --audit-level=moderate",
+    "pretest": "node scripts/sweep-test-postgres.js",
+    "posttest": "node scripts/sweep-test-postgres.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

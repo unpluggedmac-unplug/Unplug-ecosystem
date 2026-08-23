@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const EmbeddedPostgres = require('embedded-postgres').default;
+const { stopPostgres } = require('./helpers/stopPostgres');
 
 let pg;
 let pool;
@@ -87,13 +88,11 @@ before(async () => {
 after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
   if (pool) await pool.end();
-  // Windows can still hold a handle on the data directory when Postgres
-  // exits, and embedded-postgres removes that directory as part of
-  // stopping. The server is already down by then, so an EBUSY here is
-  // the OS being slow to let go, not a failure worth failing the file
-  // for — and a teardown that goes red teaches everyone to ignore red.
-  try { if (pg) await pg.stop(); } catch (e) { /* see above */ }
-  try { fs.rmSync(dataDir, { recursive: true, force: true }); } catch (e) { /* Windows holds the dir briefly */ }
+  // stopPostgres, not pg.stop() directly: on Windows the library's stop
+  // can HANG rather than throw, which used to leave the cluster running
+  // with no parent and eventually broke a later test file's startup.
+  // See test/helpers/stopPostgres.js.
+  await stopPostgres(pg, dataDir);
 });
 
 // ---------------------------------------------------------------------------
