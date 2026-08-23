@@ -375,6 +375,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="analytics">Analytics</a>
         <a data-section="activitylog">Activity Log</a>
+        <a data-section="crm">Sales &amp; CRM</a>
         <a data-section="spam">Spam Filter</a>
       </div>
     </div>
@@ -1513,6 +1514,57 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
     
+    <!-- SALES & CRM -->
+    <div class="admin-section" id="section-crm">
+      <div class="main-head"><div><h1>Sales &amp; CRM</h1>
+        <p>Every enquiry, who it came from, and what stage it is at.</p></div></div>
+
+      <div class="crm-tabs" role="tablist" aria-label="CRM views" style="display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;">
+        <button role="tab" aria-selected="true" aria-controls="crmPanePipeline" id="crmTabPipeline" class="btn btn-solid" data-crm-tab="pipeline">Pipeline</button>
+        <button role="tab" aria-selected="false" aria-controls="crmPaneContacts" id="crmTabContacts" class="btn" data-crm-tab="contacts">Contacts</button>
+        <button role="tab" aria-selected="false" aria-controls="crmPaneTasks" id="crmTabTasks" class="btn" data-crm-tab="tasks">Tasks</button>
+        <button role="tab" aria-selected="false" aria-controls="crmPaneDashboard" id="crmTabDashboard" class="btn" data-crm-tab="dashboard">Numbers</button>
+      </div>
+
+      <div id="crmPanePipeline" role="tabpanel" aria-labelledby="crmTabPipeline">
+        <div class="panel"><div class="panel-body" id="crmKanban" style="overflow-x:auto;">
+          <div class="loading-state">Loading…</div>
+        </div></div>
+      </div>
+
+      <div id="crmPaneContacts" role="tabpanel" aria-labelledby="crmTabContacts" hidden>
+        <div class="panel">
+          <div class="panel-body" style="border-bottom:1px solid var(--paper-line);">
+            <label for="crmSearch" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Search contacts</label>
+            <input id="crmSearch" type="search" placeholder="A name, an email, a company…" style="width:100%; max-width:420px;">
+          </div>
+          <div class="panel-body" id="crmContacts" style="padding:0;"><div class="loading-state">Loading…</div></div>
+        </div>
+        <div class="panel" id="crmContactDetail" hidden></div>
+      </div>
+
+      <div id="crmPaneTasks" role="tabpanel" aria-labelledby="crmTabTasks" hidden>
+        <div class="panel">
+          <div class="panel-body" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; border-bottom:1px solid var(--paper-line);">
+            <div style="flex:1 1 260px;">
+              <label for="crmTaskTitle" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">New task</label>
+              <input id="crmTaskTitle" type="text" placeholder="Call the advertiser about the rate card" style="width:100%;">
+            </div>
+            <div>
+              <label for="crmTaskDue" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Due</label>
+              <input id="crmTaskDue" type="date">
+            </div>
+            <button class="btn btn-solid" id="crmTaskAdd" style="margin-bottom:2px;">Add</button>
+          </div>
+          <div class="panel-body" id="crmTasks" style="padding:0;"><div class="loading-state">Loading…</div></div>
+        </div>
+      </div>
+
+      <div id="crmPaneDashboard" role="tabpanel" aria-labelledby="crmTabDashboard" hidden>
+        <div class="panel"><div class="panel-body" id="crmDashboard"><div class="loading-state">Loading…</div></div></div>
+      </div>
+    </div>
+
     <!-- SPAM FILTER -->
     <div class="admin-section" id="section-spam">
       <div class="main-head"><div><h1>Spam Filter</h1>
@@ -3153,6 +3205,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'inquiries') loadInquiries();
     if (section === 'activitylog') { loadActivityActions(); loadActivityLog(); }
     if (section === 'spam') { loadSpamOverview(); loadSpamVocabulary(); }
+    if (section === 'crm') crmShowTab('pipeline');
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
@@ -9547,6 +9600,433 @@ function alFilters() {
   params.set('limit', '100');
   return params;
 }
+
+// ---------------------------------------------------------------------------
+// Sales & CRM
+//
+// Everything on these screens is text somebody outside this office typed — a
+// name, a company, an enquiry. It is therefore built with createElement and
+// textContent throughout, never innerHTML with a ${} in it. That pattern
+// produced two stored XSS holes in this dashboard already, one of them
+// reachable by anyone on the internet through the contact form.
+// ---------------------------------------------------------------------------
+
+const CRM_STAGE_LABELS = {
+  prospect: 'Prospect', contacted: 'Contacted', proposal: 'Proposal',
+  won: 'Won', lost: 'Lost',
+};
+
+function crmMoney(value) {
+  return 'R' + Number(value || 0).toLocaleString('en-ZA', { maximumFractionDigits: 0 });
+}
+
+function crmEl(tag, text, style) {
+  const el = document.createElement(tag);
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  if (style) el.style.cssText = style;
+  return el;
+}
+
+function crmShowTab(name) {
+  ['pipeline', 'contacts', 'tasks', 'dashboard'].forEach((tab) => {
+    const pane = document.getElementById('crmPane' + tab.charAt(0).toUpperCase() + tab.slice(1));
+    const btn = document.querySelector(`[data-crm-tab="${tab}"]`);
+    if (pane) pane.hidden = tab !== name;
+    if (btn) {
+      btn.setAttribute('aria-selected', String(tab === name));
+      btn.classList.toggle('btn-solid', tab === name);
+    }
+  });
+  if (name === 'pipeline') loadCrmPipeline();
+  if (name === 'contacts') loadCrmContacts();
+  if (name === 'tasks') loadCrmTasks();
+  if (name === 'dashboard') loadCrmDashboard();
+}
+
+// --- the pipeline -----------------------------------------------------------
+
+// A card can be dragged, and can ALSO be moved with a select. Drag and drop is
+// unusable with a keyboard and invisible to a screen reader, so on its own it
+// would make the pipeline staff-only in a way nobody intended.
+function crmDealCard(deal, onMoved) {
+  const card = crmEl('div', null,
+    'background:var(--cream); border:1px solid var(--paper-line); border-radius:var(--radius-md); '
+    + 'padding:10px; margin-bottom:8px; cursor:grab;');
+  card.draggable = true;
+  card.dataset.dealId = deal.id;
+
+  const title = crmEl('div', deal.title, 'font-weight:700; font-size:13.5px;');
+  card.appendChild(title);
+
+  const who = crmEl('div', deal.full_name || deal.email || '—',
+    'font-size:12px; color:var(--slate); margin-top:2px;');
+  card.appendChild(who);
+  if (deal.company_name) {
+    card.appendChild(crmEl('div', deal.company_name, 'font-size:11.5px; color:var(--slate);'));
+  }
+
+  const foot = crmEl('div', null, 'display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:6px;');
+  foot.appendChild(crmEl('strong', crmMoney(deal.value), 'font-size:13px;'));
+
+  const move = document.createElement('select');
+  move.setAttribute('aria-label', 'Move "' + (deal.title || 'deal') + '" to a different stage');
+  move.style.cssText = 'font-size:11.5px; padding:2px 4px;';
+  Object.entries(CRM_STAGE_LABELS).forEach(([value, label]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    if (value === deal.stage) opt.selected = true;
+    move.appendChild(opt);
+  });
+  move.addEventListener('change', async () => {
+    try {
+      await api('/crm/deals/' + deal.id, { method: 'PATCH', body: JSON.stringify({ stage: move.value }) });
+      if (onMoved) onMoved();
+    } catch (err) { showToast("Couldn't move that: " + err.message); }
+  });
+  foot.appendChild(move);
+  card.appendChild(foot);
+
+  card.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', String(deal.id));
+    card.style.opacity = '0.5';
+  });
+  card.addEventListener('dragend', () => { card.style.opacity = '1'; });
+
+  // Opening the person behind the deal is the common next action.
+  who.style.cursor = 'pointer';
+  who.addEventListener('click', () => {
+    crmShowTab('contacts');
+    openCrmContact(deal.contact_id);
+  });
+  return card;
+}
+
+async function loadCrmPipeline() {
+  const wrap = document.getElementById('crmKanban');
+  wrap.innerHTML = '';
+  wrap.appendChild(crmEl('div', 'Loading…', 'padding:12px;'));
+  try {
+    const data = await api('/crm/pipeline');
+    wrap.innerHTML = '';
+
+    const board = crmEl('div', null, 'display:flex; gap:12px; min-width:900px; align-items:flex-start;');
+    data.stages.forEach((stage) => {
+      const column = crmEl('div', null,
+        'flex:1 1 0; min-width:170px; background:var(--paper); border-radius:var(--radius-md); padding:10px;');
+
+      const head = crmEl('div', null, 'margin-bottom:10px;');
+      head.appendChild(crmEl('div', CRM_STAGE_LABELS[stage], 'font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;'));
+      const totals = data.totals[stage] || { count: 0, value: 0 };
+      head.appendChild(crmEl('div', `${totals.count} · ${crmMoney(totals.value)}`,
+        'font-size:11.5px; color:var(--slate);'));
+      column.appendChild(head);
+
+      // The drop target.
+      column.addEventListener('dragover', (e) => { e.preventDefault(); column.style.outline = '2px dashed var(--red)'; });
+      column.addEventListener('dragleave', () => { column.style.outline = 'none'; });
+      column.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        column.style.outline = 'none';
+        const id = e.dataTransfer.getData('text/plain');
+        if (!id) return;
+        try {
+          await api('/crm/deals/' + id, { method: 'PATCH', body: JSON.stringify({ stage }) });
+          loadCrmPipeline();
+        } catch (err) { showToast("Couldn't move that: " + err.message); }
+      });
+
+      (data.deals[stage] || []).forEach((deal) => column.appendChild(crmDealCard(deal, loadCrmPipeline)));
+      if (!(data.deals[stage] || []).length) {
+        column.appendChild(crmEl('div', 'Nothing here', 'font-size:12px; color:var(--slate); padding:6px 2px;'));
+      }
+      board.appendChild(column);
+    });
+    wrap.appendChild(board);
+  } catch (err) {
+    wrap.innerHTML = '';
+    wrap.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:12px;'));
+  }
+}
+
+// --- contacts ---------------------------------------------------------------
+
+async function loadCrmContacts() {
+  const body = document.getElementById('crmContacts');
+  const term = (document.getElementById('crmSearch') || {}).value || '';
+  body.innerHTML = '';
+  try {
+    const data = await api('/crm/contacts?limit=100&q=' + encodeURIComponent(term));
+    if (!data.contacts.length) {
+      body.appendChild(crmEl('div', 'No contacts match that.', 'padding:14px;'));
+      return;
+    }
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    ['Name', 'Email', 'Company', 'Came from', 'Deals', 'Last seen'].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+    });
+    table.appendChild(head);
+
+    data.contacts.forEach((c) => {
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', () => openCrmContact(c.id));
+
+      tr.appendChild(crmCell(c.full_name || '—'));
+      tr.appendChild(crmCell(c.email));
+      tr.appendChild(crmCell(c.company_name || '—'));
+      // "Unknown" is a real answer: the source is only recorded when the
+      // visitor accepted the consent bar. Showing "Direct" instead would be
+      // inventing attribution for people who came from somewhere else.
+      tr.appendChild(crmCell(c.source_known ? (c.source || '—') : 'Unknown'));
+      tr.appendChild(crmCell(`${c.deal_count} (${c.open_deals} open)`));
+      tr.appendChild(crmCell(new Date(c.last_seen_at).toLocaleDateString()));
+      table.appendChild(tr);
+    });
+    body.appendChild(table);
+  } catch (err) {
+    body.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:14px;'));
+  }
+}
+
+function crmCell(text) {
+  const td = document.createElement('td');
+  td.textContent = text == null ? '' : String(text);
+  return td;
+}
+
+async function openCrmContact(id) {
+  const panel = document.getElementById('crmContactDetail');
+  panel.hidden = false;
+  panel.innerHTML = '';
+  panel.appendChild(crmEl('div', 'Loading…', 'padding:14px;'));
+  try {
+    const data = await api('/crm/contacts/' + id);
+    panel.innerHTML = '';
+
+    const head = crmEl('div', null, 'padding:16px; border-bottom:1px solid var(--paper-line);');
+    head.appendChild(crmEl('h2', data.contact.full_name || data.contact.email, 'font-size:20px; margin:0 0 4px;'));
+    head.appendChild(crmEl('div', data.contact.email, 'font-size:13px; color:var(--slate);'));
+    if (data.contact.phone) head.appendChild(crmEl('div', data.contact.phone, 'font-size:13px; color:var(--slate);'));
+    head.appendChild(crmEl('div',
+      data.contact.source_known
+        ? 'Came from: ' + (data.contact.source || 'unknown')
+          + (data.contact.utm_campaign ? ' · ' + data.contact.utm_campaign : '')
+        : 'Came from: not known — this visitor declined analytics cookies',
+      'font-size:12px; color:var(--slate); margin-top:6px;'));
+    panel.appendChild(head);
+
+    // Deals
+    if (data.deals.length) {
+      const box = crmEl('div', null, 'padding:14px 16px; border-bottom:1px solid var(--paper-line);');
+      box.appendChild(crmEl('div', 'Deals', 'font-weight:800; font-size:12px; text-transform:uppercase; margin-bottom:8px;'));
+      data.deals.forEach((d) => {
+        const row = crmEl('div', null, 'display:flex; justify-content:space-between; font-size:13px; padding:3px 0;');
+        row.appendChild(crmEl('span', d.title));
+        row.appendChild(crmEl('span', CRM_STAGE_LABELS[d.stage] + ' · ' + crmMoney(d.value), 'color:var(--slate);'));
+        box.appendChild(row);
+      });
+      panel.appendChild(box);
+    }
+
+    // Add a note
+    const noteBox = crmEl('div', null, 'padding:14px 16px; border-bottom:1px solid var(--paper-line);');
+    const noteInput = document.createElement('textarea');
+    noteInput.rows = 2;
+    noteInput.placeholder = 'Log a call, a note, a meeting…';
+    noteInput.setAttribute('aria-label', 'Add a note to this contact');
+    noteInput.style.cssText = 'width:100%; margin-bottom:6px;';
+    const kind = document.createElement('select');
+    kind.setAttribute('aria-label', 'Kind of activity');
+    [['note', 'Note'], ['call', 'Call'], ['email', 'Email'], ['meeting', 'Meeting']]
+      .forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; kind.appendChild(o); });
+    const saveNote = crmEl('button', 'Add to timeline');
+    saveNote.className = 'btn btn-solid';
+    saveNote.style.marginLeft = '8px';
+    saveNote.addEventListener('click', async () => {
+      if (!noteInput.value.trim()) return;
+      try {
+        await api('/crm/contacts/' + id + '/activities', {
+          method: 'POST',
+          body: JSON.stringify({ kind: kind.value, body: noteInput.value.trim() }),
+        });
+        openCrmContact(id);
+      } catch (err) { showToast("Couldn't save that: " + err.message); }
+    });
+    noteBox.appendChild(noteInput);
+    noteBox.appendChild(kind);
+    noteBox.appendChild(saveNote);
+    panel.appendChild(noteBox);
+
+    // The timeline
+    const timeline = crmEl('div', null, 'padding:14px 16px;');
+    timeline.appendChild(crmEl('div', 'Timeline', 'font-weight:800; font-size:12px; text-transform:uppercase; margin-bottom:10px;'));
+    if (!data.activities.length) {
+      timeline.appendChild(crmEl('div', 'Nothing recorded yet.', 'font-size:13px; color:var(--slate);'));
+    }
+    data.activities.forEach((a) => {
+      const item = crmEl('div', null, 'padding:8px 0; border-bottom:1px solid var(--paper-line);');
+      const when = new Date(a.occurred_at).toLocaleString();
+      item.appendChild(crmEl('div', `${a.kind} · ${when}${a.by_name ? ' · ' + a.by_name : ''}`,
+        'font-size:11.5px; color:var(--slate);'));
+      if (a.subject) item.appendChild(crmEl('div', a.subject, 'font-weight:600; font-size:13px;'));
+      if (a.body) item.appendChild(crmEl('div', a.body, 'font-size:13px; white-space:pre-wrap;'));
+      timeline.appendChild(item);
+    });
+    panel.appendChild(timeline);
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    panel.innerHTML = '';
+    panel.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:14px;'));
+  }
+}
+
+// --- tasks ------------------------------------------------------------------
+
+async function loadCrmTasks() {
+  const body = document.getElementById('crmTasks');
+  body.innerHTML = '';
+  try {
+    const data = await api('/crm/tasks');
+    if (!data.tasks.length) {
+      body.appendChild(crmEl('div', 'Nothing due.', 'padding:14px;'));
+      return;
+    }
+    const table = document.createElement('table');
+    data.tasks.forEach((t) => {
+      const tr = document.createElement('tr');
+
+      const check = document.createElement('td');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.setAttribute('aria-label', 'Mark "' + t.title + '" done');
+      box.addEventListener('change', async () => {
+        try {
+          await api('/crm/tasks/' + t.id, { method: 'PATCH', body: JSON.stringify({ done: true }) });
+          loadCrmTasks();
+        } catch (err) { showToast("Couldn't update that: " + err.message); }
+      });
+      check.appendChild(box);
+      tr.appendChild(check);
+
+      tr.appendChild(crmCell(t.title));
+      tr.appendChild(crmCell(t.contact_name || t.contact_email || '—'));
+
+      const due = crmCell(t.due_at ? new Date(t.due_at).toLocaleDateString() : '—');
+      if (t.overdue) { due.style.color = 'var(--red)'; due.style.fontWeight = '700'; }
+      tr.appendChild(due);
+      table.appendChild(tr);
+    });
+    body.appendChild(table);
+  } catch (err) {
+    body.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:14px;'));
+  }
+}
+
+// --- the numbers ------------------------------------------------------------
+
+async function loadCrmDashboard() {
+  const el = document.getElementById('crmDashboard');
+  el.innerHTML = '';
+  try {
+    const d = await api('/crm/dashboard');
+
+    const tiles = crmEl('div', null, 'display:flex; gap:28px; flex-wrap:wrap; margin-bottom:20px;');
+    const tile = (label, value, note) => {
+      const box = crmEl('div', null, 'min-width:120px;');
+      box.appendChild(crmEl('div', value, 'font-size:26px; font-weight:800;'));
+      box.appendChild(crmEl('div', label, 'font-size:12px; color:var(--slate);'));
+      if (note) box.appendChild(crmEl('div', note, 'font-size:11px; color:var(--slate);'));
+      return box;
+    };
+
+    // null, not 0 — "no close rate yet" and "a close rate of zero" are
+    // different facts, and showing 0% on a new pipeline is a claim about
+    // performance that is not true.
+    tiles.appendChild(tile('Close rate',
+      d.closeRate.percent === null ? '—' : d.closeRate.percent + '%',
+      d.closeRate.percent === null ? 'nothing decided yet' : `${d.closeRate.won} won · ${d.closeRate.lost} lost`));
+    tiles.appendChild(tile('Weighted forecast', crmMoney(d.forecast.weighted),
+      'raw ' + crmMoney(d.forecast.raw)));
+    const open = Object.entries(d.byStage)
+      .filter(([stage]) => stage !== 'won' && stage !== 'lost')
+      .reduce((n, [, v]) => n + v.count, 0);
+    tiles.appendChild(tile('Open deals', String(open)));
+    el.appendChild(tiles);
+
+    el.appendChild(crmEl('p', d.forecast.note,
+      'font-size:12px; color:var(--slate); margin:0 0 18px; max-width:560px;'));
+
+    // Revenue by month
+    if (d.revenueByMonth.length) {
+      el.appendChild(crmEl('div', 'Revenue by month', 'font-weight:800; font-size:12px; text-transform:uppercase; margin-bottom:8px;'));
+      const max = Math.max(...d.revenueByMonth.map((m) => m.value), 1);
+      d.revenueByMonth.forEach((m) => {
+        const row = crmEl('div', null, 'display:flex; align-items:center; gap:10px; margin-bottom:4px;');
+        row.appendChild(crmEl('span', new Date(m.month).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' }),
+          'font-size:11.5px; width:64px; color:var(--slate);'));
+        const bar = crmEl('span', null,
+          `height:14px; background:var(--red); border-radius:3px; width:${Math.round((m.value / max) * 240)}px;`);
+        row.appendChild(bar);
+        row.appendChild(crmEl('span', crmMoney(m.value), 'font-size:12px;'));
+        el.appendChild(row);
+      });
+    }
+
+    // Where the deals come from
+    if (d.bySource.length) {
+      el.appendChild(crmEl('div', 'By source', 'font-weight:800; font-size:12px; text-transform:uppercase; margin:18px 0 8px;'));
+      const table = document.createElement('table');
+      const head = document.createElement('tr');
+      ['Source', 'Deals', 'Won', 'Value won'].forEach((h) => {
+        const th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+      });
+      table.appendChild(head);
+      d.bySource.forEach((r) => {
+        const tr = document.createElement('tr');
+        tr.appendChild(crmCell(r.source.replace(/_/g, ' ')));
+        tr.appendChild(crmCell(r.deals));
+        tr.appendChild(crmCell(r.won));
+        tr.appendChild(crmCell(crmMoney(r.wonValue)));
+        table.appendChild(tr);
+      });
+      el.appendChild(table);
+    }
+  } catch (err) {
+    el.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:8px;'));
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-crm-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => crmShowTab(btn.dataset.crmTab));
+  });
+  const search = document.getElementById('crmSearch');
+  if (search) {
+    let timer;
+    search.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(loadCrmContacts, 250);
+    });
+  }
+  const addTask = document.getElementById('crmTaskAdd');
+  if (addTask) {
+    addTask.addEventListener('click', async () => {
+      const title = document.getElementById('crmTaskTitle');
+      const due = document.getElementById('crmTaskDue');
+      if (!title.value.trim()) return;
+      try {
+        await api('/crm/tasks', {
+          method: 'POST',
+          body: JSON.stringify({ title: title.value.trim(), dueAt: due.value || null }),
+        });
+        title.value = ''; due.value = '';
+        loadCrmTasks();
+      } catch (err) { showToast("Couldn't add that: " + err.message); }
+    });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Spam filter
