@@ -2097,10 +2097,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <!-- enablejsapi=1 and an id are what let the YouTube IFrame API
                attach to this player and report whether anyone actually
                watched. Without both, the embed is a black box. -->
+          <!-- loading="lazy" because this player costs 466 KB of YouTube
+               JavaScript and CSS, and it sits well below the fold: on a phone
+               that was a sixth of the entire page weight, downloaded before
+               the reader had scrolled anywhere near it.
+               The element still exists in the DOM from the start, so
+               getElementById and the IFrame API attach exactly as before —
+               only the network fetch waits until it is nearly on screen.
+               width/height are the player's aspect ratio, so the space is
+               reserved and the page does not jump when it arrives. -->
           <iframe
             id="unplugYouTubePlayer"
             src="https://www.youtube.com/embed/videoseries?list=PLbpi6ZahtOH6Ar_3GPy3workwDO91Sj7&enablejsapi=1"
             title="Unplug Magazine on YouTube"
+            width="560" height="315"
+            loading="lazy"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowfullscreen>
           </iframe>
@@ -3680,6 +3691,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
 <script src="unplug-shared.js"></script>
 <script src="unplug-seo-schema.js"></script>
+<script src="unplug-responsive-images.js"></script>
 <script src="unplug-participation-sdk.js"></script>
 <script>
 const api = UnplugAPI.api;
@@ -5821,7 +5833,7 @@ async function loadArticleDetail(id) {
     const shareUrl = location.origin + '/?p=article&id=' + id;
     el.innerHTML = `
       <div id="articleBreadcrumb" hidden></div>
-      <div style="position:relative; margin-bottom:24px;"><img src="${a.banner_image_url ? escapeHtml(a.banner_image_url) : PLACEHOLDER_COVER}" alt="${escapeHtml(a.title)}" style="width:100%; max-height:420px; object-fit:cover; display:block;" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';"><div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>
+      <div style="position:relative; margin-bottom:24px;">${articleBannerHtml(a)}<div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>
       <span class="eyebrow">${escapeHtml(a.category || '')}</span>
       ${emotionBadge(a.emotion) ? `<div style="margin:10px 0 0;">${emotionBadge(a.emotion)}</div>` : ''}
       <h1 style="font-size:clamp(28px,4vw,42px); margin:12px 0 10px;">${escapeHtml(a.title)}</h1>
@@ -6468,9 +6480,54 @@ const PLACEHOLDER_COVER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
 // One authoritative <img> builder for every cover: uses the stored image, falls
 // back to the branded placeholder, and if the stored image 404s (e.g. an old
 // wiped upload) onerror swaps in the placeholder instead of a broken icon.
+// The cover picture on every story card, everywhere on the site.
+//
+// Routed through UnplugImg so one change gives the whole grid AVIF and WebP at
+// card width instead of the full-size original. A card is at most half the
+// screen on a phone and a third of a column on a desktop, so `sizes` says so —
+// without it the browser assumes the image fills the viewport and picks a
+// wider file than it will ever display.
+//
+// If the responsive helper has not loaded, or the picture has no derivatives
+// yet, this returns exactly the <img> it always returned.
 function coverImgTag(url, alt) {
-  const src = url ? escapeHtml(url) : PLACEHOLDER_COVER;
-  return `<img src="${src}" alt="${escapeHtml(alt || '')}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';">`;
+  const src = url || PLACEHOLDER_COVER;
+  const shared = {
+    alt: alt || '',
+    style: 'width:100%; height:100%; object-fit:cover;',
+    sizes: '(max-width: 640px) 92vw, (max-width: 1100px) 45vw, 360px',
+  };
+  const markup = window.UnplugImg
+    ? UnplugImg.picture(src, shared)
+    : `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt || '')}" loading="lazy" decoding="async" style="${shared.style}">`;
+  // The onerror fallback is added to the <img> after the fact rather than
+  // being baked into the helper: it is this site's placeholder policy, not
+  // something every responsive image everywhere should inherit.
+  return markup.replace('<img ',
+    `<img onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';" `);
+}
+
+// The big picture at the top of an article — the one the reader is waiting
+// for, and on most article pages the Largest Contentful Paint element.
+//
+// EAGER, NOT LAZY, and that is deliberate. Lazy-loading the image the page is
+// about delays the very thing being measured; `loading="lazy"` here would make
+// the score worse, not better. UnplugImg.picture takes eager: true, which also
+// sets fetchpriority so the browser knows which race matters.
+//
+// It is full width up to the content column, so `sizes` says 100vw on a phone
+// and the column width beyond that.
+function articleBannerHtml(a) {
+  const src = a.banner_image_url || PLACEHOLDER_COVER;
+  const style = 'width:100%; max-height:420px; object-fit:cover; display:block;';
+  const markup = window.UnplugImg
+    ? UnplugImg.picture(src, {
+        alt: a.title || '', style, eager: true,
+        sizes: '(max-width: 900px) 100vw, 860px',
+      })
+    : `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.title || '')}" style="${style}">`;
+  return markup.replace('<img ',
+    `<img onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';" `);
 }
 
 function homeStoryCardHtml(article, idPrefix) {

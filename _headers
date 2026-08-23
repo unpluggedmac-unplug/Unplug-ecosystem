@@ -1,0 +1,80 @@
+# Cloudflare Pages response headers.
+#
+# WHY THIS FILE EXISTS. Pages was answering every request — HTML, JavaScript,
+# icons, everything — with "Cache-Control: public, max-age=0, must-revalidate".
+# Lighthouse reported it as "0 cacheable resources found": a returning reader
+# re-checked every single file on every single page view. The bytes usually
+# came back as 304s, but each one still cost a round trip to Johannesburg and
+# back, and there were dozens per page.
+#
+# THE RULE THROUGHOUT: how long a file may be cached depends on whether its
+# NAME changes when its CONTENTS change.
+#
+#   A name that changes  -> cache for a year, never revalidate.
+#   A name that does not -> cache briefly, and always revalidate.
+#
+# Getting that backwards is how a site serves a stale page to a reader for a
+# year with no way to fix it, so nothing below is cached hard unless its
+# filename carries a content hash.
+#
+# Order matters: Pages applies the FIRST matching rule, so the specific paths
+# come before the catch-all.
+
+# ---------------------------------------------------------------------------
+# Build output — hashed filenames, safe to cache forever.
+#
+# esbuild writes these as <name>-<hash>.js / .css. A change to the source
+# produces a different hash and therefore a different URL, so a cached copy can
+# never be the wrong one. "immutable" additionally tells the browser not to
+# revalidate even when the reader presses reload.
+# ---------------------------------------------------------------------------
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ---------------------------------------------------------------------------
+# Icons and the web app manifest. Not hashed, but they change perhaps once a
+# year, and a day-old icon harms nobody.
+# ---------------------------------------------------------------------------
+/icons/*
+  Cache-Control: public, max-age=86400
+/manifest.webmanifest
+  Cache-Control: public, max-age=86400
+
+# ---------------------------------------------------------------------------
+# The service worker. MUST NOT be cached.
+#
+# This is the file that controls what every other file does. A stale copy keeps
+# serving a stale site and re-installs itself, and there is no way to reach a
+# reader stuck on one. Browsers now bypass the HTTP cache for the worker by
+# default, but saying so explicitly costs nothing and removes the doubt.
+# ---------------------------------------------------------------------------
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# ---------------------------------------------------------------------------
+# The shared JavaScript modules, while they still have unhashed names.
+#
+# They cannot be cached hard: unplug-shared.js means something different after
+# every deploy and the URL does not change. Five minutes plus revalidation is
+# the compromise — a burst of page views inside one visit is served from
+# memory, and a deploy reaches everyone within minutes.
+#
+# Once the build step is serving hashed copies of these from /assets/, this
+# section becomes a fallback for anything still loading the source files.
+# ---------------------------------------------------------------------------
+/*.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+# ---------------------------------------------------------------------------
+# Everything else — chiefly the HTML.
+#
+# Short and always revalidated, because the pages are the product: an edit to
+# a story or a price must be visible now, not in an hour. The ETag Pages sends
+# makes an unchanged page cost a 304 rather than the whole file.
+# ---------------------------------------------------------------------------
+/*
+  Cache-Control: public, max-age=0, must-revalidate
+  # Not a cache header, but it belongs with the things that apply to every
+  # response: browsers must not second-guess a declared content type.
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

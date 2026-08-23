@@ -23,6 +23,8 @@ const marketplaceRoutes = require('./routes/marketplace');
 const highlightRoutes = require('./routes/highlights');
 const salesConsultantRoutes = require('./routes/salesConsultants');
 const uploadRoutes = require('./routes/uploads');
+const imageRoutes = require('./routes/images');
+const maintenanceRoutes = require('./routes/maintenance');
 const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
@@ -92,6 +94,10 @@ app.use('/marketplace', marketplaceRoutes);
 app.use('/highlights', highlightRoutes);
 app.use('/sales-consultants', salesConsultantRoutes);
 app.use('/uploads', uploadRoutes);
+// Which stored images have responsive versions. Public and cacheable — the
+// frontend asks once and treats a late or missing answer as "originals only".
+app.use('/images', imageRoutes);
+app.use('/maintenance', maintenanceRoutes);
 // Serves the actual uploaded files back out (GET /uploads/<filename>).
 // Mounting static alongside the POST-only uploadRoutes above is safe —
 // express.static only ever handles GET/HEAD, so it never intercepts the
@@ -195,6 +201,23 @@ setInterval(() => {
     .then((r) => { if (r && r.sent) console.log(`[birthday] sent ${r.sent} greeting(s) for ${r.date}`); })
     .catch((err) => console.error('[birthday] check failed:', err.message));
 }, BIRTHDAY_CHECK_MS);
+
+// Database hygiene: expired tokens and analytics past their retention window,
+// then VACUUM ANALYZE. Same shape as the birthday check above, and same
+// caveat — this only fires while the instance is awake, so POST
+// /maintenance/cleanup with UNPLUG_CLEANUP_SECRET is there for a scheduler
+// that wants a guarantee. Running it twice in a day removes nothing extra.
+const { runCleanup } = require('./utils/databaseCleanup');
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+setInterval(() => {
+  runCleanup({})
+    .then((r) => {
+      if (r.rowsRemoved) {
+        console.log(`[cleanup] removed ${r.rowsRemoved} expired row(s) in ${r.ms}ms`);
+      }
+    })
+    .catch((err) => console.error('[cleanup] failed:', err.message));
+}, CLEANUP_INTERVAL_MS);
 
 // Participation engine: rankings + daily homepage recalculation. No
 // pg_cron on this Postgres, so this runs the same way the birthday

@@ -16,7 +16,7 @@
 // The cost is that opening the app is exactly as fast as the site is. That is
 // the right trade here.
 
-const VERSION = 'unplug-v6';
+const VERSION = 'unplug-v7';
 const OFFLINE_URL = '/offline.html';
 
 // The bare minimum needed to show something rather than a browser error page.
@@ -62,6 +62,26 @@ function shouldIgnore(request) {
   return false;
 }
 
+// CACHE-FIRST, BUT ONLY WHERE STALENESS IS IMPOSSIBLE.
+//
+// Everything above explains why this site serves from the network first: a
+// cached homepage is yesterday's news, and a cached story may be one that has
+// since been corrected. That reasoning is about files whose CONTENTS can
+// change without their NAME changing.
+//
+// Build output is not like that. esbuild writes /assets/<name>-<hash>.js, and
+// the hash is derived from the contents — change a byte and the URL changes.
+// A cached copy of one of those URLs cannot be out of date, because a newer
+// version is a different address. So these are answered from the cache
+// immediately, with no network round trip at all, and that is the whole
+// cache-busting strategy: the URL busts itself.
+//
+// Deliberately narrow. It matches the build directory and nothing else, so an
+// unhashed file can never wander into this branch by accident.
+function isImmutableAsset(url) {
+  return url.origin === self.location.origin && /^\/assets\/.+-[A-Za-z0-9]{8,}\.(js|css)$/.test(url.pathname);
+}
+
 // WHAT TO FILE A RESPONSE UNDER.
 //
 // This site is a single page whose query string picks what to render on the
@@ -81,6 +101,24 @@ function cacheKeyFor(request) {
 
 self.addEventListener('fetch', (event) => {
   if (shouldIgnore(event.request)) return; // let the browser handle it normally
+
+  const requestUrl = new URL(event.request.url);
+
+  // Hashed build assets: from the cache if it has them, otherwise fetched and
+  // kept. No revalidation, because there is nothing to revalidate against.
+  if (isImmutableAsset(requestUrl)) {
+    event.respondWith((async () => {
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
+      const fresh = await fetch(event.request);
+      if (fresh && fresh.status === 200 && fresh.type === 'basic') {
+        const cache = await caches.open(VERSION);
+        cache.put(event.request, fresh.clone());
+      }
+      return fresh;
+    })());
+    return;
+  }
 
   event.respondWith((async () => {
     try {
