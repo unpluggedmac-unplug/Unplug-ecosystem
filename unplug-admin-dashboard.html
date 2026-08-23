@@ -378,6 +378,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="analytics">Analytics</a>
         <a data-section="activitylog">Activity Log</a>
+        <a data-section="spam">Spam Filter</a>
       </div>
     </div>
 
@@ -1515,6 +1516,61 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
     
+    <!-- SPAM FILTER -->
+    <div class="admin-section" id="section-spam">
+      <div class="main-head"><div><h1>Spam Filter</h1>
+        <p>Nothing here is deleted or refused. Submissions are scored so the queue can be sorted — you still see everything.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head">Last 30 days</div>
+        <div class="panel-body" id="spamCounts"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <!-- Deliberately its own panel, above the rest. These are the readers the
+           filter is getting wrong, and a spam filter nobody checks for false
+           positives is one quietly losing people. -->
+      <div class="panel">
+        <div class="panel-head">Wrongly flagged — check these first</div>
+        <div class="panel-body" id="spamDisagreements"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">Sensitivity</div>
+        <div class="panel-body" id="spamSettings">
+          <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-end;">
+            <div>
+              <label for="spamSuspect" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Flag as suspect above</label>
+              <input id="spamSuspect" type="number" min="1" max="100" style="width:90px;">
+            </div>
+            <div>
+              <label for="spamReject" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Call it spam above</label>
+              <input id="spamReject" type="number" min="1" max="100" style="width:90px;">
+            </div>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; padding-bottom:8px;">
+              <input id="spamAutoReject" type="checkbox"> Auto-reject what it calls spam
+            </label>
+            <button class="btn btn-solid" id="spamSaveSettings" style="margin-bottom:2px;">Save</button>
+          </div>
+          <p style="font-size:12px; color:var(--slate); margin:12px 0 0; max-width:640px;">
+            Auto-reject is off, and leaving it off is the safer choice on a site this size.
+            With it off every submission still reaches you, just sorted. With it on, anything
+            scoring above the second number is rejected without being read — and a genuine
+            nomination lost that way is one nobody ever finds out about.
+          </p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">Recently scored</div>
+        <div class="panel-body" id="spamRecent" style="padding:0;"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">What the filter has learned</div>
+        <div class="panel-body" id="spamVocabulary"><div class="loading-state">Loading…</div></div>
+      </div>
+    </div>
+
     <!-- ACTIVITY LOG -->
     <div class="admin-section" id="section-activitylog">
       <div class="main-head"><div><h1>Activity Log</h1><p>Who did what, when, and from where. Search by name, reference or address.</p></div></div>
@@ -3099,6 +3155,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'claims') loadPendingClaims();
     if (section === 'inquiries') loadInquiries();
     if (section === 'activitylog') { loadActivityActions(); loadActivityLog(); }
+    if (section === 'spam') { loadSpamOverview(); loadSpamVocabulary(); }
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
@@ -9493,6 +9550,205 @@ function alFilters() {
   params.set('limit', '100');
   return params;
 }
+
+// ---------------------------------------------------------------------------
+// Spam filter
+//
+// Built with textContent throughout. Everything on this screen is text
+// somebody else typed — that is the entire point of it — and this is the
+// screen where an attacker would most expect their payload to be rendered.
+// ---------------------------------------------------------------------------
+
+function spamCell(text, style) {
+  const td = document.createElement('td');
+  td.textContent = text == null ? '' : String(text);
+  if (style) td.style.cssText = style;
+  return td;
+}
+
+function spamVerdictPill(verdict) {
+  const span = document.createElement('span');
+  span.className = 'pill ' + (verdict === 'spam' ? 'rejected' : verdict === 'suspect' ? 'pending' : 'approved');
+  span.textContent = verdict;
+  return span;
+}
+
+// One row, with the buttons that both correct the filter and teach it.
+function spamRow(item, onRuled) {
+  const tr = document.createElement('tr');
+
+  const verdictTd = document.createElement('td');
+  verdictTd.appendChild(spamVerdictPill(item.verdict));
+  const score = document.createElement('div');
+  score.textContent = 'score ' + item.score;
+  score.style.cssText = 'font-size:11px; color:var(--slate); margin-top:2px;';
+  verdictTd.appendChild(score);
+  tr.appendChild(verdictTd);
+
+  tr.appendChild(spamCell(item.target_type));
+  tr.appendChild(spamCell((item.sample || '').slice(0, 160), 'max-width:320px;'));
+
+  // Why it was scored that way. "Flagged" with no reason is not something
+  // anybody can argue with or improve.
+  const why = (item.signals || []).map((sig) => `${sig.name} +${sig.points}`).join(', ');
+  tr.appendChild(spamCell(why || '—', 'font-size:11px; color:var(--slate); max-width:220px;'));
+
+  tr.appendChild(spamCell(new Date(item.created_at).toLocaleDateString()));
+
+  const actions = document.createElement('td');
+  if (item.moderator_verdict) {
+    actions.appendChild(spamCell('you said: ' + item.moderator_verdict).firstChild
+      || document.createTextNode('you said: ' + item.moderator_verdict));
+  } else {
+    [['Not spam', 'ham'], ['Spam', 'spam']].forEach(([label, verdict]) => {
+      const btn = document.createElement('button');
+      btn.className = 'btn-mini ' + (verdict === 'ham' ? 'btn-mini-line' : 'btn-mini-solid');
+      btn.textContent = label;
+      btn.style.marginRight = '6px';
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await api('/spam/' + item.id + '/verdict', {
+            method: 'POST', body: JSON.stringify({ verdict }),
+          });
+          if (onRuled) onRuled();
+        } catch (err) {
+          btn.disabled = false;
+          showToast("Couldn't record that: " + err.message);
+        }
+      });
+      actions.appendChild(btn);
+    });
+  }
+  tr.appendChild(actions);
+  return tr;
+}
+
+async function loadSpamOverview() {
+  const counts = document.getElementById('spamCounts');
+  const recent = document.getElementById('spamRecent');
+  const disagree = document.getElementById('spamDisagreements');
+  try {
+    const data = await api('/spam/overview');
+
+    counts.innerHTML = '';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:28px; flex-wrap:wrap;';
+    [['Clean', data.last30Days.clean], ['Suspect', data.last30Days.suspect],
+     ['Spam', data.last30Days.spam], ['Reviewed by you', data.accuracy.reviewed]]
+      .forEach(([label, n]) => {
+        const box = document.createElement('div');
+        const big = document.createElement('div');
+        big.textContent = String(n);
+        big.style.cssText = 'font-size:26px; font-weight:800;';
+        const small = document.createElement('div');
+        small.textContent = label;
+        small.style.cssText = 'font-size:12px; color:var(--slate);';
+        box.appendChild(big); box.appendChild(small);
+        row.appendChild(box);
+      });
+    counts.appendChild(row);
+
+    // Sensitivity, filled from what the server actually has rather than
+    // whatever was last typed.
+    document.getElementById('spamSuspect').value = data.settings.suspect;
+    document.getElementById('spamReject').value = data.settings.reject;
+    document.getElementById('spamAutoReject').checked = Boolean(data.settings.autoReject);
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    ['Verdict', 'Form', 'What was sent', 'Why', 'When', ''].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+    });
+    table.appendChild(head);
+    (data.recent || []).forEach((item) => table.appendChild(spamRow(item, loadSpamOverview)));
+    recent.innerHTML = '';
+    recent.appendChild(table);
+
+    // The false positives.
+    const wrong = data.accuracy.wronglyFlagged;
+    disagree.innerHTML = '';
+    if (!wrong) {
+      const p = document.createElement('p');
+      p.textContent = data.accuracy.reviewed
+        ? 'None so far. Of the ' + data.accuracy.reviewed + ' you have ruled on, the filter agreed every time.'
+        : 'Nothing reviewed yet. Rule on a few below and this will show where the filter is getting it wrong.';
+      p.style.cssText = 'font-size:13px; color:var(--slate); margin:0;';
+      disagree.appendChild(p);
+    } else {
+      const warn = document.createElement('p');
+      warn.textContent = wrong + ' submission(s) were flagged and turned out to be genuine. '
+        + 'If this number climbs, raise the thresholds.';
+      warn.style.cssText = 'font-size:13px; color:var(--red); font-weight:600; margin:0 0 10px;';
+      disagree.appendChild(warn);
+      const list = await api('/spam/disagreements');
+      const t = document.createElement('table');
+      (list.items || []).forEach((item) => t.appendChild(spamRow(item)));
+      disagree.appendChild(t);
+    }
+  } catch (err) {
+    counts.textContent = 'Could not load: ' + err.message;
+  }
+}
+
+async function loadSpamVocabulary() {
+  const el = document.getElementById('spamVocabulary');
+  try {
+    const data = await api('/spam/vocabulary');
+    el.innerHTML = '';
+    const note = document.createElement('p');
+    note.textContent = data.note;
+    note.style.cssText = 'font-size:12px; color:var(--slate); margin:0 0 10px; max-width:640px;';
+    el.appendChild(note);
+
+    if (!data.tokens.length) {
+      const none = document.createElement('p');
+      none.textContent = 'Nothing learned yet. It starts contributing once you have ruled on enough submissions.';
+      none.style.cssText = 'font-size:13px; margin:0;';
+      el.appendChild(none);
+      return;
+    }
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px;';
+    data.tokens.forEach((t) => {
+      const spammy = t.spam_count > t.ham_count;
+      const chip = document.createElement('span');
+      chip.textContent = `${t.token} (${t.spam_count}/${t.ham_count})`;
+      chip.title = `${t.spam_count} times in spam, ${t.ham_count} times in genuine submissions`;
+      chip.style.cssText = 'font-size:11.5px; padding:3px 8px; border-radius:10px; '
+        + (spammy ? 'background:rgba(200,23,26,0.10); color:var(--red);'
+                  : 'background:rgba(0,0,0,0.05); color:var(--slate);');
+      wrap.appendChild(chip);
+    });
+    el.appendChild(wrap);
+  } catch (err) {
+    el.textContent = 'Could not load: ' + err.message;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const save = document.getElementById('spamSaveSettings');
+  if (!save) return;
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      await api('/spam/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          suspectThreshold: Number(document.getElementById('spamSuspect').value),
+          rejectThreshold: Number(document.getElementById('spamReject').value),
+          autoReject: document.getElementById('spamAutoReject').checked,
+        }),
+      });
+      showToast('Sensitivity saved');
+      loadSpamOverview();
+    } catch (err) {
+      showToast("Couldn't save: " + err.message);
+    } finally {
+      save.disabled = false;
+    }
+  });
+});
 
 async function loadActivityLog() {
   const body = document.getElementById('activityLogBody');

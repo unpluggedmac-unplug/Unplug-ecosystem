@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireRole } = require('../middleware/auth');
+const { spamCheck } = require('../middleware/spamCheck');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { EVENTS, trackAsync } = require('../utils/marketingEvents');
@@ -9,7 +10,7 @@ const { EVENTS, trackAsync } = require('../utils/marketingEvents');
 const router = express.Router();
 
 // POST /inquiries — public. This is what the site's Contact form submits to.
-router.post('/', publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/', publicSubmitLimiter, honeypot, spamCheck('contact enquiry'), async (req, res, next) => {
   try {
     const { name, email, subject, message } = req.body;
     if (!name || !email || !message) {

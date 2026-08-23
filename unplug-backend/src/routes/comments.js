@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { spamCheck } = require('../middleware/spamCheck');
 const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
@@ -74,7 +75,7 @@ router.get('/:targetType/:targetId', async (req, res, next) => {
 // POST /comments/:targetType/:targetId — members only. Lands in the
 // moderation queue; we tell the commenter that plainly rather than
 // implying it's live.
-router.post('/:targetType/:targetId', requireAuth, publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/:targetType/:targetId', requireAuth, publicSubmitLimiter, honeypot, spamCheck('comment'), async (req, res, next) => {
   try {
     const { targetType } = req.params;
     const targetId = Number(req.params.targetId);

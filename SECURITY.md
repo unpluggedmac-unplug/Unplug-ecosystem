@@ -163,6 +163,61 @@ while delivering the same oversized picture.
 
 ---
 
+## Spam filtering
+
+Every public form is scored on submission: the honeypot, how long the form was
+open, whether the page's JavaScript ran, link counts, a short phrase list,
+disposable-email domains, and a classifier that learns from what moderators
+decide.
+
+**It does not block anything, and that is the design.** Every submission on
+this site already goes to a moderation queue — spam was never reaching readers.
+What it was doing was burying a nomination from somebody's grandmother behind
+forty casino adverts. So the scorer sorts and explains; a moderator still sees
+everything.
+
+Auto-rejection exists and is **off**. Turning it on is a deliberate choice in
+the admin screen, and even then the row is kept and reviewable. On a site this
+size a person can read everything that arrives, and a genuine entry vanishing
+unseen costs more than a moment's reading.
+
+### What it must never do
+
+The tests are mostly about traffic that must NOT be flagged, because that is
+the failure nobody finds out about:
+
+- a nomination written in Afrikaans or isiZulu
+- somebody typing entirely in capitals, which is common among older readers
+- a two-word comment — "Beautiful." is a real comment
+- an advertiser saying they are a loan company and asking for a rate card,
+  which is a customer, not spam
+- a nomination containing two links, to a Facebook page and a shop
+
+`loan`, `insurance`, `crypto` and `casino` are deliberately **absent** from the
+phrase list. This site sells advertising.
+
+### The classifier
+
+It learns this site's spam — and, more usefully, this site's ordinary language —
+from moderator decisions. It starts silent, ignores any word seen fewer than
+five times, and can never move a score by more than 30 points, so it can nudge
+a submission towards review but never condemn one alone. What it has learned is
+visible at `GET /spam/vocabulary`, which is how somebody notices it has decided
+"Soweto" is a spam word before that costs anything.
+
+### The number to watch
+
+The admin screen puts **wrongly flagged** at the top: submissions the filter
+called spam that a moderator then approved. Those are the readers it is
+failing. A spam filter nobody checks for false positives is one quietly losing
+people.
+
+Sensitivity lives in the `settings` table (`spam_suspect_threshold`,
+`spam_reject_threshold`, `spam_autoreject_enabled`) and is adjustable from the
+dashboard without a deploy.
+
+---
+
 ## The cross-site scripting audit
 
 Two stored XSS holes were found and fixed, both proven to execute before the

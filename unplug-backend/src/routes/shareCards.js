@@ -12,6 +12,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { spamCheck } = require('../middleware/spamCheck');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { sendEmail } = require('../utils/email');
@@ -25,7 +26,7 @@ const FORMATS = ['post', 'story'];
 const trim = (v, max) => (v === null || v === undefined ? null : String(v).trim().slice(0, max) || null);
 
 // POST /share-cards — public. Anyone can submit; nobody can publish.
-router.post('/', publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/', publicSubmitLimiter, honeypot, spamCheck('share card'), async (req, res, next) => {
   try {
     const name = trim(req.body.name, 160);
     const email = (req.body.submitterEmail || '').trim().toLowerCase();

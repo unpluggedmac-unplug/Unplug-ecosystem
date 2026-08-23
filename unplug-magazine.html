@@ -3692,6 +3692,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <script src="unplug-shared.js"></script>
 <script src="unplug-seo-schema.js"></script>
 <script src="unplug-responsive-images.js"></script>
+<script src="unplug-spam-forms.js"></script>
 <script src="unplug-participation-sdk.js"></script>
 <script>
 const api = UnplugAPI.api;
@@ -7855,7 +7856,7 @@ async function loadContributor(slug) {
     try {
       const data = await api('/inquiries', {
         method: 'POST',
-        body: JSON.stringify({
+        body: JSON.stringify(UnplugForms.decorate({
           name, email,
           // The business name rides in as the subject, which is what the
           // advertiser sequence shows and what an admin sees in the queue.
@@ -7863,7 +7864,7 @@ async function loadContributor(slug) {
           message,
           enquiryType: 'advertising',
           website: document.getElementById('advWebsite').value,
-        }),
+        })),
       });
       show(data.message || 'Thank you — we will be in touch.', false);
       ['advName', 'advEmail', 'advBusiness', 'advMessage'].forEach((id) => { document.getElementById(id).value = ''; });
@@ -8185,7 +8186,7 @@ async function loadContributor(slug) {
     try {
       const data = await api('/shoutouts/nominate', {
         method: 'POST',
-        body: JSON.stringify({ nomineeName, message, nomineeSocial, email, website }),
+        body: JSON.stringify(UnplugForms.decorate({ nomineeName, message, nomineeSocial, email, website })),
       });
 
       // Only when they actually ticked the box AND gave an address. Adding
@@ -8194,7 +8195,7 @@ async function loadContributor(slug) {
       if (subscribe && email) {
         try {
           await api('/newsletter/subscribe', {
-            method: 'POST', body: JSON.stringify({ email, website }),
+            method: 'POST', body: JSON.stringify(UnplugForms.decorate({ email, website })),
           });
         } catch (e) { /* the nomination is what matters; the list can wait */ }
       }
@@ -8887,7 +8888,7 @@ function setupDcJobModal() {
     const btn = document.getElementById('dcJobSubmit');
     btn.disabled = true; btn.textContent = 'Submitting...';
     try {
-      const data = await api('/deaf-community/jobs', { method: 'POST', body: JSON.stringify(payload) });
+      const data = await api('/deaf-community/jobs', { method: 'POST', body: JSON.stringify(UnplugForms.decorate(payload)) });
       msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for review.';
       ['dcJobBusiness', 'dcJobTitle', 'dcJobDesc', 'dcJobEmail', 'dcJobSalary'].forEach((id) => document.getElementById(id).value = '');
       document.getElementById('dcJobAgree').checked = false;
@@ -8927,7 +8928,7 @@ function setupDcPassportModal() {
     const btn = document.getElementById('dcPassSubmit');
     btn.disabled = true; btn.textContent = 'Submitting...';
     try {
-      const data = await api('/deaf-community/passports', { method: 'POST', body: JSON.stringify(payload) });
+      const data = await api('/deaf-community/passports', { method: 'POST', body: JSON.stringify(UnplugForms.decorate(payload)) });
       msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for verification.';
       ['dcPassName', 'dcPassEmail', 'dcPassImage', 'dcPassSkills', 'dcPassCerts', 'dcPassComm', 'dcPassAvail'].forEach((id) => document.getElementById(id).value = '');
     } catch (err) {

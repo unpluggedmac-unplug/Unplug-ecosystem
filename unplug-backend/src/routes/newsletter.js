@@ -3,6 +3,7 @@ const { recordConversionAsync } = require('../utils/analyticsRecorder');
 const { EVENTS, trackAsync } = require('../utils/marketingEvents');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { spamCheck } = require('../middleware/spamCheck');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 
@@ -10,7 +11,7 @@ const router = express.Router();
 
 // POST /newsletter/subscribe — public. Stores the email; duplicate signups
 // are silently ignored (ON CONFLICT), so re-subscribing is harmless.
-router.post('/subscribe', publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/subscribe', publicSubmitLimiter, honeypot, spamCheck('newsletter signup'), async (req, res, next) => {
   try {
     const email = (req.body.email || '').trim().toLowerCase();
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
