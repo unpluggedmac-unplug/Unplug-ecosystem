@@ -1517,9 +1517,36 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     
     <!-- ACTIVITY LOG -->
     <div class="admin-section" id="section-activitylog">
-      <div class="main-head"><div><h1>Activity Log</h1><p>The most recent 100 admin actions — who did what, and when.</p></div></div>
+      <div class="main-head"><div><h1>Activity Log</h1><p>Who did what, when, and from where. Search by name, reference or address.</p></div></div>
       <div class="panel">
+        <div class="panel-body" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; border-bottom:1px solid var(--line);">
+          <div style="flex:1 1 220px;">
+            <label for="alSearch" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Search</label>
+            <input id="alSearch" type="search" placeholder="A name, a reference, part of an email…" style="width:100%;">
+          </div>
+          <div style="flex:0 1 200px;">
+            <label for="alAction" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Action</label>
+            <select id="alAction" style="width:100%;"><option value="">Every action</option></select>
+          </div>
+          <div style="flex:0 1 150px;">
+            <label for="alFrom" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">From</label>
+            <input id="alFrom" type="date" style="width:100%;">
+          </div>
+          <div style="flex:0 1 150px;">
+            <label for="alTo" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">To</label>
+            <input id="alTo" type="date" style="width:100%;">
+          </div>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; padding-bottom:8px;">
+            <input id="alHighRisk" type="checkbox"> High risk only
+          </label>
+          <button class="btn" id="alClear" style="margin-bottom:2px;">Clear</button>
+        </div>
         <div class="panel-body" id="activityLogBody" style="padding:0;"></div>
+        <div class="panel-body" id="activityLogPager" style="display:none; justify-content:space-between; align-items:center; border-top:1px solid var(--line);">
+          <button class="btn" id="alPrev">Previous</button>
+          <span id="alCount" style="font-size:13px;"></span>
+          <button class="btn" id="alNext">Next</button>
+        </div>
       </div>
     </div>
 
@@ -3071,7 +3098,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'reviews') loadPendingReviews();
     if (section === 'claims') loadPendingClaims();
     if (section === 'inquiries') loadInquiries();
-    if (section === 'activitylog') loadActivityLog();
+    if (section === 'activitylog') { loadActivityActions(); loadActivityLog(); }
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
@@ -9445,28 +9472,146 @@ async function loadInquiries() {
 // ---------------------------------------------------------------------------
 // Activity Log
 // ---------------------------------------------------------------------------
+let alPage = 1;
+
+function alFilters() {
+  const v = (id) => (document.getElementById(id) || {}).value || '';
+  const params = new URLSearchParams();
+  if (v('alSearch').trim()) params.set('q', v('alSearch').trim());
+  if (v('alAction')) params.set('action', v('alAction'));
+  if (v('alFrom')) params.set('from', v('alFrom'));
+  // A date input gives midnight. Without this, "to: today" excludes everything
+  // that happened today, which reads as the log being broken.
+  if (v('alTo')) params.set('to', v('alTo') + 'T23:59:59');
+  const hr = document.getElementById('alHighRisk');
+  if (hr && hr.checked) params.set('highRiskOnly', 'true');
+  params.set('page', String(alPage));
+  params.set('limit', '100');
+  return params;
+}
+
 async function loadActivityLog() {
   const body = document.getElementById('activityLogBody');
+  const pager = document.getElementById('activityLogPager');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {
-    const data = await api('/admin/activity-log');
+    const data = await api('/admin/activity-log?' + alFilters().toString());
     if (!data.activity || data.activity.length === 0) {
-      body.innerHTML = '<div class="empty-state">No activity recorded yet.</div>';
+      body.innerHTML = '<div class="empty-state">Nothing matches those filters.</div>';
+      if (pager) pager.style.display = 'none';
       return;
     }
+
+    // BUILT WITH textContent, NOT innerHTML.
+    //
+    // `details` carries values people typed — a profile display name, an
+    // article title. Interpolating those into innerHTML made this page a
+    // stored XSS: a member could set their display name to an <img onerror>
+    // payload and have it run with an admin's session, on the very screen an
+    // admin opens to investigate. Cells are created and filled as text, so
+    // markup in a name is shown as the characters somebody typed.
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Action</th><th>Details</th><th>By</th><th>When</th></tr>';
+    const head = document.createElement('tr');
+    for (const label of ['', 'Action', 'Details', 'By', 'From', 'When']) {
+      const th = document.createElement('th');
+      th.textContent = label;
+      head.appendChild(th);
+    }
+    table.appendChild(head);
+
     data.activity.forEach((a) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${a.action.replace(/_/g, ' ')}</td><td>${a.details || '—'}</td><td>${a.admin_email || '—'}</td><td>${new Date(a.created_at).toLocaleString()}</td>`;
+
+      const risk = document.createElement('td');
+      if (a.high_risk) {
+        risk.textContent = '!';
+        risk.title = 'High-risk action';
+        risk.style.cssText = 'color:var(--red); font-weight:800; text-align:center;';
+      }
+      tr.appendChild(risk);
+
+      const cells = [
+        String(a.action || '').replace(/_/g, ' '),
+        a.details || '—',
+        a.admin_name || a.admin_email || '—',
+        a.ip_address || '—',
+        new Date(a.created_at).toLocaleString(),
+      ];
+      cells.forEach((value, idx) => {
+        const td = document.createElement('td');
+        td.textContent = value;
+        // The address is worth being able to copy out and search on.
+        if (idx === 3 && a.ip_address) td.style.cssText = 'font-family:monospace; font-size:12px;';
+        tr.appendChild(td);
+      });
       table.appendChild(tr);
     });
+
     body.innerHTML = '';
     body.appendChild(table);
+
+    if (pager) {
+      const p = data.pagination || { page: 1, totalPages: 1, total: data.activity.length };
+      pager.style.display = 'flex';
+      document.getElementById('alCount').textContent =
+        `${p.total} entr${p.total === 1 ? 'y' : 'ies'} · page ${p.page} of ${p.totalPages}`;
+      document.getElementById('alPrev').disabled = p.page <= 1;
+      document.getElementById('alNext').disabled = p.page >= p.totalPages;
+    }
   } catch (err) {
-    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+    body.textContent = 'Could not load: ' + err.message;
   }
 }
+
+// Populates the action filter from what has actually been recorded, so a new
+// kind of entry appears the first time it happens rather than when somebody
+// remembers to add it here.
+async function loadActivityActions() {
+  const select = document.getElementById('alAction');
+  if (!select || select.dataset.loaded) return;
+  try {
+    const data = await api('/admin/activity-log/actions');
+    (data.actions || []).forEach((a) => {
+      const opt = document.createElement('option');
+      opt.value = a.action;
+      opt.textContent = `${a.action.replace(/_/g, ' ')} (${a.n})`;
+      select.appendChild(opt);
+    });
+    select.dataset.loaded = '1';
+  } catch (e) { /* the filter is a convenience; the log still works without it */ }
+}
+
+// Typing re-runs the search, but only once the typing stops — a request per
+// keystroke would be a lot of queries to answer the same question.
+let alDebounce;
+function alRefresh(resetPage) {
+  if (resetPage !== false) alPage = 1;
+  clearTimeout(alDebounce);
+  alDebounce = setTimeout(loadActivityLog, 250);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const on = (id, ev, fn) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(ev, fn);
+  };
+  on('alSearch', 'input', () => alRefresh());
+  on('alAction', 'change', () => alRefresh());
+  on('alFrom', 'change', () => alRefresh());
+  on('alTo', 'change', () => alRefresh());
+  on('alHighRisk', 'change', () => alRefresh());
+  on('alClear', 'click', () => {
+    ['alSearch', 'alAction', 'alFrom', 'alTo'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const hr = document.getElementById('alHighRisk');
+    if (hr) hr.checked = false;
+    alRefresh();
+  });
+  on('alPrev', 'click', () => { if (alPage > 1) { alPage -= 1; loadActivityLog(); } });
+  on('alNext', 'click', () => { alPage += 1; loadActivityLog(); });
+});
 
 // ---------------------------------------------------------------------------
 // Vouchers

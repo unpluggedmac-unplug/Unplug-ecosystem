@@ -63,6 +63,13 @@ const app = express();
 // https scheme (via x-forwarded-proto) so generated URLs aren't http://.
 app.set('trust proxy', true);
 
+// Makes the caller's address available to anything running during the request,
+// without threading `req` through every function that might want it. The audit
+// log reads it from here: logActivity is called from seventy-eight places, and
+// editing all of them to pass an address is how some of them get missed — and
+// a log with unexplained holes is worse than one with none.
+app.use(require('./middleware/requestContext').middleware);
+
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 app.use(express.json());
