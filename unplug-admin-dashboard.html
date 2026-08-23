@@ -366,6 +366,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button type="button" class="nav-group-head"><span>Website Settings</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
         <a data-section="sitesettings">Site Settings</a>
+        <a data-section="redirects">Redirects &amp; 404s</a>
         <a data-section="pagecms">Page Content</a>
         <a data-section="placements">Marketplace Placements</a>
       </div>
@@ -661,6 +662,42 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div id="featuredMembersAdminBody"><div class="loading-state">Loading&hellip;</div></div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- REDIRECTS & 404s -->
+    <div class="admin-section" id="section-redirects">
+      <div class="main-head"><div><h1>Redirects &amp; 404s</h1><p>When a page moves, a redirect sends anyone with the old link to the new place instead of showing them a dead end. The list below the form is every address people actually asked for and did not find &mdash; the useful redirects come from there rather than from memory.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Add a redirect</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label for="rdFrom">Old path</label><input id="rdFrom" placeholder="/old-page"></div>
+            <div><label for="rdTo">Send them to</label><input id="rdTo" placeholder="/?p=news or https://..."></div>
+            <div><label for="rdStatus">Type</label>
+              <select id="rdStatus">
+                <option value="301">301 &mdash; moved for good</option>
+                <option value="302">302 &mdash; temporary</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div style="grid-column:1/-2;"><label for="rdNote">Note <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; optional, for your own reference</span></label><input id="rdNote" placeholder="e.g. printed on the March flyer"></div>
+            <div><label>&nbsp;</label><button class="btn btn-solid" style="width:100%;" id="rdAddBtn">Add redirect</button></div>
+          </div>
+          <p style="font-size:12.5px; color:var(--slate); margin-top:6px;">Use 301 when a page has moved permanently &mdash; search engines pass the old page's standing to the new one. Use 302 only while something is temporarily elsewhere.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Pages people could not find</h3></div>
+        <div class="panel-body" id="notFoundBody" style="padding:0;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Redirects in place</h3></div>
+        <div class="panel-body" id="redirectsBody" style="padding:0;"></div>
       </div>
     </div>
 
@@ -3013,6 +3050,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'deafjobs') loadDeafJobs();
     if (section === 'deafpassports') loadDeafPassports();
     if (section === 'sitesettings') { loadSiteSettings(); loadFeaturedMembersAdmin(); }
+    if (section === 'redirects') loadRedirects();
     if (section === 'halloffame') { loadHallOfFame(); populateHofUserPicker(); }
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payqueue') loadPaymentQueue();
@@ -7124,6 +7162,115 @@ async function setFeaturedMemberState(userId, state) {
   } catch (e) { showToast(e.message || 'Could not save.', true); }
 }
 
+// ---------------------------------------------------------------------------
+// Redirects and the 404 log.
+//
+// Two tables that feed each other: the misses are where redirects come from,
+// and creating a redirect takes the miss off the list. Deliberately one screen
+// rather than two, so "what is broken" and "send it here instead" are never a
+// navigation apart.
+// ---------------------------------------------------------------------------
+async function loadRedirects() {
+  const rulesBody = document.getElementById('redirectsBody');
+  const missBody = document.getElementById('notFoundBody');
+  if (!rulesBody || !missBody) return;
+  rulesBody.innerHTML = '<div class="loading-state">Loading&hellip;</div>';
+  missBody.innerHTML = '<div class="loading-state">Loading&hellip;</div>';
+
+  try {
+    const data = await api('/admin/redirects');
+    renderNotFound(missBody, data.notFound || []);
+    renderRedirects(rulesBody, data.redirects || []);
+  } catch (e) {
+    const msg = '<div class="empty-state">Could not load: ' + escapeHtmlAdmin(e.message || 'unknown error') + '</div>';
+    rulesBody.innerHTML = msg;
+    missBody.innerHTML = msg;
+  }
+}
+
+function renderNotFound(body, list) {
+  if (!list.length) {
+    body.innerHTML = '<div class="empty-state">Nothing has 404ed since this started recording. Broken links will appear here as people hit them.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Path asked for</th><th>Times</th><th>Last seen</th><th>Came from</th><th></th></tr>';
+  list.forEach((n) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><code style="font-size:12.5px;">' + escapeHtmlAdmin(n.path) + '</code></td>'
+      + '<td>' + n.hit_count + '</td>'
+      + '<td style="white-space:nowrap; font-size:12px;">' + new Date(n.last_seen_at).toLocaleDateString() + '</td>'
+      + '<td style="font-size:11.5px; color:var(--slate); max-width:220px; overflow:hidden; text-overflow:ellipsis;">'
+      + (n.last_referrer ? escapeHtmlAdmin(n.last_referrer) : '&mdash;') + '</td>'
+      + '<td><div class="row-actions">'
+      + '<button class="approve" data-act="fix">Add redirect</button>'
+      + '<button class="toggle" data-act="ignore">Ignore</button>'
+      + '</div></td>';
+    // "Add redirect" fills the form rather than opening a dialog. The path is
+    // already known, and retyping it is exactly where a typo comes from.
+    tr.querySelector('[data-act="fix"]').addEventListener('click', () => {
+      document.getElementById('rdFrom').value = n.path;
+      document.getElementById('rdFrom').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('rdTo').focus();
+    });
+    tr.querySelector('[data-act="ignore"]').addEventListener('click', async () => {
+      try {
+        await api('/admin/not-found', { method: 'PATCH', body: JSON.stringify({ path: n.path }) });
+        showToast('Ignored.');
+        loadRedirects();
+      } catch (e) { showToast(e.message, true); }
+    });
+    table.appendChild(tr);
+  });
+  body.innerHTML = '';
+  body.appendChild(table);
+}
+
+function renderRedirects(body, list) {
+  if (!list.length) {
+    body.innerHTML = '<div class="empty-state">No redirects yet.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Old path</th><th>Goes to</th><th>Type</th><th>Followed</th><th>Status</th><th></th></tr>';
+  list.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><code style="font-size:12.5px;">' + escapeHtmlAdmin(r.from_path) + '</code>'
+      + (r.note ? '<div style="font-size:11.5px; color:var(--slate);">' + escapeHtmlAdmin(r.note) + '</div>' : '')
+      + '</td>'
+      + '<td style="font-size:12.5px;">' + escapeHtmlAdmin(r.to_url) + '</td>'
+      + '<td>' + r.status_code + '</td>'
+      + '<td>' + r.hit_count
+      + (r.last_hit_at ? '<div style="font-size:11px; color:var(--slate);">last ' + new Date(r.last_hit_at).toLocaleDateString() + '</div>' : '')
+      + '</td>'
+      + '<td><span class="status-pill ' + (r.is_active ? 'approved' : 'rejected') + '">'
+      + (r.is_active ? 'On' : 'Off') + '</span></td>'
+      + '<td><div class="row-actions">'
+      + '<button class="toggle">' + (r.is_active ? 'Turn off' : 'Turn on') + '</button>'
+      + '<button class="reject">Delete</button>'
+      + '</div></td>';
+    tr.querySelector('.toggle').addEventListener('click', async () => {
+      try {
+        await api('/admin/redirects/' + r.id, {
+          method: 'PATCH', body: JSON.stringify({ isActive: !r.is_active }),
+        });
+        loadRedirects();
+      } catch (e) { showToast(e.message, true); }
+    });
+    tr.querySelector('.reject').addEventListener('click', async () => {
+      if (!confirm('Delete the redirect for ' + r.from_path + '? Anyone still using that link will get a 404 again.')) return;
+      try {
+        await api('/admin/redirects/' + r.id, { method: 'DELETE' });
+        showToast('Redirect deleted.');
+        loadRedirects();
+      } catch (e) { showToast(e.message, true); }
+    });
+    table.appendChild(tr);
+  });
+  body.innerHTML = '';
+  body.appendChild(table);
+}
+
 async function loadSiteSettings() {
   try {
     const data = await api('/admin/settings');
@@ -7135,6 +7282,30 @@ async function loadSiteSettings() {
     showToast(err.message, true);
   }
 }
+document.getElementById('rdAddBtn').addEventListener('click', async () => {
+  const fromPath = document.getElementById('rdFrom').value.trim();
+  const toUrl = document.getElementById('rdTo').value.trim();
+  if (!fromPath || !toUrl) { showToast('Give both the old path and where to send people.', true); return; }
+  try {
+    await api('/admin/redirects', {
+      method: 'POST',
+      body: JSON.stringify({
+        fromPath: fromPath,
+        toUrl: toUrl,
+        statusCode: Number(document.getElementById('rdStatus').value),
+        note: document.getElementById('rdNote').value.trim(),
+      }),
+    });
+    showToast('Redirect added — it is live straight away.');
+    ['rdFrom', 'rdTo', 'rdNote'].forEach((id) => { document.getElementById(id).value = ''; });
+    loadRedirects();
+  } catch (e) {
+    // The server explains chains and unsafe destinations in words. Showing
+    // that verbatim is more use than a generic failure.
+    showToast(e.message || 'Could not add that redirect.', true);
+  }
+});
+
 document.getElementById('saveFeaturedCountBtn').addEventListener('click', async () => {
   const raw = document.getElementById('featuredMembersCount').value.trim();
   const n = parseInt(raw, 10);

@@ -23,6 +23,8 @@ const marketplaceRoutes = require('./routes/marketplace');
 const highlightRoutes = require('./routes/highlights');
 const salesConsultantRoutes = require('./routes/salesConsultants');
 const uploadRoutes = require('./routes/uploads');
+const imageRoutes = require('./routes/images');
+const maintenanceRoutes = require('./routes/maintenance');
 const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
@@ -52,6 +54,7 @@ const profileAnalyticsRoutes = require('./routes/profileAnalytics');
 const badgeRoutes = require('./routes/badges');
 const orderRoutes = require('./routes/orders');
 const myUnplugRoutes = require('./routes/myUnplug');
+const seoRoutes = require('./routes/seo');
 
 const app = express();
 
@@ -91,6 +94,10 @@ app.use('/marketplace', marketplaceRoutes);
 app.use('/highlights', highlightRoutes);
 app.use('/sales-consultants', salesConsultantRoutes);
 app.use('/uploads', uploadRoutes);
+// Which stored images have responsive versions. Public and cacheable — the
+// frontend asks once and treats a late or missing answer as "originals only".
+app.use('/images', imageRoutes);
+app.use('/maintenance', maintenanceRoutes);
 // Serves the actual uploaded files back out (GET /uploads/<filename>).
 // Mounting static alongside the POST-only uploadRoutes above is safe —
 // express.static only ever handles GET/HEAD, so it never intercepts the
@@ -131,6 +138,13 @@ app.use('/profile-analytics', profileAnalyticsRoutes);
 app.use('/badges', badgeRoutes);
 app.use('/orders', orderRoutes);
 app.use('/my-unplug', myUnplugRoutes);
+
+// SEO: sitemaps, robots.txt, redirect lookup and the 404 log.
+//
+// Mounted at the ROOT rather than under a prefix, because /sitemap.xml and
+// /robots.txt are addresses crawlers ask for by name — they cannot be moved
+// under /seo/. The admin and lookup endpoints inside carry their own paths.
+app.use('/', seoRoutes);
 
 // Catches any request that didn't match a route above, so the API always
 // responds with clean JSON — never Express's default HTML error page,
@@ -187,6 +201,23 @@ setInterval(() => {
     .then((r) => { if (r && r.sent) console.log(`[birthday] sent ${r.sent} greeting(s) for ${r.date}`); })
     .catch((err) => console.error('[birthday] check failed:', err.message));
 }, BIRTHDAY_CHECK_MS);
+
+// Database hygiene: expired tokens and analytics past their retention window,
+// then VACUUM ANALYZE. Same shape as the birthday check above, and same
+// caveat — this only fires while the instance is awake, so POST
+// /maintenance/cleanup with UNPLUG_CLEANUP_SECRET is there for a scheduler
+// that wants a guarantee. Running it twice in a day removes nothing extra.
+const { runCleanup } = require('./utils/databaseCleanup');
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+setInterval(() => {
+  runCleanup({})
+    .then((r) => {
+      if (r.rowsRemoved) {
+        console.log(`[cleanup] removed ${r.rowsRemoved} expired row(s) in ${r.ms}ms`);
+      }
+    })
+    .catch((err) => console.error('[cleanup] failed:', err.message));
+}, CLEANUP_INTERVAL_MS);
 
 // Participation engine: rankings + daily homepage recalculation. No
 // pg_cron on this Postgres, so this runs the same way the birthday

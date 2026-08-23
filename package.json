@@ -1,0 +1,26 @@
+{
+  "name": "unplug-frontend",
+  "version": "1.0.0",
+  "description": "Unplug Magazine frontend \u2014 static pages plus a production build step.",
+  "scripts": {
+    "build": "node build.js",
+    "serve:src": "python -m http.server 4173",
+    "serve:dist": "cd dist && python -m http.server 4174"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/unpluggedmac-unplug/Unplug-ecosystem.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/unpluggedmac-unplug/Unplug-ecosystem/issues"
+  },
+  "homepage": "https://github.com/unpluggedmac-unplug/Unplug-ecosystem#readme",
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "private": true
+}

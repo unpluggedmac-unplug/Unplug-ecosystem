@@ -10,20 +10,26 @@ const SITE_URL = (process.env.SITE_URL || 'https://www.unplugnews.com').replace(
 
 // Pages that always exist, with rough change frequencies. Home and news move
 // often; the legal pages almost never do.
+//
+// The paths are the CANONICAL "/?p=..." form, matching what each page's
+// canonical tag actually says. They used to be "/unplug-magazine.html?p=...",
+// which pointed a crawler at one address only for the page to declare a
+// different one — wasted crawl, and the two forms competing for the same
+// content.
 const STATIC_PAGES = [
-  { path: '/unplug-magazine.html', freq: 'daily', priority: '1.0' },
-  { path: '/unplug-magazine.html?p=news', freq: 'daily', priority: '0.9' },
-  { path: '/unplug-magazine.html?p=directory', freq: 'weekly', priority: '0.8' },
-  { path: '/unplug-magazine.html?p=top10', freq: 'weekly', priority: '0.7' },
-  { path: '/unplug-magazine.html?p=editions', freq: 'weekly', priority: '0.7' },
-  { path: '/unplug-magazine.html?p=deafcommunity', freq: 'weekly', priority: '0.7' },
-  { path: '/unplug-magazine.html?p=competitions', freq: 'weekly', priority: '0.6' },
-  { path: '/unplug-magazine.html?p=gallery', freq: 'monthly', priority: '0.5' },
-  { path: '/unplug-magazine.html?p=about', freq: 'monthly', priority: '0.5' },
-  { path: '/unplug-magazine.html?p=contact', freq: 'monthly', priority: '0.5' },
-  { path: '/unplug-magazine.html?p=privacy', freq: 'yearly', priority: '0.3' },
-  { path: '/unplug-magazine.html?p=terms', freq: 'yearly', priority: '0.3' },
-  { path: '/unplug-magazine.html?p=refunds', freq: 'yearly', priority: '0.3' },
+  { path: '/', freq: 'daily', priority: '1.0' },
+  { path: '/?p=news', freq: 'daily', priority: '0.9' },
+  { path: '/?p=directory', freq: 'weekly', priority: '0.8' },
+  { path: '/?p=top10', freq: 'weekly', priority: '0.7' },
+  { path: '/?p=editions', freq: 'weekly', priority: '0.7' },
+  { path: '/?p=deafcommunity', freq: 'weekly', priority: '0.7' },
+  { path: '/?p=competitions', freq: 'weekly', priority: '0.6' },
+  { path: '/?p=gallery', freq: 'monthly', priority: '0.5' },
+  { path: '/?p=about', freq: 'monthly', priority: '0.5' },
+  { path: '/?p=contact', freq: 'monthly', priority: '0.5' },
+  { path: '/?p=privacy', freq: 'yearly', priority: '0.3' },
+  { path: '/?p=terms', freq: 'yearly', priority: '0.3' },
+  { path: '/?p=refunds', freq: 'yearly', priority: '0.3' },
 ];
 
 // & < > etc. must be escaped inside XML or the whole document fails to parse
@@ -50,20 +56,34 @@ function urlEntry(loc, lastmod, freq, priority) {
 // discoverable without anyone regenerating a file.
 router.get('/sitemap.xml', async (req, res, next) => {
   try {
-    const [articles, profiles] = await Promise.all([
-      pool.query("SELECT id, published_at, created_at FROM articles WHERE status = 'approved' ORDER BY id"),
-      pool.query("SELECT slug, updated_at FROM profiles WHERE status = 'approved' ORDER BY id"),
+    const [articles, profiles, projects] = await Promise.all([
+      // scheduled_for matters: an approved article dated next week is not
+      // readable yet, and listing it invites a crawl that 404s — which is how
+      // a site teaches Google its sitemap cannot be trusted.
+      pool.query(`SELECT id, published_at, created_at FROM articles
+                   WHERE status = 'approved'
+                     AND (scheduled_for IS NULL OR scheduled_for <= CURRENT_DATE)
+                   ORDER BY id`),
+      pool.query(`SELECT slug, updated_at FROM profiles
+                   WHERE status = 'approved' AND slug IS NOT NULL ORDER BY id`),
+      // Investor project showcases are public pages too and were missing.
+      pool.query(`SELECT id, updated_at FROM projects
+                   WHERE status = 'published' ORDER BY id`),
     ]);
 
     const entries = [
       ...STATIC_PAGES.map((p) => urlEntry(SITE_URL + p.path, null, p.freq, p.priority)),
       ...articles.rows.map((a) => urlEntry(
-        `${SITE_URL}/unplug-magazine.html?p=article&id=${a.id}`,
+        `${SITE_URL}/?p=article&id=${a.id}`,
         a.published_at || a.created_at, 'monthly', '0.8'
       )),
       ...profiles.rows.map((p) => urlEntry(
-        `${SITE_URL}/unplug-magazine.html?p=profile&slug=${encodeURIComponent(p.slug)}`,
+        `${SITE_URL}/?p=profile&slug=${encodeURIComponent(p.slug)}`,
         p.updated_at, 'monthly', '0.6'
+      )),
+      ...projects.rows.map((pr) => urlEntry(
+        `${SITE_URL}/?p=project&id=${pr.id}`,
+        pr.updated_at, 'monthly', '0.5'
       )),
     ];
 
@@ -80,8 +100,15 @@ router.get('/sitemap.xml', async (req, res, next) => {
   }
 });
 
-// GET /robots.txt — served here too so the API host doesn't get crawled as if
-// it were the site.
+// GET /robots.txt — for the API HOST ONLY, and deliberately "Disallow: /".
+//
+// This is the opposite of what the public site serves, and that is correct:
+// nothing on the API is a page a reader should find in search results, and an
+// indexed JSON endpoint competes with the real page for the same content.
+//
+// IT MUST NEVER BE PROXIED ONTO THE PUBLIC DOMAIN. Serving this file at
+// www.unplugnews.com would tell every crawler to index nothing at all. The
+// public robots.txt is a static file in the repository root.
 router.get('/robots.txt', (req, res) => {
   res.type('text/plain').send(
     'User-agent: *\nDisallow: /\n\nSitemap: ' + SITE_URL + '/sitemap.xml\n'

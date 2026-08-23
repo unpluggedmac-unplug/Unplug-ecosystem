@@ -12,6 +12,8 @@ const router = express.Router();
 //   SUPABASE_URL          e.g. https://xxxx.supabase.co
 //   SUPABASE_SERVICE_KEY  the service_role key (server-side only, never public)
 //   SUPABASE_BUCKET       a PUBLIC storage bucket name, e.g. "uploads"
+const { storeDerivatives } = require('../utils/imageDerivativeStore');
+
 const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET } = process.env;
 const supabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY && SUPABASE_BUCKET);
 
@@ -30,25 +32,13 @@ const supabasePrivateConfigured = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY);
 async function uploadToSupabase(file) {
   const buffer = fs.readFileSync(file.path);
   const objectPath = `${Date.now()}-${file.filename}`;
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${objectPath}`, {
-    method: 'POST',
-    headers: {
-      // Works with both the legacy service_role JWT and the new sb_secret_*
-      // keys. The Storage API gateway expects the key in the `apikey` header
-      // as well as the Bearer token, so we send both.
-      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-      apikey: SUPABASE_SERVICE_KEY,
-      'Content-Type': file.mimetype || 'application/octet-stream',
-      'x-upsert': 'true',
-    },
-    body: buffer,
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`Supabase Storage upload failed (${res.status}): ${detail}`);
-  }
+  const url = await putPublicObject(objectPath, buffer, file.mimetype);
   fs.unlink(file.path, () => {}); // best-effort cleanup of the local temp file
-  return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${objectPath}`;
+  // The key and the bytes come back with the URL because the caller needs both
+  // to build responsive derivatives. They are RETURNED, not stashed on the
+  // function: two uploads landing at once would otherwise overwrite each
+  // other's key, and the second image would get the first one's derivatives.
+  return { url, key: objectPath, buffer };
 }
 
 // Same upload mechanics as uploadToSupabase above, but targets the PRIVATE
@@ -83,14 +73,33 @@ async function uploadToSupabasePrivate(file) {
 // no local file for those, just bytes already held in memory, and unlike a
 // proof-of-payment upload an invoice/receipt is fine to be a plain public
 // link (it's what WE billed, not a bank statement).
-async function uploadBufferToSupabase(buffer, filename, mimetype) {
-  const objectPath = `${Date.now()}-${filename}`;
+// HOW LONG A STORED FILE MAY BE CACHED.
+//
+// Supabase serves uploads with "Cache-Control: no-cache" unless told otherwise,
+// which is why every image on the site is revalidated on every single page
+// view — including the 1.9 MB one. Every object here is written under a key
+// containing a timestamp and a random name, and is never rewritten, so the
+// bytes at a given URL can never change. That is the definition of immutable,
+// and a year is the longest max-age browsers respect.
+const STORAGE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+// Puts bytes in the PUBLIC bucket at an exact key and returns the public URL.
+//
+// The key is passed in rather than invented here, because responsive
+// derivatives have to land at names the frontend can work out for itself
+// ("derivatives/<original>-800.avif"). Callers that just want a unique name
+// use uploadBufferToSupabase below, which is this function plus a timestamp.
+async function putPublicObject(objectPath, buffer, mimetype) {
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${objectPath}`, {
     method: 'POST',
     headers: {
+      // Works with both the legacy service_role JWT and the new sb_secret_*
+      // keys. The Storage API gateway expects the key in the `apikey` header
+      // as well as the Bearer token, so we send both.
       Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
       apikey: SUPABASE_SERVICE_KEY,
       'Content-Type': mimetype || 'application/octet-stream',
+      'cache-control': STORAGE_CACHE_CONTROL,
       'x-upsert': 'true',
     },
     body: buffer,
@@ -100,6 +109,10 @@ async function uploadBufferToSupabase(buffer, filename, mimetype) {
     throw new Error(`Supabase Storage upload failed (${res.status}): ${detail}`);
   }
   return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${objectPath}`;
+}
+
+async function uploadBufferToSupabase(buffer, filename, mimetype) {
+  return putPublicObject(`${Date.now()}-${filename}`, buffer, mimetype);
 }
 
 // Fetches a file back out of the private bucket with the service-role key —
@@ -174,8 +187,36 @@ router.post('/pdf', requireRole('admin'), (req, res) => {
 
     if (supabaseConfigured) {
       try {
-        const url = await uploadToSupabase(req.file);
-        return res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'supabase' });
+        const { url, key, buffer } = await uploadToSupabase(req.file);
+
+        // Responsive derivatives, built now so a reader never waits for them.
+        //
+        // Deliberately AWAITED rather than left running after the response.
+        // Render's free instance sleeps when idle, so work started after the
+        // reply is work that may simply never finish — and an image recorded
+        // as having derivatives that were never uploaded is the one failure
+        // that breaks the page rather than merely slowing it. The uploader
+        // waits a few seconds; the site stays correct.
+        //
+        // A failure here is NOT a failed upload. The original is already
+        // stored and is what the page will serve, exactly as before this
+        // pipeline existed.
+        let derivatives = null;
+        try {
+          derivatives = await storeDerivatives({ key, buffer, putObject: putPublicObject });
+        } catch (derr) {
+          console.error('[uploads] derivatives failed for', key, '-', derr.message);
+        }
+
+        return res.status(201).json({
+          url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'supabase',
+          // Reported so an admin screen can say what happened, and so the
+          // response is honest about whether the responsive versions exist.
+          responsive: derivatives && derivatives.made > 0
+            ? { widths: derivatives.widths, formats: derivatives.formats,
+                bytes: derivatives.derivativeBytes }
+            : null,
+        });
       } catch (e) {
         // Same reasoning as the image route: never fall back to Render's
         // ephemeral disk, or the edition PDF disappears on the next redeploy
@@ -237,7 +278,7 @@ router.post('/', requireAuth, (req, res) => {
 
     if (supabaseConfigured) {
       try {
-        const url = await uploadToSupabase(req.file);
+        const { url } = await uploadToSupabase(req.file);
         return res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'supabase' });
       } catch (e) {
         // Do NOT silently fall back to local disk in production: Render's disk is
@@ -301,6 +342,8 @@ function isPublicStorageUrl(url) {
 
 router.fetchFromSupabasePrivate = fetchFromSupabasePrivate;
 router.uploadBufferToSupabase = uploadBufferToSupabase;
+router.putPublicObject = putPublicObject;
+router.STORAGE_CACHE_CONTROL = STORAGE_CACHE_CONTROL;
 router.uploadBufferToSupabasePrivate = uploadBufferToSupabasePrivate;
 router.isPublicStorageUrl = isPublicStorageUrl;
 router.supabaseConfigured = supabaseConfigured;
