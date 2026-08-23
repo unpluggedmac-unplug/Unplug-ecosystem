@@ -60,6 +60,7 @@ const PAGES = [
 // keep the cache granular.
 const MODULES = [
   'unplug-shared.js', 'unplug-seo-schema.js', 'unplug-responsive-images.js',
+  'unplug-components.js', 'unplug-spam-forms.js',
   'unplug-participation-sdk.js', 'i18n.js', 'accessibility.js',
   'chatbot.js', 'image-upload.js',
 ];

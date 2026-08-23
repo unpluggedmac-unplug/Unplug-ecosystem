@@ -1,0 +1,129 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unplug components — usage</title>
+<link rel="stylesheet" href="unplug-tokens.css">
+<style>
+  body { font-family: var(--font-body); background: var(--paper); color: var(--ink);
+         margin: 0; padding: var(--space-6); line-height: var(--leading-body); }
+  main { max-width: 780px; margin: 0 auto; }
+  h1 { font-family: var(--font-display); font-size: var(--text-3xl); }
+  h2 { font-family: var(--font-display); margin-top: var(--space-8); font-size: var(--text-xl); }
+  pre { background: var(--black); color: #eee; padding: var(--space-4);
+        border-radius: var(--radius-md); overflow-x: auto; font-size: var(--text-sm); }
+  .demo { background: var(--cream); border: 1px solid var(--paper-line);
+          border-radius: var(--radius-md); padding: var(--space-5); margin: var(--space-4) 0; }
+  .note { color: var(--slate); font-size: var(--text-sm); }
+</style>
+
+<main>
+  <h1>Component library</h1>
+  <p class="note">
+    Every component is a custom element: drop the tag in and it works. They read the brand
+    tokens from <code>unplug-tokens.css</code>, so nothing here hard-codes a colour, and they
+    all honour <code>prefers-reduced-motion</code> — which is one rule in the token file rather
+    than a decision each component makes separately.
+  </p>
+  <p class="note">
+    The markup works without the script. An accordion is headings and sections; if
+    <code>unplug-components.js</code> fails to load, the content is still readable.
+  </p>
+
+  <h2>Accordion</h2>
+  <pre>&lt;unplug-accordion open-first&gt;
+  &lt;h3 slot="title"&gt;How do I enter?&lt;/h3&gt;
+  &lt;div&gt;Nominate someone from the Top 10 page.&lt;/div&gt;
+&lt;/unplug-accordion&gt;</pre>
+  <div class="demo">
+    <unplug-accordion open-first>
+      <h3 slot="title">How do I enter the Top 10?</h3>
+      <div>Nominate someone from the Top 10 page. Nominations are free; votes are not.</div>
+      <h3 slot="title">What does a directory listing cost?</h3>
+      <div>Packages start at R250 a month. The rate card is on the Advertise page.</div>
+      <h3 slot="title">Do you publish in languages other than English?</h3>
+      <div>Yes — submissions in Afrikaans, isiZulu and Sesotho are welcome.</div>
+    </unplug-accordion>
+  </div>
+  <p class="note">
+    Each heading is a real <code>&lt;button&gt;</code> inside the heading level you wrote, so the
+    document outline survives and a screen reader announces "button, collapsed". Arrow keys are
+    deliberately left alone — for disclosures the expected key is Tab, and hijacking arrows
+    breaks scrolling for keyboard users.
+  </p>
+
+  <h2>Countdown</h2>
+  <pre>&lt;unplug-countdown to="2026-12-25T00:00:00+02:00" finished="Entries closed"&gt;&lt;/unplug-countdown&gt;</pre>
+  <div class="demo">
+    <unplug-countdown to="2026-12-25T00:00:00+02:00" finished="Entries closed"></unplug-countdown>
+  </div>
+  <p class="note">
+    The digits tick every second; the screen-reader announcement is polite and only changes
+    when the minutes do. A live region updating every second would have a screen reader
+    reciting numbers for ever.
+  </p>
+
+  <h2>Separators</h2>
+  <pre>&lt;unplug-separator shape="wave|slant|curve|layered" height="60" flip&gt;&lt;/unplug-separator&gt;</pre>
+  <div class="demo" style="padding:0; overflow:hidden;">
+    <div style="background:var(--red); height:40px;"></div>
+    <unplug-separator shape="layered" colour="var(--red)" flip height="50"></unplug-separator>
+  </div>
+
+  <h2>Lightbox</h2>
+  <pre>&lt;unplug-lightbox&gt;&lt;img src="…" alt="…"&gt;&lt;/unplug-lightbox&gt;</pre>
+  <div class="demo">
+    <unplug-lightbox>
+      <img src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23d20709'/%3E%3C/svg%3E" alt="A red rectangle" width="160" height="120">
+      <img src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23272626'/%3E%3C/svg%3E" alt="A dark rectangle" width="160" height="120">
+    </unplug-lightbox>
+  </div>
+  <p class="note">
+    Focus moves into the dialog, is trapped while it is open, and returns to the thumbnail on
+    close. Escape closes, arrows move between images, and a swipe works on a phone. A dialog
+    somebody can Tab out of into a page they cannot see is worse than no dialog.
+  </p>
+
+  <h2>Click to share</h2>
+  <pre>&lt;unplug-tweet text="…" url="…"&gt;&lt;/unplug-tweet&gt;</pre>
+  <div class="demo">
+    <unplug-tweet text="Nine provinces, one purpose — the South African journey worth following."></unplug-tweet>
+  </div>
+  <p class="note">
+    A link, not a third-party script. The official button loads code from another company on
+    every page it appears on, which costs a request and tells them who read the article.
+  </p>
+
+  <h2>Scroll reveal</h2>
+  <pre>&lt;unplug-reveal&gt;…&lt;/unplug-reveal&gt;</pre>
+  <div class="demo">
+    <unplug-reveal><p>This faded in — unless you have asked your device for less motion, in which case it was simply here.</p></unplug-reveal>
+  </div>
+
+  <h2>Testimonials</h2>
+  <pre>&lt;unplug-testimonials&gt;&lt;figure&gt;&lt;blockquote&gt;…&lt;/blockquote&gt;&lt;figcaption&gt;…&lt;/figcaption&gt;&lt;/figure&gt;&lt;/unplug-testimonials&gt;</pre>
+  <div class="demo">
+    <unplug-testimonials>
+      <figure><blockquote>Being listed brought us four new customers in the first month.</blockquote><figcaption>Nkosi Trading, Soweto</figcaption></figure>
+      <figure><blockquote>The team actually answered the phone. That is rarer than it should be.</blockquote><figcaption>AG Scott</figcaption></figure>
+    </unplug-testimonials>
+  </div>
+  <p class="note">
+    A list, not a carousel. Rotating quotes lose the reader mid-sentence and give a screen
+    reader whichever one happens to be showing.
+  </p>
+
+  <h2>Coming soon</h2>
+  <pre>&lt;unplug-coming-soon active="true"&gt;&lt;h2&gt;…&lt;/h2&gt;&lt;p&gt;…&lt;/p&gt;&lt;/unplug-coming-soon&gt;</pre>
+  <div class="demo" style="padding:0;">
+    <unplug-coming-soon active="true">
+      <h2>Marketplace opens in September</h2>
+      <p>We are still building this. The directory and the magazine are unaffected.</p>
+    </unplug-coming-soon>
+  </div>
+  <p class="note">
+    <strong>Not a security control.</strong> It hides content in the browser; the content is
+    still in the HTML and still in the API. Anything that genuinely must not be seen is gated
+    on the server.
+  </p>
+</main>
+
+<script src="unplug-components.js"></script>
