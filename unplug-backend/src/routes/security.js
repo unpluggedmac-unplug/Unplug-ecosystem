@@ -14,6 +14,7 @@ const { isValidIp, isValidCidr, inCidr, sameAddress } = require('../utils/ipMatc
 const pool = require('../db');
 const twoFactor = require('../utils/twoFactor');
 const altcha = require('../utils/altcha');
+const crypto = require('crypto');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -297,6 +298,76 @@ router.post('/two-factor/recovery-codes', requireAuth, async (req, res, next) =>
 router.get('/altcha-challenge', (req, res) => {
   res.set('Cache-Control', 'no-store'); // a reused challenge is a solved one
   res.json(altcha.createChallenge());
+});
+
+
+// ---------------------------------------------------------------------------
+// CSP violation reports
+// ---------------------------------------------------------------------------
+
+// POST /security/csp-report — public, and unauthenticated by necessity: the
+// browser sends these on behalf of a reader who may never sign in, and it will
+// not attach our headers to them.
+//
+// Rate-limited by its own shape rather than by a limiter: reports are
+// deduplicated to one row per distinct violation, so a flood of identical
+// reports costs one UPDATE each and adds no rows.
+router.post('/csp-report', express.json({
+  // Browsers send these as application/csp-report or application/reports+json,
+  // never as application/json, so the normal parser ignores them entirely.
+  type: ['application/csp-report', 'application/reports+json', 'application/json'],
+  limit: '32kb',
+}), async (req, res) => {
+  // Answer first, always. This endpoint must never make a reader's browser
+  // wait, and a failure to record a report is not worth telling anyone about.
+  res.status(204).end();
+
+  try {
+    const body = req.body || {};
+    // Two formats in the wild: the original {"csp-report": {...}} and the
+    // newer Reporting API array. Both are handled because both are sent,
+    // depending on the browser.
+    const reports = Array.isArray(body) ? body.map((r) => r.body || r) : [body['csp-report'] || body];
+
+    for (const r of reports) {
+      if (!r || typeof r !== 'object') continue;
+      const directive = String(r['effective-directive'] || r.effectiveDirective
+        || r['violated-directive'] || r.violatedDirective || '').slice(0, 100);
+      if (!directive) continue;
+
+      const blocked = String(r['blocked-uri'] || r.blockedURL || '').slice(0, 300);
+      // The query string is dropped: the same violation on ?p=news and
+      // ?p=directory is one violation, not two hundred.
+      const document = String(r['document-uri'] || r.documentURL || '').split('?')[0].slice(0, 300);
+      const sample = String(r['script-sample'] || r.sample || '').slice(0, 200) || null;
+
+      const fingerprint = crypto.createHash('sha256')
+        .update([directive, blocked, document, sample || ''].join('|')).digest('hex');
+
+      await pool.query(
+        `INSERT INTO csp_reports (fingerprint, directive, blocked_uri, document_uri, sample)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (fingerprint) DO UPDATE SET
+           hit_count = csp_reports.hit_count + 1, last_seen_at = now()`,
+        [fingerprint, directive, blocked, document, sample]);
+    }
+  } catch (err) {
+    console.error('[csp] could not record a report:', err.message);
+  }
+});
+
+// GET /security/csp-reports — admin. What the strict policy would break, most
+// frequent first, which is the order to fix them in.
+router.get('/csp-reports', requireRole('admin'), async (req, res, next) => {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM csp_reports ORDER BY hit_count DESC, last_seen_at DESC LIMIT 200`);
+    res.json({
+      reports: r.rows,
+      note: 'These are from the Report-Only policy. Nothing here was blocked — '
+          + 'this is what a strict script-src WOULD block today.',
+    });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

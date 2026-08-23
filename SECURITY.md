@@ -1,0 +1,177 @@
+# Security
+
+What protects this site, where each layer sits, and what is deliberately not
+built. Deployment steps and environment variables are in
+[OPERATIONS.md](OPERATIONS.md).
+
+---
+
+## The front layer: Cloudflare
+
+**The brief for this work said to put Cloudflare's free plan in front of
+unplugnews.com. That is already done, and has been since the site launched** —
+the site is hosted on Cloudflare Pages, so it is served from Cloudflare's
+network by definition. Confirmed on the live site:
+
+```
+Server: cloudflare
+CF-RAY: a2f60874df43816a-JNB
+```
+
+The frontend therefore already has the CDN, the DDoS protection, the free TLS
+and the free-tier WAF rules.
+
+### The gap that is worth closing
+
+**The API does not sit behind your Cloudflare.**
+`unplug-ecosystem.onrender.com` returns `Server: cloudflare` too, but that is
+*Render's* Cloudflare account, not yours. You cannot write firewall rules for
+it, see its traffic, or rate-limit it from your dashboard.
+
+Everything that matters — sign-in, payments, admin actions — happens on that
+host.
+
+To put it behind your own zone:
+
+1. In Cloudflare DNS for `unplugnews.com`, add a `CNAME` record:
+   `api` → `unplug-ecosystem.onrender.com`, **proxy status: Proxied** (the
+   orange cloud). The orange cloud is the entire point; grey means DNS only and
+   changes nothing.
+2. In Render → your service → Settings → Custom Domains, add
+   `api.unplugnews.com` and wait for it to verify.
+3. Set `CORS_ORIGINS` to include `https://www.unplugnews.com`.
+4. Change the frontend's API base to `https://api.unplugnews.com`. It is one
+   constant, `LIVE_API_BASE` in `unplug-shared.js`.
+5. Leave the old `.onrender.com` address working. Anything cached — a service
+   worker, a bookmarked admin page — will keep using it for a while.
+
+**Do steps 1–3 before step 4**, and check `https://api.unplugnews.com/health`
+returns `{"status":"ok"}` before changing anything in the frontend.
+
+Once it is proxied you can, from the Cloudflare dashboard and at no cost: rate
+limit `/auth/login` at the edge so brute-force attempts never reach the
+instance; block or challenge by country; and see the API's traffic alongside
+the site's.
+
+---
+
+## The application layer
+
+Everything below runs in this codebase and complements the above. Cloudflare
+handles volume; these handle intent.
+
+| Layer | Where | What it does |
+|---|---|---|
+| Access rules | `middleware/accessControl.js` | IP, CIDR and account allow/block lists, held in the database so a block does not need a deploy |
+| Request filter | `middleware/wafLite.js` | Refuses injection and traversal shapes in URLs, bounds request size |
+| Rate limits | `middleware/rateLimit.js` | Per-IP caps on login, registration, email actions and public submissions |
+| Sign-in backoff | `utils/loginAttempts.js` | Per-account exponential delay, which the per-IP limiter cannot provide |
+| Two-factor | `utils/twoFactor.js` | TOTP plus hashed recovery codes, for admins |
+| Bot defence | `utils/altcha.js` | Self-hosted proof-of-work; no third party, no tracking |
+| Upload checks | `utils/fileSignature.js` | Magic-byte verification — the declared type comes from the browser |
+| Audit trail | `routes/activityLog.js` | Who, what, when, from which address; searchable |
+| Response headers | `_headers`, `middleware/securityHeaders.js` | CSP, HSTS, nosniff, frame-ancestors, referrer and permissions policy |
+
+### Allow beats block, always
+
+The access list checks allow rules first, and a block that would catch the
+connection you are using is refused outright with an explanation.
+
+This is not caution for its own sake. The realistic accident is not an attacker
+slipping past a rule — Cloudflare catches most of that. It is an admin blocking
+a range that turns out to contain their own office, or a large slice of a South
+African mobile network, and losing the screen they would use to undo it.
+
+### The request filter does not read bodies
+
+This is a magazine that publishes articles about technology. An article about
+SQL injection contains `OR 1=1`. A tutorial contains `<script>`. A comment
+quoting a path contains `../`.
+
+A filter that scanned bodies would block writers from publishing and readers
+from commenting — intermittently, which is worse, because nobody would work out
+why an article saved on Tuesday and not on Wednesday. It would be switched off
+within a week, leaving the site less protected than if it had never been added.
+
+So the patterns apply only to URLs, query strings and a couple of headers,
+where those strings are never legitimate. Bodies are bounded in size and
+defended the way content must be: parameterised queries going in, escaping
+coming out.
+
+---
+
+## Content Security Policy: what is enforced and what is not
+
+Everything except inline script is **enforced**. `script-src` still permits
+`'unsafe-inline'`, and it is worth being plain about why.
+
+These pages carry **213 inline event handlers** — `onclick="save()"` and
+relatives — written into the markup. CSP cannot allow those except with
+`'unsafe-inline'`. Nonces do not help: a nonce applies to a `<script>` element,
+not to an attribute, and adding one would make things *worse*, because a policy
+containing a nonce causes browsers to ignore `'unsafe-inline'` altogether —
+every handler would stop working at the first click.
+
+What **is** enforced still carries most of the value:
+
+- **`connect-src`** — the important one. A stored XSS was found in the admin
+  activity log during this work and fixed. Script on the page could read an
+  admin's token; `connect-src` is what stops it being *sent* anywhere.
+  Exfiltration is blocked even when script runs.
+- **`object-src 'none'`** — no plugin content, a classic injection route.
+- **`base-uri 'self'`** — an injected `<base>` tag can otherwise repoint every
+  relative URL on the page, including script sources.
+- **`form-action 'self'`** — an injected form cannot post credentials elsewhere.
+- **`frame-ancestors 'none'`** — clickjacking.
+
+### Getting to a strict `script-src`
+
+1. Enable the Pages build (OPERATIONS.md step 2). It already moves the large
+   inline `<script>` blocks into hashed files.
+2. Convert the 213 `onclick` attributes to delegated listeners. The pattern is
+   already used for story cards in `unplug-magazine.html`.
+3. Remove `'unsafe-inline'` from `script-src`.
+
+A **Report-Only** header already carries the strict policy and posts violations
+to `/security/csp-report`. Nothing is blocked by it. Read the collected
+evidence at `GET /security/csp-reports` (admin) — it says which handlers real
+readers actually trigger, so step 2 can be done in order of what matters rather
+than alphabetically.
+
+---
+
+## Deliberately not built
+
+**Role-based permissions.** Every protected route uses `requireRole('admin')`.
+There is no case yet where two admins should be able to do different things. A
+permissions matrix would add a table, a screen and a lookup on every request to
+express a distinction nobody has made. Worth building the day two admins should
+see different things — not before.
+
+**ClamAV virus scanning.** It wants around a gigabyte of RAM for its signature
+database. The instance has 512 MB. Installing it would trade the site being up
+for the appearance of scanning. Uploads are defended by magic-byte checks, an
+extension allow-list, size caps and random filenames.
+
+**Country blocking.** The rules are accepted and stored, but nothing matches
+them until a GeoIP lookup exists, which needs a MaxMind GeoLite2 licence key.
+An inert rule is honest; one that guesses would block the wrong people.
+
+**A separate mobile cache.** See OPERATIONS.md — a phone is slow because it
+receives desktop-sized images, and a second cache would halve the hit rate
+while delivering the same oversized picture.
+
+---
+
+## Known and not yet fixed
+
+**Unescaped `innerHTML` beyond the activity log.** The stored XSS found and
+fixed in the audit log is not the only instance of that pattern. A rough scan
+flags roughly 133 interpolations in the admin dashboard and 61 in the member
+dashboard. Most are false positives — numbers, colour lookups, pre-built
+fragments — but genuine ones are in there, including `display_name` and `bio`
+fields that members control.
+
+Auditing them properly is its own piece of work. Until it is done, `connect-src`
+limits what an exploited one could achieve: script may run, but it cannot send
+anything it reads to an attacker's server.

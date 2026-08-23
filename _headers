@@ -17,6 +17,52 @@
 # year with no way to fix it, so nothing below is cached hard unless its
 # filename carries a content hash.
 #
+# ---------------------------------------------------------------------------
+# CONTENT SECURITY POLICY — WHY script-src STILL SAYS 'unsafe-inline'
+# ---------------------------------------------------------------------------
+#
+# A CSP is only as strong as its weakest directive, and honesty about which one
+# that is matters more than the appearance of a long policy.
+#
+# THE OBSTACLE: these pages carry 213 inline event handlers — onclick="save()"
+# and its relatives — written directly in the markup. CSP has no way to allow
+# those except 'unsafe-inline'. Nonces do not cover them: a nonce applies to a
+# <script> element, and an onclick attribute is not one. Adding a nonce would
+# in fact make things WORSE, because a policy containing a nonce causes
+# browsers to IGNORE 'unsafe-inline' entirely — every one of those 213 handlers
+# would stop working the moment somebody clicked.
+#
+# 'unsafe-hashes' with a hash per handler is the other theoretical route: 213
+# hashes, regenerated whenever any handler changes. That is not a policy
+# anybody maintains; it is a policy that gets deleted in six months.
+#
+# So script-src is honest about where it stands, and EVERYTHING ELSE IS
+# ENFORCED — which is where most of the value is anyway:
+#
+#   connect-src  is the one that matters most here. A stored XSS was found in
+#                the admin activity log during this work. Script running on the
+#                page could read an admin's token; connect-src is what stops it
+#                being SENT anywhere. Exfiltration to an attacker's server is
+#                now blocked even when script does run.
+#   object-src   'none' — no Flash, no plugin content, a classic XSS route.
+#   base-uri     'self' — an injected <base> tag can otherwise repoint every
+#                relative URL on the page, including script sources.
+#   form-action  'self' — an injected form cannot post credentials elsewhere.
+#   frame-ancestors 'none' — clickjacking.
+#
+# THE PATH TO A STRICT script-src, in order:
+#   1. Enable the Pages build (npm run build), which already moves the large
+#      inline <script> blocks into hashed files. See OPERATIONS.md.
+#   2. Convert the 213 onclick attributes to delegated listeners. The pattern
+#      is already used in unplug-magazine.html for story cards.
+#   3. Remove 'unsafe-inline' from script-src below.
+#
+# A Report-Only header alongside carries the STRICT policy and reports to the
+# API. Nothing is blocked by it; it collects exactly what step 2 would need to
+# fix, so the work can be sized from evidence rather than guessed at.
+#
+# ---------------------------------------------------------------------------
+
 # PAGES APPLIES EVERY MATCHING RULE, NOT THE FIRST ONE.
 #
 # This was written the other way round, and the deploy proved it wrong. With a
@@ -96,3 +142,8 @@
   # every rule above and make all of them ambiguous.
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.supabase.co https://ui-avatars.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://www.googletagmanager.com https://i.ytimg.com; connect-src 'self' https://unplug-ecosystem.onrender.com https://*.supabase.co https://www.google-analytics.com https://region1.google-analytics.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org; frame-src https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.tiktok.com https://www.instagram.com https://drive.google.com; media-src 'self' https://*.supabase.co blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://www.googletagmanager.com; style-src 'self' https://fonts.googleapis.com https://unpkg.com; report-uri https://unplug-ecosystem.onrender.com/security/csp-report
