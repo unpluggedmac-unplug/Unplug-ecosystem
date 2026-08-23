@@ -7445,7 +7445,7 @@ async function loadPendingEft() {
     table.innerHTML = '<tr><th>Reference</th><th>Amount</th><th>For</th><th></th></tr>';
     data.payments.forEach((p) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${p.gateway_reference}</td><td>R${p.amount}</td><td>${p.linked_type} #${p.linked_id}</td><td><div class="row-actions"><button class="approve">Confirm</button></div></td>`;
+      tr.innerHTML = `<td>${escapeHtmlAdmin(p.gateway_reference)}</td><td>R${escapeHtmlAdmin(p.amount)}</td><td>${escapeHtmlAdmin(p.linked_type)} #${escapeHtmlAdmin(p.linked_id)}</td><td><div class="row-actions"><button class="approve">Confirm</button></div></td>`;
       tr.querySelector('.approve').addEventListener('click', async () => {
         try {
           await api(`/payments/${p.id}/confirm-eft`, { method: 'PATCH' });
@@ -7786,7 +7786,7 @@ async function loadConsultants() {
       const pending = c.pending_referrals > 0
         ? ` <span style="color:var(--muted); font-weight:400;">(+${c.pending_referrals} pending)</span>` : '';
       tr.innerHTML = `
-        <td><a href="#" style="color:var(--red); font-weight:600; text-decoration:none;">${c.name}</a>${c.user_id ? '' : ' <span style="color:var(--muted); font-size:11px;">no linked account</span>'}</td>
+        <td><a href="#" style="color:var(--red); font-weight:600; text-decoration:none;">${escapeHtmlAdmin(c.name)}</a>${c.user_id ? '' : ' <span style="color:var(--muted); font-size:11px;">no linked account</span>'}</td>
         <td>${c.email || '—'}</td>
         <td>${c.commission_pct}%</td>
         <td>${c.confirmed_referrals}${pending}</td>
@@ -7906,7 +7906,7 @@ async function loadUnplugLeaderboard() {
       const tr = document.createElement('tr');
       const movement = r.rank_movement > 0 ? `↑${r.rank_movement}` : r.rank_movement < 0 ? `↓${Math.abs(r.rank_movement)}` : '—';
       tr.innerHTML = `<td>${r.rank_position}</td><td>${escapeHtmlAdmin(r.display_name)}</td>
-        <td>${r.status_emoji || ''} ${escapeHtmlAdmin(r.status_label || '—')}</td>
+        <td>${escapeHtmlAdmin(r.status_emoji || '')} ${escapeHtmlAdmin(r.status_label || '—')}</td>
         <td>${Number(r.score_value).toLocaleString()}</td><td>${movement}</td>`;
       table.appendChild(tr);
     });
@@ -9437,11 +9437,15 @@ async function loadInquiries() {
     table.innerHTML = '<tr><th>From</th><th>Subject</th><th>Message</th><th>Status</th><th>Received</th><th></th></tr>';
     data.inquiries.forEach((inq) => {
       const tr = document.createElement('tr');
+      // EVERY FIELD ESCAPED. All four come from the public contact form, which
+      // needs no account at all — this is the one screen on the site where a
+      // total stranger's typing is rendered to an admin. Unescaped, an
+      // <img onerror> in the name field runs with the admin's session.
       tr.innerHTML = `
-        <td>${inq.name}<br><span style="color:var(--slate); font-size:11px;">${inq.email}</span></td>
-        <td>${inq.subject || '—'}</td>
-        <td style="max-width:280px;">${inq.message}</td>
-        <td><span class="pill ${inq.status === 'new' ? 'pending' : 'approved'}">${inq.status}</span></td>
+        <td>${escapeHtmlAdmin(inq.name)}<br><span style="color:var(--slate); font-size:11px;">${escapeHtmlAdmin(inq.email)}</span></td>
+        <td>${escapeHtmlAdmin(inq.subject || '—')}</td>
+        <td style="max-width:280px;">${escapeHtmlAdmin(inq.message)}</td>
+        <td><span class="pill ${inq.status === 'new' ? 'pending' : 'approved'}">${escapeHtmlAdmin(inq.status)}</span></td>
         <td>${new Date(inq.created_at).toLocaleDateString()}</td>
         <td></td>`;
       const actionTd = tr.lastElementChild;

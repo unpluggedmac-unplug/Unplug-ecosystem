@@ -163,15 +163,54 @@ while delivering the same oversized picture.
 
 ---
 
-## Known and not yet fixed
+## The cross-site scripting audit
 
-**Unescaped `innerHTML` beyond the activity log.** The stored XSS found and
-fixed in the audit log is not the only instance of that pattern. A rough scan
-flags roughly 133 interpolations in the admin dashboard and 61 in the member
-dashboard. Most are false positives — numbers, colour lookups, pre-built
-fragments — but genuine ones are in there, including `display_name` and `bio`
-fields that members control.
+Two stored XSS holes were found and fixed, both proven to execute before the
+fix and proven not to afterwards.
 
-Auditing them properly is its own piece of work. Until it is done, `connect-src`
-limits what an exploited one could achieve: script may run, but it cannot send
-anything it reads to an attacker's server.
+**The enquiry inbox — the serious one.** `POST /inquiries` is the public
+contact form: no account, no sign-in, anyone on the internet. Its `name`,
+`email`, `subject` and `message` were interpolated straight into `innerHTML` on
+the admin's screen. A stranger putting `<img src=x onerror=...>` in the name
+field got script running with an admin's session. Demonstrated with a real
+payload: it executed. After the fix, the same payload is displayed as text.
+
+**The activity log.** Same shape, via `details`, which carries member-supplied
+values such as profile display names. Fixed by building every cell with
+`createElement` and `textContent`.
+
+Also escaped while in there: pending EFT payment references, consultant names,
+and the leaderboard status emoji.
+
+### What was checked and found already safe
+
+The **public profile page** — the one place a member's text is shown to every
+reader, and therefore the highest-value target — was never exposed.
+`display_name` goes through `escapeHtml`, and `bio` through
+`DOMPurify.sanitize` with a tag and attribute allow-list, because a bio is
+meant to be rich text.
+
+### What is left, and why it is not urgent
+
+The scan reports 174 remaining interpolations across five files. They break
+down as:
+
+- **Mostly false positives.** The scanner cannot resolve a variable, so
+  `${rows}`, `${bars}` and `${summary}` are flagged even though they hold HTML
+  that was built and escaped elsewhere. So are numbers, enum values and
+  ternaries between fixed strings.
+- **Self-XSS in the member dashboard.** It renders the member's OWN profile
+  from `/profiles/me` without escaping. You can only attack your own page with
+  it — there is no other victim and no privilege gained. Worth tidying; not a
+  vulnerability in the usual sense.
+- **`bio` in the member dashboard must NOT simply be escaped.** It is rich text
+  by design. Escaping it would show a member raw HTML tags where their
+  formatting used to be. It needs the same DOMPurify treatment the magazine
+  uses, which is a change worth making deliberately rather than in a sweep.
+
+The rule for anything added from here: **build cells with `textContent`, or
+escape at the interpolation.** `innerHTML` with a `${}` in it is the pattern
+that produced both of the holes above.
+
+`connect-src` in the CSP is the backstop. Even where script does run, it cannot
+send what it reads to anywhere but this site's own origins.
