@@ -25,6 +25,7 @@ const salesConsultantRoutes = require('./routes/salesConsultants');
 const uploadRoutes = require('./routes/uploads');
 const imageRoutes = require('./routes/images');
 const maintenanceRoutes = require('./routes/maintenance');
+const securityRoutes = require('./routes/security');
 const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
@@ -98,6 +99,7 @@ app.use('/uploads', uploadRoutes);
 // frontend asks once and treats a late or missing answer as "originals only".
 app.use('/images', imageRoutes);
 app.use('/maintenance', maintenanceRoutes);
+app.use('/security', securityRoutes);
 // Serves the actual uploaded files back out (GET /uploads/<filename>).
 // Mounting static alongside the POST-only uploadRoutes above is safe —
 // express.static only ever handles GET/HEAD, so it never intercepts the
