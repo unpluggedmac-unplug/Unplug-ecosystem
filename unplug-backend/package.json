@@ -11,7 +11,11 @@
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
     "audit": "npm audit --audit-level=moderate",
     "pretest": "node scripts/sweep-test-postgres.js",
-    "posttest": "node scripts/sweep-test-postgres.js"
+    "posttest": "node scripts/sweep-test-postgres.js",
+    "backup": "node -e \"require('./src/utils/backupRunner').run().then(r=>console.log(r)).catch(e=>{console.error(e.message);process.exit(1)})\"",
+    "backup:list": "node scripts/restore-backup.js --list",
+    "restore": "node scripts/restore-backup.js",
+    "clone:staging": "node scripts/clone-to-staging.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

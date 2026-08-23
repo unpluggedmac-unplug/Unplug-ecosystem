@@ -27,6 +27,7 @@ const imageRoutes = require('./routes/images');
 const maintenanceRoutes = require('./routes/maintenance');
 const securityRoutes = require('./routes/security');
 const spamRoutes = require('./routes/spam');
+const backupRoutes = require('./routes/backups');
 const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
@@ -127,6 +128,7 @@ app.use('/images', imageRoutes);
 app.use('/maintenance', maintenanceRoutes);
 app.use('/security', securityRoutes);
 app.use('/spam', spamRoutes);
+app.use('/backups', backupRoutes);
 // Serves the actual uploaded files back out (GET /uploads/<filename>).
 // Mounting static alongside the POST-only uploadRoutes above is safe —
 // express.static only ever handles GET/HEAD, so it never intercepts the
@@ -247,6 +249,32 @@ setInterval(() => {
     })
     .catch((err) => console.error('[cleanup] failed:', err.message));
 }, CLEANUP_INTERVAL_MS);
+
+// Nightly backup. Same in-process pattern as the others, with the same caveat:
+// it only fires while the instance is awake, so POST /backups/run with
+// UNPLUG_CLEANUP_SECRET is there for a scheduler that wants a guarantee.
+//
+// SILENT UNLESS CONFIGURED. With no passphrase set this logs once and stops
+// trying, rather than writing an error every night that everybody learns to
+// scroll past. A backup system nobody trusts the logs of is not one anybody
+// checks.
+const backupRunner = require('./utils/backupRunner');
+const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+let backupWarned = false;
+setInterval(() => {
+  if (!process.env.UNPLUG_BACKUP_PASSPHRASE) {
+    if (!backupWarned) {
+      console.warn('[backup] UNPLUG_BACKUP_PASSPHRASE is not set — no backups are being taken.');
+      backupWarned = true;
+    }
+    return;
+  }
+  backupRunner.run()
+    .then((r) => console.log(`[backup] ${r.filename}: ${r.rows} rows, `
+      + `${(r.encryptedBytes / 1024).toFixed(0)}KB to `
+      + r.destinations.filter((d) => d.ok).map((d) => d.provider).join(', ')))
+    .catch((err) => console.error('[backup] failed:', err.message));
+}, BACKUP_INTERVAL_MS);
 
 // Participation engine: rankings + daily homepage recalculation. No
 // pg_cron on this Postgres, so this runs the same way the birthday
