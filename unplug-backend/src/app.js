@@ -29,6 +29,7 @@ const securityRoutes = require('./routes/security');
 const spamRoutes = require('./routes/spam');
 const backupRoutes = require('./routes/backups');
 const crmRoutes = require('./routes/crm');
+const emailRoutes = require('./routes/email');
 const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
@@ -131,6 +132,9 @@ app.use('/security', securityRoutes);
 app.use('/spam', spamRoutes);
 app.use('/backups', backupRoutes);
 app.use('/crm', crmRoutes);
+// Public and unauthenticated on purpose: somebody unsubscribing is holding a
+// link from an email, not a password.
+app.use('/email', emailRoutes);
 // Serves the actual uploaded files back out (GET /uploads/<filename>).
 // Mounting static alongside the POST-only uploadRoutes above is safe —
 // express.static only ever handles GET/HEAD, so it never intercepts the

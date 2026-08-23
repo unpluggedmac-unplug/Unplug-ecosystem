@@ -79,7 +79,7 @@ function config() {
   };
 }
 
-async function sendViaResend({ to, subject, text }) {
+async function sendViaResend({ to, subject, text, html, headers }) {
   const from = parseFrom(DEFAULT_FROM);
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -87,7 +87,17 @@ async function sendViaResend({ to, subject, text }) {
       Authorization: `Bearer ${RESEND_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: `${from.name} <${from.address}>`, to: [to], subject, text }),
+    body: JSON.stringify({
+      from: `${from.name} <${from.address}>`, to: [to], subject, text,
+      // html and headers are optional and only appear when given, so every
+      // existing caller — which passes neither — sends exactly what it sent
+      // before.
+      ...(html ? { html } : {}),
+      // The List-Unsubscribe pair travels here. Without them Gmail shows no
+      // unsubscribe button, and somebody who cannot find the link in the
+      // footer presses the spam button instead.
+      ...(headers ? { headers } : {}),
+    }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -96,7 +106,7 @@ async function sendViaResend({ to, subject, text }) {
   return { provider: 'resend' };
 }
 
-async function sendViaBrevo({ to, subject, text }) {
+async function sendViaBrevo({ to, subject, text, html, headers }) {
   const from = parseFrom(DEFAULT_FROM);
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -106,6 +116,8 @@ async function sendViaBrevo({ to, subject, text }) {
       to: [{ email: to }],
       subject,
       textContent: text,
+      ...(html ? { htmlContent: html } : {}),
+      ...(headers ? { headers } : {}),
     }),
   });
   if (!res.ok) {
@@ -138,15 +150,19 @@ async function verifyConnection() {
   return true;
 }
 
-async function sendEmail({ to, subject, text }) {
+// html and headers are optional additions for marketing mail. Transactional
+// callers pass neither and behave exactly as before — the two paths share a
+// transport, not a policy: utils/emailMarketing.js enforces suppression and
+// unsubscribe, and a password reset must never be subject to either.
+async function sendEmail({ to, subject, text, html, headers }) {
   if (!provider) {
     console.warn('[email] No provider configured — logging instead of sending.');
     console.log(`[email] To: ${to}\n[email] Subject: ${subject}\n[email] Body:\n${text}`);
     return { simulated: true };
   }
-  if (provider === 'resend') return sendViaResend({ to, subject, text });
-  if (provider === 'brevo') return sendViaBrevo({ to, subject, text });
-  return transporter.sendMail({ from: DEFAULT_FROM, to, subject, text });
+  if (provider === 'resend') return sendViaResend({ to, subject, text, html, headers });
+  if (provider === 'brevo') return sendViaBrevo({ to, subject, text, html, headers });
+  return transporter.sendMail({ from: DEFAULT_FROM, to, subject, text, html, headers });
 }
 
 module.exports = { sendEmail, isConfigured, verifyConnection, config };
