@@ -103,7 +103,13 @@ async function sendViaResend({ to, subject, text, html, headers }) {
     const detail = await res.text().catch(() => '');
     throw new Error(`Resend rejected the message (${res.status}): ${detail.slice(0, 300)}`);
   }
-  return { provider: 'resend' };
+  // The id is Resend's handle for this message, and it is the ONLY way a
+  // later bounce or complaint webhook can be tied back to the send it came
+  // from. It used to be discarded, which meant a bounce arriving an hour
+  // afterwards could not be attributed to anybody. A failure to read the body
+  // is not a failure to send, so it degrades to no id rather than throwing.
+  const body = await res.json().catch(() => null);
+  return { provider: 'resend', id: body && body.id ? body.id : null };
 }
 
 async function sendViaBrevo({ to, subject, text, html, headers }) {

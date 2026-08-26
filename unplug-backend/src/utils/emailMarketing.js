@@ -66,6 +66,11 @@ async function subscribe({ email, listSlug = 'newsletter', source, ip, contactId
        contact_id = COALESCE(email_subscriptions.contact_id, EXCLUDED.contact_id)`,
     [address, list.rows[0].id, contactId || null, source || 'unknown', ip || null]);
 
+  // A welcome sequence, if one is switched on for this list. Safe to call on
+  // every subscribe including a repeat: the unique enrolment index means
+  // somebody already in the sequence is not added again.
+  await enrolForListSubscribe({ email: address, listId: list.rows[0].id, contactId });
+
   return { ok: true };
 }
 
@@ -82,6 +87,7 @@ async function unsubscribe({ email, listSlug, reason = 'link', all = false }) {
     // The global list, so a campaign that never checked the subscription table
     // still cannot reach them.
     await suppress(address, 'unsubscribed', `via ${reason}`);
+    await cancelEnrolments(address, reason);
   } else {
     await pool.query(
       `UPDATE email_subscriptions
@@ -96,9 +102,32 @@ async function unsubscribe({ email, listSlug, reason = 'link', all = false }) {
     const remaining = await pool.query(
       `SELECT count(*)::int AS n FROM email_subscriptions
         WHERE LOWER(email) = $1 AND status = 'subscribed'`, [address]);
-    if (remaining.rows[0].n === 0) await suppress(address, 'unsubscribed', 'left every list');
+    if (remaining.rows[0].n === 0) {
+      await suppress(address, 'unsubscribed', 'left every list');
+      await cancelEnrolments(address, reason);
+    }
   }
   return { ok: true };
+}
+
+// STOPPING THE SEQUENCES TOO, not only the campaigns.
+//
+// sendOne would refuse to deliver to a suppressed address anyway, so nothing
+// would actually arrive. But an enrolment left 'active' keeps marching through
+// its steps, writing a 'skipped' row for each one, and the reporting then says
+// the welcome sequence is running for somebody who asked it to stop. The state
+// should say what is true: they left, so the sequence ended.
+//
+// It is CANCELLED rather than deleted, so re-subscribing does not start the
+// welcome sequence again from the beginning — the unique index means the row
+// stays and the person is not re-enrolled. Somebody who comes back should not
+// be welcomed twice.
+async function cancelEnrolments(email, reason = 'unsubscribed') {
+  await pool.query(
+    `UPDATE email_automation_enrolments
+        SET status = 'cancelled', stopped_reason = $2, updated_at = now()
+      WHERE LOWER(email) = $1 AND status = 'active'`,
+    [normalise(email), String(reason).slice(0, 40)]);
 }
 
 async function suppress(email, reason, detail) {
@@ -157,13 +186,14 @@ async function audienceFor(listId) {
 //
 // Returns the email_sends row. Never throws: one bad address must not stop a
 // campaign of four hundred.
-async function sendOne({ campaignId, email, subject, html, text }) {
+async function sendOne({ campaignId, automationStepId, email, subject, html, text, track = true }) {
   const address = normalise(email);
   const token = newToken();
 
   const record = await pool.query(
-    `INSERT INTO email_sends (campaign_id, email, token, status) VALUES ($1, $2, $3, 'queued')
-     RETURNING *`, [campaignId, address, token]);
+    `INSERT INTO email_sends (campaign_id, automation_step_id, email, token, status)
+     VALUES ($1, $2, $3, $4, 'queued') RETURNING *`,
+    [campaignId || null, automationStepId || null, address, token]);
   const send = record.rows[0];
 
   // CHECKED HERE, at the moment of sending — not when the list was built.
@@ -178,12 +208,24 @@ async function sendOne({ campaignId, email, subject, html, text }) {
   }
 
   const unsubscribeUrl = `${API_URL}/email/unsubscribe/${token}`;
+
+  // Click tracking is applied HERE rather than by each caller, so there is one
+  // place that decides what a link in a marketing email looks like. It was
+  // written for this and then not wired in, which is how a codebase ends up
+  // with two ideas of the same thing — the reporting would have shown zero
+  // clicks for ever and looked like a data problem rather than a missing call.
+  //
+  // The footer is added AFTER wrapping, so the unsubscribe and preferences
+  // links are never routed through the redirect. Those two have to work even
+  // if the tracking endpoint is broken.
+  const bodyHtml = html && track ? wrapLinks(html, token) : html;
+
   try {
-    await sendEmail({
+    const delivery = await sendEmail({
       to: address,
       subject,
       text: `${text}\n\n---\nTo stop receiving these: ${unsubscribeUrl}`,
-      html: html ? withUnsubscribe(html, unsubscribeUrl, token) : undefined,
+      html: bodyHtml ? withUnsubscribe(bodyHtml, unsubscribeUrl, token) : undefined,
       // RFC 2369 and RFC 8058. These are what put a one-click Unsubscribe
       // button next to the sender name in Gmail and Apple Mail — the button
       // people press INSTEAD of the spam button, which is the difference
@@ -193,8 +235,13 @@ async function sendOne({ campaignId, email, subject, html, text }) {
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       },
     });
+    // provider_id is what a bounce or complaint webhook arriving hours later
+    // is matched on. Without it the webhook knows an address bounced but not
+    // which message, and the reporting cannot say which campaign is burning
+    // the sending reputation.
     await pool.query(
-      `UPDATE email_sends SET status = 'sent', sent_at = now() WHERE id = $1`, [send.id]);
+      `UPDATE email_sends SET status = 'sent', sent_at = now(), provider_id = $2 WHERE id = $1`,
+      [send.id, (delivery && delivery.id) || null]);
     return { ...send, status: 'sent' };
   } catch (err) {
     await pool.query(
@@ -234,12 +281,78 @@ function withUnsubscribe(html, unsubscribeUrl, token) {
 function wrapLinks(html, token) {
   return html.replace(/href="(https?:\/\/[^"]+)"/g, (match, url) => {
     if (url.includes('/email/unsubscribe/')) return match;
-    return `href="${API_URL}/email/c/${token}?u=${encodeURIComponent(url)}"`;
+    // The href in the document is HTML-ESCAPED — a link with two query
+    // parameters is written href="…?a=1&amp;b=2". Encoding that as-is would
+    // send the reader to a URL containing a literal "&amp;", which for a
+    // tracked link means every campaign link with more than one parameter
+    // lands on the wrong page. The entity is turned back into a character
+    // before the URL is encoded.
+    const real = url.replace(/&amp;/g, '&');
+    return `href="${API_URL}/email/c/${token}?u=${encodeURIComponent(real)}"`;
   });
 }
 
+// ---------------------------------------------------------------------------
+// Automations
+// ---------------------------------------------------------------------------
+
+// Puts somebody into a sequence, once.
+//
+// ON CONFLICT DO NOTHING against the unique index rather than a "have they
+// already?" query first: two subscribe requests arriving together would both
+// pass that check and both insert. The database is the only thing that can
+// decide this without a race.
+//
+// A CANCELLED ENROLMENT IS NOT REVIVED. Somebody who unsubscribed halfway
+// through the welcome sequence and later re-subscribed should not resume at
+// step three of a welcome they have already half-had. If they should be
+// welcomed again, an admin can enrol them by hand, which is a decision
+// somebody made rather than one the system made at three in the morning.
+async function enrol({ automationId, email, contactId, delayHours }) {
+  const address = normalise(email);
+  if (!address.includes('@')) return { ok: false, reason: 'not an email address' };
+
+  // Nobody suppressed is enrolled at all. The send would be skipped anyway,
+  // but an enrolment that can only ever produce skipped rows is noise in the
+  // reporting for the entire length of the sequence.
+  if (await isSuppressed(address)) return { ok: false, reason: 'suppressed' };
+
+  const first = await pool.query(
+    `SELECT delay_hours FROM email_automation_steps
+      WHERE automation_id = $1 ORDER BY position LIMIT 1`, [automationId]);
+  if (first.rowCount === 0) return { ok: false, reason: 'the sequence has no steps' };
+
+  const hours = delayHours == null ? Number(first.rows[0].delay_hours) : Number(delayHours);
+
+  const r = await pool.query(
+    `INSERT INTO email_automation_enrolments (automation_id, email, contact_id, next_run_at)
+     VALUES ($1, $2, $3, now() + ($4 || ' hours')::interval)
+     ON CONFLICT (automation_id, LOWER(email)) DO NOTHING
+     RETURNING id`,
+    [automationId, address, contactId || null, String(Math.max(0, hours))]);
+
+  return r.rowCount ? { ok: true, id: r.rows[0].id } : { ok: false, reason: 'already enrolled' };
+}
+
+// Called when somebody joins a list. Every automation triggered by that list
+// and switched on picks them up.
+//
+// NEVER THROWS. This is called from the middle of a subscribe request, and a
+// broken automation must not stop somebody subscribing.
+async function enrolForListSubscribe({ email, listId, contactId }) {
+  try {
+    const r = await pool.query(
+      `SELECT id FROM email_automations
+        WHERE active = true AND trigger = 'subscribe' AND trigger_list_id = $1`, [listId]);
+    for (const row of r.rows) await enrol({ automationId: row.id, email, contactId });
+  } catch (err) {
+    console.error('[email] automation enrolment failed:', err.message);
+  }
+}
+
 module.exports = {
-  subscribe, unsubscribe, suppress, isSuppressed,
+  subscribe, unsubscribe, suppress, isSuppressed, cancelEnrolments,
   audienceFor, sendOne, withUnsubscribe, wrapLinks,
+  enrol, enrolForListSubscribe,
   newToken, sendForToken, normalise,
 };

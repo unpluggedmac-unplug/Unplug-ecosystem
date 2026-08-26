@@ -134,6 +134,17 @@ suite rather than production.
 
 None are required. Every one has a working default.
 
+## Marketing email
+
+Campaigns, the composer, drip sequences and the suppression list have their own
+document: **[EMAIL.md](EMAIL.md)**. The one operational fact worth repeating
+here is that `PUBLIC_API_URL` must be correct — every unsubscribe link in every
+email points at it, and a broken unsubscribe is the failure that becomes spam
+complaints and takes the sending domain down along with the password resets.
+
+`POST /admin/email/tick` with `X-Cron-Secret: $UNPLUG_CLEANUP_SECRET` is the
+external-scheduler entry point, the same shape as the cleanup and backup ones.
+
 ## Environment variables added by B2
 
 | Name | Default | What it does |

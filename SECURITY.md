@@ -140,6 +140,43 @@ than alphabetically.
 
 ---
 
+## The two unauthenticated endpoints that change state
+
+Most of this API either needs a session or only reads. Two routes accept a
+request from a stranger and change something, and both are deliberate.
+
+### `POST /email/unsubscribe/:token`
+
+Somebody unsubscribing is holding a link from an email, not a password.
+Requiring a login to unsubscribe is the same as not letting them unsubscribe,
+and they press the spam button instead. The token is random per message and
+stored, so it identifies one send without being guessable from an address, and
+the only thing it can do is stop mail.
+
+### `POST /email/webhooks/resend`
+
+Unauthenticated but **not unverified**, and the distinction is the whole
+control. Resend cannot log in; it can sign. Every request is verified against
+`RESEND_WEBHOOK_SECRET` — HMAC-SHA256 over the raw bytes, compared in constant
+time, with a five-minute timestamp window to stop replay. There is no
+"verify only if a secret is set" path: with no secret the endpoint refuses
+everything.
+
+That strictness is not ceremony. **This endpoint suppresses email addresses.**
+An unsigned version would be a remote denial-of-mail: anybody who found the URL
+could POST `bounced` for every subscriber in turn and silently destroy the
+mailing list — and it would look like a deliverability problem for weeks rather
+than an attack.
+
+The signature is over the **raw request bytes**, so `src/app.js` exempts this
+one path from the global `express.json()` and the router parses its own body.
+Exempting the parser rather than mounting the route above it keeps the webhook
+behind the access-control and WAF middleware: it skips one parser, not every
+guard on the server.
+
+Verified by test, not by inspection: unsigned, forged and replayed requests all
+return 401 and change nothing (`test/emailWebhooks.test.js`).
+
 ## Deliberately not built
 
 **Role-based permissions.** Every protected route uses `requireRole('admin')`.

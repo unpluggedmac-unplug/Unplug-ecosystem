@@ -81,7 +81,23 @@ app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 // limits. Express defaults to 100kb, which a long article can exceed — so this
 // is raised deliberately rather than left to chance, and bounded deliberately
 // rather than left open.
-app.use(express.json({ limit: require('./middleware/wafLite').MAX_JSON_BYTES }));
+//
+// THE MAIL PROVIDER'S WEBHOOKS ARE EXEMPTED FROM THIS PARSER, deliberately.
+//
+// Their signature is computed over the RAW REQUEST BYTES. Once express.json()
+// has parsed the body and it has been re-serialised, key order and whitespace
+// have changed, and a perfectly correct secret then verifies as wrong — the
+// most confusing way this can possibly fail, because everything looks right.
+// routes/emailWebhooks.js brings its own express.raw().
+//
+// Skipping the parser rather than mounting the route above it keeps the
+// webhook BEHIND the access-control and WAF middleware further down, so it is
+// exempt from one parser rather than from every guard on the server.
+const jsonParser = express.json({ limit: require('./middleware/wafLite').MAX_JSON_BYTES });
+app.use((req, res, next) => {
+  if (req.path.startsWith('/email/webhooks')) return next();
+  return jsonParser(req, res, next);
+});
 app.use(securityHeaders);
 app.use(requestLogger);
 
@@ -103,6 +119,12 @@ app.use(require('./middleware/wafLite').middleware);
 // Health stays reachable regardless — an uptime check must not be able to trip
 // a filter and report the site down when it is fine.
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// What the mail provider tells us after a send: delivered, bounced,
+// complained. Unauthenticated because Resend cannot log in — but every request
+// is verified against a shared signing secret, and unsigned requests are
+// refused outright. It parses its own raw body (see the exemption above).
+app.use('/email/webhooks', require('./routes/emailWebhooks'));
 
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
@@ -135,6 +157,11 @@ app.use('/crm', crmRoutes);
 // Public and unauthenticated on purpose: somebody unsubscribing is holding a
 // link from an email, not a password.
 app.use('/email', emailRoutes);
+// The other half: the composer, the campaigns, the automations and the
+// reporting. Admin-only, mounted under /admin so the split between "anybody
+// holding an unsubscribe link" and "an administrator" is visible in the path
+// rather than only inside the file.
+app.use('/admin/email', require('./routes/emailCampaigns'));
 // Serves the actual uploaded files back out (GET /uploads/<filename>).
 // Mounting static alongside the POST-only uploadRoutes above is safe —
 // express.static only ever handles GET/HEAD, so it never intercepts the
@@ -286,6 +313,17 @@ setInterval(() => {
 // pg_cron on this Postgres, so this runs the same way the birthday
 // check above does — an in-process interval, not a database job.
 require('./utils/participationScheduler').start();
+
+// Scheduled campaigns and drip automations, every five minutes.
+//
+// Same caveat as everything else here — it only fires while the instance is
+// awake — but with a different consequence, so it is worth saying plainly: a
+// missed tick DELAYS a send, it never loses one and it never sends twice. Each
+// tick claims work by moving its status forward in the same statement that
+// finds it, so the next tick picks up whatever is still due and nothing else.
+// POST /admin/email/tick with UNPLUG_CLEANUP_SECRET is there for an external
+// scheduler that wants sends to happen at the minute they were set for.
+require('./utils/emailScheduler').start();
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => {
