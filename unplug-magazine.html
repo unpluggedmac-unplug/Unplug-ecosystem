@@ -2959,6 +2959,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="divider" style="margin:0;"><div class="line"></div><span class="print-mark">or</span><div class="line"></div></div>
   </div>
 
+<div id="nominateCardSlot">
 <div class="wrap" id="nominate-card" style="padding-top:8px; max-width:900px; scroll-margin-top:90px;">
     <span class="eyebrow" data-cms="card.eyebrow">Share Your Feature</span>
     <!-- An h2, not an h1. It was the h1 of its own page; on the nominate page
@@ -3016,6 +3017,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </div>
     </div>
   </div>
+  </div><!-- /nominateCardSlot -->
 </main>
 
 <main class="page" id="page-brandplacement">
@@ -3189,16 +3191,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <p style="font-size:14px; margin-bottom:4px;"><strong>Website:</strong> <a href="https://www.unplugnews.com" style="color:var(--red);">www.unplugnews.com</a></p>
         <p style="font-size:13px; color:var(--slate); margin-top:24px; font-style:italic;">"Where Stories Shape Legacy"</p>
 
-        <!-- Nominate is not in the top nav, so this is one of the few places
-             on the site that leads to it. Kept as a link rather than a second
-             copy of the form: two copies of one form is two things to keep in
-             step, and only one of them would get fixed. -->
+        <!-- Nominate is not in the top nav, so this is one of the few places on
+             the site that leads to it. -->
         <div style="margin-top:28px; padding-top:24px; border-top:1px solid var(--paper-line);">
           <h3 style="margin:0 0 8px;">Nominate someone</h3>
           <p style="color:var(--slate); line-height:1.6; margin:0 0 14px; font-size:14px;">
             Know an ordinary South African doing something worth noticing? Tell us about them &mdash;
-            most of the people we feature would never put themselves forward. Been featured already?
-            You can make your &ldquo;As Featured in Unplug&rdquo; card on the same page.
+            most of the people we feature would never put themselves forward.
           </p>
           <a class="btn btn-line" href="/nominate" style="width:auto; display:inline-block;">Nominate someone &rarr;</a>
         </div>
@@ -3214,6 +3213,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </form>
     </div>
   </section>
+
+  <!-- WHERE THE CARD MAKER GOES ON THIS PAGE.
+       Empty in the markup on purpose. There is exactly ONE card maker in this
+       document and it is MOVED here when the contact page opens, never copied
+       — its JavaScript binds to element ids (cardCanvas, cardName, cardSubmit)
+       and a second copy would mean two elements sharing each of those, at
+       which point getElementById returns whichever came first and the other
+       form is dead markup that silently does nothing. -->
+  <div class="wrap" style="padding-top:0;">
+    <div class="divider" style="margin:8px 0 0;"><div class="line"></div><span class="print-mark">or</span><div class="line"></div></div>
+  </div>
+  <div id="contactCardSlot"></div>
 
   <!-- FEATURED ADVERTISERS POSTER SLIDESHOW -->
   <section class="wrap poster-section" style="padding-top:0;">
@@ -7616,6 +7627,29 @@ function routeFromUrl(){
 //
 // Deferred a frame: goToPage has only just unhidden the page, and an element
 // inside something still display:none has no position to scroll to.
+// ONE CARD MAKER, MOVED BETWEEN TWO PAGES — never duplicated.
+//
+// The "As Featured in Unplug" card appears on both /nominate and the contact
+// page. Copying the markup would be the obvious way to do that and would break
+// it outright: the card's script binds to element ids, so two copies means two
+// elements sharing every id, getElementById returns whichever came first, and
+// the other form looks completely normal while doing nothing at all.
+//
+// Only one page is ever visible in this document, so relocating the single
+// node is safe — every listener bound to it and everything already typed into
+// it comes along, because it is the same element.
+function placeCardMaker(pageId) {
+  const card = document.getElementById('nominate-card');
+  if (!card) return;
+  const slot = pageId === 'contact'
+    ? document.getElementById('contactCardSlot')
+    : document.getElementById('nominateCardSlot');
+  // Moved only when it is not already there. Re-appending an element that is
+  // already in place still detaches and reinserts it, which would reset a
+  // half-drawn canvas and lose whatever somebody had typed.
+  if (slot && card.parentElement !== slot) slot.appendChild(card);
+}
+
 function scrollToCardMaker() {
   // TRIED MORE THAN ONCE, on purpose. goToPage scrolls to the top
   // synchronously immediately before this runs; the page being scrolled within
@@ -8485,6 +8519,7 @@ function goToPage(pageId){
   // unplug-popups.js listens for this to release its one-popup-per-page-view
   // lock; without it a reader could browse all evening and, having dismissed
   // nothing, still only ever be offered one thing.
+  placeCardMaker(pageId);
   document.dispatchEvent(new CustomEvent('unplug:pageview', { detail: { page: pageId } }));
   const PAGE_TITLES = {
     home: 'Unplug Magazine — Real People. Real Impact.',
