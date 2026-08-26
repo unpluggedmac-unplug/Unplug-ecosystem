@@ -7592,7 +7592,19 @@ function seoSetTitle(title){
   });
 }
 
-// On first load and on browser back/forward, route from the ?p= URL so deep
+// The paths this document answers to that are NOT query strings.
+//
+// ONE LIST, used both to decide whether to route on load and to decide which
+// page to open. Keeping those as two separate tests is exactly how /nominate
+// shipped serving the homepage: the router knew about the path and the thing
+// that decides whether to call the router did not.
+const CLEAN_PATHS = { '/nominate': 'nominate' };
+
+function cleanPathPage() {
+  return CLEAN_PATHS[location.pathname.replace(/\/+$/, '') || '/'] || null;
+}
+
+// On first load and on browser back/forward, route from the URL so deep
 // links (e.g. shared article/profile URLs) open the right content.
 function routeFromUrl(){
   window.__seoSuppress = true;
@@ -7616,8 +7628,8 @@ function routeFromUrl(){
     // ?p=nominate still works. It is printed in social bios that were set
     // before /nominate existed, and those are not editable in bulk.
     else if (p && document.getElementById('page-' + p)) { goToPage(p); }
-    // The clean path, served here by a Cloudflare Pages rewrite.
-    else if (/^\/nominate\/?$/.test(location.pathname)) { goToPage('nominate'); }
+    // A clean path, served here by a Cloudflare Pages rewrite.
+    else if (cleanPathPage()) { goToPage(cleanPathPage()); }
     else { goToPage('home'); }
   } finally { window.__seoSuppress = false; }
 }
@@ -9311,7 +9323,14 @@ setInterval(loadLiveVisitors, 30000);
 
 // If the page was opened via a deep link (?p=news, ?p=article&id=5, …),
 // route to that content. A plain home load needs nothing (home is default).
-if (location.search) routeFromUrl();
+// ROUTE ON A CLEAN PATH TOO, not only on a query string.
+//
+// This said `if (location.search)` — which was right for as long as every deep
+// link was ?p=something. /nominate has no query string, so the router was never
+// called for it and the page sat on the homepage while the address bar said
+// /nominate. It could not be caught locally: the static dev server has no
+// Cloudflare rewrite, so the path form only exists in production.
+if (location.search || cleanPathPage()) routeFromUrl();
 
 // ---------------------------------------------------------------------------
 // Accessibility: skip-to-content link + modal focus management. For a
