@@ -26,3 +26,18 @@
 # as a 308 to /unplug-magazine, and a rewrite whose destination is itself
 # a redirect is not one Pages will follow.
 /    /unplug-magazine    200
+
+# /nominate — the one page with a real path rather than ?p=.
+#
+# It is the address that goes in a social bio, and "unplugnews.com/nominate"
+# is one somebody can read out loud over a phone. A 200 here is a REWRITE for
+# the same reason the root rule is: Pages serves the magazine's bytes at
+# /nominate while the address bar keeps saying /nominate, so a refresh, a
+# bookmark and a shared link all work. A 301 to ?p=nominate would put the
+# query string back in front of everybody who followed the clean link.
+#
+# The trailing-slash form is listed separately: Pages does not treat
+# /nominate and /nominate/ as the same request, and somebody typing the
+# address by hand adds the slash about half the time.
+/nominate     /unplug-magazine    200
+/nominate/    /unplug-magazine    200

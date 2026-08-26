@@ -1618,7 +1618,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button data-page="competitions" data-i18n="nav.competitions">Competitions</button>
       <button data-page="investors" data-i18n="nav.investors">Investors</button>
       <button data-page="brandplacement" data-i18n="nav.marketplace">Marketplace</button>
-      <button data-page="nominate" data-i18n="nav.nominate">Nominate</button>
       <button data-page="members" data-i18n="nav.members">Members</button>
       <button data-page="deafcommunity" data-i18n="nav.deafcommunity">Deaf Community</button>
       <button data-page="about" data-i18n="nav.about">About</button>
@@ -2904,14 +2903,69 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
      A real page rather than a bolted-on file, so it carries the site's header,
      nav, fonts, mobile rules, consent gate and analytics without any of that
      being rebuilt. Linkable from a social bio as ?p=nominate . -->
-<!-- SHARE CARD — "As Featured in Unplug".
-     Someone we featured makes a card for their own social accounts. The
-     preview is watermarked; the clean version only exists after an admin
-     approves it, and only the API can hand over the fields to draw it. -->
-<main class="page" id="page-card">
-  <div class="wrap" style="padding-top:56px; max-width:900px;">
+<main class="page" id="page-nominate">
+  <div class="wrap cms-blocks" data-cms-blocks="nominate"></div>
+  <div class="wrap" style="padding-top:56px; max-width:760px;">
+    <span class="eyebrow" data-cms="nominate.eyebrow">Nominate Someone</span>
+    <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 10px;" data-cms="nominate.title">Know someone who deserves to be seen?</h1>
+    <p class="lede" data-cms="nominate.lede">Every week we tell the story of an ordinary South African doing something worth noticing. Most of them would never put themselves forward. That is usually why they are worth writing about &mdash; and why it takes someone like you to point us to them.</p>
+
+    <div style="margin-top:32px; border:1px solid var(--paper-line); padding:26px 24px; background:var(--paper);">
+      <div class="field" style="margin-bottom:14px;">
+        <label for="nomName">Who are they? <span style="color:var(--red);">*</span></label>
+        <input id="nomName" type="text" maxlength="200" placeholder="Name and surname">
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="nomWhy">Why them?</label>
+        <textarea id="nomWhy" rows="4" placeholder="A sentence or two about what they do and why it matters. Anything you know helps."></textarea>
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="nomSocial">Their social media <span style="color:var(--slate); font-weight:400;">(optional)</span></label>
+        <input id="nomSocial" type="text" maxlength="200" placeholder="@theirhandle or a link to their page">
+        <span style="display:block; font-size:12.5px; color:var(--slate); margin-top:5px;"
+              data-cms="nominate.socialhint">Facebook, Instagram, TikTok &mdash; whatever you have. It helps us find the right person.</span>
+      </div>
+      <div class="field" style="margin-bottom:6px;">
+        <label for="nomEmail">Your email</label>
+        <input id="nomEmail" type="email" placeholder="So we can tell you when their story goes live">
+      </div>
+      <label style="display:flex; gap:9px; align-items:flex-start; font-size:13.5px; color:var(--slate); margin:12px 0 4px; cursor:pointer;">
+        <input type="checkbox" id="nomSubscribe" checked style="margin-top:3px; flex:none;">
+        <span data-cms="nominate.optin">Also send me the Unplug newsletter &mdash; one email, once a week, real stories from around the country.</span>
+      </label>
+      <!-- Honeypot: a real person never fills this in. Matches the field the
+           API's honeypot middleware already checks. -->
+      <input type="text" id="nomWebsite" tabindex="-1" autocomplete="off" aria-hidden="true"
+             style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+      <button class="btn btn-solid" id="nomSubmit" style="width:auto; margin-top:16px;">Send nomination</button>
+      <p id="nomMsg" style="font-size:13px; margin:12px 0 0; min-height:18px;"></p>
+      <p class="consent-note">Nominations are read by a person before anything is published. We never publish an email address. <a href="?p=privacy">Privacy Policy</a>.</p>
+    </div>
+
+    <div style="margin-top:44px;">
+      <h2 style="font-size:22px; margin:0 0 10px;" data-cms="nominate.how.title">What happens next</h2>
+      <ol style="color:var(--slate); line-height:1.9; padding-left:20px;">
+        <li data-cms="nominate.how.1">We read every nomination ourselves &mdash; there is no algorithm here.</li>
+        <li data-cms="nominate.how.2">If it is a fit, we get in touch and take the time to do the story properly.</li>
+        <li data-cms="nominate.how.3">It goes live on Unplug, and we send them a card they can share with their own people.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- The dividing line between the two halves of this page. Deliberately
+       loud: above it you are talking about somebody else, below it you are
+       talking about yourself. -->
+  <div class="wrap" style="max-width:760px; padding-top:40px; padding-bottom:0;">
+    <div class="divider" style="margin:0;"><div class="line"></div><span class="print-mark">or</span><div class="line"></div></div>
+  </div>
+
+<div class="wrap" id="nominate-card" style="padding-top:8px; max-width:900px; scroll-margin-top:90px;">
     <span class="eyebrow" data-cms="card.eyebrow">Share Your Feature</span>
-    <h1 style="font-size:clamp(30px,4.2vw,46px); margin:14px 0 10px;" data-cms="card.title">Make your &ldquo;As Featured in Unplug&rdquo; card</h1>
+    <!-- An h2, not an h1. It was the h1 of its own page; on the nominate page
+           the h1 is "Know someone who deserves to be seen?" and a second one
+           would give the document two top-level titles — which is a broken
+           outline for anyone navigating this page by heading. -->
+      <h2 style="font-size:clamp(28px,3.8vw,40px); margin:14px 0 10px;" data-cms="card.title">Make your &ldquo;As Featured in Unplug&rdquo; card</h2>
     <p class="lede" data-cms="card.lede">Been featured in Unplug? Make a card to post on your own accounts. Fill it in, see how it looks, and send it to us &mdash; we check every card before it goes out with our name on it, then email you the finished one.</p>
 
     <div id="cardApproved" hidden style="margin-top:24px; padding:16px 18px; border:1px solid var(--paper-line); background:var(--paper);"></div>
@@ -2960,56 +3014,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         </p>
         <button class="btn btn-line" id="cardDownload" style="width:auto; margin-top:6px; display:none;">Download your card</button>
       </div>
-    </div>
-  </div>
-</main>
-
-<main class="page" id="page-nominate">
-  <div class="wrap cms-blocks" data-cms-blocks="nominate"></div>
-  <div class="wrap" style="padding-top:56px; max-width:760px;">
-    <span class="eyebrow" data-cms="nominate.eyebrow">Nominate Someone</span>
-    <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 10px;" data-cms="nominate.title">Know someone who deserves to be seen?</h1>
-    <p class="lede" data-cms="nominate.lede">Every week we tell the story of an ordinary South African doing something worth noticing. Most of them would never put themselves forward. That is usually why they are worth writing about &mdash; and why it takes someone like you to point us to them.</p>
-
-    <div style="margin-top:32px; border:1px solid var(--paper-line); padding:26px 24px; background:var(--paper);">
-      <div class="field" style="margin-bottom:14px;">
-        <label for="nomName">Who are they? <span style="color:var(--red);">*</span></label>
-        <input id="nomName" type="text" maxlength="200" placeholder="Name and surname">
-      </div>
-      <div class="field" style="margin-bottom:14px;">
-        <label for="nomWhy">Why them?</label>
-        <textarea id="nomWhy" rows="4" placeholder="A sentence or two about what they do and why it matters. Anything you know helps."></textarea>
-      </div>
-      <div class="field" style="margin-bottom:14px;">
-        <label for="nomSocial">Their social media <span style="color:var(--slate); font-weight:400;">(optional)</span></label>
-        <input id="nomSocial" type="text" maxlength="200" placeholder="@theirhandle or a link to their page">
-        <span style="display:block; font-size:12.5px; color:var(--slate); margin-top:5px;"
-              data-cms="nominate.socialhint">Facebook, Instagram, TikTok &mdash; whatever you have. It helps us find the right person.</span>
-      </div>
-      <div class="field" style="margin-bottom:6px;">
-        <label for="nomEmail">Your email</label>
-        <input id="nomEmail" type="email" placeholder="So we can tell you when their story goes live">
-      </div>
-      <label style="display:flex; gap:9px; align-items:flex-start; font-size:13.5px; color:var(--slate); margin:12px 0 4px; cursor:pointer;">
-        <input type="checkbox" id="nomSubscribe" checked style="margin-top:3px; flex:none;">
-        <span data-cms="nominate.optin">Also send me the Unplug newsletter &mdash; one email, once a week, real stories from around the country.</span>
-      </label>
-      <!-- Honeypot: a real person never fills this in. Matches the field the
-           API's honeypot middleware already checks. -->
-      <input type="text" id="nomWebsite" tabindex="-1" autocomplete="off" aria-hidden="true"
-             style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
-      <button class="btn btn-solid" id="nomSubmit" style="width:auto; margin-top:16px;">Send nomination</button>
-      <p id="nomMsg" style="font-size:13px; margin:12px 0 0; min-height:18px;"></p>
-      <p class="consent-note">Nominations are read by a person before anything is published. We never publish an email address. <a href="?p=privacy">Privacy Policy</a>.</p>
-    </div>
-
-    <div style="margin-top:44px;">
-      <h2 style="font-size:22px; margin:0 0 10px;" data-cms="nominate.how.title">What happens next</h2>
-      <ol style="color:var(--slate); line-height:1.9; padding-left:20px;">
-        <li data-cms="nominate.how.1">We read every nomination ourselves &mdash; there is no algorithm here.</li>
-        <li data-cms="nominate.how.2">If it is a fit, we get in touch and take the time to do the story properly.</li>
-        <li data-cms="nominate.how.3">It goes live on Unplug, and we send them a card they can share with their own people.</li>
-      </ol>
     </div>
   </div>
 </main>
@@ -3184,6 +3188,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <p style="font-size:14px; margin-bottom:24px;"><strong>General:</strong> hello@unplugnews.com</p>
         <p style="font-size:14px; margin-bottom:4px;"><strong>Website:</strong> <a href="https://www.unplugnews.com" style="color:var(--red);">www.unplugnews.com</a></p>
         <p style="font-size:13px; color:var(--slate); margin-top:24px; font-style:italic;">"Where Stories Shape Legacy"</p>
+
+        <!-- Nominate is not in the top nav, so this is one of the few places
+             on the site that leads to it. Kept as a link rather than a second
+             copy of the form: two copies of one form is two things to keep in
+             step, and only one of them would get fixed. -->
+        <div style="margin-top:28px; padding-top:24px; border-top:1px solid var(--paper-line);">
+          <h3 style="margin:0 0 8px;">Nominate someone</h3>
+          <p style="color:var(--slate); line-height:1.6; margin:0 0 14px; font-size:14px;">
+            Know an ordinary South African doing something worth noticing? Tell us about them &mdash;
+            most of the people we feature would never put themselves forward. Been featured already?
+            You can make your &ldquo;As Featured in Unplug&rdquo; card on the same page.
+          </p>
+          <a class="btn btn-line" href="/nominate" style="width:auto; display:inline-block;">Nominate someone &rarr;</a>
+        </div>
       </div>
       <form id="contactForm">
         <input type="text" name="website" id="hpContact" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
@@ -7574,11 +7592,64 @@ function routeFromUrl(){
     else if (p === 'project' && params.get('id')) { goToPage('project'); loadProject(params.get('id')); }
     else if (p === 'profile' && params.get('slug')) { goToPage('directoryprofile'); loadProfileDetail(params.get('slug')); }
     else if (p === 'contributor' && params.get('slug')) { goToPage('contributor'); loadContributor(params.get('slug')); }
-    else if (p === 'card' && params.get('token')) { goToPage('card'); loadApprovedCard(params.get('token')); }
+    // The card maker now lives on the nominate page, so every route that used
+    // to open ?p=card lands there instead and scrolls to it.
+    //
+    // ?p=card&token=... IS THE LINK IN THE APPROVAL EMAIL. Somebody has been
+    // told their card is ready and sent this address; it has to keep working
+    // exactly, for as long as those emails exist in people's inboxes.
+    else if (p === 'card' && params.get('token')) {
+      goToPage('nominate'); loadApprovedCard(params.get('token')); scrollToCardMaker();
+    }
+    else if (p === 'card') { goToPage('nominate'); scrollToCardMaker(); }
+    // ?p=nominate still works. It is printed in social bios that were set
+    // before /nominate existed, and those are not editable in bulk.
     else if (p && document.getElementById('page-' + p)) { goToPage(p); }
+    // The clean path, served here by a Cloudflare Pages rewrite.
+    else if (/^\/nominate\/?$/.test(location.pathname)) { goToPage('nominate'); }
     else { goToPage('home'); }
   } finally { window.__seoSuppress = false; }
 }
+// Puts the card maker in view when somebody arrived for it specifically,
+// rather than leaving them at the top of a page about nominating other people
+// and expecting them to scroll past a whole form to find their own.
+//
+// Deferred a frame: goToPage has only just unhidden the page, and an element
+// inside something still display:none has no position to scroll to.
+function scrollToCardMaker() {
+  // TRIED MORE THAN ONCE, on purpose. goToPage scrolls to the top
+  // synchronously immediately before this runs; the page being scrolled within
+  // has only just been unhidden, so a moment earlier the target had no layout
+  // at all; and the sections above the card fill in asynchronously, which moves
+  // it after the first attempt lands. Any one of those defeats a single call.
+  //
+  // Instant rather than smooth: a smooth scroll can be interrupted part-way by
+  // the next thing that shifts the layout, which leaves the reader stranded
+  // between the two forms with no idea which one they are looking at.
+  //
+  // IT GIVES UP THE MOMENT THE READER TAKES OVER. Yanking somebody who has
+  // started scrolling for themselves is worse than landing in the wrong place.
+  let cancelled = false;
+  const stop = () => { cancelled = true; };
+  window.addEventListener('wheel', stop, { once: true, passive: true });
+  window.addEventListener('touchstart', stop, { once: true, passive: true });
+  window.addEventListener('keydown', stop, { once: true });
+
+  const jump = () => {
+    if (cancelled) return;
+    const el = document.getElementById('nominate-card');
+    if (el) el.scrollIntoView({ behavior: 'auto', block: 'start' });
+  };
+  requestAnimationFrame(jump);
+  setTimeout(jump, 300);
+  setTimeout(() => {
+    jump();
+    window.removeEventListener('wheel', stop);
+    window.removeEventListener('touchstart', stop);
+    window.removeEventListener('keydown', stop);
+  }, 900);
+}
+
 window.addEventListener('popstate', routeFromUrl);
 
 // ---- Contributor page (the byline links here) ----
@@ -8425,6 +8496,7 @@ function goToPage(pageId){
     members: 'Members — Unplug Magazine',
     about: 'About Us — Unplug Magazine',
     contact: 'Contact Us — Unplug Magazine',
+    nominate: 'Nominate Someone — Unplug Magazine',
     privacy: 'Privacy Policy — Unplug Magazine',
     terms: 'Terms of Use — Unplug Magazine',
     refunds: 'Terms & Policies — Unplug Magazine',
@@ -8434,10 +8506,35 @@ function goToPage(pageId){
   // Deep-linkable URL: reflect the current page in the address bar so pages
   // are shareable, bookmarkable and individually indexable. Query params are
   // used (not paths) so a refresh always serves index.html on the static host.
-  if (!window.__seoSuppress) {
-    const url = pageId === 'home' ? '/' : ('?p=' + encodeURIComponent(pageId));
-    history.pushState({ p: pageId }, '', url);
-    seoSetUrl(url === '/' ? '' : url);
+  // THE CANONICAL IS SET EVEN ON FIRST LOAD; only the history entry is
+  // suppressed.
+  //
+  // __seoSuppress exists so that routing from the URL on arrival does not push
+  // a second history entry for the page the browser is already on — pressing
+  // Back would then do nothing the first time. That is right. But it was
+  // wrapped around seoSetUrl as well, so a visitor arriving directly at
+  // /?p=about was served a canonical of https://www.unplugnews.com/ — every
+  // page on this site telling search engines it was really the homepage, and
+  // therefore a duplicate not worth indexing separately. Verified in a browser
+  // before and after: ?p=about reported the homepage as its canonical.
+  //
+  // That silently defeated the sitemap, which lists these pages individually.
+  {
+    // NOMINATE HAS A REAL PATH. It is the address that goes in a social bio,
+    // and /nominate is one somebody can read out loud. Cloudflare Pages
+    // rewrites it to this file (see _redirects), so a refresh still works.
+    //
+    // Without this branch the address bar would flip back to ?p=nominate the
+    // moment anything navigated, and the clean URL would last exactly one
+    // click.
+    const url = pageId === 'home' ? '/'
+      : pageId === 'nominate' ? '/nominate'
+      : ('?p=' + encodeURIComponent(pageId));
+    if (!window.__seoSuppress) history.pushState({ p: pageId }, '', url);
+    // seoSetUrl builds https://www.unplugnews.com/ + what it is given, so the
+    // canonical for this page is the path, not the query string — otherwise
+    // /nominate and ?p=nominate would be two indexable copies of one page.
+    seoSetUrl(url === '/' ? '' : (pageId === 'nominate' ? 'nominate' : url));
   }
 
   // Drop the previous page's structured data. An article's NewsArticle markup
