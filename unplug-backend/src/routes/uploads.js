@@ -1,6 +1,10 @@
 const express = require('express');
 const fs = require('fs');
-const { upload, uploadPdf, uploadProof, MAX_PDF_SIZE_BYTES, MAX_PROOF_SIZE_BYTES } = require('../middleware/upload');
+const {
+  upload, uploadPdf, uploadProof, verifySignature,
+  ALLOWED_MIME_TYPES, ALLOWED_PROOF_MIME_TYPES,
+  MAX_PDF_SIZE_BYTES, MAX_PROOF_SIZE_BYTES,
+} = require('../middleware/upload');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
@@ -153,6 +157,15 @@ router.post('/proof', (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file was uploaded (expected multipart field "file").' });
     }
+
+    // What the bytes say it is, not what the browser called it. multer's
+    // fileFilter only ever saw a client-supplied Content-Type; this is the
+    // first point at which the file itself can be read. A mismatch deletes
+    // the temp file and refuses — proof of payment is what this endpoint stores.
+    const signature = verifySignature(req.file, ALLOWED_PROOF_MIME_TYPES);
+    if (!signature.ok) {
+      return res.status(400).json({ error: signature.reason });
+    }
     try {
       const url = await uploadToSupabasePrivate(req.file);
       res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size });
@@ -183,6 +196,15 @@ router.post('/pdf', requireRole('admin'), (req, res) => {
     }
     if (!req.file) {
       return res.status(400).json({ error: 'No file was uploaded (expected multipart field "file").' });
+    }
+
+    // What the bytes say it is, not what the browser called it. multer's
+    // fileFilter only ever saw a client-supplied Content-Type; this is the
+    // first point at which the file itself can be read. A mismatch deletes
+    // the temp file and refuses — a PDF is what this endpoint stores.
+    const signature = verifySignature(req.file, ['application/pdf']);
+    if (!signature.ok) {
+      return res.status(400).json({ error: signature.reason });
     }
 
     if (supabaseConfigured) {
@@ -257,6 +279,15 @@ router.post('/edition-download-pdf', requireRole('admin'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file was uploaded (expected multipart field "file").' });
     }
+
+    // What the bytes say it is, not what the browser called it. multer's
+    // fileFilter only ever saw a client-supplied Content-Type; this is the
+    // first point at which the file itself can be read. A mismatch deletes
+    // the temp file and refuses — a PDF is what this endpoint stores.
+    const signature = verifySignature(req.file, ['application/pdf']);
+    if (!signature.ok) {
+      return res.status(400).json({ error: signature.reason });
+    }
     try {
       const url = await uploadToSupabasePrivate(req.file);
       res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'supabase-private' });
@@ -274,6 +305,15 @@ router.post('/', requireAuth, (req, res) => {
     }
     if (!req.file) {
       return res.status(400).json({ error: 'No file was uploaded (expected multipart field "file").' });
+    }
+
+    // What the bytes say it is, not what the browser called it. multer's
+    // fileFilter only ever saw a client-supplied Content-Type; this is the
+    // first point at which the file itself can be read. A mismatch deletes
+    // the temp file and refuses — an image is what this endpoint stores.
+    const signature = verifySignature(req.file, ALLOWED_MIME_TYPES);
+    if (!signature.ok) {
+      return res.status(400).json({ error: signature.reason });
     }
 
     if (supabaseConfigured) {

@@ -60,12 +60,18 @@ const PAGES = [
 // keep the cache granular.
 const MODULES = [
   'unplug-shared.js', 'unplug-seo-schema.js', 'unplug-responsive-images.js',
+  'unplug-components.js', 'unplug-spam-forms.js',
   'unplug-participation-sdk.js', 'i18n.js', 'accessibility.js',
   'chatbot.js', 'image-upload.js',
 ];
 
 // Copied through untouched.
-const STATIC = ['sw.js', 'manifest.webmanifest', 'robots.txt', '_headers', '_redirects'];
+// unplug-tokens.css is listed here rather than being minified into a hashed
+// asset because every page LINKS it by name. Hashing it would mean rewriting
+// that link in seven files, and a page linking a hashed name that did not get
+// rewritten is the undefined-token bug all over again, one layer down.
+const STATIC = ['sw.js', 'manifest.webmanifest', 'robots.txt', '_headers',
+                '_redirects', 'unplug-tokens.css', 'unplug-popups.js'];
 const STATIC_DIRS = ['icons', 'media', 'functions'];
 
 function hash(content) {

@@ -27,6 +27,13 @@ const STATIC_PAGES = [
   { path: '/?p=gallery', freq: 'monthly', priority: '0.5' },
   { path: '/?p=about', freq: 'monthly', priority: '0.5' },
   { path: '/?p=contact', freq: 'monthly', priority: '0.5' },
+  // Listed even though it is not in the site's navigation. It is out of the
+  // nav on purpose, not hidden — it is the page a social bio points at, and
+  // somebody searching "nominate unplug" should still find it. The path form
+  // is used because that is the canonical this page now sets for itself; the
+  // old ?p=nominate still works but must not be advertised as a second URL
+  // for the same page.
+  { path: '/nominate', freq: 'monthly', priority: '0.6' },
   { path: '/?p=privacy', freq: 'yearly', priority: '0.3' },
   { path: '/?p=terms', freq: 'yearly', priority: '0.3' },
   { path: '/?p=refunds', freq: 'yearly', priority: '0.3' },

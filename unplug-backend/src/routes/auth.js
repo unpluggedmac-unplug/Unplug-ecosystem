@@ -8,6 +8,8 @@ const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireAuth } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
 const { loginLimiter, registerLimiter, emailActionLimiter } = require('../middleware/rateLimit');
+const loginAttempts = require('../utils/loginAttempts');
+const twoFactor = require('../utils/twoFactor');
 
 const router = express.Router();
 
@@ -185,8 +187,27 @@ router.post('/login', loginLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
+    // PER-ACCOUNT BACKOFF, on top of the per-IP limiter above.
+    //
+    // loginLimiter keys on the address: it stops one machine trying thousands
+    // of passwords, and does nothing about a hundred machines trying a hundred
+    // each against one account. This is the half of brute-forcing that the IP
+    // limit cannot see.
+    //
+    // Checked BEFORE the database is asked anything, so a delayed attempt
+    // costs a lookup rather than a bcrypt comparison — bcrypt is deliberately
+    // expensive, which makes it a way to load the server if it runs first.
+    const gate = await loginAttempts.check(email);
+    if (!gate.allowed) {
+      res.set('Retry-After', String(gate.retryAfterSeconds));
+      return res.status(429).json({
+        error: `Too many failed sign-in attempts. Please wait ${gate.retryAfterSeconds} second${gate.retryAfterSeconds === 1 ? '' : 's'} and try again, or reset your password.`,
+        retryAfterSeconds: gate.retryAfterSeconds,
+      });
+    }
+
     const result = await pool.query(
-      'SELECT id, email, role, password_hash, email_verified, full_name, member_type, is_suspended, suspended_reason FROM users WHERE email = $1',
+      'SELECT id, email, role, password_hash, email_verified, full_name, member_type, is_suspended, suspended_reason, two_factor_enabled FROM users WHERE email = $1',
       [email]
     );
     const user = result.rows[0];
@@ -194,10 +215,16 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     // Same generic error whether the email doesn't exist or the password is
     // wrong — avoids revealing which accounts exist.
     if (!user) {
+      // Recorded even though no such account exists. Counting only real
+      // accounts would make the delay itself an answer to "is this address
+      // registered here?" — the same disclosure the shared error message
+      // above exists to prevent.
+      await loginAttempts.recordFailure(email, req.ip);
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
     const matches = await bcrypt.compare(password, user.password_hash);
     if (!matches) {
+      await loginAttempts.recordFailure(email, req.ip);
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
     if (!user.email_verified) {
@@ -208,6 +235,47 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     if (user.is_suspended) {
       return res.status(403).json({ error: user.suspended_reason ? `Your account has been suspended: ${user.suspended_reason}` : 'Your account has been suspended. Contact Unplug support for details.' });
     }
+
+    // SECOND FACTOR, checked after the password and after the suspension check.
+    //
+    // Order matters: asking for a code before the password is right would tell
+    // an attacker that the password WAS right for every account that has 2FA
+    // switched on, turning the feature into an oracle for guessing passwords.
+    //
+    // The failed-attempt record is NOT cleared here. Until the second factor
+    // is satisfied this is not a successful sign-in, and clearing it would let
+    // somebody with a correct password reset the backoff at will.
+    if (user.two_factor_enabled) {
+      const code = req.body.twoFactorCode;
+      if (!code) {
+        return res.status(401).json({
+          error: 'Enter the six-digit code from your authenticator app.',
+          twoFactorRequired: true,
+        });
+      }
+      const second = await twoFactor.verifySecondFactor(user.id, code);
+      if (!second.ok) {
+        await loginAttempts.recordFailure(email, req.ip);
+        return res.status(401).json({
+          error: second.replayed
+            ? 'That code has already been used. Wait for your app to show the next one.'
+            : 'That code is not right.',
+          twoFactorRequired: true,
+        });
+      }
+      if (second.usedRecoveryCode) {
+        // Worth saying out loud: a recovery code is a one-time way in, and
+        // running out of them without noticing is how somebody ends up locked
+        // out of their own site.
+        console.warn(`[auth] recovery code used by ${user.email}, ${second.remainingRecoveryCodes} left`);
+      }
+    }
+
+    // The failures were evidence of guessing only until the owner arrived.
+    // Not awaited on the response path — a slow DELETE must never be the
+    // reason a correct sign-in feels slow.
+    loginAttempts.recordSuccess(email)
+      .catch((e) => console.error('[login] could not clear attempt record:', e.message));
 
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, {
       expiresIn: '7d',

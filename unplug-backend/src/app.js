@@ -25,6 +25,11 @@ const salesConsultantRoutes = require('./routes/salesConsultants');
 const uploadRoutes = require('./routes/uploads');
 const imageRoutes = require('./routes/images');
 const maintenanceRoutes = require('./routes/maintenance');
+const securityRoutes = require('./routes/security');
+const spamRoutes = require('./routes/spam');
+const backupRoutes = require('./routes/backups');
+const crmRoutes = require('./routes/crm');
+const emailRoutes = require('./routes/email');
 const agreementRoutes = require('./routes/agreements');
 const bulkEmailRoutes = require('./routes/bulkEmail');
 const editionRoutes = require('./routes/editions');
@@ -62,9 +67,37 @@ const app = express();
 // https scheme (via x-forwarded-proto) so generated URLs aren't http://.
 app.set('trust proxy', true);
 
+// Makes the caller's address available to anything running during the request,
+// without threading `req` through every function that might want it. The audit
+// log reads it from here: logActivity is called from seventy-eight places, and
+// editing all of them to pass an address is how some of them get missed — and
+// a log with unexplained holes is worse than one with none.
+app.use(require('./middleware/requestContext').middleware);
+
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
-app.use(express.json());
+// 512kb. The largest honest JSON payload is a long article with its gallery
+// list; uploads are multipart and handled by multer, which has its own larger
+// limits. Express defaults to 100kb, which a long article can exceed — so this
+// is raised deliberately rather than left to chance, and bounded deliberately
+// rather than left open.
+//
+// THE MAIL PROVIDER'S WEBHOOKS ARE EXEMPTED FROM THIS PARSER, deliberately.
+//
+// Their signature is computed over the RAW REQUEST BYTES. Once express.json()
+// has parsed the body and it has been re-serialised, key order and whitespace
+// have changed, and a perfectly correct secret then verifies as wrong — the
+// most confusing way this can possibly fail, because everything looks right.
+// routes/emailWebhooks.js brings its own express.raw().
+//
+// Skipping the parser rather than mounting the route above it keeps the
+// webhook BEHIND the access-control and WAF middleware further down, so it is
+// exempt from one parser rather than from every guard on the server.
+const jsonParser = express.json({ limit: require('./middleware/wafLite').MAX_JSON_BYTES });
+app.use((req, res, next) => {
+  if (req.path.startsWith('/email/webhooks')) return next();
+  return jsonParser(req, res, next);
+});
 app.use(securityHeaders);
 app.use(requestLogger);
 
@@ -72,7 +105,26 @@ app.use(requestLogger);
 // Individual routes then use requireAuth / requireRole to enforce access.
 app.use(attachUser);
 
+// AFTER attachUser, so an account block follows the person rather than the
+// machine they happen to be using, and BEFORE every route, so a refused
+// request costs a cached lookup instead of a query.
+//
+// Order between these two matters as well: the access list is consulted first,
+// so an address on the allow list is never refused by a pattern. Somebody
+// exempted has been exempted deliberately, and a filter second-guessing that
+// is how an admin gets locked out mid-incident.
+app.use(require('./middleware/accessControl').middleware);
+app.use(require('./middleware/wafLite').middleware);
+
+// Health stays reachable regardless — an uptime check must not be able to trip
+// a filter and report the site down when it is fine.
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// What the mail provider tells us after a send: delivered, bounced,
+// complained. Unauthenticated because Resend cannot log in — but every request
+// is verified against a shared signing secret, and unsigned requests are
+// refused outright. It parses its own raw body (see the exemption above).
+app.use('/email/webhooks', require('./routes/emailWebhooks'));
 
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
@@ -98,6 +150,18 @@ app.use('/uploads', uploadRoutes);
 // frontend asks once and treats a late or missing answer as "originals only".
 app.use('/images', imageRoutes);
 app.use('/maintenance', maintenanceRoutes);
+app.use('/security', securityRoutes);
+app.use('/spam', spamRoutes);
+app.use('/backups', backupRoutes);
+app.use('/crm', crmRoutes);
+// Public and unauthenticated on purpose: somebody unsubscribing is holding a
+// link from an email, not a password.
+app.use('/email', emailRoutes);
+// The other half: the composer, the campaigns, the automations and the
+// reporting. Admin-only, mounted under /admin so the split between "anybody
+// holding an unsubscribe link" and "an administrator" is visible in the path
+// rather than only inside the file.
+app.use('/admin/email', require('./routes/emailCampaigns'));
 // Serves the actual uploaded files back out (GET /uploads/<filename>).
 // Mounting static alongside the POST-only uploadRoutes above is safe —
 // express.static only ever handles GET/HEAD, so it never intercepts the
@@ -113,6 +177,10 @@ app.use('/shoutouts', shoutoutRoutes);
 app.use('/search', searchRoutes);
 app.use('/deaf-community', deafCommunityRoutes);
 app.use('/newsletter', newsletterRoutes);
+// Reader popups: the public feed and event counter, plus the admin's controls.
+// The feed is identical for everybody and cached for a minute — it is asked
+// for on every page view, and this instance sleeps when idle.
+app.use('/popups', require('./routes/popups'));
 app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);
@@ -219,10 +287,47 @@ setInterval(() => {
     .catch((err) => console.error('[cleanup] failed:', err.message));
 }, CLEANUP_INTERVAL_MS);
 
+// Nightly backup. Same in-process pattern as the others, with the same caveat:
+// it only fires while the instance is awake, so POST /backups/run with
+// UNPLUG_CLEANUP_SECRET is there for a scheduler that wants a guarantee.
+//
+// SILENT UNLESS CONFIGURED. With no passphrase set this logs once and stops
+// trying, rather than writing an error every night that everybody learns to
+// scroll past. A backup system nobody trusts the logs of is not one anybody
+// checks.
+const backupRunner = require('./utils/backupRunner');
+const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+let backupWarned = false;
+setInterval(() => {
+  if (!process.env.UNPLUG_BACKUP_PASSPHRASE) {
+    if (!backupWarned) {
+      console.warn('[backup] UNPLUG_BACKUP_PASSPHRASE is not set — no backups are being taken.');
+      backupWarned = true;
+    }
+    return;
+  }
+  backupRunner.run()
+    .then((r) => console.log(`[backup] ${r.filename}: ${r.rows} rows, `
+      + `${(r.encryptedBytes / 1024).toFixed(0)}KB to `
+      + r.destinations.filter((d) => d.ok).map((d) => d.provider).join(', ')))
+    .catch((err) => console.error('[backup] failed:', err.message));
+}, BACKUP_INTERVAL_MS);
+
 // Participation engine: rankings + daily homepage recalculation. No
 // pg_cron on this Postgres, so this runs the same way the birthday
 // check above does — an in-process interval, not a database job.
 require('./utils/participationScheduler').start();
+
+// Scheduled campaigns and drip automations, every five minutes.
+//
+// Same caveat as everything else here — it only fires while the instance is
+// awake — but with a different consequence, so it is worth saying plainly: a
+// missed tick DELAYS a send, it never loses one and it never sends twice. Each
+// tick claims work by moving its status forward in the same statement that
+// finds it, so the next tick picks up whatever is still due and nothing else.
+// POST /admin/email/tick with UNPLUG_CLEANUP_SECRET is there for an external
+// scheduler that wants sends to happen at the minute they were set for.
+require('./utils/emailScheduler').start();
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => {

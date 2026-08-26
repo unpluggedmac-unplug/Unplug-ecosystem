@@ -78,6 +78,14 @@ function rules() {
       why: `one row per page load; past ${ANALYTICS_RETENTION_DAYS} days nothing queries them`,
     },
     {
+      table: 'login_attempts',
+      // Only rows already past the reset window, so a live delay is never
+      // deleted out from under somebody mid-attack. The row is worthless once
+      // the count has reset anyway — check() ignores it.
+      where: `last_failed_at < now() - INTERVAL '30 days'`,
+      why: 'failed sign-in records that stopped counting weeks ago',
+    },
+    {
       table: 'not_found_log',
       // Only entries already dealt with. An unresolved miss is a to-do list
       // item, however old, and deleting it loses the reason a redirect was

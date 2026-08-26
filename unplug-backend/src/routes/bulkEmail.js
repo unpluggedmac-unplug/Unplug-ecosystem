@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
+const marketing = require('../utils/emailMarketing');
 
 const router = express.Router();
 
@@ -49,16 +50,55 @@ async function getRecipients(segment) {
 // it progresses so GET /history reflects real-time delivery status.
 const BATCH_SIZE = 10;
 
+// The campaign body is plain text an admin typed. Escaped before it goes into
+// the HTML part, or a stray "<" swallows the rest of the message in every mail
+// client that renders HTML.
+function escapeForEmail(text) {
+  return String(text == null ? '' : text)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 async function sendCampaignInBackground(campaignId, recipients, subject, body) {
   try {
     await pool.query(`UPDATE bulk_email_campaigns SET status = 'sending' WHERE id = $1`, [campaignId]);
 
     let sentCount = 0;
+    let skipped = 0;
     for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
       const batch = recipients.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map((r) => sendEmail({ to: r.email, subject, text: body })));
-      sentCount += batch.length;
+
+      const results = await Promise.all(batch.map(async (r) => {
+        // SUPPRESSION IS CHECKED HERE, one address at a time, at the moment of
+        // sending — not when `recipients` was built.
+        //
+        // This send takes minutes. Somebody who unsubscribes during minute two
+        // must not receive minute three, and a list filtered once at the start
+        // cannot know that. Before this check existed there was no filtering at
+        // all: this route mailed every matching member with no unsubscribe link
+        // and no way for anyone to stop it.
+        const suppressed = await marketing.isSuppressed(r.email);
+        if (suppressed) return { skipped: true, reason: suppressed };
+
+        // Sent through the marketing sender so the message carries an
+        // unsubscribe link and the List-Unsubscribe headers that put a
+        // one-click button in Gmail. A bulk message without them is one people
+        // report as spam instead of leaving.
+        await marketing.sendOne({
+          campaignId: null, email: r.email, subject,
+          text: body,
+          html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#272626;">`
+              + escapeForEmail(body).replace(/\n/g, '<br>') + '</div>',
+        });
+        return { skipped: false };
+      }));
+
+      sentCount += results.filter((x) => !x.skipped).length;
+      skipped += results.filter((x) => x.skipped).length;
       await pool.query(`UPDATE bulk_email_campaigns SET sent_count = $1 WHERE id = $2`, [sentCount, campaignId]);
+    }
+
+    if (skipped) {
+      console.log(`[bulk-email] Campaign ${campaignId}: skipped ${skipped} suppressed address(es)`);
     }
 
     await pool.query(`UPDATE bulk_email_campaigns SET status = 'completed' WHERE id = $1`, [campaignId]);

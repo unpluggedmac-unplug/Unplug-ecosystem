@@ -1,0 +1,116 @@
+/* Unplug — design tokens. The one place the site's appearance is defined.
+ *
+ * WHY THIS FILE EXISTS, and it is not tidiness.
+ *
+ * These custom properties were declared separately inside three HTML files and
+ * NOT AT ALL in two others — while those two used them anyway.
+ * unplug-checkout.html referenced var(--red), var(--paper) and four more
+ * twenty-seven times; unplug-vote.html thirty-eight times. Every one of those
+ * resolved to nothing.
+ *
+ * Verified in a browser: on the checkout page `body` computed to a transparent
+ * background where var(--paper) was intended and plain black text instead of
+ * var(--ink); the cards had no background at all. Those are the two pages
+ * where people pay.
+ *
+ * So this is a repair as much as a foundation. One file, linked by every page,
+ * and the brand can be changed in one place instead of three-and-a-half.
+ *
+ * LOADED BEFORE EACH PAGE'S OWN STYLES, so a page can still override a token
+ * for itself without editing this.
+ */
+
+:root {
+  /* --------------------------------------------------------------------
+   * Brand palette.
+   *
+   * The five brand colours, plus the neutrals the site already used. Names
+   * describe the ROLE rather than the colour, because "--ink" survives a
+   * rebrand and "--dark-grey" does not.
+   * ------------------------------------------------------------------ */
+  --ink:        #272626;   /* body text */
+  --slate:      #454545;   /* secondary text, captions */
+  --black:      #0f0e0e;   /* headings, the darkest surface */
+  --cream:      #ffffff;   /* card and panel surfaces */
+  --paper:      #f1f0ef;   /* the page behind the cards */
+  --paper-line: rgba(15, 14, 14, 0.14);  /* hairline rules and borders */
+
+  --red:        #d20709;   /* the brand red: calls to action, the fingerprint */
+  --maroon:     #721415;   /* the deeper red, for hovers and accents */
+
+  /* Kept because the site already uses them. --gold is currently the same as
+   * --red; it is a separate name so a future gold does not require finding
+   * every place that meant "accent" and happened to say "red".
+   */
+  --gold:       #d20709;
+  --green:      #2e7d32;   /* success, confirmed payments, approved states */
+
+  /* --------------------------------------------------------------------
+   * Typography.
+   *
+   * A scale rather than a list of sizes, so headings relate to each other
+   * instead of each being chosen separately. The clamp() values are what the
+   * magazine already uses — captured here rather than invented, so nothing
+   * changes size today.
+   * ------------------------------------------------------------------ */
+  --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-accent:  'Fraunces', Georgia, serif;
+
+  --text-xs:   11.5px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-lg:   18px;
+  --text-xl:   clamp(20px, 2.2vw, 26px);
+  --text-2xl:  clamp(24px, 3vw, 34px);
+  --text-3xl:  clamp(28px, 4vw, 42px);
+  --text-4xl:  clamp(32px, 4.5vw, 52px);
+
+  --leading-tight: 1.15;
+  --leading-body:  1.7;
+
+  /* --------------------------------------------------------------------
+   * Spacing and shape.
+   *
+   * Used by the component library so a card built for one page does not
+   * arrive on another with different padding.
+   * ------------------------------------------------------------------ */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 14, 14, 0.06);
+  --shadow-md: 0 4px 16px rgba(15, 14, 14, 0.10);
+
+  /* How long a transition lasts. Referenced rather than hard-coded so the
+   * reduced-motion rule below can flatten every one of them at once. */
+  --motion-fast: 120ms;
+  --motion-base: 220ms;
+  --motion-slow: 400ms;
+}
+
+/* SOMEBODY WHO HAS ASKED THEIR DEVICE TO STOP MOVING THINGS HAS ASKED FOR A
+ * REASON — vestibular disorders, migraine, motion sickness, or simply
+ * preferring it. Every component that animates reads these tokens, so honouring
+ * the request is one rule here rather than a decision each component makes
+ * separately and some forget.
+ *
+ * Not zero: a 1ms duration still fires transitionend, so anything waiting on
+ * that event to clean up still works. Setting it to 0s silently breaks those.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 1ms;
+    --motion-base: 1ms;
+    --motion-slow: 1ms;
+  }
+}

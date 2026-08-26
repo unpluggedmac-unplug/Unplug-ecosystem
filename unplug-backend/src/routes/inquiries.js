@@ -2,6 +2,8 @@ const express = require('express');
 const pool = require('../db');
 const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireRole } = require('../middleware/auth');
+const { spamCheck } = require('../middleware/spamCheck');
+const crm = require('../utils/crmCapture');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { EVENTS, trackAsync } = require('../utils/marketingEvents');
@@ -9,7 +11,7 @@ const { EVENTS, trackAsync } = require('../utils/marketingEvents');
 const router = express.Router();
 
 // POST /inquiries — public. This is what the site's Contact form submits to.
-router.post('/', publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/', publicSubmitLimiter, honeypot, spamCheck('contact enquiry'), async (req, res, next) => {
   try {
     const { name, email, subject, message } = req.body;
     if (!name || !email || !message) {
@@ -20,10 +22,39 @@ router.post('/', publicSubmitLimiter, honeypot, async (req, res, next) => {
     // never be inferred from words somebody happened to type.
     const enquiryType = req.body.enquiryType === 'advertising' ? 'advertising' : 'general';
 
-    await pool.query(
-      `INSERT INTO inquiries (name, email, subject, message, enquiry_type) VALUES ($1, $2, $3, $4, $5)`,
+    const saved = await pool.query(
+      `INSERT INTO inquiries (name, email, subject, message, enquiry_type)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
       [name, email, subject || null, message, enquiryType]
     );
+
+    // Into the CRM: find or create the person, open a deal if this is a sales
+    // enquiry, and put the message on their timeline.
+    //
+    // NOT AWAITED ON THE REPLY PATH — the person who filled in the form is
+    // waiting, and filing their enquiry must never be the reason it feels
+    // slow. captureSubmission never throws, so nothing here can turn a
+    // received enquiry into an error message.
+    crm.attributionFor(req.body.sessionId)
+      .then((attribution) => crm.captureSubmission({
+        email,
+        fullName: name,
+        formName: enquiryType === 'advertising' ? 'Advertising enquiry' : 'Contact form',
+        message,
+        // A general question is not a sale. Only an advertising enquiry opens
+        // a deal, so the pipeline stays a list of things somebody can actually
+        // close rather than every message ever received.
+        shape: enquiryType === 'advertising' ? 'advertising' : null,
+        attribution,
+      }))
+      .then((result) => {
+        if (!result.contact) return;
+        // The thread back to the original row, so the message lives in exactly
+        // one place and the timeline points at it.
+        return pool.query('UPDATE inquiries SET crm_contact_id = $2 WHERE id = $1',
+          [saved.rows[0].id, result.contact.id]);
+      })
+      .catch((err) => console.error('[crm] enquiry capture failed:', err.message));
 
     // Each enquiry is its own row: a business asking about advertising is a
     // person waiting for a reply, not a statistic.

@@ -7,12 +7,9 @@
 <title>Unplug Admin Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="unplug-tokens.css">
 <style>
-:root{
-  --ink:#272626; --slate:#454545; --black:#0f0e0e;
-  --cream:#ffffff; --paper:#f1f0ef; --paper-line: rgba(15,14,14,0.14);
-  --red:#d20709; --maroon:#721415; --green:#2e7d32;
-}
+
 *{box-sizing:border-box; margin:0; padding:0;}
 body{ font-family:'Inter',sans-serif; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
 h1,h2,h3{ font-family:'Playfair Display', serif; }
@@ -378,6 +375,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="analytics">Analytics</a>
         <a data-section="activitylog">Activity Log</a>
+        <a data-section="crm">Sales &amp; CRM</a>
+        <a data-section="emailmarketing">Email Marketing</a>
+        <a data-section="popups">Popups</a>
+        <a data-section="spam">Spam Filter</a>
       </div>
     </div>
 
@@ -1515,11 +1516,254 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
     
+    <!-- SALES & CRM -->
+    <div class="admin-section" id="section-crm">
+      <div class="main-head"><div><h1>Sales &amp; CRM</h1>
+        <p>Every enquiry, who it came from, and what stage it is at.</p></div></div>
+
+      <div class="crm-tabs" role="tablist" aria-label="CRM views" style="display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;">
+        <button role="tab" aria-selected="true" aria-controls="crmPanePipeline" id="crmTabPipeline" class="btn btn-solid" data-crm-tab="pipeline">Pipeline</button>
+        <button role="tab" aria-selected="false" aria-controls="crmPaneContacts" id="crmTabContacts" class="btn" data-crm-tab="contacts">Contacts</button>
+        <button role="tab" aria-selected="false" aria-controls="crmPaneTasks" id="crmTabTasks" class="btn" data-crm-tab="tasks">Tasks</button>
+        <button role="tab" aria-selected="false" aria-controls="crmPaneDashboard" id="crmTabDashboard" class="btn" data-crm-tab="dashboard">Numbers</button>
+      </div>
+
+      <div id="crmPanePipeline" role="tabpanel" aria-labelledby="crmTabPipeline">
+        <div class="panel"><div class="panel-body" id="crmKanban" style="overflow-x:auto;">
+          <div class="loading-state">Loading…</div>
+        </div></div>
+      </div>
+
+      <div id="crmPaneContacts" role="tabpanel" aria-labelledby="crmTabContacts" hidden>
+        <div class="panel">
+          <div class="panel-body" style="border-bottom:1px solid var(--paper-line);">
+            <label for="crmSearch" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Search contacts</label>
+            <input id="crmSearch" type="search" placeholder="A name, an email, a company…" style="width:100%; max-width:420px;">
+          </div>
+          <div class="panel-body" id="crmContacts" style="padding:0;"><div class="loading-state">Loading…</div></div>
+        </div>
+        <div class="panel" id="crmContactDetail" hidden></div>
+      </div>
+
+      <div id="crmPaneTasks" role="tabpanel" aria-labelledby="crmTabTasks" hidden>
+        <div class="panel">
+          <div class="panel-body" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; border-bottom:1px solid var(--paper-line);">
+            <div style="flex:1 1 260px;">
+              <label for="crmTaskTitle" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">New task</label>
+              <input id="crmTaskTitle" type="text" placeholder="Call the advertiser about the rate card" style="width:100%;">
+            </div>
+            <div>
+              <label for="crmTaskDue" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Due</label>
+              <input id="crmTaskDue" type="date">
+            </div>
+            <button class="btn btn-solid" id="crmTaskAdd" style="margin-bottom:2px;">Add</button>
+          </div>
+          <div class="panel-body" id="crmTasks" style="padding:0;"><div class="loading-state">Loading…</div></div>
+        </div>
+      </div>
+
+      <div id="crmPaneDashboard" role="tabpanel" aria-labelledby="crmTabDashboard" hidden>
+        <div class="panel"><div class="panel-body" id="crmDashboard"><div class="loading-state">Loading…</div></div></div>
+      </div>
+    </div>
+
+
+    <!-- EMAIL MARKETING -->
+    <!--
+      Campaigns, the composer, drip automations, the lists and the suppression
+      list. The public half of this — unsubscribing and the preference centre —
+      is not here and never needs a login; it lives at /email on the API.
+
+      EVERYTHING ON THESE SCREENS IS BUILT WITH createElement AND textContent,
+      never innerHTML with a value in it. A campaign name, a subject line and a
+      subscriber's address are all text somebody typed, and this dashboard has
+      already produced two stored XSS holes from exactly that shortcut.
+    -->
+    <div class="admin-section" id="section-emailmarketing">
+      <div class="main-head"><div><h1>Email Marketing</h1>
+        <p>Newsletters, welcome sequences and who has asked to be left alone. Every message
+           carries an unsubscribe link, and the suppression list is checked at the moment of
+           sending — not when the list was built.</p></div></div>
+
+      <div role="tablist" aria-label="Email views" style="display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;">
+        <button role="tab" aria-selected="true" aria-controls="emPaneCampaigns" id="emTabCampaigns" class="btn btn-solid" data-em-tab="campaigns">Campaigns</button>
+        <button role="tab" aria-selected="false" aria-controls="emPaneAutomations" id="emTabAutomations" class="btn" data-em-tab="automations">Automations</button>
+        <button role="tab" aria-selected="false" aria-controls="emPaneLists" id="emTabLists" class="btn" data-em-tab="lists">Lists</button>
+        <button role="tab" aria-selected="false" aria-controls="emPaneSuppressed" id="emTabSuppressed" class="btn" data-em-tab="suppressed">Suppressed</button>
+      </div>
+
+      <!-- Campaigns -->
+      <div id="emPaneCampaigns" role="tabpanel" aria-labelledby="emTabCampaigns">
+        <div class="panel" id="emComposer" hidden></div>
+
+        <div class="panel" id="emCampaignListPanel">
+          <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <span>Campaigns</span>
+            <button class="btn btn-solid" id="emNewCampaign">New campaign</button>
+          </div>
+          <div class="panel-body" id="emCampaigns" style="padding:0;"><div class="loading-state">Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- Automations -->
+      <div id="emPaneAutomations" role="tabpanel" aria-labelledby="emTabAutomations" hidden>
+        <div class="panel" id="emAutomationDetail" hidden></div>
+        <div class="panel">
+          <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <span>Sequences</span>
+            <button class="btn btn-solid" id="emNewAutomation">New sequence</button>
+          </div>
+          <div class="panel-body" id="emAutomations" style="padding:0;"><div class="loading-state">Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- Lists -->
+      <div id="emPaneLists" role="tabpanel" aria-labelledby="emTabLists" hidden>
+        <div class="panel">
+          <div class="panel-head" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+            <div><label for="emListName" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">New list</label>
+              <input id="emListName" type="text" placeholder="The Friday newsletter" style="min-width:240px;"></div>
+            <button class="btn btn-solid" id="emAddList" style="margin-bottom:2px;">Add</button>
+          </div>
+          <div class="panel-body" id="emLists" style="padding:0;"><div class="loading-state">Loading…</div></div>
+        </div>
+      </div>
+
+      <!-- Suppressed -->
+      <div id="emPaneSuppressed" role="tabpanel" aria-labelledby="emTabSuppressed" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <p style="margin:0; font-size:13px; color:var(--slate); font-weight:400;">
+              Nothing is ever sent to an address on this list — not by a campaign, not by a
+              sequence, not by a test send. Taking somebody off it means mailing them again,
+              so it asks you why and records the answer.</p>
+          </div>
+          <div class="panel-head" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+            <div><label for="emSuppSearch" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Search</label>
+              <input id="emSuppSearch" type="search" placeholder="An address…" style="min-width:220px;"></div>
+            <div><label for="emSuppAdd" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Add an address</label>
+              <input id="emSuppAdd" type="email" placeholder="someone@example.com" style="min-width:220px;"></div>
+            <button class="btn" id="emSuppAddBtn" style="margin-bottom:2px;">Suppress</button>
+          </div>
+          <div class="panel-body" id="emSuppressions" style="padding:0;"><div class="loading-state">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- POPUPS -->
+    <!--
+      The only feature on this site whose purpose is to get in a reader's way.
+      The screen is arranged around that fact: the number of people who closed
+      a popup sits beside the number who signed up, everywhere it appears,
+      because a popup that gains twelve subscribers by annoying nine hundred
+      readers is not a success and a screen showing only the twelve will never
+      say so.
+    -->
+    <div class="admin-section" id="section-popups">
+      <div class="main-head"><div><h1>Popups</h1>
+        <p>A popup appears once somebody has scrolled far enough down a page to have earned
+           the interruption &mdash; never the moment they arrive, never while the cookie bar is
+           still up, and never on checkout or the privacy pages.</p></div></div>
+
+      <div class="panel" id="puEditor" hidden></div>
+
+      <div class="panel">
+        <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span>Your popups</span>
+          <button class="btn btn-solid" id="puNew">New popup</button>
+        </div>
+        <div class="panel-body" id="puList" style="padding:0;"><div class="loading-state">Loading&hellip;</div></div>
+      </div>
+    </div>
+
+    <!-- SPAM FILTER -->
+    <div class="admin-section" id="section-spam">
+      <div class="main-head"><div><h1>Spam Filter</h1>
+        <p>Nothing here is deleted or refused. Submissions are scored so the queue can be sorted — you still see everything.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head">Last 30 days</div>
+        <div class="panel-body" id="spamCounts"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <!-- Deliberately its own panel, above the rest. These are the readers the
+           filter is getting wrong, and a spam filter nobody checks for false
+           positives is one quietly losing people. -->
+      <div class="panel">
+        <div class="panel-head">Wrongly flagged — check these first</div>
+        <div class="panel-body" id="spamDisagreements"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">Sensitivity</div>
+        <div class="panel-body" id="spamSettings">
+          <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-end;">
+            <div>
+              <label for="spamSuspect" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Flag as suspect above</label>
+              <input id="spamSuspect" type="number" min="1" max="100" style="width:90px;">
+            </div>
+            <div>
+              <label for="spamReject" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Call it spam above</label>
+              <input id="spamReject" type="number" min="1" max="100" style="width:90px;">
+            </div>
+            <label style="display:flex; align-items:center; gap:6px; font-size:13px; padding-bottom:8px;">
+              <input id="spamAutoReject" type="checkbox"> Auto-reject what it calls spam
+            </label>
+            <button class="btn btn-solid" id="spamSaveSettings" style="margin-bottom:2px;">Save</button>
+          </div>
+          <p style="font-size:12px; color:var(--slate); margin:12px 0 0; max-width:640px;">
+            Auto-reject is off, and leaving it off is the safer choice on a site this size.
+            With it off every submission still reaches you, just sorted. With it on, anything
+            scoring above the second number is rejected without being read — and a genuine
+            nomination lost that way is one nobody ever finds out about.
+          </p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">Recently scored</div>
+        <div class="panel-body" id="spamRecent" style="padding:0;"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">What the filter has learned</div>
+        <div class="panel-body" id="spamVocabulary"><div class="loading-state">Loading…</div></div>
+      </div>
+    </div>
+
     <!-- ACTIVITY LOG -->
     <div class="admin-section" id="section-activitylog">
-      <div class="main-head"><div><h1>Activity Log</h1><p>The most recent 100 admin actions — who did what, and when.</p></div></div>
+      <div class="main-head"><div><h1>Activity Log</h1><p>Who did what, when, and from where. Search by name, reference or address.</p></div></div>
       <div class="panel">
+        <div class="panel-body" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; border-bottom:1px solid var(--line);">
+          <div style="flex:1 1 220px;">
+            <label for="alSearch" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Search</label>
+            <input id="alSearch" type="search" placeholder="A name, a reference, part of an email…" style="width:100%;">
+          </div>
+          <div style="flex:0 1 200px;">
+            <label for="alAction" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Action</label>
+            <select id="alAction" style="width:100%;"><option value="">Every action</option></select>
+          </div>
+          <div style="flex:0 1 150px;">
+            <label for="alFrom" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">From</label>
+            <input id="alFrom" type="date" style="width:100%;">
+          </div>
+          <div style="flex:0 1 150px;">
+            <label for="alTo" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">To</label>
+            <input id="alTo" type="date" style="width:100%;">
+          </div>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; padding-bottom:8px;">
+            <input id="alHighRisk" type="checkbox"> High risk only
+          </label>
+          <button class="btn" id="alClear" style="margin-bottom:2px;">Clear</button>
+        </div>
         <div class="panel-body" id="activityLogBody" style="padding:0;"></div>
+        <div class="panel-body" id="activityLogPager" style="display:none; justify-content:space-between; align-items:center; border-top:1px solid var(--line);">
+          <button class="btn" id="alPrev">Previous</button>
+          <span id="alCount" style="font-size:13px;"></span>
+          <button class="btn" id="alNext">Next</button>
+        </div>
       </div>
     </div>
 
@@ -3071,7 +3315,11 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'reviews') loadPendingReviews();
     if (section === 'claims') loadPendingClaims();
     if (section === 'inquiries') loadInquiries();
-    if (section === 'activitylog') loadActivityLog();
+    if (section === 'activitylog') { loadActivityActions(); loadActivityLog(); }
+    if (section === 'spam') { loadSpamOverview(); loadSpamVocabulary(); }
+    if (section === 'crm') crmShowTab('pipeline');
+    if (section === 'emailmarketing') emShowTab('campaigns');
+    if (section === 'popups') loadPopups();
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
@@ -7418,7 +7666,7 @@ async function loadPendingEft() {
     table.innerHTML = '<tr><th>Reference</th><th>Amount</th><th>For</th><th></th></tr>';
     data.payments.forEach((p) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${p.gateway_reference}</td><td>R${p.amount}</td><td>${p.linked_type} #${p.linked_id}</td><td><div class="row-actions"><button class="approve">Confirm</button></div></td>`;
+      tr.innerHTML = `<td>${escapeHtmlAdmin(p.gateway_reference)}</td><td>R${escapeHtmlAdmin(p.amount)}</td><td>${escapeHtmlAdmin(p.linked_type)} #${escapeHtmlAdmin(p.linked_id)}</td><td><div class="row-actions"><button class="approve">Confirm</button></div></td>`;
       tr.querySelector('.approve').addEventListener('click', async () => {
         try {
           await api(`/payments/${p.id}/confirm-eft`, { method: 'PATCH' });
@@ -7759,7 +8007,7 @@ async function loadConsultants() {
       const pending = c.pending_referrals > 0
         ? ` <span style="color:var(--muted); font-weight:400;">(+${c.pending_referrals} pending)</span>` : '';
       tr.innerHTML = `
-        <td><a href="#" style="color:var(--red); font-weight:600; text-decoration:none;">${c.name}</a>${c.user_id ? '' : ' <span style="color:var(--muted); font-size:11px;">no linked account</span>'}</td>
+        <td><a href="#" style="color:var(--red); font-weight:600; text-decoration:none;">${escapeHtmlAdmin(c.name)}</a>${c.user_id ? '' : ' <span style="color:var(--muted); font-size:11px;">no linked account</span>'}</td>
         <td>${c.email || '—'}</td>
         <td>${c.commission_pct}%</td>
         <td>${c.confirmed_referrals}${pending}</td>
@@ -7879,7 +8127,7 @@ async function loadUnplugLeaderboard() {
       const tr = document.createElement('tr');
       const movement = r.rank_movement > 0 ? `↑${r.rank_movement}` : r.rank_movement < 0 ? `↓${Math.abs(r.rank_movement)}` : '—';
       tr.innerHTML = `<td>${r.rank_position}</td><td>${escapeHtmlAdmin(r.display_name)}</td>
-        <td>${r.status_emoji || ''} ${escapeHtmlAdmin(r.status_label || '—')}</td>
+        <td>${escapeHtmlAdmin(r.status_emoji || '')} ${escapeHtmlAdmin(r.status_label || '—')}</td>
         <td>${Number(r.score_value).toLocaleString()}</td><td>${movement}</td>`;
       table.appendChild(tr);
     });
@@ -9410,11 +9658,15 @@ async function loadInquiries() {
     table.innerHTML = '<tr><th>From</th><th>Subject</th><th>Message</th><th>Status</th><th>Received</th><th></th></tr>';
     data.inquiries.forEach((inq) => {
       const tr = document.createElement('tr');
+      // EVERY FIELD ESCAPED. All four come from the public contact form, which
+      // needs no account at all — this is the one screen on the site where a
+      // total stranger's typing is rendered to an admin. Unescaped, an
+      // <img onerror> in the name field runs with the admin's session.
       tr.innerHTML = `
-        <td>${inq.name}<br><span style="color:var(--slate); font-size:11px;">${inq.email}</span></td>
-        <td>${inq.subject || '—'}</td>
-        <td style="max-width:280px;">${inq.message}</td>
-        <td><span class="pill ${inq.status === 'new' ? 'pending' : 'approved'}">${inq.status}</span></td>
+        <td>${escapeHtmlAdmin(inq.name)}<br><span style="color:var(--slate); font-size:11px;">${escapeHtmlAdmin(inq.email)}</span></td>
+        <td>${escapeHtmlAdmin(inq.subject || '—')}</td>
+        <td style="max-width:280px;">${escapeHtmlAdmin(inq.message)}</td>
+        <td><span class="pill ${inq.status === 'new' ? 'pending' : 'approved'}">${escapeHtmlAdmin(inq.status)}</span></td>
         <td>${new Date(inq.created_at).toLocaleDateString()}</td>
         <td></td>`;
       const actionTd = tr.lastElementChild;
@@ -9445,28 +9697,772 @@ async function loadInquiries() {
 // ---------------------------------------------------------------------------
 // Activity Log
 // ---------------------------------------------------------------------------
-async function loadActivityLog() {
-  const body = document.getElementById('activityLogBody');
-  body.innerHTML = '<div class="loading-state">Loading…</div>';
+let alPage = 1;
+
+function alFilters() {
+  const v = (id) => (document.getElementById(id) || {}).value || '';
+  const params = new URLSearchParams();
+  if (v('alSearch').trim()) params.set('q', v('alSearch').trim());
+  if (v('alAction')) params.set('action', v('alAction'));
+  if (v('alFrom')) params.set('from', v('alFrom'));
+  // A date input gives midnight. Without this, "to: today" excludes everything
+  // that happened today, which reads as the log being broken.
+  if (v('alTo')) params.set('to', v('alTo') + 'T23:59:59');
+  const hr = document.getElementById('alHighRisk');
+  if (hr && hr.checked) params.set('highRiskOnly', 'true');
+  params.set('page', String(alPage));
+  params.set('limit', '100');
+  return params;
+}
+
+// ---------------------------------------------------------------------------
+// Sales & CRM
+//
+// Everything on these screens is text somebody outside this office typed — a
+// name, a company, an enquiry. It is therefore built with createElement and
+// textContent throughout, never innerHTML with a ${} in it. That pattern
+// produced two stored XSS holes in this dashboard already, one of them
+// reachable by anyone on the internet through the contact form.
+// ---------------------------------------------------------------------------
+
+const CRM_STAGE_LABELS = {
+  prospect: 'Prospect', contacted: 'Contacted', proposal: 'Proposal',
+  won: 'Won', lost: 'Lost',
+};
+
+function crmMoney(value) {
+  return 'R' + Number(value || 0).toLocaleString('en-ZA', { maximumFractionDigits: 0 });
+}
+
+function crmEl(tag, text, style) {
+  const el = document.createElement(tag);
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  if (style) el.style.cssText = style;
+  return el;
+}
+
+function crmShowTab(name) {
+  ['pipeline', 'contacts', 'tasks', 'dashboard'].forEach((tab) => {
+    const pane = document.getElementById('crmPane' + tab.charAt(0).toUpperCase() + tab.slice(1));
+    const btn = document.querySelector(`[data-crm-tab="${tab}"]`);
+    if (pane) pane.hidden = tab !== name;
+    if (btn) {
+      btn.setAttribute('aria-selected', String(tab === name));
+      btn.classList.toggle('btn-solid', tab === name);
+    }
+  });
+  if (name === 'pipeline') loadCrmPipeline();
+  if (name === 'contacts') loadCrmContacts();
+  if (name === 'tasks') loadCrmTasks();
+  if (name === 'dashboard') loadCrmDashboard();
+}
+
+// --- the pipeline -----------------------------------------------------------
+
+// A card can be dragged, and can ALSO be moved with a select. Drag and drop is
+// unusable with a keyboard and invisible to a screen reader, so on its own it
+// would make the pipeline staff-only in a way nobody intended.
+function crmDealCard(deal, onMoved) {
+  const card = crmEl('div', null,
+    'background:var(--cream); border:1px solid var(--paper-line); border-radius:var(--radius-md); '
+    + 'padding:10px; margin-bottom:8px; cursor:grab;');
+  card.draggable = true;
+  card.dataset.dealId = deal.id;
+
+  const title = crmEl('div', deal.title, 'font-weight:700; font-size:13.5px;');
+  card.appendChild(title);
+
+  const who = crmEl('div', deal.full_name || deal.email || '—',
+    'font-size:12px; color:var(--slate); margin-top:2px;');
+  card.appendChild(who);
+  if (deal.company_name) {
+    card.appendChild(crmEl('div', deal.company_name, 'font-size:11.5px; color:var(--slate);'));
+  }
+
+  const foot = crmEl('div', null, 'display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:6px;');
+  foot.appendChild(crmEl('strong', crmMoney(deal.value), 'font-size:13px;'));
+
+  const move = document.createElement('select');
+  move.setAttribute('aria-label', 'Move "' + (deal.title || 'deal') + '" to a different stage');
+  move.style.cssText = 'font-size:11.5px; padding:2px 4px;';
+  Object.entries(CRM_STAGE_LABELS).forEach(([value, label]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    if (value === deal.stage) opt.selected = true;
+    move.appendChild(opt);
+  });
+  move.addEventListener('change', async () => {
+    try {
+      await api('/crm/deals/' + deal.id, { method: 'PATCH', body: JSON.stringify({ stage: move.value }) });
+      if (onMoved) onMoved();
+    } catch (err) { showToast("Couldn't move that: " + err.message); }
+  });
+  foot.appendChild(move);
+  card.appendChild(foot);
+
+  card.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', String(deal.id));
+    card.style.opacity = '0.5';
+  });
+  card.addEventListener('dragend', () => { card.style.opacity = '1'; });
+
+  // Opening the person behind the deal is the common next action.
+  who.style.cursor = 'pointer';
+  who.addEventListener('click', () => {
+    crmShowTab('contacts');
+    openCrmContact(deal.contact_id);
+  });
+  return card;
+}
+
+async function loadCrmPipeline() {
+  const wrap = document.getElementById('crmKanban');
+  wrap.innerHTML = '';
+  wrap.appendChild(crmEl('div', 'Loading…', 'padding:12px;'));
   try {
-    const data = await api('/admin/activity-log');
-    if (!data.activity || data.activity.length === 0) {
-      body.innerHTML = '<div class="empty-state">No activity recorded yet.</div>';
+    const data = await api('/crm/pipeline');
+    wrap.innerHTML = '';
+
+    const board = crmEl('div', null, 'display:flex; gap:12px; min-width:900px; align-items:flex-start;');
+    data.stages.forEach((stage) => {
+      const column = crmEl('div', null,
+        'flex:1 1 0; min-width:170px; background:var(--paper); border-radius:var(--radius-md); padding:10px;');
+
+      const head = crmEl('div', null, 'margin-bottom:10px;');
+      head.appendChild(crmEl('div', CRM_STAGE_LABELS[stage], 'font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;'));
+      const totals = data.totals[stage] || { count: 0, value: 0 };
+      head.appendChild(crmEl('div', `${totals.count} · ${crmMoney(totals.value)}`,
+        'font-size:11.5px; color:var(--slate);'));
+      column.appendChild(head);
+
+      // The drop target.
+      column.addEventListener('dragover', (e) => { e.preventDefault(); column.style.outline = '2px dashed var(--red)'; });
+      column.addEventListener('dragleave', () => { column.style.outline = 'none'; });
+      column.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        column.style.outline = 'none';
+        const id = e.dataTransfer.getData('text/plain');
+        if (!id) return;
+        try {
+          await api('/crm/deals/' + id, { method: 'PATCH', body: JSON.stringify({ stage }) });
+          loadCrmPipeline();
+        } catch (err) { showToast("Couldn't move that: " + err.message); }
+      });
+
+      (data.deals[stage] || []).forEach((deal) => column.appendChild(crmDealCard(deal, loadCrmPipeline)));
+      if (!(data.deals[stage] || []).length) {
+        column.appendChild(crmEl('div', 'Nothing here', 'font-size:12px; color:var(--slate); padding:6px 2px;'));
+      }
+      board.appendChild(column);
+    });
+    wrap.appendChild(board);
+  } catch (err) {
+    wrap.innerHTML = '';
+    wrap.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:12px;'));
+  }
+}
+
+// --- contacts ---------------------------------------------------------------
+
+async function loadCrmContacts() {
+  const body = document.getElementById('crmContacts');
+  const term = (document.getElementById('crmSearch') || {}).value || '';
+  body.innerHTML = '';
+  try {
+    const data = await api('/crm/contacts?limit=100&q=' + encodeURIComponent(term));
+    if (!data.contacts.length) {
+      body.appendChild(crmEl('div', 'No contacts match that.', 'padding:14px;'));
       return;
     }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Action</th><th>Details</th><th>By</th><th>When</th></tr>';
-    data.activity.forEach((a) => {
+    const head = document.createElement('tr');
+    ['Name', 'Email', 'Company', 'Came from', 'Deals', 'Last seen'].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+    });
+    table.appendChild(head);
+
+    data.contacts.forEach((c) => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${a.action.replace(/_/g, ' ')}</td><td>${a.details || '—'}</td><td>${a.admin_email || '—'}</td><td>${new Date(a.created_at).toLocaleString()}</td>`;
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', () => openCrmContact(c.id));
+
+      tr.appendChild(crmCell(c.full_name || '—'));
+      tr.appendChild(crmCell(c.email));
+      tr.appendChild(crmCell(c.company_name || '—'));
+      // "Unknown" is a real answer: the source is only recorded when the
+      // visitor accepted the consent bar. Showing "Direct" instead would be
+      // inventing attribution for people who came from somewhere else.
+      tr.appendChild(crmCell(c.source_known ? (c.source || '—') : 'Unknown'));
+      tr.appendChild(crmCell(`${c.deal_count} (${c.open_deals} open)`));
+      tr.appendChild(crmCell(new Date(c.last_seen_at).toLocaleDateString()));
       table.appendChild(tr);
     });
-    body.innerHTML = '';
     body.appendChild(table);
   } catch (err) {
-    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+    body.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:14px;'));
   }
 }
+
+function crmCell(text) {
+  const td = document.createElement('td');
+  td.textContent = text == null ? '' : String(text);
+  return td;
+}
+
+async function openCrmContact(id) {
+  const panel = document.getElementById('crmContactDetail');
+  panel.hidden = false;
+  panel.innerHTML = '';
+  panel.appendChild(crmEl('div', 'Loading…', 'padding:14px;'));
+  try {
+    const data = await api('/crm/contacts/' + id);
+    panel.innerHTML = '';
+
+    const head = crmEl('div', null, 'padding:16px; border-bottom:1px solid var(--paper-line);');
+    head.appendChild(crmEl('h2', data.contact.full_name || data.contact.email, 'font-size:20px; margin:0 0 4px;'));
+    head.appendChild(crmEl('div', data.contact.email, 'font-size:13px; color:var(--slate);'));
+    if (data.contact.phone) head.appendChild(crmEl('div', data.contact.phone, 'font-size:13px; color:var(--slate);'));
+    head.appendChild(crmEl('div',
+      data.contact.source_known
+        ? 'Came from: ' + (data.contact.source || 'unknown')
+          + (data.contact.utm_campaign ? ' · ' + data.contact.utm_campaign : '')
+        : 'Came from: not known — this visitor declined analytics cookies',
+      'font-size:12px; color:var(--slate); margin-top:6px;'));
+    panel.appendChild(head);
+
+    // Deals
+    if (data.deals.length) {
+      const box = crmEl('div', null, 'padding:14px 16px; border-bottom:1px solid var(--paper-line);');
+      box.appendChild(crmEl('div', 'Deals', 'font-weight:800; font-size:12px; text-transform:uppercase; margin-bottom:8px;'));
+      data.deals.forEach((d) => {
+        const row = crmEl('div', null, 'display:flex; justify-content:space-between; font-size:13px; padding:3px 0;');
+        row.appendChild(crmEl('span', d.title));
+        row.appendChild(crmEl('span', CRM_STAGE_LABELS[d.stage] + ' · ' + crmMoney(d.value), 'color:var(--slate);'));
+        box.appendChild(row);
+      });
+      panel.appendChild(box);
+    }
+
+    // Add a note
+    const noteBox = crmEl('div', null, 'padding:14px 16px; border-bottom:1px solid var(--paper-line);');
+    const noteInput = document.createElement('textarea');
+    noteInput.rows = 2;
+    noteInput.placeholder = 'Log a call, a note, a meeting…';
+    noteInput.setAttribute('aria-label', 'Add a note to this contact');
+    noteInput.style.cssText = 'width:100%; margin-bottom:6px;';
+    const kind = document.createElement('select');
+    kind.setAttribute('aria-label', 'Kind of activity');
+    [['note', 'Note'], ['call', 'Call'], ['email', 'Email'], ['meeting', 'Meeting']]
+      .forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; kind.appendChild(o); });
+    const saveNote = crmEl('button', 'Add to timeline');
+    saveNote.className = 'btn btn-solid';
+    saveNote.style.marginLeft = '8px';
+    saveNote.addEventListener('click', async () => {
+      if (!noteInput.value.trim()) return;
+      try {
+        await api('/crm/contacts/' + id + '/activities', {
+          method: 'POST',
+          body: JSON.stringify({ kind: kind.value, body: noteInput.value.trim() }),
+        });
+        openCrmContact(id);
+      } catch (err) { showToast("Couldn't save that: " + err.message); }
+    });
+    noteBox.appendChild(noteInput);
+    noteBox.appendChild(kind);
+    noteBox.appendChild(saveNote);
+    panel.appendChild(noteBox);
+
+    // The timeline
+    const timeline = crmEl('div', null, 'padding:14px 16px;');
+    timeline.appendChild(crmEl('div', 'Timeline', 'font-weight:800; font-size:12px; text-transform:uppercase; margin-bottom:10px;'));
+    if (!data.activities.length) {
+      timeline.appendChild(crmEl('div', 'Nothing recorded yet.', 'font-size:13px; color:var(--slate);'));
+    }
+    data.activities.forEach((a) => {
+      const item = crmEl('div', null, 'padding:8px 0; border-bottom:1px solid var(--paper-line);');
+      const when = new Date(a.occurred_at).toLocaleString();
+      item.appendChild(crmEl('div', `${a.kind} · ${when}${a.by_name ? ' · ' + a.by_name : ''}`,
+        'font-size:11.5px; color:var(--slate);'));
+      if (a.subject) item.appendChild(crmEl('div', a.subject, 'font-weight:600; font-size:13px;'));
+      if (a.body) item.appendChild(crmEl('div', a.body, 'font-size:13px; white-space:pre-wrap;'));
+      timeline.appendChild(item);
+    });
+    panel.appendChild(timeline);
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    panel.innerHTML = '';
+    panel.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:14px;'));
+  }
+}
+
+// --- tasks ------------------------------------------------------------------
+
+async function loadCrmTasks() {
+  const body = document.getElementById('crmTasks');
+  body.innerHTML = '';
+  try {
+    const data = await api('/crm/tasks');
+    if (!data.tasks.length) {
+      body.appendChild(crmEl('div', 'Nothing due.', 'padding:14px;'));
+      return;
+    }
+    const table = document.createElement('table');
+    data.tasks.forEach((t) => {
+      const tr = document.createElement('tr');
+
+      const check = document.createElement('td');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.setAttribute('aria-label', 'Mark "' + t.title + '" done');
+      box.addEventListener('change', async () => {
+        try {
+          await api('/crm/tasks/' + t.id, { method: 'PATCH', body: JSON.stringify({ done: true }) });
+          loadCrmTasks();
+        } catch (err) { showToast("Couldn't update that: " + err.message); }
+      });
+      check.appendChild(box);
+      tr.appendChild(check);
+
+      tr.appendChild(crmCell(t.title));
+      tr.appendChild(crmCell(t.contact_name || t.contact_email || '—'));
+
+      const due = crmCell(t.due_at ? new Date(t.due_at).toLocaleDateString() : '—');
+      if (t.overdue) { due.style.color = 'var(--red)'; due.style.fontWeight = '700'; }
+      tr.appendChild(due);
+      table.appendChild(tr);
+    });
+    body.appendChild(table);
+  } catch (err) {
+    body.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:14px;'));
+  }
+}
+
+// --- the numbers ------------------------------------------------------------
+
+async function loadCrmDashboard() {
+  const el = document.getElementById('crmDashboard');
+  el.innerHTML = '';
+  try {
+    const d = await api('/crm/dashboard');
+
+    const tiles = crmEl('div', null, 'display:flex; gap:28px; flex-wrap:wrap; margin-bottom:20px;');
+    const tile = (label, value, note) => {
+      const box = crmEl('div', null, 'min-width:120px;');
+      box.appendChild(crmEl('div', value, 'font-size:26px; font-weight:800;'));
+      box.appendChild(crmEl('div', label, 'font-size:12px; color:var(--slate);'));
+      if (note) box.appendChild(crmEl('div', note, 'font-size:11px; color:var(--slate);'));
+      return box;
+    };
+
+    // null, not 0 — "no close rate yet" and "a close rate of zero" are
+    // different facts, and showing 0% on a new pipeline is a claim about
+    // performance that is not true.
+    tiles.appendChild(tile('Close rate',
+      d.closeRate.percent === null ? '—' : d.closeRate.percent + '%',
+      d.closeRate.percent === null ? 'nothing decided yet' : `${d.closeRate.won} won · ${d.closeRate.lost} lost`));
+    tiles.appendChild(tile('Weighted forecast', crmMoney(d.forecast.weighted),
+      'raw ' + crmMoney(d.forecast.raw)));
+    const open = Object.entries(d.byStage)
+      .filter(([stage]) => stage !== 'won' && stage !== 'lost')
+      .reduce((n, [, v]) => n + v.count, 0);
+    tiles.appendChild(tile('Open deals', String(open)));
+    el.appendChild(tiles);
+
+    el.appendChild(crmEl('p', d.forecast.note,
+      'font-size:12px; color:var(--slate); margin:0 0 18px; max-width:560px;'));
+
+    // Revenue by month
+    if (d.revenueByMonth.length) {
+      el.appendChild(crmEl('div', 'Revenue by month', 'font-weight:800; font-size:12px; text-transform:uppercase; margin-bottom:8px;'));
+      const max = Math.max(...d.revenueByMonth.map((m) => m.value), 1);
+      d.revenueByMonth.forEach((m) => {
+        const row = crmEl('div', null, 'display:flex; align-items:center; gap:10px; margin-bottom:4px;');
+        row.appendChild(crmEl('span', new Date(m.month).toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' }),
+          'font-size:11.5px; width:64px; color:var(--slate);'));
+        const bar = crmEl('span', null,
+          `height:14px; background:var(--red); border-radius:3px; width:${Math.round((m.value / max) * 240)}px;`);
+        row.appendChild(bar);
+        row.appendChild(crmEl('span', crmMoney(m.value), 'font-size:12px;'));
+        el.appendChild(row);
+      });
+    }
+
+    // Where the deals come from
+    if (d.bySource.length) {
+      el.appendChild(crmEl('div', 'By source', 'font-weight:800; font-size:12px; text-transform:uppercase; margin:18px 0 8px;'));
+      const table = document.createElement('table');
+      const head = document.createElement('tr');
+      ['Source', 'Deals', 'Won', 'Value won'].forEach((h) => {
+        const th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+      });
+      table.appendChild(head);
+      d.bySource.forEach((r) => {
+        const tr = document.createElement('tr');
+        tr.appendChild(crmCell(r.source.replace(/_/g, ' ')));
+        tr.appendChild(crmCell(r.deals));
+        tr.appendChild(crmCell(r.won));
+        tr.appendChild(crmCell(crmMoney(r.wonValue)));
+        table.appendChild(tr);
+      });
+      el.appendChild(table);
+    }
+  } catch (err) {
+    el.appendChild(crmEl('div', 'Could not load: ' + err.message, 'padding:8px;'));
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-crm-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => crmShowTab(btn.dataset.crmTab));
+  });
+  const search = document.getElementById('crmSearch');
+  if (search) {
+    let timer;
+    search.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(loadCrmContacts, 250);
+    });
+  }
+  const addTask = document.getElementById('crmTaskAdd');
+  if (addTask) {
+    addTask.addEventListener('click', async () => {
+      const title = document.getElementById('crmTaskTitle');
+      const due = document.getElementById('crmTaskDue');
+      if (!title.value.trim()) return;
+      try {
+        await api('/crm/tasks', {
+          method: 'POST',
+          body: JSON.stringify({ title: title.value.trim(), dueAt: due.value || null }),
+        });
+        title.value = ''; due.value = '';
+        loadCrmTasks();
+      } catch (err) { showToast("Couldn't add that: " + err.message); }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Spam filter
+//
+// Built with textContent throughout. Everything on this screen is text
+// somebody else typed — that is the entire point of it — and this is the
+// screen where an attacker would most expect their payload to be rendered.
+// ---------------------------------------------------------------------------
+
+function spamCell(text, style) {
+  const td = document.createElement('td');
+  td.textContent = text == null ? '' : String(text);
+  if (style) td.style.cssText = style;
+  return td;
+}
+
+function spamVerdictPill(verdict) {
+  const span = document.createElement('span');
+  span.className = 'pill ' + (verdict === 'spam' ? 'rejected' : verdict === 'suspect' ? 'pending' : 'approved');
+  span.textContent = verdict;
+  return span;
+}
+
+// One row, with the buttons that both correct the filter and teach it.
+function spamRow(item, onRuled) {
+  const tr = document.createElement('tr');
+
+  const verdictTd = document.createElement('td');
+  verdictTd.appendChild(spamVerdictPill(item.verdict));
+  const score = document.createElement('div');
+  score.textContent = 'score ' + item.score;
+  score.style.cssText = 'font-size:11px; color:var(--slate); margin-top:2px;';
+  verdictTd.appendChild(score);
+  tr.appendChild(verdictTd);
+
+  tr.appendChild(spamCell(item.target_type));
+  tr.appendChild(spamCell((item.sample || '').slice(0, 160), 'max-width:320px;'));
+
+  // Why it was scored that way. "Flagged" with no reason is not something
+  // anybody can argue with or improve.
+  const why = (item.signals || []).map((sig) => `${sig.name} +${sig.points}`).join(', ');
+  tr.appendChild(spamCell(why || '—', 'font-size:11px; color:var(--slate); max-width:220px;'));
+
+  tr.appendChild(spamCell(new Date(item.created_at).toLocaleDateString()));
+
+  const actions = document.createElement('td');
+  if (item.moderator_verdict) {
+    actions.appendChild(spamCell('you said: ' + item.moderator_verdict).firstChild
+      || document.createTextNode('you said: ' + item.moderator_verdict));
+  } else {
+    [['Not spam', 'ham'], ['Spam', 'spam']].forEach(([label, verdict]) => {
+      const btn = document.createElement('button');
+      btn.className = 'btn-mini ' + (verdict === 'ham' ? 'btn-mini-line' : 'btn-mini-solid');
+      btn.textContent = label;
+      btn.style.marginRight = '6px';
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await api('/spam/' + item.id + '/verdict', {
+            method: 'POST', body: JSON.stringify({ verdict }),
+          });
+          if (onRuled) onRuled();
+        } catch (err) {
+          btn.disabled = false;
+          showToast("Couldn't record that: " + err.message);
+        }
+      });
+      actions.appendChild(btn);
+    });
+  }
+  tr.appendChild(actions);
+  return tr;
+}
+
+async function loadSpamOverview() {
+  const counts = document.getElementById('spamCounts');
+  const recent = document.getElementById('spamRecent');
+  const disagree = document.getElementById('spamDisagreements');
+  try {
+    const data = await api('/spam/overview');
+
+    counts.innerHTML = '';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:28px; flex-wrap:wrap;';
+    [['Clean', data.last30Days.clean], ['Suspect', data.last30Days.suspect],
+     ['Spam', data.last30Days.spam], ['Reviewed by you', data.accuracy.reviewed]]
+      .forEach(([label, n]) => {
+        const box = document.createElement('div');
+        const big = document.createElement('div');
+        big.textContent = String(n);
+        big.style.cssText = 'font-size:26px; font-weight:800;';
+        const small = document.createElement('div');
+        small.textContent = label;
+        small.style.cssText = 'font-size:12px; color:var(--slate);';
+        box.appendChild(big); box.appendChild(small);
+        row.appendChild(box);
+      });
+    counts.appendChild(row);
+
+    // Sensitivity, filled from what the server actually has rather than
+    // whatever was last typed.
+    document.getElementById('spamSuspect').value = data.settings.suspect;
+    document.getElementById('spamReject').value = data.settings.reject;
+    document.getElementById('spamAutoReject').checked = Boolean(data.settings.autoReject);
+
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    ['Verdict', 'Form', 'What was sent', 'Why', 'When', ''].forEach((h) => {
+      const th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+    });
+    table.appendChild(head);
+    (data.recent || []).forEach((item) => table.appendChild(spamRow(item, loadSpamOverview)));
+    recent.innerHTML = '';
+    recent.appendChild(table);
+
+    // The false positives.
+    const wrong = data.accuracy.wronglyFlagged;
+    disagree.innerHTML = '';
+    if (!wrong) {
+      const p = document.createElement('p');
+      p.textContent = data.accuracy.reviewed
+        ? 'None so far. Of the ' + data.accuracy.reviewed + ' you have ruled on, the filter agreed every time.'
+        : 'Nothing reviewed yet. Rule on a few below and this will show where the filter is getting it wrong.';
+      p.style.cssText = 'font-size:13px; color:var(--slate); margin:0;';
+      disagree.appendChild(p);
+    } else {
+      const warn = document.createElement('p');
+      warn.textContent = wrong + ' submission(s) were flagged and turned out to be genuine. '
+        + 'If this number climbs, raise the thresholds.';
+      warn.style.cssText = 'font-size:13px; color:var(--red); font-weight:600; margin:0 0 10px;';
+      disagree.appendChild(warn);
+      const list = await api('/spam/disagreements');
+      const t = document.createElement('table');
+      (list.items || []).forEach((item) => t.appendChild(spamRow(item)));
+      disagree.appendChild(t);
+    }
+  } catch (err) {
+    counts.textContent = 'Could not load: ' + err.message;
+  }
+}
+
+async function loadSpamVocabulary() {
+  const el = document.getElementById('spamVocabulary');
+  try {
+    const data = await api('/spam/vocabulary');
+    el.innerHTML = '';
+    const note = document.createElement('p');
+    note.textContent = data.note;
+    note.style.cssText = 'font-size:12px; color:var(--slate); margin:0 0 10px; max-width:640px;';
+    el.appendChild(note);
+
+    if (!data.tokens.length) {
+      const none = document.createElement('p');
+      none.textContent = 'Nothing learned yet. It starts contributing once you have ruled on enough submissions.';
+      none.style.cssText = 'font-size:13px; margin:0;';
+      el.appendChild(none);
+      return;
+    }
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px;';
+    data.tokens.forEach((t) => {
+      const spammy = t.spam_count > t.ham_count;
+      const chip = document.createElement('span');
+      chip.textContent = `${t.token} (${t.spam_count}/${t.ham_count})`;
+      chip.title = `${t.spam_count} times in spam, ${t.ham_count} times in genuine submissions`;
+      chip.style.cssText = 'font-size:11.5px; padding:3px 8px; border-radius:10px; '
+        + (spammy ? 'background:rgba(200,23,26,0.10); color:var(--red);'
+                  : 'background:rgba(0,0,0,0.05); color:var(--slate);');
+      wrap.appendChild(chip);
+    });
+    el.appendChild(wrap);
+  } catch (err) {
+    el.textContent = 'Could not load: ' + err.message;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const save = document.getElementById('spamSaveSettings');
+  if (!save) return;
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    try {
+      await api('/spam/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          suspectThreshold: Number(document.getElementById('spamSuspect').value),
+          rejectThreshold: Number(document.getElementById('spamReject').value),
+          autoReject: document.getElementById('spamAutoReject').checked,
+        }),
+      });
+      showToast('Sensitivity saved');
+      loadSpamOverview();
+    } catch (err) {
+      showToast("Couldn't save: " + err.message);
+    } finally {
+      save.disabled = false;
+    }
+  });
+});
+
+async function loadActivityLog() {
+  const body = document.getElementById('activityLogBody');
+  const pager = document.getElementById('activityLogPager');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/admin/activity-log?' + alFilters().toString());
+    if (!data.activity || data.activity.length === 0) {
+      body.innerHTML = '<div class="empty-state">Nothing matches those filters.</div>';
+      if (pager) pager.style.display = 'none';
+      return;
+    }
+
+    // BUILT WITH textContent, NOT innerHTML.
+    //
+    // `details` carries values people typed — a profile display name, an
+    // article title. Interpolating those into innerHTML made this page a
+    // stored XSS: a member could set their display name to an <img onerror>
+    // payload and have it run with an admin's session, on the very screen an
+    // admin opens to investigate. Cells are created and filled as text, so
+    // markup in a name is shown as the characters somebody typed.
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    for (const label of ['', 'Action', 'Details', 'By', 'From', 'When']) {
+      const th = document.createElement('th');
+      th.textContent = label;
+      head.appendChild(th);
+    }
+    table.appendChild(head);
+
+    data.activity.forEach((a) => {
+      const tr = document.createElement('tr');
+
+      const risk = document.createElement('td');
+      if (a.high_risk) {
+        risk.textContent = '!';
+        risk.title = 'High-risk action';
+        risk.style.cssText = 'color:var(--red); font-weight:800; text-align:center;';
+      }
+      tr.appendChild(risk);
+
+      const cells = [
+        String(a.action || '').replace(/_/g, ' '),
+        a.details || '—',
+        a.admin_name || a.admin_email || '—',
+        a.ip_address || '—',
+        new Date(a.created_at).toLocaleString(),
+      ];
+      cells.forEach((value, idx) => {
+        const td = document.createElement('td');
+        td.textContent = value;
+        // The address is worth being able to copy out and search on.
+        if (idx === 3 && a.ip_address) td.style.cssText = 'font-family:monospace; font-size:12px;';
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+
+    body.innerHTML = '';
+    body.appendChild(table);
+
+    if (pager) {
+      const p = data.pagination || { page: 1, totalPages: 1, total: data.activity.length };
+      pager.style.display = 'flex';
+      document.getElementById('alCount').textContent =
+        `${p.total} entr${p.total === 1 ? 'y' : 'ies'} · page ${p.page} of ${p.totalPages}`;
+      document.getElementById('alPrev').disabled = p.page <= 1;
+      document.getElementById('alNext').disabled = p.page >= p.totalPages;
+    }
+  } catch (err) {
+    body.textContent = 'Could not load: ' + err.message;
+  }
+}
+
+// Populates the action filter from what has actually been recorded, so a new
+// kind of entry appears the first time it happens rather than when somebody
+// remembers to add it here.
+async function loadActivityActions() {
+  const select = document.getElementById('alAction');
+  if (!select || select.dataset.loaded) return;
+  try {
+    const data = await api('/admin/activity-log/actions');
+    (data.actions || []).forEach((a) => {
+      const opt = document.createElement('option');
+      opt.value = a.action;
+      opt.textContent = `${a.action.replace(/_/g, ' ')} (${a.n})`;
+      select.appendChild(opt);
+    });
+    select.dataset.loaded = '1';
+  } catch (e) { /* the filter is a convenience; the log still works without it */ }
+}
+
+// Typing re-runs the search, but only once the typing stops — a request per
+// keystroke would be a lot of queries to answer the same question.
+let alDebounce;
+function alRefresh(resetPage) {
+  if (resetPage !== false) alPage = 1;
+  clearTimeout(alDebounce);
+  alDebounce = setTimeout(loadActivityLog, 250);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const on = (id, ev, fn) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(ev, fn);
+  };
+  on('alSearch', 'input', () => alRefresh());
+  on('alAction', 'change', () => alRefresh());
+  on('alFrom', 'change', () => alRefresh());
+  on('alTo', 'change', () => alRefresh());
+  on('alHighRisk', 'change', () => alRefresh());
+  on('alClear', 'click', () => {
+    ['alSearch', 'alAction', 'alFrom', 'alTo'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const hr = document.getElementById('alHighRisk');
+    if (hr) hr.checked = false;
+    alRefresh();
+  });
+  on('alPrev', 'click', () => { if (alPage > 1) { alPage -= 1; loadActivityLog(); } });
+  on('alNext', 'click', () => { alPage += 1; loadActivityLog(); });
+});
 
 // ---------------------------------------------------------------------------
 // Vouchers
@@ -11461,6 +12457,1301 @@ document.getElementById('compAddBtn').addEventListener('click', async () => {
     loadCompetitions();
   } catch (e) { showToast(e.message || 'Could not add competition.', true); }
 });
+
+// ---------------------------------------------------------------------------
+// Email Marketing
+//
+// Campaigns, the block composer, drip sequences, lists and suppressions.
+//
+// BUILT WITH createElement AND textContent THROUGHOUT. A campaign name, a
+// subject line and a subscriber's address are all text somebody typed, and
+// this dashboard has already produced two stored XSS holes from reaching for
+// innerHTML with a ${} in it — one of them reachable by anyone on the internet.
+// The only innerHTML in this whole section is the sandboxed preview iframe,
+// and that is discussed where it happens.
+// ---------------------------------------------------------------------------
+
+function emEl(tag, text, style) {
+  const el = document.createElement(tag);
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  if (style) el.setAttribute('style', style);
+  return el;
+}
+
+function emButton(label, onClick, className) {
+  const b = emEl('button', label);
+  b.type = 'button';
+  b.className = className || 'btn';
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function emField(labelText, input) {
+  const wrap = emEl('div', null, 'margin-bottom:12px;');
+  const label = emEl('label', labelText, 'display:block; font-size:12px; font-weight:700; margin-bottom:4px;');
+  const id = 'em-f-' + Math.random().toString(36).slice(2, 9);
+  input.id = id;
+  label.setAttribute('for', id);
+  wrap.appendChild(label);
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function emInput(value, placeholder, type) {
+  const i = document.createElement('input');
+  i.type = type || 'text';
+  i.value = value == null ? '' : String(value);
+  if (placeholder) i.placeholder = placeholder;
+  i.setAttribute('style', 'width:100%; max-width:520px;');
+  return i;
+}
+
+function emWhen(value) {
+  if (!value) return '—';
+  try { return new Date(value).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch (e) { return String(value); }
+}
+
+// --- tabs ------------------------------------------------------------------
+
+function emShowTab(name) {
+  document.querySelectorAll('[data-em-tab]').forEach((btn) => {
+    const on = btn.getAttribute('data-em-tab') === name;
+    btn.setAttribute('aria-selected', String(on));
+    btn.className = on ? 'btn btn-solid' : 'btn';
+  });
+  const panes = { campaigns: 'emPaneCampaigns', automations: 'emPaneAutomations',
+    lists: 'emPaneLists', suppressed: 'emPaneSuppressed' };
+  Object.keys(panes).forEach((k) => {
+    const pane = document.getElementById(panes[k]);
+    if (pane) pane.hidden = k !== name;
+  });
+  if (name === 'campaigns') emLoadCampaigns();
+  if (name === 'automations') emLoadAutomations();
+  if (name === 'lists') emLoadLists();
+  if (name === 'suppressed') emLoadSuppressions();
+}
+
+document.addEventListener('click', (e) => {
+  const tab = e.target.closest && e.target.closest('[data-em-tab]');
+  if (tab) emShowTab(tab.getAttribute('data-em-tab'));
+});
+
+// --- lists, cached because every screen needs them --------------------------
+
+let EM_LISTS = [];
+
+async function emFetchLists() {
+  try { EM_LISTS = await api('/admin/email/lists') || []; }
+  catch (e) { EM_LISTS = []; }
+  return EM_LISTS;
+}
+
+function emListSelect(selectedId) {
+  const sel = document.createElement('select');
+  sel.setAttribute('style', 'width:100%; max-width:520px;');
+  const none = emEl('option', '— choose a list —');
+  none.value = '';
+  sel.appendChild(none);
+  EM_LISTS.forEach((l) => {
+    const o = emEl('option', l.name + ' (' + (l.reachable || 0) + ' reachable)');
+    o.value = String(l.id);
+    if (String(selectedId) === String(l.id)) o.selected = true;
+    sel.appendChild(o);
+  });
+  return sel;
+}
+
+// ===========================================================================
+// The block composer
+// ===========================================================================
+//
+// The blocks are held as a plain array of objects and saved as JSON. They are
+// rendered to HTML by the SERVER at send time rather than stored as HTML, so a
+// fix to the renderer improves every future send instead of only new drafts.
+
+const EM_BLOCK_TYPES = [
+  { type: 'heading', label: 'Heading' },
+  { type: 'text', label: 'Text' },
+  { type: 'image', label: 'Image' },
+  { type: 'button', label: 'Button' },
+  { type: 'article', label: 'Article card' },
+  { type: 'divider', label: 'Divider' },
+  { type: 'spacer', label: 'Spacer' },
+];
+
+function emNewBlock(type) {
+  if (type === 'heading') return { type, text: 'A heading', level: 2 };
+  if (type === 'text') return { type, text: 'Write something here.' };
+  if (type === 'image') return { type, src: '', alt: '' };
+  if (type === 'button') return { type, label: 'Read it', href: '' };
+  if (type === 'article') return { type, title: '', excerpt: '', href: '', image: '' };
+  if (type === 'spacer') return { type, height: 24 };
+  return { type };
+}
+
+// Draws the editor for one block. onChange is called on every keystroke; the
+// caller decides when to save, so typing does not fire a request per character.
+function emBlockRow(block, index, blocks, onChange) {
+  const row = emEl('div', null,
+    'border:1px solid var(--paper-line); border-radius:8px; padding:12px; margin-bottom:10px; background:#fff;');
+
+  const head = emEl('div', null, 'display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;');
+  const meta = EM_BLOCK_TYPES.find((t) => t.type === block.type);
+  head.appendChild(emEl('strong', (meta && meta.label) || block.type, 'font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);'));
+
+  const controls = emEl('div', null, 'display:flex; gap:4px;');
+  const move = (from, to) => {
+    if (to < 0 || to >= blocks.length) return;
+    const [moved] = blocks.splice(from, 1);
+    blocks.splice(to, 0, moved);
+    onChange(true);
+  };
+  const up = emButton('↑', () => move(index, index - 1));
+  up.setAttribute('aria-label', 'Move this block up');
+  up.disabled = index === 0;
+  const down = emButton('↓', () => move(index, index + 1));
+  down.setAttribute('aria-label', 'Move this block down');
+  down.disabled = index === blocks.length - 1;
+  const del = emButton('Remove', () => { blocks.splice(index, 1); onChange(true); });
+  del.setAttribute('aria-label', 'Remove this block');
+  controls.appendChild(up); controls.appendChild(down); controls.appendChild(del);
+  head.appendChild(controls);
+  row.appendChild(head);
+
+  const bind = (input, key, transform) => {
+    input.addEventListener('input', () => {
+      block[key] = transform ? transform(input.value) : input.value;
+      onChange(false);
+    });
+    return input;
+  };
+
+  if (block.type === 'heading') {
+    row.appendChild(emField('Text', bind(emInput(block.text), 'text')));
+    const level = document.createElement('select');
+    level.setAttribute('style', 'max-width:200px;');
+    [1, 2, 3].forEach((n) => {
+      const o = emEl('option', 'Level ' + n);
+      o.value = String(n);
+      if (Number(block.level) === n) o.selected = true;
+      level.appendChild(o);
+    });
+    level.addEventListener('change', () => { block.level = Number(level.value); onChange(false); });
+    row.appendChild(emField('Size', level));
+  } else if (block.type === 'text') {
+    const ta = document.createElement('textarea');
+    ta.rows = 5;
+    ta.value = block.text || '';
+    ta.setAttribute('style', 'width:100%; max-width:520px;');
+    row.appendChild(emField('Text', bind(ta, 'text')));
+    row.appendChild(emEl('p',
+      'You can use **bold**, _italic_ and [a link](https://example.com). Anything else is written out as you typed it.',
+      'font-size:12px; color:var(--slate); margin:0;'));
+  } else if (block.type === 'image') {
+    row.appendChild(emField('Image URL', bind(emInput(block.src, 'https://…'), 'src')));
+    row.appendChild(emField('Description for somebody who cannot see it',
+      bind(emInput(block.alt, 'Leave empty if the image is decorative'), 'alt')));
+    row.appendChild(emField('Links to (optional)', bind(emInput(block.href, 'https://…'), 'href')));
+    row.appendChild(emEl('p',
+      'About half of readers see images blocked by default, so the message has to make sense without this one.',
+      'font-size:12px; color:var(--slate); margin:0;'));
+  } else if (block.type === 'button') {
+    row.appendChild(emField('Label', bind(emInput(block.label), 'label')));
+    row.appendChild(emField('Goes to', bind(emInput(block.href, 'https://…'), 'href')));
+    row.appendChild(emEl('p',
+      'A button with no address is left out of the message entirely — a dead button is worse than none, because somebody presses it.',
+      'font-size:12px; color:var(--slate); margin:0;'));
+  } else if (block.type === 'article') {
+    row.appendChild(emField('Headline', bind(emInput(block.title), 'title')));
+    row.appendChild(emField('Standfirst', bind(emInput(block.excerpt), 'excerpt')));
+    row.appendChild(emField('Link', bind(emInput(block.href, 'https://www.unplugnews.com/…'), 'href')));
+    row.appendChild(emField('Image URL (optional)', bind(emInput(block.image, 'https://…'), 'image')));
+    row.appendChild(emEl('p',
+      'These are copied into the campaign, not looked up when it sends — so an email says what it said when you wrote it, even if the headline changes later.',
+      'font-size:12px; color:var(--slate); margin:0;'));
+  } else if (block.type === 'spacer') {
+    row.appendChild(emField('Height in pixels',
+      bind(emInput(block.height, null, 'number'), 'height', (v) => Number(v) || 24)));
+  } else if (block.type === 'divider') {
+    row.appendChild(emEl('p', 'A hairline rule across the message.', 'font-size:13px; color:var(--slate); margin:0;'));
+  }
+
+  return row;
+}
+
+// Renders the whole block editor into a container.
+function emRenderBlocks(container, blocks, onChange) {
+  container.textContent = '';
+
+  if (!blocks.length) {
+    container.appendChild(emEl('p', 'Nothing in this email yet. Add a block below.',
+      'color:var(--slate); font-size:14px; margin:0 0 12px;'));
+  }
+  blocks.forEach((block, i) => {
+    container.appendChild(emBlockRow(block, i, blocks, onChange));
+  });
+
+  const adders = emEl('div', null, 'display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;');
+  EM_BLOCK_TYPES.forEach((t) => {
+    adders.appendChild(emButton('+ ' + t.label, () => {
+      blocks.push(emNewBlock(t.type));
+      onChange(true);
+    }));
+  });
+  container.appendChild(adders);
+}
+
+// ===========================================================================
+// Campaigns
+// ===========================================================================
+
+async function emLoadCampaigns() {
+  const host = document.getElementById('emCampaigns');
+  if (!host) return;
+  host.textContent = '';
+  host.appendChild(emEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    await emFetchLists();
+    const campaigns = await api('/admin/email/campaigns');
+    host.textContent = '';
+
+    if (!campaigns.length) {
+      host.appendChild(emEl('p', 'No campaigns yet.', 'padding:16px; color:var(--slate);'));
+      return;
+    }
+
+    const table = emEl('table', null, 'width:100%; border-collapse:collapse; font-size:14px;');
+    const thead = emEl('thead');
+    const hr = emEl('tr');
+    ['Campaign', 'List', 'Status', 'Sent', 'When', ''].forEach((h) => {
+      hr.appendChild(emEl('th', h,
+        'text-align:left; padding:10px 12px; border-bottom:1px solid var(--paper-line); font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate);'));
+    });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    const tbody = emEl('tbody');
+    campaigns.forEach((c) => {
+      const tr = emEl('tr');
+      const cell = (text) => emEl('td', text, 'padding:10px 12px; border-bottom:1px solid var(--paper-line); vertical-align:top;');
+
+      const nameCell = cell('');
+      nameCell.appendChild(emEl('div', c.name, 'font-weight:700;'));
+      nameCell.appendChild(emEl('div', c.subject, 'color:var(--slate); font-size:13px;'));
+      tr.appendChild(nameCell);
+
+      tr.appendChild(cell(c.list_name || '—'));
+
+      const statusCell = cell('');
+      const colours = { draft: 'var(--slate)', scheduled: '#b26a00', sending: '#b26a00',
+        sent: 'var(--green)', cancelled: 'var(--slate)' };
+      statusCell.appendChild(emEl('span', c.status,
+        'font-weight:700; color:' + (colours[c.status] || 'var(--slate)') + ';'));
+      tr.appendChild(statusCell);
+
+      tr.appendChild(cell(c.sent_count || 0));
+      tr.appendChild(cell(c.status === 'scheduled' ? emWhen(c.scheduled_for) : emWhen(c.sent_at || c.created_at)));
+
+      const actions = cell('');
+      const group = emEl('div', null, 'display:flex; gap:6px; flex-wrap:wrap;');
+      group.appendChild(emButton(c.status === 'sent' ? 'Report' : 'Open',
+        () => (c.status === 'sent' ? emOpenReport(c.id) : emOpenComposer(c.id))));
+      group.appendChild(emButton('Duplicate', () => emDuplicate(c.id)));
+      if (['draft', 'scheduled', 'cancelled'].includes(c.status)) {
+        group.appendChild(emButton('Delete', () => emDeleteCampaign(c.id, c.name)));
+      }
+      actions.appendChild(group);
+      tr.appendChild(actions);
+
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    host.appendChild(table);
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(emEl('p', e.message || 'Could not load campaigns.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+async function emDuplicate(id) {
+  try {
+    const copy = await api('/admin/email/campaigns/' + id + '/duplicate', { method: 'POST' });
+    showToast('Duplicated.');
+    await emLoadCampaigns();
+    emOpenComposer(copy.id);
+  } catch (e) { showToast(e.message || 'Could not duplicate.', true); }
+}
+
+async function emDeleteCampaign(id, name) {
+  if (!confirm('Delete the campaign "' + name + '"? This cannot be undone.')) return;
+  try {
+    await api('/admin/email/campaigns/' + id, { method: 'DELETE' });
+    showToast('Deleted.');
+    emLoadCampaigns();
+  } catch (e) { showToast(e.message || 'Could not delete.', true); }
+}
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'emNewCampaign') {
+    const name = prompt('What is this campaign called? (only you see this)');
+    if (!name) return;
+    const subject = prompt('Subject line — this is what readers see:');
+    if (!subject) return;
+    try {
+      const c = await api('/admin/email/campaigns', {
+        method: 'POST', body: JSON.stringify({ name, subject }),
+      });
+      await emLoadCampaigns();
+      emOpenComposer(c.id);
+    } catch (err) { showToast(err.message || 'Could not create the campaign.', true); }
+  }
+});
+
+// --- the composer ----------------------------------------------------------
+
+let EM_CURRENT = null;
+let EM_SAVE_TIMER = null;
+
+async function emOpenComposer(id) {
+  const panel = document.getElementById('emComposer');
+  const listPanel = document.getElementById('emCampaignListPanel');
+  if (!panel) return;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.appendChild(emEl('div', 'Loading…', 'padding:16px;'));
+  if (listPanel) listPanel.hidden = true;
+
+  try {
+    await emFetchLists();
+    const campaign = await api('/admin/email/campaigns/' + id);
+    EM_CURRENT = campaign;
+    campaign.blocks = Array.isArray(campaign.blocks) ? campaign.blocks : [];
+    emDrawComposer(panel, campaign);
+  } catch (e) {
+    panel.textContent = '';
+    panel.appendChild(emEl('p', e.message || 'Could not open that campaign.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+function emCloseComposer() {
+  const panel = document.getElementById('emComposer');
+  const listPanel = document.getElementById('emCampaignListPanel');
+  if (panel) { panel.hidden = true; panel.textContent = ''; }
+  if (listPanel) listPanel.hidden = false;
+  EM_CURRENT = null;
+  emLoadCampaigns();
+}
+
+function emDrawComposer(panel, campaign) {
+  panel.textContent = '';
+
+  const head = emEl('div', null,
+    'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
+  head.appendChild(emEl('strong', campaign.name));
+  const savedNote = emEl('span', '', 'font-size:12px; color:var(--slate);');
+  savedNote.id = 'emSavedNote';
+  head.appendChild(savedNote);
+  head.appendChild(emButton('Back to campaigns', emCloseComposer));
+  panel.appendChild(head);
+
+  const body = emEl('div', null, 'padding:16px;');
+
+  // Save is debounced: typing a subject line should not be a request per
+  // keystroke, and a save that fires mid-word is a save that fights the cursor.
+  const save = (immediate) => {
+    if (EM_SAVE_TIMER) clearTimeout(EM_SAVE_TIMER);
+    const run = async () => {
+      try {
+        await api('/admin/email/campaigns/' + campaign.id, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: campaign.name, subject: campaign.subject, preheader: campaign.preheader,
+            listId: campaign.list_id, blocks: campaign.blocks,
+          }),
+        });
+        savedNote.textContent = 'Saved ' + new Date().toLocaleTimeString('en-ZA', { timeStyle: 'short' });
+      } catch (e) {
+        savedNote.textContent = 'Not saved — ' + (e.message || 'try again');
+      }
+    };
+    EM_SAVE_TIMER = setTimeout(run, immediate ? 0 : 700);
+  };
+
+  const nameInput = emInput(campaign.name);
+  nameInput.addEventListener('input', () => { campaign.name = nameInput.value; save(); });
+  body.appendChild(emField('Campaign name (only you see this)', nameInput));
+
+  const subjectInput = emInput(campaign.subject);
+  subjectInput.addEventListener('input', () => { campaign.subject = subjectInput.value; save(); });
+  body.appendChild(emField('Subject line', subjectInput));
+
+  const preInput = emInput(campaign.preheader, 'The grey line shown after the subject');
+  preInput.addEventListener('input', () => { campaign.preheader = preInput.value; save(); });
+  body.appendChild(emField('Preview text', preInput));
+
+  const listSel = emListSelect(campaign.list_id);
+  listSel.addEventListener('change', () => { campaign.list_id = listSel.value || null; save(true); });
+  body.appendChild(emField('Send to', listSel));
+
+  body.appendChild(emEl('h3', 'The email', 'margin:20px 0 10px; font-size:15px;'));
+  const blockHost = emEl('div');
+  body.appendChild(blockHost);
+
+  const redraw = (structural) => {
+    if (structural) emRenderBlocks(blockHost, campaign.blocks, redraw);
+    save(structural);
+  };
+  emRenderBlocks(blockHost, campaign.blocks, redraw);
+
+  // --- preview -------------------------------------------------------------
+  body.appendChild(emEl('h3', 'Preview', 'margin:24px 0 10px; font-size:15px;'));
+  const previewHost = emEl('div');
+  body.appendChild(previewHost);
+
+  const previewBtn = emButton('Show me what it looks like', async () => {
+    previewHost.textContent = '';
+    previewHost.appendChild(emEl('p', 'Rendering…', 'color:var(--slate); font-size:13px;'));
+    try {
+      const result = await api('/admin/email/preview', {
+        method: 'POST',
+        body: JSON.stringify({
+          subject: campaign.subject, preheader: campaign.preheader,
+          blocks: campaign.blocks, listId: campaign.list_id,
+        }),
+      });
+      previewHost.textContent = '';
+
+      if (result.audience) {
+        const line = emEl('p', '', 'font-size:13px; margin:0 0 10px;');
+        line.appendChild(emEl('strong', result.audience.willSend + ' will receive this'));
+        if (result.audience.willSkip) {
+          line.appendChild(document.createTextNode(
+            ' · ' + result.audience.willSkip + ' on the list are suppressed and will be skipped'));
+        }
+        previewHost.appendChild(line);
+      }
+
+      // THE ONLY innerHTML IN THIS SECTION, and it is deliberately inside a
+      // fully sandboxed iframe rather than in this page.
+      //
+      // The composed email is admin-typed HTML. Dropping it into the dashboard
+      // itself would be a stored-XSS hole wearing a preview's clothes: it would
+      // run with the admin's session. sandbox="" gives the frame an opaque
+      // origin with scripts, forms and navigation all switched off, so the
+      // worst a hostile campaign can do is look odd.
+      //
+      // The frame inherits this page's CSP, so images hosted somewhere img-src
+      // does not allow will not appear HERE. They will appear in the real
+      // email — the note below says so, rather than leaving somebody to think
+      // their picture is broken.
+      const frame = document.createElement('iframe');
+      frame.setAttribute('sandbox', '');
+      frame.setAttribute('title', 'Preview of the email');
+      frame.setAttribute('style',
+        'width:100%; max-width:660px; height:640px; border:1px solid var(--paper-line); border-radius:8px; background:#fff;');
+      frame.srcdoc = result.html;
+      previewHost.appendChild(frame);
+      previewHost.appendChild(emEl('p',
+        'Images stored outside the site may not show in this preview — that is this page’s security policy, not a problem with the email. Send yourself a test to see it properly.',
+        'font-size:12px; color:var(--slate); margin:8px 0 0;'));
+    } catch (e) {
+      previewHost.textContent = '';
+      previewHost.appendChild(emEl('p', e.message || 'Could not render the preview.', 'color:var(--red); font-size:13px;'));
+    }
+  }, 'btn');
+  previewHost.appendChild(previewBtn);
+
+  // --- test send -----------------------------------------------------------
+  body.appendChild(emEl('h3', 'Send yourself a test', 'margin:24px 0 10px; font-size:15px;'));
+  const testRow = emEl('div', null, 'display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;');
+  const testInput = emInput('', 'you@example.com', 'email');
+  testInput.setAttribute('style', 'max-width:280px;');
+  testRow.appendChild(emField('Address', testInput));
+  testRow.appendChild(emButton('Send the test', async () => {
+    if (!testInput.value) return showToast('Put an address in first.', true);
+    try {
+      await api('/admin/email/campaigns/' + campaign.id + '/test',
+        { method: 'POST', body: JSON.stringify({ email: testInput.value }) });
+      showToast('Test sent to ' + testInput.value + '.');
+    } catch (e) { showToast(e.message || 'Could not send the test.', true); }
+  }));
+  body.appendChild(testRow);
+  body.appendChild(emEl('p',
+    'A test is a real email to a real address, so the suppression list still applies to it.',
+    'font-size:12px; color:var(--slate); margin:4px 0 0;'));
+
+  // --- sending -------------------------------------------------------------
+  body.appendChild(emEl('h3', 'Send', 'margin:24px 0 10px; font-size:15px;'));
+
+  if (campaign.status === 'scheduled') {
+    const note = emEl('p', '', 'font-size:14px; margin:0 0 10px;');
+    note.appendChild(document.createTextNode('Waiting to go out at '));
+    note.appendChild(emEl('strong', emWhen(campaign.scheduled_for)));
+    note.appendChild(document.createTextNode('.'));
+    body.appendChild(note);
+    body.appendChild(emButton('Cancel and put it back in drafts', async () => {
+      try {
+        await api('/admin/email/campaigns/' + campaign.id + '/cancel', { method: 'POST' });
+        showToast('Back in drafts.');
+        emOpenComposer(campaign.id);
+      } catch (e) { showToast(e.message || 'Could not cancel it.', true); }
+    }, 'btn'));
+  } else {
+    const sendRow = emEl('div', null, 'display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;');
+    const whenInput = emInput('', null, 'datetime-local');
+    whenInput.setAttribute('style', 'max-width:260px;');
+    sendRow.appendChild(emField('Schedule for (leave empty to send now)', whenInput));
+
+    sendRow.appendChild(emButton('Send', async () => {
+      const scheduledFor = whenInput.value || null;
+      const listName = (EM_LISTS.find((l) => String(l.id) === String(campaign.list_id)) || {}).name;
+      const confirmText = scheduledFor
+        ? 'Schedule "' + campaign.name + '" to go to ' + (listName || 'the chosen list') + '?'
+        : 'Send "' + campaign.name + '" to ' + (listName || 'the chosen list') + ' now? This cannot be taken back.';
+      if (!confirm(confirmText)) return;
+      try {
+        const r = await api('/admin/email/campaigns/' + campaign.id + '/send', {
+          method: 'POST',
+          body: JSON.stringify(scheduledFor ? { scheduledFor: new Date(scheduledFor).toISOString() } : {}),
+        });
+        showToast(r.scheduled
+          ? 'Scheduled for ' + emWhen(r.scheduledFor) + ' — ' + r.recipients + ' recipient(s).'
+          : 'Sending to ' + r.recipients + ' recipient(s).');
+        emCloseComposer();
+      } catch (e) { showToast(e.message || 'Could not send.', true); }
+    }, 'btn btn-solid'));
+
+    body.appendChild(sendRow);
+  }
+
+  panel.appendChild(body);
+}
+
+// --- the report ------------------------------------------------------------
+
+async function emOpenReport(id) {
+  const panel = document.getElementById('emComposer');
+  const listPanel = document.getElementById('emCampaignListPanel');
+  if (!panel) return;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.appendChild(emEl('div', 'Loading…', 'padding:16px;'));
+  if (listPanel) listPanel.hidden = true;
+
+  try {
+    const r = await api('/admin/email/campaigns/' + id + '/report');
+    panel.textContent = '';
+
+    const head = emEl('div', null,
+      'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
+    head.appendChild(emEl('strong', r.campaign.name));
+    head.appendChild(emButton('Back to campaigns', emCloseComposer));
+    panel.appendChild(head);
+
+    const body = emEl('div', null, 'padding:16px;');
+
+    const stats = emEl('div', null,
+      'display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:16px;');
+    const tile = (label, value, sub) => {
+      const t = emEl('div', null,
+        'border:1px solid var(--paper-line); border-radius:8px; padding:12px; background:#fff;');
+      t.appendChild(emEl('div', value, 'font-size:24px; font-weight:800;'));
+      t.appendChild(emEl('div', label, 'font-size:12px; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em;'));
+      if (sub) t.appendChild(emEl('div', sub, 'font-size:12px; color:var(--slate); margin-top:4px;'));
+      return t;
+    };
+    stats.appendChild(tile('Sent', r.stats.sent || 0));
+    stats.appendChild(tile('Opened', r.stats.opened || 0, r.rates.open + '%'));
+    stats.appendChild(tile('Clicked', r.stats.clicked || 0, r.rates.click + '%'));
+    stats.appendChild(tile('Unsubscribed', r.stats.unsubscribed || 0, r.rates.unsubscribe + '%'));
+    stats.appendChild(tile('Skipped', r.stats.skipped || 0, 'suppressed'));
+    stats.appendChild(tile('Failed', r.stats.failed || 0));
+    body.appendChild(stats);
+
+    body.appendChild(emEl('p', r.caveat, 'font-size:13px; color:var(--slate); margin:0 0 20px; line-height:1.6;'));
+
+    if (r.links.length) {
+      body.appendChild(emEl('h3', 'What people clicked', 'margin:0 0 10px; font-size:15px;'));
+      const ul = emEl('ul', null, 'margin:0 0 20px; padding-left:18px; font-size:14px;');
+      r.links.forEach((l) => {
+        const li = emEl('li', null, 'margin-bottom:4px; word-break:break-all;');
+        li.appendChild(emEl('span', l.clicks + ' — ', 'font-weight:700;'));
+        li.appendChild(document.createTextNode(l.url));
+        ul.appendChild(li);
+      });
+      body.appendChild(ul);
+    }
+
+    if (r.failures.length) {
+      body.appendChild(emEl('h3', 'Not delivered', 'margin:0 0 10px; font-size:15px;'));
+      const ul = emEl('ul', null, 'margin:0; padding-left:18px; font-size:13px; color:var(--slate);');
+      r.failures.forEach((f) => {
+        ul.appendChild(emEl('li', f.email + ' — ' + (f.skip_reason || f.error || f.status)));
+      });
+      body.appendChild(ul);
+    }
+
+    panel.appendChild(body);
+  } catch (e) {
+    panel.textContent = '';
+    panel.appendChild(emEl('p', e.message || 'Could not load the report.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+// ===========================================================================
+// Automations
+// ===========================================================================
+
+async function emLoadAutomations() {
+  const host = document.getElementById('emAutomations');
+  if (!host) return;
+  host.textContent = '';
+  host.appendChild(emEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    await emFetchLists();
+    const rows = await api('/admin/email/automations');
+    host.textContent = '';
+
+    if (!rows.length) {
+      host.appendChild(emEl('p',
+        'No sequences yet. A sequence sends a series of emails on a delay after somebody joins a list — a welcome, then a follow-up a day later.',
+        'padding:16px; color:var(--slate); line-height:1.6;'));
+      return;
+    }
+
+    rows.forEach((a) => {
+      const card = emEl('div', null,
+        'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;');
+
+      const left = emEl('div');
+      const title = emEl('div', null, 'display:flex; align-items:center; gap:8px;');
+      title.appendChild(emEl('strong', a.name));
+      title.appendChild(emEl('span', a.active ? 'Running' : 'Paused',
+        'font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; background:'
+        + (a.active ? 'var(--green)' : 'var(--slate)') + ';'));
+      left.appendChild(title);
+      left.appendChild(emEl('div',
+        a.steps + ' email(s) · ' + a.active_enrolments + ' part-way through · '
+        + a.completed_enrolments + ' finished · ' + a.cancelled_enrolments + ' stopped'
+        + (a.trigger_list_name ? ' · starts when somebody joins ' + a.trigger_list_name : ''),
+        'font-size:13px; color:var(--slate); margin-top:2px;'));
+      card.appendChild(left);
+
+      const actions = emEl('div', null, 'display:flex; gap:6px; flex-wrap:wrap;');
+      actions.appendChild(emButton('Open', () => emOpenAutomation(a.id)));
+      actions.appendChild(emButton(a.active ? 'Pause' : 'Switch on', async () => {
+        if (!a.active && !confirm('Switching this on means it starts emailing people by itself. Ready?')) return;
+        try {
+          await api('/admin/email/automations/' + a.id,
+            { method: 'PATCH', body: JSON.stringify({ active: !a.active }) });
+          emLoadAutomations();
+        } catch (e) { showToast(e.message || 'Could not change that.', true); }
+      }, a.active ? 'btn' : 'btn btn-solid'));
+      card.appendChild(actions);
+
+      host.appendChild(card);
+    });
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(emEl('p', e.message || 'Could not load the sequences.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'emNewAutomation') {
+    const name = prompt('What is this sequence called?');
+    if (!name) return;
+    try {
+      const a = await api('/admin/email/automations',
+        { method: 'POST', body: JSON.stringify({ name, trigger: 'subscribe' }) });
+      await emLoadAutomations();
+      emOpenAutomation(a.id);
+    } catch (err) { showToast(err.message || 'Could not create it.', true); }
+  }
+});
+
+async function emOpenAutomation(id) {
+  const panel = document.getElementById('emAutomationDetail');
+  if (!panel) return;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.appendChild(emEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    await emFetchLists();
+    const a = await api('/admin/email/automations/' + id);
+    panel.textContent = '';
+
+    const head = emEl('div', null,
+      'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
+    head.appendChild(emEl('strong', a.name));
+    head.appendChild(emButton('Close', () => { panel.hidden = true; panel.textContent = ''; }));
+    panel.appendChild(head);
+
+    const body = emEl('div', null, 'padding:16px;');
+
+    const listSel = emListSelect(a.trigger_list_id);
+    listSel.addEventListener('change', async () => {
+      try {
+        await api('/admin/email/automations/' + a.id,
+          { method: 'PATCH', body: JSON.stringify({ triggerListId: listSel.value || null }) });
+        showToast('Saved.');
+      } catch (err) { showToast(err.message || 'Could not save.', true); }
+    });
+    body.appendChild(emField('Starts when somebody joins', listSel));
+
+    body.appendChild(emEl('h3', 'The emails, in order', 'margin:20px 0 10px; font-size:15px;'));
+    body.appendChild(emEl('p',
+      'Each delay is counted from the email before it, so inserting one later does not shift everything after it. People part-way through keep their place.',
+      'font-size:12px; color:var(--slate); margin:0 0 12px;'));
+
+    if (!a.steps.length) {
+      body.appendChild(emEl('p', 'No emails in this sequence yet.', 'color:var(--slate); font-size:14px;'));
+    }
+
+    a.steps.forEach((step) => {
+      const card = emEl('div', null,
+        'border:1px solid var(--paper-line); border-radius:8px; padding:14px; margin-bottom:12px;');
+
+      const cardHead = emEl('div', null, 'display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;');
+      cardHead.appendChild(emEl('strong', 'Email ' + step.position,
+        'font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);'));
+      cardHead.appendChild(emButton('Remove', async () => {
+        if (!confirm('Remove email ' + step.position + ' from this sequence?')) return;
+        try {
+          await api('/admin/email/automations/' + a.id + '/steps/' + step.id, { method: 'DELETE' });
+          emOpenAutomation(a.id);
+        } catch (err) { showToast(err.message || 'Could not remove it.', true); }
+      }));
+      card.appendChild(cardHead);
+
+      const blocks = Array.isArray(step.blocks) ? step.blocks : [];
+      const saveStep = async () => {
+        try {
+          await api('/admin/email/automations/' + a.id + '/steps/' + step.id, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              subject: step.subject, delayHours: step.delay_hours, blocks,
+            }),
+          });
+        } catch (err) { showToast(err.message || 'Could not save.', true); }
+      };
+      let stepTimer = null;
+      const queueSave = () => { if (stepTimer) clearTimeout(stepTimer); stepTimer = setTimeout(saveStep, 700); };
+
+      const delay = emInput(step.delay_hours, null, 'number');
+      delay.setAttribute('style', 'max-width:160px;');
+      delay.addEventListener('input', () => { step.delay_hours = Number(delay.value) || 0; queueSave(); });
+      card.appendChild(emField('Hours after the previous email', delay));
+
+      const subject = emInput(step.subject);
+      subject.addEventListener('input', () => { step.subject = subject.value; queueSave(); });
+      card.appendChild(emField('Subject line', subject));
+
+      const blockHost = emEl('div');
+      card.appendChild(blockHost);
+      const redraw = (structural) => {
+        if (structural) emRenderBlocks(blockHost, blocks, redraw);
+        queueSave();
+      };
+      emRenderBlocks(blockHost, blocks, redraw);
+
+      body.appendChild(card);
+    });
+
+    body.appendChild(emButton('+ Add an email', async () => {
+      const subject = prompt('Subject line for this email:');
+      if (!subject) return;
+      const hours = prompt('How many hours after the previous one? (0 for straight away)', '24');
+      try {
+        await api('/admin/email/automations/' + a.id + '/steps', {
+          method: 'POST',
+          body: JSON.stringify({ subject, delayHours: Number(hours) || 0, blocks: [] }),
+        });
+        emOpenAutomation(a.id);
+      } catch (err) { showToast(err.message || 'Could not add it.', true); }
+    }, 'btn btn-solid'));
+
+    panel.appendChild(body);
+  } catch (e) {
+    panel.textContent = '';
+    panel.appendChild(emEl('p', e.message || 'Could not open that sequence.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+// ===========================================================================
+// Lists
+// ===========================================================================
+
+async function emLoadLists() {
+  const host = document.getElementById('emLists');
+  if (!host) return;
+  host.textContent = '';
+  host.appendChild(emEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const rows = await emFetchLists();
+    host.textContent = '';
+    if (!rows.length) {
+      host.appendChild(emEl('p', 'No lists yet.', 'padding:16px; color:var(--slate);'));
+      return;
+    }
+    rows.forEach((l) => {
+      const card = emEl('div', null, 'padding:14px 16px; border-bottom:1px solid var(--paper-line);');
+      card.appendChild(emEl('strong', l.name));
+      card.appendChild(emEl('div',
+        l.reachable + ' reachable · ' + l.subscribed + ' subscribed · ' + l.unsubscribed + ' left',
+        'font-size:13px; color:var(--slate); margin-top:2px;'));
+      if (Number(l.subscribed) > Number(l.reachable)) {
+        card.appendChild(emEl('div',
+          (Number(l.subscribed) - Number(l.reachable))
+          + ' on this list are suppressed — bounced, complained, or unsubscribed elsewhere — and will be skipped.',
+          'font-size:12px; color:var(--slate); margin-top:4px;'));
+      }
+      host.appendChild(card);
+    });
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(emEl('p', e.message || 'Could not load the lists.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'emAddList') {
+    const input = document.getElementById('emListName');
+    if (!input || !input.value.trim()) return showToast('Give the list a name.', true);
+    try {
+      await api('/admin/email/lists', { method: 'POST', body: JSON.stringify({ name: input.value.trim() }) });
+      input.value = '';
+      showToast('List added.');
+      emLoadLists();
+    } catch (err) { showToast(err.message || 'Could not add the list.', true); }
+  }
+});
+
+// ===========================================================================
+// Suppressions
+// ===========================================================================
+
+async function emLoadSuppressions() {
+  const host = document.getElementById('emSuppressions');
+  if (!host) return;
+  const search = document.getElementById('emSuppSearch');
+  host.textContent = '';
+  host.appendChild(emEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const q = search && search.value ? '?q=' + encodeURIComponent(search.value.trim()) : '';
+    const rows = await api('/admin/email/suppressions' + q);
+    host.textContent = '';
+
+    if (!rows.length) {
+      host.appendChild(emEl('p', 'Nobody is suppressed.', 'padding:16px; color:var(--slate);'));
+      return;
+    }
+
+    const REASONS = {
+      unsubscribed: 'asked to stop',
+      bounced: 'the address does not accept mail',
+      complained: 'marked us as spam',
+      manual: 'added by an admin',
+      invalid: 'not a usable address',
+    };
+
+    rows.forEach((r) => {
+      const card = emEl('div', null,
+        'padding:12px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;');
+      const left = emEl('div');
+      left.appendChild(emEl('div', r.email, 'font-weight:600;'));
+      left.appendChild(emEl('div',
+        (REASONS[r.reason] || r.reason) + (r.detail ? ' — ' + r.detail : '') + ' · ' + emWhen(r.created_at),
+        'font-size:13px; color:var(--slate); margin-top:2px;'));
+      card.appendChild(left);
+
+      card.appendChild(emButton('Allow mail again', async () => {
+        const reason = prompt(
+          'Why is ' + r.email + ' being made mailable again?\n\n'
+          + 'This is recorded in the activity log. "They asked to come back" is a reason; '
+          + '"the numbers looked low" is not.');
+        if (!reason || !reason.trim()) return;
+        try {
+          await api('/admin/email/suppressions/' + encodeURIComponent(r.email), {
+            method: 'DELETE', body: JSON.stringify({ reason: reason.trim() }),
+          });
+          showToast('Removed from the suppression list.');
+          emLoadSuppressions();
+        } catch (err) { showToast(err.message || 'Could not remove it.', true); }
+      }));
+      host.appendChild(card);
+    });
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(emEl('p', e.message || 'Could not load the suppression list.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'emSuppAddBtn') {
+    const input = document.getElementById('emSuppAdd');
+    if (!input || !input.value.trim()) return showToast('Put an address in first.', true);
+    try {
+      await api('/admin/email/suppressions', {
+        method: 'POST',
+        body: JSON.stringify({ email: input.value.trim(), detail: 'added by an admin' }),
+      });
+      input.value = '';
+      showToast('Suppressed.');
+      emLoadSuppressions();
+    } catch (err) { showToast(err.message || 'Could not suppress that address.', true); }
+  }
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target && e.target.id === 'emSuppSearch') {
+    clearTimeout(window.__emSuppTimer);
+    window.__emSuppTimer = setTimeout(emLoadSuppressions, 300);
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// Popups
+//
+// The only feature on this site whose purpose is to get in a reader's way, so
+// the screen is arranged around that: the dismissal count sits next to the
+// conversion count everywhere it appears, because a popup that signs up twelve
+// people by annoying nine hundred is not a success, and a screen that only
+// shows the twelve will never say so.
+//
+// createElement and textContent throughout, like the rest of this dashboard.
+// ---------------------------------------------------------------------------
+
+const PU_KINDS = {
+  newsletter: 'Newsletter sign-up',
+  announcement: 'Announcement',
+  nominate: 'Nominate prompt',
+};
+
+// The magazine's own page ids. Matches what goToPage uses, so what is chosen
+// here is what the popup script compares against at runtime.
+const PU_PAGES = [
+  ['home', 'Home'], ['news', 'News'], ['articledetail', 'Article pages'],
+  ['directory', 'Directory'], ['editions', 'Editions'], ['top10', 'Top 10'],
+  ['competitions', 'Competitions'], ['gallery', 'Gallery'], ['deafcommunity', 'Deaf Community'],
+  ['members', 'Members'], ['about', 'About'], ['contact', 'Contact'], ['nominate', 'Nominate'],
+];
+
+function puEl(tag, text, style) {
+  const el = document.createElement(tag);
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  if (style) el.setAttribute('style', style);
+  return el;
+}
+
+function puBtn(label, onClick, cls) {
+  const b = puEl('button', label);
+  b.type = 'button';
+  b.className = cls || 'btn';
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function puField(labelText, input, hint) {
+  const wrap = puEl('div', null, 'margin-bottom:12px;');
+  const id = 'pu-' + Math.random().toString(36).slice(2, 9);
+  input.id = id;
+  const label = puEl('label', labelText, 'display:block; font-size:12px; font-weight:700; margin-bottom:4px;');
+  label.setAttribute('for', id);
+  wrap.appendChild(label);
+  wrap.appendChild(input);
+  if (hint) wrap.appendChild(puEl('p', hint, 'font-size:12px; color:var(--slate); margin:4px 0 0;'));
+  return wrap;
+}
+
+function puInput(value, type, placeholder) {
+  const i = document.createElement('input');
+  i.type = type || 'text';
+  i.value = value == null ? '' : String(value);
+  if (placeholder) i.placeholder = placeholder;
+  i.setAttribute('style', 'width:100%; max-width:520px;');
+  return i;
+}
+
+function puSelect(options, selected) {
+  const s = document.createElement('select');
+  s.setAttribute('style', 'width:100%; max-width:520px;');
+  options.forEach(([value, label]) => {
+    const o = puEl('option', label);
+    o.value = value;
+    if (String(selected) === String(value)) o.selected = true;
+    s.appendChild(o);
+  });
+  return s;
+}
+
+function puWhen(value) {
+  if (!value) return '—';
+  try { return new Date(value).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch (e) { return String(value); }
+}
+
+// For the datetime-local input, which wants local time with no timezone.
+function puLocalValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+let PU_LISTS = [];
+
+async function loadPopups() {
+  const host = document.getElementById('puList');
+  if (!host) return;
+  host.textContent = '';
+  host.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    try { PU_LISTS = await api('/admin/email/lists') || []; } catch (e) { PU_LISTS = []; }
+    const rows = await api('/popups');
+    host.textContent = '';
+
+    if (!rows.length) {
+      host.appendChild(puEl('p',
+        'No popups yet. A popup appears once a reader has scrolled far enough down a page — '
+        + 'it never fires the moment somebody arrives, and never while the cookie bar is still up.',
+        'padding:16px; color:var(--slate); line-height:1.6;'));
+      return;
+    }
+
+    rows.forEach((p) => {
+      const card = puEl('div', null,
+        'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;');
+
+      const left = puEl('div', null, 'min-width:260px; flex:1;');
+      const head = puEl('div', null, 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;');
+      head.appendChild(puEl('strong', p.name));
+      head.appendChild(puEl('span', p.active ? 'Live' : 'Off',
+        'font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; background:'
+        + (p.active ? 'var(--green)' : 'var(--slate)') + ';'));
+      head.appendChild(puEl('span', PU_KINDS[p.kind] || p.kind,
+        'font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em;'));
+      left.appendChild(head);
+
+      left.appendChild(puEl('div', p.title, 'font-size:13px; color:var(--slate); margin-top:2px;'));
+
+      const pages = Array.isArray(p.pages) ? p.pages : [];
+      left.appendChild(puEl('div',
+        'At ' + p.scroll_percent + '% down · '
+        + (pages.length ? pages.length + ' page(s)' : 'every page') + ' · '
+        + (p.frequency === 'once' ? 'once per person'
+          : p.frequency === 'session' ? 'once per visit'
+            : 'again after ' + p.frequency_days + ' days')
+        + (p.ends_at ? ' · ends ' + puWhen(p.ends_at) : ''),
+        'font-size:12.5px; color:var(--slate); margin-top:4px;'));
+
+      // The two numbers together, always. See the note at the top of this
+      // section for why the conversion count never appears on its own.
+      const seen = Number(p.impressions) || 0;
+      const stats = puEl('div', null, 'font-size:12.5px; margin-top:6px;');
+      if (seen) {
+        const pct = (n) => Math.round((n / seen) * 1000) / 10;
+        stats.appendChild(puEl('span', 'Shown ' + seen + ' × '));
+        stats.appendChild(puEl('span', ' · ' + p.conversions + ' signed up (' + pct(p.conversions) + '%)',
+          'color:var(--green); font-weight:700;'));
+        stats.appendChild(puEl('span', ' · ' + p.dismissals + ' closed it (' + pct(p.dismissals) + '%)',
+          'color:' + (pct(p.dismissals) > 60 ? 'var(--red)' : 'var(--slate)') + '; font-weight:700;'));
+      } else {
+        stats.appendChild(puEl('span', 'Not shown to anybody yet.', 'color:var(--slate);'));
+      }
+      left.appendChild(stats);
+      card.appendChild(left);
+
+      const actions = puEl('div', null, 'display:flex; gap:6px; flex-wrap:wrap;');
+      actions.appendChild(puBtn('Edit', () => puEdit(p.id)));
+      actions.appendChild(puBtn(p.active ? 'Switch off' : 'Switch on', async () => {
+        if (!p.active && !confirm(
+          'Switching this on means readers start being interrupted by it. Ready?')) return;
+        try {
+          await api('/popups/' + p.id, { method: 'PATCH', body: JSON.stringify({ active: !p.active }) });
+          loadPopups();
+        } catch (e) { showToast(e.message || 'Could not change that.', true); }
+      }, p.active ? 'btn' : 'btn btn-solid'));
+      actions.appendChild(puBtn('Delete', async () => {
+        if (!confirm('Delete the popup "' + p.name + '"? Its numbers go with it.')) return;
+        try {
+          await api('/popups/' + p.id, { method: 'DELETE' });
+          showToast('Deleted.');
+          loadPopups();
+        } catch (e) { showToast(e.message || 'Could not delete.', true); }
+      }));
+      card.appendChild(actions);
+
+      host.appendChild(card);
+    });
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(puEl('p', e.message || 'Could not load the popups.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+async function puEdit(id) {
+  const panel = document.getElementById('puEditor');
+  if (!panel) return;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const all = await api('/popups');
+    const p = all.find((x) => x.id === id);
+    if (!p) throw new Error('That popup is gone.');
+    panel.textContent = '';
+
+    const head = puEl('div', null,
+      'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
+    head.appendChild(puEl('strong', p.name));
+    head.appendChild(puBtn('Close', () => { panel.hidden = true; panel.textContent = ''; }));
+    panel.appendChild(head);
+
+    const body = puEl('div', null, 'padding:16px;');
+    const draft = {};
+
+    const bind = (input, key, transform) => {
+      input.addEventListener('input', () => { draft[key] = transform ? transform(input.value) : input.value; });
+      input.addEventListener('change', () => { draft[key] = transform ? transform(input.value) : input.value; });
+      return input;
+    };
+
+    body.appendChild(puField('Name (only you see this)', bind(puInput(p.name), 'name')));
+
+    const kind = puSelect(Object.entries(PU_KINDS), p.kind);
+    kind.addEventListener('change', () => { draft.kind = kind.value; });
+    body.appendChild(puField('What it is for', kind));
+
+    body.appendChild(puField('Heading', bind(puInput(p.title), 'title')));
+
+    const bodyText = document.createElement('textarea');
+    bodyText.rows = 3;
+    bodyText.value = p.body || '';
+    bodyText.setAttribute('style', 'width:100%; max-width:520px;');
+    body.appendChild(puField('Message', bind(bodyText, 'body')));
+
+    body.appendChild(puField('Button label', bind(puInput(p.button_label, 'text', 'Subscribe'), 'buttonLabel')));
+    body.appendChild(puField('Button goes to', bind(puInput(p.button_url, 'text', 'https://…  or  /nominate'), 'buttonUrl'),
+      'Only needed for an announcement or a nominate prompt. A newsletter popup has its own email field.'));
+    body.appendChild(puField('Image URL (optional)', bind(puInput(p.image_url, 'text', 'https://…'), 'imageUrl')));
+
+    if (PU_LISTS.length) {
+      const listSel = puSelect(
+        [['', 'The Friday newsletter (default)']].concat(PU_LISTS.map((l) => [String(l.id), l.name])),
+        p.list_id || '');
+      listSel.addEventListener('change', () => { draft.listId = listSel.value || null; });
+      body.appendChild(puField('Sign-ups join this list', listSel));
+    }
+
+    const scroll = puInput(p.scroll_percent, 'number');
+    scroll.min = 5; scroll.max = 100;
+    scroll.setAttribute('style', 'max-width:160px;');
+    body.appendChild(puField('Show once the reader is this far down (%)',
+      bind(scroll, 'scrollPercent', (v) => Number(v)),
+      'It can never be 0. A popup that fires the moment somebody arrives has interrupted them '
+      + 'before they have seen anything worth staying for.'));
+
+    // Pages
+    const pagesWrap = puEl('div', null, 'margin-bottom:12px;');
+    pagesWrap.appendChild(puEl('label', 'Which pages',
+      'display:block; font-size:12px; font-weight:700; margin-bottom:6px;'));
+    pagesWrap.appendChild(puEl('p', 'Tick none for every page. Checkout, privacy, terms and refunds '
+      + 'are always excluded and cannot be turned on.',
+      'font-size:12px; color:var(--slate); margin:0 0 8px;'));
+    const chosen = new Set(Array.isArray(p.pages) ? p.pages : []);
+    const grid = puEl('div', null,
+      'display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:4px;');
+    PU_PAGES.forEach(([value, label]) => {
+      const row = puEl('label', null, 'display:flex; gap:7px; align-items:center; font-size:13.5px; cursor:pointer;');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = chosen.has(value);
+      box.addEventListener('change', () => {
+        if (box.checked) chosen.add(value); else chosen.delete(value);
+        draft.pages = [...chosen];
+      });
+      row.appendChild(box);
+      row.appendChild(puEl('span', label));
+      grid.appendChild(row);
+    });
+    pagesWrap.appendChild(grid);
+    body.appendChild(pagesWrap);
+
+    const freq = puSelect([
+      ['days', 'Show again after a number of days'],
+      ['session', 'Once per visit'],
+      ['once', 'Once per person, ever'],
+    ], p.frequency);
+    freq.addEventListener('change', () => { draft.frequency = freq.value; });
+    body.appendChild(puField('Once somebody closes it', freq,
+      'Closing it is an answer. The default waits thirty days before asking again.'));
+
+    const days = puInput(p.frequency_days, 'number');
+    days.min = 1; days.max = 365;
+    days.setAttribute('style', 'max-width:160px;');
+    body.appendChild(puField('Days before asking again', bind(days, 'frequencyDays', (v) => Number(v))));
+
+    const starts = puInput(puLocalValue(p.starts_at), 'datetime-local');
+    starts.setAttribute('style', 'max-width:260px;');
+    starts.addEventListener('change', () => {
+      draft.startsAt = starts.value ? new Date(starts.value).toISOString() : null;
+    });
+    body.appendChild(puField('Start showing (optional)', starts));
+
+    const ends = puInput(puLocalValue(p.ends_at), 'datetime-local');
+    ends.setAttribute('style', 'max-width:260px;');
+    ends.addEventListener('change', () => {
+      draft.endsAt = ends.value ? new Date(ends.value).toISOString() : null;
+    });
+    body.appendChild(puField('Stop showing (optional)', ends,
+      'Worth setting for anything with a deadline. Without it, a competition popup is still '
+      + 'counting down to a date that passed months ago.'));
+
+    const save = puBtn('Save', async () => {
+      if (!Object.keys(draft).length) return showToast('Nothing changed.');
+      try {
+        await api('/popups/' + p.id, { method: 'PATCH', body: JSON.stringify(draft) });
+        showToast('Saved.');
+        panel.hidden = true;
+        panel.textContent = '';
+        loadPopups();
+      } catch (e) { showToast(e.message || 'Could not save.', true); }
+    }, 'btn btn-solid');
+    body.appendChild(save);
+
+    panel.appendChild(body);
+  } catch (e) {
+    panel.textContent = '';
+    panel.appendChild(puEl('p', e.message || 'Could not open that popup.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'puNew') {
+    const name = prompt('What is this popup called? (only you see this)');
+    if (!name) return;
+    const title = prompt('The heading readers see:');
+    if (!title) return;
+    try {
+      const made = await api('/popups', { method: 'POST', body: JSON.stringify({ name, title }) });
+      showToast('Created — it is switched off until you turn it on.');
+      await loadPopups();
+      puEdit(made.id);
+    } catch (err) { showToast(err.message || 'Could not create it.', true); }
+  }
+});
+
 </script>
 <script src="accessibility.js" defer></script>
 </body>

@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireRole } = require('../middleware/auth');
+const { spamCheck } = require('../middleware/spamCheck');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
 const { logActivity } = require('./activityLog');
@@ -61,7 +62,7 @@ router.get('/jobs', async (req, res, next) => {
 // POST /deaf-community/jobs — public submission. Enters 'pending'; goes live
 // (for 14 days) once an admin approves. The employer must agree they are a
 // deaf-friendly employer, and the description is capped at 100 words.
-router.post('/jobs', publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/jobs', publicSubmitLimiter, honeypot, spamCheck('job posting'), async (req, res, next) => {
   try {
     const { businessName, title, description, applyEmail, province, salaryRange, filters, deafFriendlyAgreed } = req.body;
     if (!businessName || !title || !description || !applyEmail) {
@@ -122,7 +123,7 @@ router.get('/passports', async (req, res, next) => {
 // POST /deaf-community/passports — public submission. Email is used for the
 // verification process (admin approval) and is never shown publicly. Enters
 // 'pending'; shows for 14 days once approved.
-router.post('/passports', publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/passports', publicSubmitLimiter, honeypot, spamCheck('deaf passport'), async (req, res, next) => {
   try {
     const { name, email, profileImageUrl, skills, certifications, communicationPreferences, availability } = req.body;
     if (!name || !email) {
@@ -171,7 +172,7 @@ router.get('/passports/:id/comments', async (req, res, next) => {
 
 // POST /deaf-community/passports/:id/comments — public. The only interaction
 // allowed on a passport is leaving a comment.
-router.post('/passports/:id/comments', publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/passports/:id/comments', publicSubmitLimiter, honeypot, spamCheck('passport comment'), async (req, res, next) => {
   try {
     const { commenterName, comment } = req.body;
     const text = (comment || '').trim();

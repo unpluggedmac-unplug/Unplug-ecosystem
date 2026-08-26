@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { spamCheck } = require('../middleware/spamCheck');
 const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
@@ -58,7 +59,7 @@ router.get('/profile/:profileId', async (req, res, next) => {
 // POST /reviews/profile/:profileId — members only. Re-reviewing updates the
 // existing review rather than adding a second one, and sends it back through
 // moderation because the content changed.
-router.post('/profile/:profileId', requireAuth, publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/profile/:profileId', requireAuth, publicSubmitLimiter, honeypot, spamCheck('profile review'), async (req, res, next) => {
   try {
     const profileId = Number(req.params.profileId);
     const rating = Number(req.body.rating);

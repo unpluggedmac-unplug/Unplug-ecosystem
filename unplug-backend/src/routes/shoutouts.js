@@ -3,6 +3,7 @@ const pool = require('../db');
 const { EVENTS, trackAsync } = require('../utils/marketingEvents');
 const { parseSocialHandle } = require('../utils/socialHandle');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
+const { spamCheck } = require('../middleware/spamCheck');
 const honeypot = require('../middleware/honeypot');
 const { recordParticipationAsync } = require('../utils/participation');
 
@@ -90,7 +91,7 @@ router.get('/today', async (req, res, next) => {
 // POST /shoutouts/nominate — public. Anyone can suggest a name+surname for a
 // future shoutout. Enters as 'pending'; nothing appears publicly until an
 // admin approves it, so unauthenticated submission is safe.
-router.post('/nominate', publicSubmitLimiter, honeypot, async (req, res, next) => {
+router.post('/nominate', publicSubmitLimiter, honeypot, spamCheck('shout-out nomination'), async (req, res, next) => {
   try {
     const { nomineeName, message, email, nomineeSocial } = req.body;
     const name = (nomineeName || '').trim();

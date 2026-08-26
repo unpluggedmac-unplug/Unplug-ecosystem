@@ -134,6 +134,51 @@ suite rather than production.
 
 None are required. Every one has a working default.
 
+## Marketing email
+
+Campaigns, the composer, drip sequences and the suppression list have their own
+document: **[EMAIL.md](EMAIL.md)**. The one operational fact worth repeating
+here is that `PUBLIC_API_URL` must be correct — every unsubscribe link in every
+email points at it, and a broken unsubscribe is the failure that becomes spam
+complaints and takes the sending domain down along with the password resets.
+
+`POST /admin/email/tick` with `X-Cron-Secret: $UNPLUG_CLEANUP_SECRET` is the
+external-scheduler entry point, the same shape as the cleanup and backup ones.
+
+## Environment variables added by B2
+
+| Name | Default | What it does |
+|---|---|---|
+| `UNPLUG_SECURITY_ALERT_EMAIL` | *(unset)* | Where to send an alert when a high-risk action is recorded — a role change, a refund, a cleared sign-in delay. **Unset means no alerts are sent at all.** That is deliberate: an alerting system nobody configured is worse than none, because it produces the belief that somebody is watching. |
+
+### High-risk actions
+
+These write an audit entry flagged `high_risk` and, if an address is
+configured, send an email at the time:
+
+`user_deleted`, `user_role_changed`, `user_suspended`, `user_unsuspended`,
+`payment_refunded`, `payment_deleted`, `order_refunded`,
+`login_delay_cleared`, `ip_block_removed`, `redirect_created`,
+`redirect_deleted`, `database_cleanup`, `admin_created`,
+`password_reset_forced`.
+
+The test for membership is not "is this important" — approving an article is
+important — but "would I want to know within the minute if it happened and it
+was not me".
+
+### Sign-in delays are not lockouts
+
+`GET /security/login-attempts` lists accounts currently being failed against.
+Reading that screen as "these people are locked out" is the obvious mistake and
+the wrong one. Nobody is locked out: each failure makes the next attempt wait
+longer, the wait is capped at fifteen minutes, and it clears on a correct
+password or after a day of quiet. Password reset is never blocked.
+
+If somebody is genuinely stuck and on the phone,
+`DELETE /security/login-attempts/<email>` clears their delay. It writes an
+audit entry, because an admin removing a defence for a named account is worth
+recording.
+
 ---
 
 ## Why there is no separate mobile cache
