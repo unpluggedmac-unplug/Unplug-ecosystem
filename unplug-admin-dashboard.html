@@ -377,6 +377,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="activitylog">Activity Log</a>
         <a data-section="crm">Sales &amp; CRM</a>
         <a data-section="emailmarketing">Email Marketing</a>
+        <a data-section="popups">Popups</a>
         <a data-section="spam">Spam Filter</a>
       </div>
     </div>
@@ -1646,6 +1647,33 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
           <div class="panel-body" id="emSuppressions" style="padding:0;"><div class="loading-state">Loading…</div></div>
         </div>
+      </div>
+    </div>
+
+
+    <!-- POPUPS -->
+    <!--
+      The only feature on this site whose purpose is to get in a reader's way.
+      The screen is arranged around that fact: the number of people who closed
+      a popup sits beside the number who signed up, everywhere it appears,
+      because a popup that gains twelve subscribers by annoying nine hundred
+      readers is not a success and a screen showing only the twelve will never
+      say so.
+    -->
+    <div class="admin-section" id="section-popups">
+      <div class="main-head"><div><h1>Popups</h1>
+        <p>A popup appears once somebody has scrolled far enough down a page to have earned
+           the interruption &mdash; never the moment they arrive, never while the cookie bar is
+           still up, and never on checkout or the privacy pages.</p></div></div>
+
+      <div class="panel" id="puEditor" hidden></div>
+
+      <div class="panel">
+        <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span>Your popups</span>
+          <button class="btn btn-solid" id="puNew">New popup</button>
+        </div>
+        <div class="panel-body" id="puList" style="padding:0;"><div class="loading-state">Loading&hellip;</div></div>
       </div>
     </div>
 
@@ -3291,6 +3319,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'spam') { loadSpamOverview(); loadSpamVocabulary(); }
     if (section === 'crm') crmShowTab('pipeline');
     if (section === 'emailmarketing') emShowTab('campaigns');
+    if (section === 'popups') loadPopups();
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
@@ -13384,6 +13413,342 @@ document.addEventListener('input', (e) => {
   if (e.target && e.target.id === 'emSuppSearch') {
     clearTimeout(window.__emSuppTimer);
     window.__emSuppTimer = setTimeout(emLoadSuppressions, 300);
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// Popups
+//
+// The only feature on this site whose purpose is to get in a reader's way, so
+// the screen is arranged around that: the dismissal count sits next to the
+// conversion count everywhere it appears, because a popup that signs up twelve
+// people by annoying nine hundred is not a success, and a screen that only
+// shows the twelve will never say so.
+//
+// createElement and textContent throughout, like the rest of this dashboard.
+// ---------------------------------------------------------------------------
+
+const PU_KINDS = {
+  newsletter: 'Newsletter sign-up',
+  announcement: 'Announcement',
+  nominate: 'Nominate prompt',
+};
+
+// The magazine's own page ids. Matches what goToPage uses, so what is chosen
+// here is what the popup script compares against at runtime.
+const PU_PAGES = [
+  ['home', 'Home'], ['news', 'News'], ['articledetail', 'Article pages'],
+  ['directory', 'Directory'], ['editions', 'Editions'], ['top10', 'Top 10'],
+  ['competitions', 'Competitions'], ['gallery', 'Gallery'], ['deafcommunity', 'Deaf Community'],
+  ['members', 'Members'], ['about', 'About'], ['contact', 'Contact'], ['nominate', 'Nominate'],
+];
+
+function puEl(tag, text, style) {
+  const el = document.createElement(tag);
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  if (style) el.setAttribute('style', style);
+  return el;
+}
+
+function puBtn(label, onClick, cls) {
+  const b = puEl('button', label);
+  b.type = 'button';
+  b.className = cls || 'btn';
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function puField(labelText, input, hint) {
+  const wrap = puEl('div', null, 'margin-bottom:12px;');
+  const id = 'pu-' + Math.random().toString(36).slice(2, 9);
+  input.id = id;
+  const label = puEl('label', labelText, 'display:block; font-size:12px; font-weight:700; margin-bottom:4px;');
+  label.setAttribute('for', id);
+  wrap.appendChild(label);
+  wrap.appendChild(input);
+  if (hint) wrap.appendChild(puEl('p', hint, 'font-size:12px; color:var(--slate); margin:4px 0 0;'));
+  return wrap;
+}
+
+function puInput(value, type, placeholder) {
+  const i = document.createElement('input');
+  i.type = type || 'text';
+  i.value = value == null ? '' : String(value);
+  if (placeholder) i.placeholder = placeholder;
+  i.setAttribute('style', 'width:100%; max-width:520px;');
+  return i;
+}
+
+function puSelect(options, selected) {
+  const s = document.createElement('select');
+  s.setAttribute('style', 'width:100%; max-width:520px;');
+  options.forEach(([value, label]) => {
+    const o = puEl('option', label);
+    o.value = value;
+    if (String(selected) === String(value)) o.selected = true;
+    s.appendChild(o);
+  });
+  return s;
+}
+
+function puWhen(value) {
+  if (!value) return '—';
+  try { return new Date(value).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch (e) { return String(value); }
+}
+
+// For the datetime-local input, which wants local time with no timezone.
+function puLocalValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+let PU_LISTS = [];
+
+async function loadPopups() {
+  const host = document.getElementById('puList');
+  if (!host) return;
+  host.textContent = '';
+  host.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    try { PU_LISTS = await api('/admin/email/lists') || []; } catch (e) { PU_LISTS = []; }
+    const rows = await api('/popups');
+    host.textContent = '';
+
+    if (!rows.length) {
+      host.appendChild(puEl('p',
+        'No popups yet. A popup appears once a reader has scrolled far enough down a page — '
+        + 'it never fires the moment somebody arrives, and never while the cookie bar is still up.',
+        'padding:16px; color:var(--slate); line-height:1.6;'));
+      return;
+    }
+
+    rows.forEach((p) => {
+      const card = puEl('div', null,
+        'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;');
+
+      const left = puEl('div', null, 'min-width:260px; flex:1;');
+      const head = puEl('div', null, 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;');
+      head.appendChild(puEl('strong', p.name));
+      head.appendChild(puEl('span', p.active ? 'Live' : 'Off',
+        'font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; background:'
+        + (p.active ? 'var(--green)' : 'var(--slate)') + ';'));
+      head.appendChild(puEl('span', PU_KINDS[p.kind] || p.kind,
+        'font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em;'));
+      left.appendChild(head);
+
+      left.appendChild(puEl('div', p.title, 'font-size:13px; color:var(--slate); margin-top:2px;'));
+
+      const pages = Array.isArray(p.pages) ? p.pages : [];
+      left.appendChild(puEl('div',
+        'At ' + p.scroll_percent + '% down · '
+        + (pages.length ? pages.length + ' page(s)' : 'every page') + ' · '
+        + (p.frequency === 'once' ? 'once per person'
+          : p.frequency === 'session' ? 'once per visit'
+            : 'again after ' + p.frequency_days + ' days')
+        + (p.ends_at ? ' · ends ' + puWhen(p.ends_at) : ''),
+        'font-size:12.5px; color:var(--slate); margin-top:4px;'));
+
+      // The two numbers together, always. See the note at the top of this
+      // section for why the conversion count never appears on its own.
+      const seen = Number(p.impressions) || 0;
+      const stats = puEl('div', null, 'font-size:12.5px; margin-top:6px;');
+      if (seen) {
+        const pct = (n) => Math.round((n / seen) * 1000) / 10;
+        stats.appendChild(puEl('span', 'Shown ' + seen + ' × '));
+        stats.appendChild(puEl('span', ' · ' + p.conversions + ' signed up (' + pct(p.conversions) + '%)',
+          'color:var(--green); font-weight:700;'));
+        stats.appendChild(puEl('span', ' · ' + p.dismissals + ' closed it (' + pct(p.dismissals) + '%)',
+          'color:' + (pct(p.dismissals) > 60 ? 'var(--red)' : 'var(--slate)') + '; font-weight:700;'));
+      } else {
+        stats.appendChild(puEl('span', 'Not shown to anybody yet.', 'color:var(--slate);'));
+      }
+      left.appendChild(stats);
+      card.appendChild(left);
+
+      const actions = puEl('div', null, 'display:flex; gap:6px; flex-wrap:wrap;');
+      actions.appendChild(puBtn('Edit', () => puEdit(p.id)));
+      actions.appendChild(puBtn(p.active ? 'Switch off' : 'Switch on', async () => {
+        if (!p.active && !confirm(
+          'Switching this on means readers start being interrupted by it. Ready?')) return;
+        try {
+          await api('/popups/' + p.id, { method: 'PATCH', body: JSON.stringify({ active: !p.active }) });
+          loadPopups();
+        } catch (e) { showToast(e.message || 'Could not change that.', true); }
+      }, p.active ? 'btn' : 'btn btn-solid'));
+      actions.appendChild(puBtn('Delete', async () => {
+        if (!confirm('Delete the popup "' + p.name + '"? Its numbers go with it.')) return;
+        try {
+          await api('/popups/' + p.id, { method: 'DELETE' });
+          showToast('Deleted.');
+          loadPopups();
+        } catch (e) { showToast(e.message || 'Could not delete.', true); }
+      }));
+      card.appendChild(actions);
+
+      host.appendChild(card);
+    });
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(puEl('p', e.message || 'Could not load the popups.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+async function puEdit(id) {
+  const panel = document.getElementById('puEditor');
+  if (!panel) return;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const all = await api('/popups');
+    const p = all.find((x) => x.id === id);
+    if (!p) throw new Error('That popup is gone.');
+    panel.textContent = '';
+
+    const head = puEl('div', null,
+      'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
+    head.appendChild(puEl('strong', p.name));
+    head.appendChild(puBtn('Close', () => { panel.hidden = true; panel.textContent = ''; }));
+    panel.appendChild(head);
+
+    const body = puEl('div', null, 'padding:16px;');
+    const draft = {};
+
+    const bind = (input, key, transform) => {
+      input.addEventListener('input', () => { draft[key] = transform ? transform(input.value) : input.value; });
+      input.addEventListener('change', () => { draft[key] = transform ? transform(input.value) : input.value; });
+      return input;
+    };
+
+    body.appendChild(puField('Name (only you see this)', bind(puInput(p.name), 'name')));
+
+    const kind = puSelect(Object.entries(PU_KINDS), p.kind);
+    kind.addEventListener('change', () => { draft.kind = kind.value; });
+    body.appendChild(puField('What it is for', kind));
+
+    body.appendChild(puField('Heading', bind(puInput(p.title), 'title')));
+
+    const bodyText = document.createElement('textarea');
+    bodyText.rows = 3;
+    bodyText.value = p.body || '';
+    bodyText.setAttribute('style', 'width:100%; max-width:520px;');
+    body.appendChild(puField('Message', bind(bodyText, 'body')));
+
+    body.appendChild(puField('Button label', bind(puInput(p.button_label, 'text', 'Subscribe'), 'buttonLabel')));
+    body.appendChild(puField('Button goes to', bind(puInput(p.button_url, 'text', 'https://…  or  /nominate'), 'buttonUrl'),
+      'Only needed for an announcement or a nominate prompt. A newsletter popup has its own email field.'));
+    body.appendChild(puField('Image URL (optional)', bind(puInput(p.image_url, 'text', 'https://…'), 'imageUrl')));
+
+    if (PU_LISTS.length) {
+      const listSel = puSelect(
+        [['', 'The Friday newsletter (default)']].concat(PU_LISTS.map((l) => [String(l.id), l.name])),
+        p.list_id || '');
+      listSel.addEventListener('change', () => { draft.listId = listSel.value || null; });
+      body.appendChild(puField('Sign-ups join this list', listSel));
+    }
+
+    const scroll = puInput(p.scroll_percent, 'number');
+    scroll.min = 5; scroll.max = 100;
+    scroll.setAttribute('style', 'max-width:160px;');
+    body.appendChild(puField('Show once the reader is this far down (%)',
+      bind(scroll, 'scrollPercent', (v) => Number(v)),
+      'It can never be 0. A popup that fires the moment somebody arrives has interrupted them '
+      + 'before they have seen anything worth staying for.'));
+
+    // Pages
+    const pagesWrap = puEl('div', null, 'margin-bottom:12px;');
+    pagesWrap.appendChild(puEl('label', 'Which pages',
+      'display:block; font-size:12px; font-weight:700; margin-bottom:6px;'));
+    pagesWrap.appendChild(puEl('p', 'Tick none for every page. Checkout, privacy, terms and refunds '
+      + 'are always excluded and cannot be turned on.',
+      'font-size:12px; color:var(--slate); margin:0 0 8px;'));
+    const chosen = new Set(Array.isArray(p.pages) ? p.pages : []);
+    const grid = puEl('div', null,
+      'display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:4px;');
+    PU_PAGES.forEach(([value, label]) => {
+      const row = puEl('label', null, 'display:flex; gap:7px; align-items:center; font-size:13.5px; cursor:pointer;');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = chosen.has(value);
+      box.addEventListener('change', () => {
+        if (box.checked) chosen.add(value); else chosen.delete(value);
+        draft.pages = [...chosen];
+      });
+      row.appendChild(box);
+      row.appendChild(puEl('span', label));
+      grid.appendChild(row);
+    });
+    pagesWrap.appendChild(grid);
+    body.appendChild(pagesWrap);
+
+    const freq = puSelect([
+      ['days', 'Show again after a number of days'],
+      ['session', 'Once per visit'],
+      ['once', 'Once per person, ever'],
+    ], p.frequency);
+    freq.addEventListener('change', () => { draft.frequency = freq.value; });
+    body.appendChild(puField('Once somebody closes it', freq,
+      'Closing it is an answer. The default waits thirty days before asking again.'));
+
+    const days = puInput(p.frequency_days, 'number');
+    days.min = 1; days.max = 365;
+    days.setAttribute('style', 'max-width:160px;');
+    body.appendChild(puField('Days before asking again', bind(days, 'frequencyDays', (v) => Number(v))));
+
+    const starts = puInput(puLocalValue(p.starts_at), 'datetime-local');
+    starts.setAttribute('style', 'max-width:260px;');
+    starts.addEventListener('change', () => {
+      draft.startsAt = starts.value ? new Date(starts.value).toISOString() : null;
+    });
+    body.appendChild(puField('Start showing (optional)', starts));
+
+    const ends = puInput(puLocalValue(p.ends_at), 'datetime-local');
+    ends.setAttribute('style', 'max-width:260px;');
+    ends.addEventListener('change', () => {
+      draft.endsAt = ends.value ? new Date(ends.value).toISOString() : null;
+    });
+    body.appendChild(puField('Stop showing (optional)', ends,
+      'Worth setting for anything with a deadline. Without it, a competition popup is still '
+      + 'counting down to a date that passed months ago.'));
+
+    const save = puBtn('Save', async () => {
+      if (!Object.keys(draft).length) return showToast('Nothing changed.');
+      try {
+        await api('/popups/' + p.id, { method: 'PATCH', body: JSON.stringify(draft) });
+        showToast('Saved.');
+        panel.hidden = true;
+        panel.textContent = '';
+        loadPopups();
+      } catch (e) { showToast(e.message || 'Could not save.', true); }
+    }, 'btn btn-solid');
+    body.appendChild(save);
+
+    panel.appendChild(body);
+  } catch (e) {
+    panel.textContent = '';
+    panel.appendChild(puEl('p', e.message || 'Could not open that popup.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  if (e.target && e.target.id === 'puNew') {
+    const name = prompt('What is this popup called? (only you see this)');
+    if (!name) return;
+    const title = prompt('The heading readers see:');
+    if (!title) return;
+    try {
+      const made = await api('/popups', { method: 'POST', body: JSON.stringify({ name, title }) });
+      showToast('Created — it is switched off until you turn it on.');
+      await loadPopups();
+      puEdit(made.id);
+    } catch (err) { showToast(err.message || 'Could not create it.', true); }
   }
 });
 

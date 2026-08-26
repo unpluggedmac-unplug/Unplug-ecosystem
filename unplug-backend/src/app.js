@@ -177,6 +177,10 @@ app.use('/shoutouts', shoutoutRoutes);
 app.use('/search', searchRoutes);
 app.use('/deaf-community', deafCommunityRoutes);
 app.use('/newsletter', newsletterRoutes);
+// Reader popups: the public feed and event counter, plus the admin's controls.
+// The feed is identical for everybody and cached for a minute — it is asked
+// for on every page view, and this instance sleeps when idle.
+app.use('/popups', require('./routes/popups'));
 app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);

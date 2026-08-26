@@ -71,7 +71,7 @@ const MODULES = [
 // that link in seven files, and a page linking a hashed name that did not get
 // rewritten is the undefined-token bug all over again, one layer down.
 const STATIC = ['sw.js', 'manifest.webmanifest', 'robots.txt', '_headers',
-                '_redirects', 'unplug-tokens.css'];
+                '_redirects', 'unplug-tokens.css', 'unplug-popups.js'];
 const STATIC_DIRS = ['icons', 'media', 'functions'];
 
 function hash(content) {

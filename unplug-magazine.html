@@ -8481,6 +8481,11 @@ function goToPage(pageId){
   // rather than on every page load — an advertiser is the only person who
   // needs them.
   if (pageId === 'brandplacement' && typeof loadMediaKitStats === 'function') loadMediaKitStats();
+  // This site is one document, so moving between pages fires no page load.
+  // unplug-popups.js listens for this to release its one-popup-per-page-view
+  // lock; without it a reader could browse all evening and, having dismissed
+  // nothing, still only ever be offered one thing.
+  document.dispatchEvent(new CustomEvent('unplug:pageview', { detail: { page: pageId } }));
   const PAGE_TITLES = {
     home: 'Unplug Magazine — Real People. Real Impact.',
     news: 'Latest News — Unplug Magazine',
@@ -9950,5 +9955,9 @@ function setupPosterCarousel(widget) {
 <script src="i18n.js" defer></script>
 <script src="accessibility.js" defer></script>
 <script src="chatbot.js" defer></script>
+<!-- Reader popups. Deferred and entirely optional: if it fails to load the
+     magazine is unaffected, which is the correct failure for the least
+     important thing on the page. -->
+<script src="unplug-popups.js" defer></script>
 </body>
 </html>

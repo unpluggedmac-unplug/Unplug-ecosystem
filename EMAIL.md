@@ -156,6 +156,26 @@ scheduler at:
 curl -X POST https://unplug-ecosystem.onrender.com/admin/email/tick -H "X-Cron-Secret: $UNPLUG_CLEANUP_SECRET"
 ```
 
+## Where subscribers come from
+
+Two places, and both now record consent properly:
+
+| | Route | Source recorded as |
+|---|---|---|
+| Footer form | `POST /newsletter/subscribe` | `newsletter form` |
+| Popup | same route, with a `source` | `popup: <its heading>` |
+
+**This used to be broken and it mattered.** `/newsletter/subscribe` wrote only
+to `newsletter_subscribers`. Migration 141 imported whoever existed the day it
+ran, but every signup after that landed in the old table alone — on no mailing
+list, with no record of where the consent came from. A campaign sent to "The
+Friday newsletter" reached none of them, and the gap widened by one person per
+signup, invisibly. The first symptom would have been a newsletter that went to
+fewer people than had subscribed to it.
+
+Both writes are kept. The old table is still read by the analytics dashboard
+and the admin export, so dropping it to tidy up would break both for no gain.
+
 ## Bounces and complaints
 
 Nothing in this codebase used to write a `bounced` or `complained` suppression.
