@@ -336,7 +336,22 @@ require('./utils/emailScheduler').start();
 // stalls, then it stops. Hourly rather than every five minutes — the
 // thresholds are measured in days, so landing within the hour is close enough
 // and it keeps the query off a sleeping instance the rest of the time.
-require('./utils/checkoutRecovery').start();
+// OFF UNLESS EXPLICITLY SWITCHED ON, and it stays that way until somebody
+// decides otherwise.
+//
+// This is the same rule popups and email automations follow, for the same
+// reason and with more at stake: everything this sends goes to somebody who
+// was about to give the magazine money. A half-finished version of it running
+// unattended does not produce a bug report, it produces a customer who got a
+// strange email about their order.
+//
+// Set UNPLUG_CHECKOUT_RECOVERY=on to enable it. POST /orders/recovery-run with
+// UNPLUG_CLEANUP_SECRET runs one pass by hand regardless, which is how to
+// watch it work before trusting it to a timer.
+if (process.env.UNPLUG_CHECKOUT_RECOVERY === 'on') {
+  require('./utils/checkoutRecovery').start();
+  console.log('[recovery] checkout reminders are ON');
+}
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => {
