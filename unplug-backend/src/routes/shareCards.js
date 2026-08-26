@@ -1,4 +1,4 @@
-// "AS FEATURED IN UNPLUG" SHARE CARDS.
+// "SEEN AND HEARD BY UNPLUG" SHARE CARDS.
 //
 // Someone we featured designs a card to post on their own accounts. They see
 // only a WATERMARKED preview until an admin approves it — nothing carrying the
@@ -140,7 +140,7 @@ async function decide(req, res, next, decision) {
       ? {
         subject: 'Your Unplug card is ready',
         text: `Hi ${card.name},\n\n`
-          + 'Your "As Featured in Unplug" card has been approved and is ready to download and share.\n\n'
+          + 'Your "Seen and Heard by Unplug" card has been approved and is ready to download and share.\n\n'
           + `${link}\n\n`
           + 'Open that link and press Download. Post it wherever you like — and thank you for letting us tell your story.\n\n'
           + 'The Unplug team',

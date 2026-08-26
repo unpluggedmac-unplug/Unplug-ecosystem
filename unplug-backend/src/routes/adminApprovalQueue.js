@@ -147,7 +147,7 @@ const SOURCES = [
     }),
   },
   {
-    // An "As Featured in Unplug" card somebody made for themselves. The
+    // A "Seen and Heard by Unplug" card somebody made for themselves. The
     // masthead goes on it, so an editor sees it before it can be downloaded
     // clean — and that decision belongs in THIS queue with every other one,
     // not in an inbox with its own separate audit trail.

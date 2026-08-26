@@ -181,6 +181,9 @@ app.use('/newsletter', newsletterRoutes);
 // The feed is identical for everybody and cached for a minute — it is asked
 // for on every page view, and this instance sleeps when idle.
 app.use('/popups', require('./routes/popups'));
+// The social feed: hand-entered posts. No API call to Meta anywhere — see
+// routes/social.js for why (Basic Display was switched off in Dec 2024).
+app.use('/social', require('./routes/social'));
 app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);
@@ -328,6 +331,12 @@ require('./utils/participationScheduler').start();
 // POST /admin/email/tick with UNPLUG_CLEANUP_SECRET is there for an external
 // scheduler that wants sends to happen at the minute they were set for.
 require('./utils/emailScheduler').start();
+
+// Checkout recovery: two reminders, a day and three days after a checkout
+// stalls, then it stops. Hourly rather than every five minutes — the
+// thresholds are measured in days, so landing within the hour is close enough
+// and it keeps the query off a sleeping instance the rest of the time.
+require('./utils/checkoutRecovery').start();
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => {

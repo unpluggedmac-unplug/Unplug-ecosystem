@@ -2961,13 +2961,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <div id="nominateCardSlot">
 <div class="wrap" id="nominate-card" style="padding-top:8px; max-width:900px; scroll-margin-top:90px;">
-    <span class="eyebrow" data-cms="card.eyebrow">Share Your Feature</span>
+    <span class="eyebrow" data-cms="card.eyebrow">Share Your Acknowledgement</span>
     <!-- An h2, not an h1. It was the h1 of its own page; on the nominate page
            the h1 is "Know someone who deserves to be seen?" and a second one
            would give the document two top-level titles — which is a broken
            outline for anyone navigating this page by heading. -->
-      <h2 style="font-size:clamp(28px,3.8vw,40px); margin:14px 0 10px;" data-cms="card.title">Make your &ldquo;As Featured in Unplug&rdquo; card</h2>
-    <p class="lede" data-cms="card.lede">Been featured in Unplug? Make a card to post on your own accounts. Fill it in, see how it looks, and send it to us &mdash; we check every card before it goes out with our name on it, then email you the finished one.</p>
+      <h2 style="font-size:clamp(28px,3.8vw,40px); margin:14px 0 10px;" data-cms="card.title">Make your &ldquo;Seen and Heard by Unplug&rdquo; card</h2>
+    <p class="lede" data-cms="card.lede">Been seen and heard by Unplug? Make a card to post on your own accounts. Fill it in, see how it looks, and send it to us &mdash; we check every card before it goes out with our name on it, then email you the finished one.</p>
 
     <div id="cardApproved" hidden style="margin-top:24px; padding:16px 18px; border:1px solid var(--paper-line); background:var(--paper);"></div>
 
@@ -7643,7 +7643,7 @@ function routeFromUrl(){
 // inside something still display:none has no position to scroll to.
 // ONE CARD MAKER, MOVED BETWEEN TWO PAGES — never duplicated.
 //
-// The "As Featured in Unplug" card appears on both /nominate and the contact
+// The "Seen and Heard by Unplug" card appears on both /nominate and the contact
 // page. Copying the markup would be the obvious way to do that and would break
 // it outright: the card's script binds to element ids, so two copies means two
 // elements sharing every id, getElementById returns whichever came first, and
@@ -7745,7 +7745,7 @@ async function loadContributor(slug) {
   }
 }
 
-// ---- "As Featured in Unplug" share card (?p=card) ----
+// ---- "Seen and Heard by Unplug" share card (?p=card) ----
 //
 // The card is drawn from its fields, here, in the browser. Nothing is stored
 // as an image anywhere: the same code draws the watermarked preview and, once
@@ -7799,7 +7799,13 @@ async function loadContributor(slug) {
     ctx.fillText('UNPLUG', 72, 176);
     ctx.fillStyle = 'rgba(250,246,240,0.55)';
     ctx.font = '400 22px Inter, Arial, sans-serif';
-    ctx.fillText('AS FEATURED IN UNPLUG MAGAZINE', 72, 214);
+    // The line printed on the card itself, and the reason the heading above
+    // says the same words: somebody fills in a card called one thing and must
+    // not download a card that calls itself another.
+    //
+    // "MAGAZINE" is dropped — the masthead directly above it already says
+    // UNPLUG, and the shorter line sets better at this size.
+    ctx.fillText('SEEN AND HEARD BY UNPLUG', 72, 214);
 
     if (card.category) {
       ctx.fillStyle = '#d4a537';

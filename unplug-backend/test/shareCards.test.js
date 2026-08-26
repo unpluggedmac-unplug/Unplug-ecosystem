@@ -1,4 +1,4 @@
-// "AS FEATURED IN UNPLUG" SHARE CARDS — the approval gate.
+// "SEEN AND HEARD BY UNPLUG" SHARE CARDS — the approval gate.
 //
 // The masthead goes on these, so the guarantee is simple and absolute: NOBODY
 // gets a clean card until an admin has approved it. Everything worth testing

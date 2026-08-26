@@ -233,6 +233,16 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       );
       order = orderResult.rows[0];
 
+      // THE SAVED CART IS NOW AN ORDER, so it stops being an abandoned cart.
+      // Without this the same person is chased twice about one intention: once
+      // "you left something in your cart" and once "your order is waiting".
+      //
+      // Marked converted rather than deleted, so "have we already chased this
+      // person" survives and a cart that came back cannot be counted as new.
+      await client.query(
+        `UPDATE saved_carts SET converted_at = now() WHERE user_id = $1 AND converted_at IS NULL`,
+        [req.user.id]);
+
       // Each item's payable share is proportional to its price within the
       // order — a R95 article and a R300 event share a single voucher/
       // credit discount in proportion to what each actually costs, not
@@ -313,6 +323,91 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     }
     next(err);
   }
+});
+
+// ---------------------------------------------------------------------------
+// The saved cart
+// ---------------------------------------------------------------------------
+//
+// The cart lives in the browser. These endpoints keep a COPY on the server so
+// it survives a new device, a cleared browser, and a phone that died — and so
+// somebody who walked away can be reminded it is there.
+//
+// THE COPY IS NEVER THE SOURCE OF A PRICE. items is the same
+// { linkedType, linkedId } shape /orders/initiate already validates, and
+// checkout re-prices every line server-side exactly as it did before. A cart
+// saved in March must not buy at March's price in September, and a stored
+// price is precisely the field somebody would try to edit.
+//
+// SIGNED-IN ONLY, because checkout is signed-in only. There is no anonymous
+// cart to save and no address to send anything to.
+
+// PUT /orders/cart — replace the saved cart.
+router.put('/cart', requireAuth, async (req, res, next) => {
+  try {
+    const items = Array.isArray(req.body.items) ? req.body.items : null;
+    if (!items) return res.status(400).json({ error: 'items must be an array.' });
+
+    // Same shape rules as checkout, minus the "must not be empty" one: saving
+    // an empty cart is how somebody clears it.
+    if (items.length) {
+      const shapeError = validateItemsShape(items);
+      if (shapeError) return res.status(400).json({ error: shapeError });
+    }
+
+    // updated_at moving resets the reminder count: a cart somebody has just
+    // changed is a live intention again, not the one they already ignored.
+    await pool.query(
+      `INSERT INTO saved_carts (user_id, items, updated_at, reminders_sent, last_reminded_at, converted_at)
+       VALUES ($1, $2, now(), 0, NULL, NULL)
+       ON CONFLICT (user_id) DO UPDATE SET
+         items = EXCLUDED.items,
+         updated_at = now(),
+         reminders_sent = 0,
+         last_reminded_at = NULL,
+         converted_at = NULL`,
+      [req.user.id, JSON.stringify(items.slice(0, 20))]);
+
+    res.json({ ok: true, count: items.length });
+  } catch (err) { next(err); }
+});
+
+// GET /orders/cart — what was saved, if anything.
+router.get('/cart', requireAuth, async (req, res, next) => {
+  try {
+    const r = await pool.query(
+      'SELECT items, updated_at FROM saved_carts WHERE user_id = $1 AND converted_at IS NULL',
+      [req.user.id]);
+    res.json(r.rowCount ? { items: r.rows[0].items, updatedAt: r.rows[0].updated_at } : { items: [] });
+  } catch (err) { next(err); }
+});
+
+// DELETE /orders/cart — forget it.
+//
+// The row is REMOVED rather than emptied. Somebody clearing their cart has
+// asked for it to be gone, and keeping an empty row that records they once
+// had one is not what they meant.
+router.delete('/cart', requireAuth, async (req, res, next) => {
+  try {
+    await pool.query('DELETE FROM saved_carts WHERE user_id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+// POST /orders/:id/stop-reminders — from the link in a reminder email.
+//
+// Stops the chasing for ONE order without unsubscribing from anything else.
+// Without this the only way to stop a reminder is to leave the mailing list,
+// which is far more than somebody means when they think "stop emailing me
+// about this order".
+router.post('/:id/stop-reminders', requireAuth, async (req, res, next) => {
+  try {
+    const r = await pool.query(
+      `UPDATE orders SET recovery_opted_out = true
+        WHERE id = $1 AND user_id = $2 RETURNING id`, [req.params.id, req.user.id]);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'No such order.' });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 // GET /orders/mine — the member's own order history, one row per order
