@@ -188,6 +188,8 @@ app.use('/social', require('./routes/social'));
 // Mounted AFTER /social so nothing here can shadow an existing route — a form
 // slug is arbitrary text an admin types.
 app.use('/forms', require('./routes/forms'));
+app.use('/privacy', require('./routes/privacy'));
+app.use('/sasl', require('./routes/sasl'));
 app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);
