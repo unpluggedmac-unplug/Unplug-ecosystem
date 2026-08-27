@@ -3486,6 +3486,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           </p>
           <a class="btn btn-line" href="/nominate" style="width:auto; display:inline-block;">Nominate someone &rarr;</a>
         </div>
+
+        <!-- The card maker itself lives on /nominate. This is a pointer to it,
+             written to match the Nominate block above it exactly — the two are
+             the same kind of thing (something you can go and do) and used to
+             look nothing alike, because one was a link and the other was the
+             entire form dropped into the page.
+             ?p=card rather than /nominate: it lands on the same page and
+             scrolls straight to the card, instead of leaving somebody at the
+             top of a page about nominating other people. -->
+        <div style="margin-top:28px; padding-top:24px; border-top:1px solid var(--paper-line);">
+          <h3 style="margin:0 0 8px;">Make your card</h3>
+          <p style="color:var(--slate); line-height:1.6; margin:0 0 14px; font-size:14px;">
+            Been seen and heard by Unplug? Make a &ldquo;Seen and Heard&rdquo; card to post on
+            your own accounts &mdash; we check every one before it goes out with our name on it.
+          </p>
+          <a class="btn btn-line" href="?p=card" style="width:auto; display:inline-block;">Make your card &rarr;</a>
+        </div>
       </div>
       <form id="contactForm">
         <input type="text" name="website" id="hpContact" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
@@ -3499,17 +3516,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </section>
 
-  <!-- WHERE THE CARD MAKER GOES ON THIS PAGE.
-       Empty in the markup on purpose. There is exactly ONE card maker in this
-       document and it is MOVED here when the contact page opens, never copied
-       — its JavaScript binds to element ids (cardCanvas, cardName, cardSubmit)
-       and a second copy would mean two elements sharing each of those, at
-       which point getElementById returns whichever came first and the other
-       form is dead markup that silently does nothing. -->
-  <div class="wrap" style="padding-top:0;">
-    <div class="divider" style="margin:8px 0 0;"><div class="line"></div><span class="print-mark">or</span><div class="line"></div></div>
-  </div>
-  <div id="contactCardSlot"></div>
 
   <!-- FEATURED ADVERTISERS POSTER SLIDESHOW -->
   <section class="wrap poster-section" style="padding-top:0;">
@@ -8252,28 +8258,22 @@ function routeFromUrl(){
 //
 // Deferred a frame: goToPage has only just unhidden the page, and an element
 // inside something still display:none has no position to scroll to.
-// ONE CARD MAKER, MOVED BETWEEN TWO PAGES — never duplicated.
+// THE CARD MAKER HAS ONE HOME, AND NO LONGER MOVES.
 //
-// The "Seen and Heard by Unplug" card appears on both /nominate and the contact
-// page. Copying the markup would be the obvious way to do that and would break
-// it outright: the card's script binds to element ids, so two copies means two
+// It used to be relocated between /nominate and the contact page, because
+// there is exactly one of it in this document and copying the markup would
+// break it outright: its script binds to element ids, so two copies means two
 // elements sharing every id, getElementById returns whichever came first, and
 // the other form looks completely normal while doing nothing at all.
 //
-// Only one page is ever visible in this document, so relocating the single
-// node is safe — every listener bound to it and everything already typed into
-// it comes along, because it is the same element.
-function placeCardMaker(pageId) {
-  const card = document.getElementById('nominate-card');
-  if (!card) return;
-  const slot = pageId === 'contact'
-    ? document.getElementById('contactCardSlot')
-    : document.getElementById('nominateCardSlot');
-  // Moved only when it is not already there. Re-appending an element that is
-  // already in place still detaches and reinserts it, which would reset a
-  // half-drawn canvas and lose whatever somebody had typed.
-  if (slot && card.parentElement !== slot) slot.appendChild(card);
-}
+// The contact page now links to it instead of hosting it, so the moving is
+// gone along with the slot it moved into. The card is authored inside
+// #nominateCardSlot and stays there. Removed rather than left as a function
+// that no longer does anything: a no-op called on every page change, named
+// after behaviour that no longer exists, is worse than no function at all.
+//
+// If the card is ever wanted inline on a second page again, MOVE it — do not
+// copy it. That constraint has not changed.
 
 function scrollToCardMaker() {
   // TRIED MORE THAN ONCE, on purpose. goToPage scrolls to the top
@@ -9505,7 +9505,6 @@ function goToPage(pageId){
   // unplug-popups.js listens for this to release its one-popup-per-page-view
   // lock; without it a reader could browse all evening and, having dismissed
   // nothing, still only ever be offered one thing.
-  placeCardMaker(pageId);
   document.dispatchEvent(new CustomEvent('unplug:pageview', { detail: { page: pageId } }));
   const PAGE_TITLES = {
     home: 'Unplug Magazine — Real People. Real Impact.',
