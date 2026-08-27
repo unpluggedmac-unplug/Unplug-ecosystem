@@ -110,8 +110,18 @@ test('and ONLY the whitelisted settings, never the whole table', async () => {
   const res = await api('GET', '/public-settings');
   // bundle_vote_price is a real setting and has no business being public.
   assert.equal(res.body.settings.bundle_vote_price, undefined);
+  // The list is stated here ON PURPOSE, so adding a setting to the public
+  // whitelist has to be a deliberate act in two places rather than something
+  // that happens by accident in one. If this fails after you exposed a new
+  // key, add it here — and think about whether it should be public first.
+  const EXPECTED_PUBLIC = [
+    'youtube_image_url',   // the admin-chosen YouTube image
+    'unlisted_pages',      // the magazine hides its own menu entries
+    'whatsapp_number',     // the assistant's "talk to a person" handoff
+    'whatsapp_hours',
+  ];
   assert.deepEqual(
-    Object.keys(res.body.settings).filter((k) => !['youtube_image_url', 'unlisted_pages'].includes(k)),
+    Object.keys(res.body.settings).filter((k) => !EXPECTED_PUBLIC.includes(k)),
     [], 'nothing outside the whitelist leaks');
 });
 

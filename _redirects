@@ -41,3 +41,11 @@
 # address by hand adds the slash about half the time.
 /nominate     /unplug-magazine    200
 /nominate/    /unplug-magazine    200
+
+# /form/<slug> — an admin-built form at its own address.
+#
+# A wildcard rather than a list, because the slug is whatever an admin typed
+# and Pages cannot be redeployed every time somebody makes a form. Same 200
+# rewrite as the rest: the address bar keeps saying /form/bursary-2026, so the
+# link can be shared, bookmarked and refreshed.
+/form/*    /unplug-magazine    200

@@ -2904,6 +2904,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
      A real page rather than a bolted-on file, so it carries the site's header,
      nav, fonts, mobile rules, consent gate and analytics without any of that
      being rebuilt. Linkable from a social bio as ?p=nominate . -->
+<!-- FORM — an admin-built form at its own address, /form/<slug>.
+     The same definition also renders inside any page through a
+     <div data-unplug-form="slug"> block, so one form serves both a link you
+     send out and a form at the bottom of the page that explains it. -->
+<main class="page" id="page-form">
+  <div class="wrap" style="padding-top:56px; max-width:760px;">
+    <div id="formHost"></div>
+  </div>
+</main>
+
 <main class="page" id="page-nominate">
   <div class="wrap cms-blocks" data-cms-blocks="nominate"></div>
   <div class="wrap" style="padding-top:56px; max-width:760px;">
@@ -3762,6 +3772,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <script src="unplug-seo-schema.js"></script>
 <script src="unplug-responsive-images.js"></script>
 <script src="unplug-spam-forms.js"></script>
+<script src="unplug-form-render.js"></script>
 <script src="unplug-participation-sdk.js"></script>
 <script>
 const api = UnplugAPI.api;
@@ -7650,7 +7661,18 @@ function seoSetTitle(title){
 const CLEAN_PATHS = { '/nominate': 'nominate' };
 
 function cleanPathPage() {
-  return CLEAN_PATHS[location.pathname.replace(/\/+$/, '') || '/'] || null;
+  const path = location.pathname.replace(/\/+$/, '') || '/';
+  if (CLEAN_PATHS[path]) return CLEAN_PATHS[path];
+  // /form/<slug>. Not in CLEAN_PATHS because the slug is whatever an admin
+  // typed, but resolved here so there is still one place that decides what a
+  // path means.
+  if (/^\/form\/[a-z0-9-]+$/i.test(path)) return 'form';
+  return null;
+}
+
+function formSlugFromPath() {
+  const m = location.pathname.replace(/\/+$/, '').match(/^\/form\/([a-z0-9-]+)$/i);
+  return m ? m[1] : null;
 }
 
 // On first load and on browser back/forward, route from the URL so deep
@@ -7678,6 +7700,10 @@ function routeFromUrl(){
     // before /nominate existed, and those are not editable in bulk.
     else if (p && document.getElementById('page-' + p)) { goToPage(p); }
     // A clean path, served here by a Cloudflare Pages rewrite.
+    else if (cleanPathPage() === 'form') {
+      goToPage('form');
+      if (window.UnplugFormRender) UnplugFormRender.render(document.getElementById('formHost'), formSlugFromPath());
+    }
     else if (cleanPathPage()) { goToPage(cleanPathPage()); }
     else { goToPage('home'); }
   } finally { window.__seoSuppress = false; }

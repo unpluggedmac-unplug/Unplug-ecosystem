@@ -379,6 +379,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="emailmarketing">Email Marketing</a>
         <a data-section="popups">Popups</a>
         <a data-section="social">Social Feed</a>
+        <a data-section="forms">Forms</a>
         <a data-section="pagevisibility">Page Visibility</a>
         <a data-section="spam">Spam Filter</a>
       </div>
@@ -1743,6 +1744,31 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </p>
         </div>
         <div class="panel-body" id="pvList" style="padding:0;"><div class="loading-state">Loading&hellip;</div></div>
+      </div>
+    </div>
+
+
+    <!-- FORMS -->
+    <!--
+      Forms an admin composes without a deploy: a bursary application, a
+      survey, an RSVP, a call for submissions that runs six weeks and stops.
+      NOT a replacement for the contact form, the newsletter box or the
+      nomination form — those are load-bearing and stay where they are.
+    -->
+    <div class="admin-section" id="section-forms">
+      <div class="main-head"><div><h1>Forms</h1>
+        <p>Build a form, send people its link, or drop it into any page. Answers land here and
+           anybody who leaves an email becomes a CRM contact, the same way the contact form works.</p></div></div>
+
+      <div class="panel" id="fbEditor" hidden></div>
+      <div class="panel" id="fbResponses" hidden></div>
+
+      <div class="panel" id="fbListPanel">
+        <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span>Your forms</span>
+          <button class="btn btn-solid" id="fbNew">New form</button>
+        </div>
+        <div class="panel-body" id="fbList" style="padding:0;"><div class="loading-state">Loading&hellip;</div></div>
       </div>
     </div>
 
@@ -3391,6 +3417,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'popups') loadPopups();
     if (section === 'social') loadSocialPosts();
     if (section === 'pagevisibility') loadPageVisibility();
+    if (section === 'forms') loadForms();
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
@@ -14049,6 +14076,317 @@ async function loadPageVisibility() {
     host.textContent = '';
     host.appendChild(puEl('p', e.message || 'Could not load the page list.',
       'padding:16px; color:var(--red);'));
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Forms
+//
+// createElement and textContent throughout — a question label is text somebody
+// typed and it is rendered on a public page.
+// ---------------------------------------------------------------------------
+
+const FB_KINDS = [
+  ['text', 'Short text'], ['textarea', 'Long text'], ['email', 'Email address'],
+  ['phone', 'Phone number'], ['number', 'Number'], ['date', 'Date'],
+  ['select', 'Choose one (dropdown)'], ['radio', 'Choose one (buttons)'],
+  ['checkbox', 'Tick box'], ['file', 'File upload — needs a member account'],
+];
+
+function fbWhen(v) {
+  if (!v) return '—';
+  try { return new Date(v).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' }); }
+  catch (e) { return String(v); }
+}
+
+async function loadForms() {
+  const host = document.getElementById('fbList');
+  if (!host) return;
+  document.getElementById('fbEditor').hidden = true;
+  document.getElementById('fbResponses').hidden = true;
+  document.getElementById('fbListPanel').hidden = false;
+  host.textContent = '';
+  host.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const rows = await api('/forms');
+    host.textContent = '';
+    if (!rows.length) {
+      host.appendChild(puEl('p',
+        'No forms yet. A form gets its own address you can send people to, and can also be '
+        + 'dropped into any page.',
+        'padding:16px; color:var(--slate); line-height:1.6;'));
+      return;
+    }
+
+    rows.forEach((f) => {
+      const card = puEl('div', null,
+        'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;');
+
+      const left = puEl('div', null, 'min-width:250px; flex:1;');
+      const head = puEl('div', null, 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;');
+      head.appendChild(puEl('strong', f.name));
+      head.appendChild(puEl('span', f.active ? 'Open' : 'Closed',
+        'font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; background:'
+        + (f.active ? 'var(--green)' : 'var(--slate)') + ';'));
+      if (f.unread) {
+        head.appendChild(puEl('span', f.unread + ' new',
+          'font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; background:var(--red);'));
+      }
+      left.appendChild(head);
+      left.appendChild(puEl('div', '/form/' + f.slug,
+        'font-size:12.5px; color:var(--slate); margin-top:3px;'));
+      left.appendChild(puEl('div',
+        f.field_count + ' question(s) · ' + f.submission_count + ' response(s)'
+        + (f.closes_at ? ' · closes ' + fbWhen(f.closes_at) : ''),
+        'font-size:12.5px; color:var(--slate); margin-top:3px;'));
+      // Copyable, because the whole point of the embed is pasting it into a
+      // Page Content block.
+      left.appendChild(puEl('code', '<div data-unplug-form="' + f.slug + '"></div>',
+        'display:inline-block; font-size:11.5px; color:var(--slate); margin-top:6px; background:var(--paper); padding:3px 6px; border-radius:4px;'));
+      card.appendChild(left);
+
+      const actions = puEl('div', null, 'display:flex; gap:6px; flex-wrap:wrap;');
+      actions.appendChild(puBtn('Questions', () => fbEdit(f.id)));
+      actions.appendChild(puBtn('Responses (' + f.submission_count + ')', () => fbResponses(f.id, f.name)));
+      actions.appendChild(puBtn(f.active ? 'Close' : 'Open', async () => {
+        if (!f.active && !confirm('Open "' + f.name + '"? People will be able to send answers.')) return;
+        try {
+          await api('/forms/' + f.id, { method: 'PATCH', body: JSON.stringify({ active: !f.active }) });
+          loadForms();
+        } catch (e) { showToast(e.message || 'Could not change that.', true); }
+      }, f.active ? 'btn' : 'btn btn-solid'));
+      actions.appendChild(puBtn('Delete', async () => {
+        if (!confirm('Delete "' + f.name + '"?')) return;
+        try {
+          await api('/forms/' + f.id, { method: 'DELETE' });
+          showToast('Deleted.');
+          loadForms();
+        } catch (e) { showToast(e.message || 'Could not delete.', true); }
+      }));
+      card.appendChild(actions);
+      host.appendChild(card);
+    });
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(puEl('p', e.message || 'Could not load the forms.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  if (!e.target || e.target.id !== 'fbNew') return;
+  const name = prompt('What is this form called? (only you see this)');
+  if (!name) return;
+  try {
+    const made = await api('/forms', { method: 'POST', body: JSON.stringify({ name }) });
+    showToast('Created — it stays closed until you open it.');
+    await loadForms();
+    fbEdit(made.id);
+  } catch (err) { showToast(err.message || 'Could not create it.', true); }
+});
+
+async function fbEdit(id) {
+  const panel = document.getElementById('fbEditor');
+  document.getElementById('fbListPanel').hidden = true;
+  document.getElementById('fbResponses').hidden = true;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const f = await api('/forms/admin/' + id);
+    panel.textContent = '';
+
+    const head = puEl('div', null,
+      'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
+    head.appendChild(puEl('strong', f.name));
+    head.appendChild(puBtn('Back to forms', loadForms));
+    panel.appendChild(head);
+
+    const body = puEl('div', null, 'padding:16px;');
+    const draft = {};
+    const bind = (input, key) => {
+      input.addEventListener('input', () => { draft[key] = input.value; });
+      input.addEventListener('change', () => { draft[key] = input.value; });
+      return input;
+    };
+
+    body.appendChild(puField('Name (only you see this)', bind(puInput(f.name), 'name')));
+    body.appendChild(puField('Address', bind(puInput(f.slug), 'slug'),
+      'The form lives at /form/' + f.slug + ' — changing this breaks links already sent.'));
+    body.appendChild(puField('Heading readers see', bind(puInput(f.title), 'title')));
+
+    const intro = document.createElement('textarea');
+    intro.rows = 3; intro.value = f.intro || '';
+    intro.setAttribute('style', 'width:100%; max-width:520px;');
+    body.appendChild(puField('Introduction', bind(intro, 'intro')));
+
+    const success = document.createElement('textarea');
+    success.rows = 2; success.value = f.success_message || '';
+    success.setAttribute('style', 'width:100%; max-width:520px;');
+    body.appendChild(puField('Thank-you message', bind(success, 'successMessage')));
+
+    const closed = document.createElement('textarea');
+    closed.rows = 2; closed.value = f.closed_message || '';
+    closed.setAttribute('style', 'width:100%; max-width:520px;');
+    body.appendChild(puField('What it says once closed', bind(closed, 'closedMessage'),
+      'Shown instead of the form. Somebody following an old link is late, not lost.'));
+
+    const closes = puInput(f.closes_at ? puLocalValue(f.closes_at) : '', 'datetime-local');
+    closes.setAttribute('style', 'max-width:260px;');
+    closes.addEventListener('change', () => {
+      draft.closesAt = closes.value ? new Date(closes.value).toISOString() : null;
+    });
+    body.appendChild(puField('Closes (optional)', closes,
+      'Worth setting for anything with a deadline — it then stops on its own.'));
+
+    body.appendChild(puBtn('Save', async () => {
+      if (!Object.keys(draft).length) return showToast('Nothing changed.');
+      try {
+        await api('/forms/' + f.id, { method: 'PATCH', body: JSON.stringify(draft) });
+        showToast('Saved.');
+        fbEdit(f.id);
+      } catch (err) { showToast(err.message || 'Could not save.', true); }
+    }, 'btn btn-solid'));
+
+    // --- questions ---------------------------------------------------------
+    body.appendChild(puEl('h3', 'Questions', 'margin:26px 0 10px; font-size:15px;'));
+    if (!f.fields.length) {
+      body.appendChild(puEl('p', 'No questions yet. The form cannot be opened until it has one.',
+        'color:var(--slate); font-size:14px;'));
+    }
+
+    f.fields.forEach((field) => {
+      const row = puEl('div', null,
+        'border:1px solid var(--paper-line); border-radius:8px; padding:12px; margin-bottom:10px; display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;');
+      const info = puEl('div', null, 'min-width:220px; flex:1;');
+      const t = puEl('div', null, 'display:flex; gap:8px; align-items:center; flex-wrap:wrap;');
+      t.appendChild(puEl('strong', field.label));
+      if (field.required) t.appendChild(puEl('span', 'required',
+        'font-size:11px; color:var(--red); font-weight:700;'));
+      info.appendChild(t);
+      info.appendChild(puEl('div',
+        (FB_KINDS.find((k) => k[0] === field.kind) || [, field.kind])[1]
+        + ' · key: ' + field.field_key
+        + ((field.options || []).length ? ' · ' + field.options.join(', ') : ''),
+        'font-size:12.5px; color:var(--slate); margin-top:3px;'));
+      row.appendChild(info);
+
+      const acts = puEl('div', null, 'display:flex; gap:6px;');
+      acts.appendChild(puBtn(field.required ? 'Make optional' : 'Make required', async () => {
+        await api('/forms/' + f.id + '/fields/' + field.id, {
+          method: 'PATCH', body: JSON.stringify({ required: !field.required }),
+        });
+        fbEdit(f.id);
+      }));
+      acts.appendChild(puBtn('Remove', async () => {
+        if (!confirm('Remove “' + field.label + '”? Answers already given through it are kept.')) return;
+        await api('/forms/' + f.id + '/fields/' + field.id, { method: 'DELETE' });
+        fbEdit(f.id);
+      }));
+      row.appendChild(acts);
+      body.appendChild(row);
+    });
+
+    // --- add a question ----------------------------------------------------
+    const adder = puEl('div', null,
+      'border:1px dashed var(--paper-line); border-radius:8px; padding:14px; margin-top:12px;');
+    const qLabel = puInput('', 'text', 'e.g. Which school do you attend?');
+    const qKind = puSelect(FB_KINDS, 'text');
+    const qOptions = puInput('', 'text', 'For a dropdown: Gauteng, Western Cape, KZN');
+    adder.appendChild(puField('New question', qLabel));
+    adder.appendChild(puField('Kind', qKind));
+    adder.appendChild(puField('Choices (comma separated)', qOptions,
+      'Only used by the two “choose one” kinds.'));
+    adder.appendChild(puBtn('Add question', async () => {
+      if (!qLabel.value.trim()) return showToast('Give the question a label.', true);
+      try {
+        await api('/forms/' + f.id + '/fields', {
+          method: 'POST',
+          body: JSON.stringify({
+            label: qLabel.value.trim(),
+            kind: qKind.value,
+            options: qOptions.value.split(',').map((x) => x.trim()).filter(Boolean),
+          }),
+        });
+        fbEdit(f.id);
+      } catch (err) { showToast(err.message || 'Could not add it.', true); }
+    }, 'btn btn-solid'));
+    body.appendChild(adder);
+
+    panel.appendChild(body);
+  } catch (e) {
+    panel.textContent = '';
+    panel.appendChild(puEl('p', e.message || 'Could not open that form.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+async function fbResponses(id, name) {
+  const panel = document.getElementById('fbResponses');
+  document.getElementById('fbListPanel').hidden = true;
+  document.getElementById('fbEditor').hidden = true;
+  panel.hidden = false;
+  panel.textContent = '';
+  panel.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const d = await api('/forms/' + id + '/submissions');
+    panel.textContent = '';
+
+    const head = puEl('div', null,
+      'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
+    head.appendChild(puEl('strong', name + ' — responses'));
+    const right = puEl('div', null, 'display:flex; gap:6px;');
+    right.appendChild(puBtn('Download CSV', async () => {
+      // Fetched with the admin token rather than linked directly: the export
+      // endpoint needs the Authorization header, and a plain <a href> cannot
+      // send one.
+      try {
+        const res = await fetch(API_BASE + '/forms/' + id + '/submissions.csv',
+          { headers: { Authorization: 'Bearer ' + AUTH_TOKEN } });
+        if (!res.ok) throw new Error('Could not export.');
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'form-' + id + '-responses.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch (err) { showToast(err.message || 'Could not export.', true); }
+    }, 'btn btn-solid'));
+    right.appendChild(puBtn('Back to forms', loadForms));
+    head.appendChild(right);
+    panel.appendChild(head);
+
+    const body = puEl('div', null, 'padding:0;');
+    if (!d.submissions.length) {
+      body.appendChild(puEl('p', 'Nobody has answered yet.', 'padding:16px; color:var(--slate);'));
+    }
+
+    d.submissions.forEach((sub) => {
+      const card = puEl('div', null, 'padding:14px 16px; border-bottom:1px solid var(--paper-line);');
+      const top = puEl('div', null, 'display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;');
+      top.appendChild(puEl('strong', sub.full_name || sub.email || 'Anonymous'));
+      top.appendChild(puEl('span', fbWhen(sub.created_at), 'font-size:12px; color:var(--slate);'));
+      card.appendChild(top);
+
+      d.fields.forEach((field) => {
+        const value = (sub.answers || {})[field.field_key];
+        if (value === undefined || value === null || value === '') return;
+        const line = puEl('div', null, 'font-size:13.5px; margin-top:5px;');
+        line.appendChild(puEl('span', field.label + ': ',
+          'color:var(--slate); font-weight:700;'));
+        line.appendChild(document.createTextNode(
+          value === true ? 'Yes' : value === false ? 'No' : String(value)));
+        card.appendChild(line);
+      });
+
+      body.appendChild(card);
+    });
+    panel.appendChild(body);
+  } catch (e) {
+    panel.textContent = '';
+    panel.appendChild(puEl('p', e.message || 'Could not load the responses.', 'padding:16px; color:var(--red);'));
   }
 }
 

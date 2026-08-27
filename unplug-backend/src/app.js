@@ -184,6 +184,10 @@ app.use('/popups', require('./routes/popups'));
 // The social feed: hand-entered posts. No API call to Meta anywhere — see
 // routes/social.js for why (Basic Display was switched off in Dec 2024).
 app.use('/social', require('./routes/social'));
+// The form builder: admin-composed forms, and the answers people give them.
+// Mounted AFTER /social so nothing here can shadow an existing route — a form
+// slug is arbitrary text an admin types.
+app.use('/forms', require('./routes/forms'));
 app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);
