@@ -251,6 +251,42 @@ nav.main-nav .nav-item.active .nav-item-label{ color:var(--red); }
 .btn-line{ background:transparent; color:var(--ink); }
 .btn-line:hover{ background:var(--ink); color:var(--cream); }
 
+/* ---- FEATURED STORIES SLIDER ----
+   Auto-advance is deliberately OFF, and there is no setting to switch it on.
+   A carousel that moves on its own takes away the thing somebody was halfway
+   through reading — for a slow reader, a screen-magnifier user, or anyone
+   using a switch, that is not a preference, it is a failure. Advancing here is
+   always the reader's decision. */
+.featured-slider{ position:relative; }
+.featured-slide{ display:grid; grid-template-columns:1.05fr 0.95fr; gap:34px; align-items:center; }
+.featured-slide[hidden]{ display:none; }
+.featured-figure{ display:block; position:relative; aspect-ratio:16/10; overflow:hidden;
+  background:var(--paper); border:1px solid var(--paper-line); }
+.featured-body .featured-kicker{ display:inline-block; font-size:11px; text-transform:uppercase;
+  letter-spacing:0.09em; color:var(--red); margin-bottom:6px; }
+.featured-body h3{ font-family:'Playfair Display',serif; font-weight:700;
+  font-size:clamp(23px,3.2vw,36px); line-height:1.14; margin:0 0 12px; }
+.featured-body h3 a{ color:inherit; text-decoration:none; }
+.featured-body h3 a:hover{ color:var(--red); }
+.featured-body p{ color:var(--slate); font-size:15.5px; line-height:1.65; margin:0 0 12px; }
+.featured-controls{ display:flex; align-items:center; gap:12px; margin-top:22px; }
+.featured-controls[hidden]{ display:none; }
+.featured-arrow{ width:38px; height:38px; border:1px solid var(--paper-line); background:var(--cream);
+  color:var(--ink); font-size:20px; line-height:1; cursor:pointer; }
+.featured-arrow:hover{ border-color:var(--red); color:var(--red); }
+.featured-dots{ display:flex; gap:2px; }
+/* 28px hit area around a 10px dot. WCAG 2.2 asks for 24x24 minimum, and a
+   10px target is exactly the sort of thing that is fine with a mouse and
+   miserable on a phone. */
+.featured-dot{ width:28px; height:28px; padding:0; border:none; background:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; }
+.featured-dot::before{ content:''; width:10px; height:10px; border-radius:50%;
+  border:1px solid var(--slate); }
+.featured-dot[aria-current="true"]::before{ background:var(--red); border-color:var(--red); }
+.featured-count{ font-size:12.5px; color:var(--slate); margin-left:2px; }
+@media (max-width:760px){
+  .featured-slide{ grid-template-columns:1fr; gap:18px; }
+}
 .hero-print{ position:relative; aspect-ratio:1/1.05; display:flex; align-items:center; justify-content:center; }
 .hero-print .print-mark svg{ width:100%; height:100%; }
 
@@ -1740,6 +1776,36 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </div>
 
+  <!-- Featured stories. Same editorial selection as before (the admin's
+       Highlighted Articles), shown one at a time with the real photo instead
+       of three small cards. There is only ONE section for it: two places
+       showing the same admin picks would drift the moment one of them was
+       changed. -->
+  <section class="wrap home-section" id="featuredSection">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">This week</span>
+        <h2>Featured Stories</h2>
+      </div>
+      <button class="view-all" data-page="news">View all stories →</button>
+    </div>
+    <div class="featured-slider" role="group" aria-roledescription="carousel" aria-label="Featured stories">
+      <div id="featuredSlides">
+        <div class="dir-empty-state">Loading…</div>
+      </div>
+      <div class="featured-controls" id="featuredControls" hidden>
+        <button class="featured-arrow" id="featuredPrev" type="button" aria-label="Previous story">‹</button>
+        <div class="featured-dots" id="featuredDots" role="group" aria-label="Choose a story"></div>
+        <button class="featured-arrow" id="featuredNext" type="button" aria-label="Next story">›</button>
+        <span class="featured-count" id="featuredCount"></span>
+      </div>
+      <!-- Announced instead of putting aria-live on the slide itself: a live
+           region wrapped round the whole slide would read the headline, the
+           standfirst, the byline and the read time on every arrow press. -->
+      <span class="sr-only" id="featuredStatus" role="status" aria-live="polite"></span>
+    </div>
+  </section>
+
   <!-- FOLLOW US — SOCIAL CHANNELS -->
   <section class="wrap home-section">
     <div class="social-follow">
@@ -1945,18 +2011,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </section>
 
-  <section class="wrap home-section">
-    <div class="section-head">
-      <div>
-        <span class="eyebrow">This week</span>
-        <h2>Highlighted Articles</h2>
-      </div>
-      <button class="view-all" data-page="news">View all stories →</button>
-    </div>
-    <div class="grid-3" id="highlightedArticlesGrid">
-      <div class="dir-empty-state">Loading...</div>
-    </div>
-  </section>
 
   <div class="wrap cms-blocks" data-cms-blocks="home"></div>
 
@@ -6706,32 +6760,150 @@ ${shareRow(absUrl('?p=article&id=' + article.id), article.title)}
 </article>`;
 }
 
-async function loadHighlightedArticles() {
-  const el = document.getElementById('highlightedArticlesGrid');
+// ---- FEATURED STORIES SLIDER ----
+// Source: the admin's editorial highlights, exactly as the three-card grid
+// used before. No new table and no second admin screen — a slider with its
+// own list of picks would mean two places to keep correct.
+function featuredSlideHtml(a, index, total) {
+  const href = '?p=article&id=' + encodeURIComponent(a.id);
+  const category = escapeHtml(a.category || '');
+  const by = a.contributor_name || a.published_by || a.author_name || a.kicker_supplied_by || '';
+  return `<div class="featured-slide" role="group" aria-roledescription="slide"
+       aria-label="${index + 1} of ${total}"${index ? ' hidden' : ''}>
+    <a class="featured-figure featured-link" href="${href}" data-article-id="${a.id}"
+       tabindex="-1" aria-hidden="true">${coverImgTag(a.banner_image_url, a.title)}</a>
+    <div class="featured-body">
+      ${category ? `<span class="featured-kicker">${category}</span>` : ''}
+      <h3><a class="featured-link" href="${href}" data-article-id="${a.id}">${escapeHtml(a.title)}</a></h3>
+      <p>${textExcerpt(a.body, 180)}</p>
+      ${by ? `<span class="story-kicker">Published by <strong>${escapeHtml(by)}</strong></span>` : ''}
+      <span class="story-meta">${readMinutes(a.body)} min read</span>
+    </div>
+  </div>`;
+}
+
+async function loadFeaturedSlider() {
+  const wrap = document.getElementById('featuredSlides');
+  const controls = document.getElementById('featuredControls');
+  if (!wrap) return;
   try {
-    // /highlights/active is already ordered by the admin's priority and filtered
-    // to the current date window (start/end, or no-end).
+    // /highlights/active is already date-windowed and ordered by the admin's
+    // priority, so slide order is the admin's chosen order.
     const active = await api('/highlights/active');
-    const articleHighlights = active.highlights.filter((h) => h.target_type === 'article').slice(0, 3);
-    if (articleHighlights.length === 0) {
-      el.innerHTML = '<div class="dir-empty-state">No highlighted stories right now.</div>';
+    const picks = active.highlights.filter((h) => h.target_type === 'article').slice(0, 5);
+    let articles = [];
+    if (picks.length) {
+      articles = (await Promise.all(picks.map((h) => api('/articles/' + h.target_id)
+        .then((d) => {
+          const art = d.article;
+          // The admin's cover choice for this placement beats the article's own.
+          if (art && h.admin_image_url) art.banner_image_url = h.admin_image_url;
+          return art;
+        })
+        .catch(() => null)))).filter(Boolean);
+    }
+    // Nothing highlighted is the normal state, not an error — and the top of
+    // the homepage must never be an empty box saying so. The newest stories
+    // are a better answer than a shrug.
+    if (!articles.length) {
+      const feed = await api('/articles?page=1&limit=5').catch(() => null);
+      articles = (feed && Array.isArray(feed.articles)) ? feed.articles : [];
+    }
+    if (!articles.length) {
+      wrap.innerHTML = '<div class="dir-empty-state">No stories yet — check back soon.</div>';
       return;
     }
-    const articles = await Promise.all(
-      articleHighlights.map((h) => api('/articles/' + h.target_id).then((d) => {
-        const art = d.article;
-        // Admin-selected cover image for this placement overrides the article's own.
-        if (art && h.admin_image_url) art.banner_image_url = h.admin_image_url;
-        return art;
-      }).catch(() => null))
-    );
-    const valid = articles.filter(Boolean);
-    el.innerHTML = valid.length ? valid.map((a) => homeStoryCardHtml(a, 'hl')).join('') : '<div class="dir-empty-state">No highlighted stories right now.</div>';
-    renderInteractionBarsBatch('article', valid.map((a) => ({ id: a.id, containerId: `hl-int-${a.id}` })));
+    wrap.innerHTML = articles.map((a, n) => featuredSlideHtml(a, n, articles.length)).join('');
+    wireFeaturedSlider(articles.length);
   } catch (err) {
-    el.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
+    wrap.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
+    if (controls) controls.hidden = true;
   }
 }
+
+let featuredShow = null;
+let featuredIndex = 0;
+function wireFeaturedSlider(total) {
+  const wrap = document.getElementById('featuredSlides');
+  const controls = document.getElementById('featuredControls');
+  const dotsBox = document.getElementById('featuredDots');
+  const status = document.getElementById('featuredStatus');
+  const countEl = document.getElementById('featuredCount');
+  const prev = document.getElementById('featuredPrev');
+  const next = document.getElementById('featuredNext');
+  if (!wrap || !controls) return;
+
+  // A single story is not a carousel. Showing arrows and one dot would be
+  // controls that do nothing.
+  if (total < 2) { controls.hidden = true; return; }
+  controls.hidden = false;
+
+  const slides = () => wrap.querySelectorAll('.featured-slide');
+  let current = 0;
+  featuredIndex = 0;
+
+  dotsBox.innerHTML = Array.from({ length: total }, (_, n) =>
+    `<button class="featured-dot" type="button" data-slide="${n}"
+       aria-label="Show story ${n + 1} of ${total}"
+       aria-current="${n === 0 ? 'true' : 'false'}"></button>`).join('');
+
+  function show(n, announce) {
+    const target = ((n % total) + total) % total;   // wraps both ways
+    const all = slides();
+    all.forEach((el, k) => { el.hidden = k !== target; });
+    dotsBox.querySelectorAll('.featured-dot').forEach((d, k) => {
+      d.setAttribute('aria-current', k === target ? 'true' : 'false');
+    });
+    current = target;
+    featuredIndex = target;
+    countEl.textContent = (target + 1) + ' / ' + total;
+    if (announce) {
+      const heading = all[target] && all[target].querySelector('h3');
+      status.textContent = 'Story ' + (target + 1) + ' of ' + total
+        + (heading ? ': ' + heading.textContent.trim() : '');
+    }
+  }
+
+  // The controls are permanent DOM; only the slides are re-rendered. Binding
+  // on every load would stack listeners, and one click would then advance the
+  // slider twice. Bind once, and let the handlers read the current show().
+  featuredShow = show;
+  if (!wrap.dataset.wired) {
+    wrap.dataset.wired = '1';
+    prev.addEventListener('click', () => featuredShow(featuredIndex - 1, true));
+    next.addEventListener('click', () => featuredShow(featuredIndex + 1, true));
+
+    dotsBox.addEventListener('click', (e) => {
+      const dot = e.target.closest('.featured-dot');
+      if (dot) featuredShow(Number(dot.dataset.slide), true);
+    });
+
+    // Left/Right move between the dots the way a reader expects a row of
+    // controls to behave, and take focus with them so the keyboard user can
+    // see where they are.
+    dotsBox.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      featuredShow(featuredIndex + (e.key === 'ArrowRight' ? 1 : -1), true);
+      const dot = dotsBox.querySelectorAll('.featured-dot')[featuredIndex];
+      if (dot) dot.focus();
+    });
+  }
+
+  show(0, false);   // no announcement on first paint — nothing changed yet
+}
+
+// The headline and the picture are real links, so they can be opened in a new
+// tab or copied. A plain click still routes in-page; a modified click is the
+// browser's to handle, not ours.
+document.addEventListener('click', (e) => {
+  const link = e.target.closest && e.target.closest('.featured-link[data-article-id]');
+  if (!link) return;
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+  e.preventDefault();
+  goToPage('articledetail');
+  loadArticleDetail(link.dataset.articleId);
+});
 
 async function loadNewStories() {
   const el = document.getElementById('newStoriesGrid');
@@ -6877,7 +7049,7 @@ async function loadDiscovery() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadHighlightedArticles();
+  loadFeaturedSlider();
   loadNewStories();
   loadHighlightedProfiles();
   loadSpotlight();
