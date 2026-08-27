@@ -2974,6 +2974,32 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
     <div id="cardMaker" style="display:grid; grid-template-columns:1fr 1fr; gap:34px; margin-top:32px; align-items:start;">
       <div>
+        <!-- THE PHOTO NEEDS A MEMBER ACCOUNT; the rest of the card does not.
+             An unauthenticated upload that becomes a publicly readable file is
+             free image hosting for anyone who finds the endpoint, and there is
+             no account to suspend when it is abused. Everything else here stays
+             open, because somebody we have just featured should not meet a
+             login screen. -->
+        <div class="field" style="margin-bottom:14px;">
+          <label>Your photo <span style="color:var(--slate); font-weight:400;">(optional)</span></label>
+          <div id="cardPhotoSignedOut" hidden style="font-size:13.5px; color:var(--slate); line-height:1.6;">
+            <a href="unplug-member-dashboard.html" style="color:var(--red); font-weight:700;">Sign in as an Unplug member</a>
+            to put your picture on the card. Without one it shows the Unplug monogram, which looks good too.
+          </div>
+          <div id="cardPhotoControls" hidden>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <input id="cardPhotoFile" type="file" accept="image/png,image/jpeg,image/webp" style="max-width:230px;">
+              <button class="btn btn-line" id="cardPhotoRemove" type="button" hidden style="width:auto; padding:7px 14px; font-size:12px;">Remove</button>
+            </div>
+            <div id="cardPhotoAdjust" hidden style="margin-top:10px;">
+              <label for="cardPhotoZoom" style="display:block; font-size:12.5px; color:var(--slate); margin-bottom:4px;">
+                Drag the picture in the circle to move it, and zoom here.
+              </label>
+              <input id="cardPhotoZoom" type="range" min="1" max="4" step="0.01" value="1" style="width:100%; max-width:280px;">
+            </div>
+            <p id="cardPhotoMsg" style="font-size:12.5px; margin:6px 0 0; min-height:16px;"></p>
+          </div>
+        </div>
         <div class="field" style="margin-bottom:14px;">
           <label for="cardName">Name <span style="color:var(--red);">*</span></label>
           <input id="cardName" type="text" maxlength="160" placeholder="e.g. Naledi Mokoena">
@@ -7786,6 +7812,24 @@ async function loadContributor(slug) {
     story: { w: 1080, h: 1920 },
   };
 
+  // The picture, and where the reader has put it in the circle. Offsets are a
+  // FRACTION of the circle's diameter rather than pixels, so the framing holds
+  // whether the card is drawn at 1080px to download or smaller on screen.
+  let photoImg = null;
+  const photo = { url: null, x: 0, y: 0, zoom: 1 };
+
+  // crossOrigin matters more than it looks. Without it the storage image
+  // taints the canvas, and toDataURL — which is the entire download button —
+  // throws a security error instead of returning a picture.
+  function loadPhoto(url, then) {
+    if (!url) { photoImg = null; if (then) then(); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { photoImg = img; if (then) then(); };
+    img.onerror = () => { photoImg = null; if (then) then(); };
+    img.src = url;
+  }
+
   function wrapLines(ctx, text, maxWidth) {
     const words = String(text || '').split(/\s+/).filter(Boolean);
     const lines = [];
@@ -7801,78 +7845,264 @@ async function loadContributor(slug) {
 
   // watermarked=true is the ONLY thing that differs between a preview and the
   // real card, so the two can never drift into looking like different designs.
+  // ---------------------------------------------------------------------
+  // The card itself.
+  //
+  // Everything is CENTRED and the layout is built top-down from a cursor, so
+  // a long name, a two-line quote or a missing field pushes what follows
+  // rather than colliding with it. The previous version placed the name and
+  // the category at fixed offsets from the bottom edge, and they printed
+  // straight through each other the moment somebody filled the category in.
+  //
+  // READABILITY IS THE RULE the design is measured against. The watermark is
+  // laid down first, UNDER the content, and kept faint: a preview somebody
+  // cannot read is a preview that cannot be checked before it is submitted.
+  // ---------------------------------------------------------------------
+
+  const INK = '#f7f3ee';
+  const GOLD = '#d9b45c';
+  const RED = '#c8102e';
+
+  // ctx.roundRect is recent. Falling back keeps the border and the pill from
+  // disappearing entirely on an older browser.
+  function roundRect(ctx, x, y, w, h, r) {
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Letterspacing, drawn by hand. ctx.letterSpacing exists only in newer
+  // engines, and this line is the one place the design depends on it.
+  function trackedText(ctx, text, cx, y, spacing) {
+    const chars = String(text).split('');
+    const width = chars.reduce((w, c) => w + ctx.measureText(c).width + spacing, -spacing);
+    let x = cx - width / 2;
+    chars.forEach((c) => {
+      ctx.fillText(c, x, y);
+      x += ctx.measureText(c).width + spacing;
+    });
+    return width;
+  }
+
+  function centred(ctx, text, cx, y) { ctx.fillText(text, cx - ctx.measureText(text).width / 2, y); }
+
   function draw(card, watermarked) {
     const size = FORMATS[card.format] || FORMATS.post;
     canvas.width = size.w;
     canvas.height = size.h;
     const ctx = canvas.getContext('2d');
-    const W = size.w, H = size.h;
+    const W = size.w, H = size.h, CX = W / 2;
+    const scale = W / 1080;          // every measurement below is for a 1080 card
+    const px = (n) => Math.round(n * scale);
 
-    ctx.fillStyle = '#161412';
+    // --- background -----------------------------------------------------
+    ctx.fillStyle = '#0d0b0b';
     ctx.fillRect(0, 0, W, H);
 
-    // Masthead rule
-    ctx.fillStyle = '#d20709';
-    ctx.fillRect(72, 96, 120, 8);
+    // The red glow. Radial rather than a flat tint so the masthead sits in
+    // light and the lower half stays dark enough for white type.
+    const glow = ctx.createRadialGradient(CX, px(120), px(40), CX, px(120), H * 0.85);
+    glow.addColorStop(0, 'rgba(160,18,32,0.55)');
+    glow.addColorStop(0.45, 'rgba(90,12,20,0.22)');
+    glow.addColorStop(1, 'rgba(13,11,11,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = '#faf6f0';
-    ctx.font = '600 34px Georgia, serif';
-    ctx.fillText('UNPLUG', 72, 176);
-    ctx.fillStyle = 'rgba(250,246,240,0.55)';
-    ctx.font = '400 22px Inter, Arial, sans-serif';
-    // The line printed on the card itself, and the reason the heading above
-    // says the same words: somebody fills in a card called one thing and must
-    // not download a card that calls itself another.
+    // --- the watermark goes UNDER everything ----------------------------
     //
-    // "MAGAZINE" is dropped — the masthead directly above it already says
-    // UNPLUG, and the shorter line sets better at this size.
-    ctx.fillText('SEEN AND HEARD BY UNPLUG', 72, 214);
-
-    if (card.category) {
-      ctx.fillStyle = '#d4a537';
-      ctx.font = '600 22px Inter, Arial, sans-serif';
-      ctx.fillText(String(card.category).toUpperCase(), 72, H - 232);
-    }
-
-    // Name, wrapped — a long one must not run off the edge.
-    ctx.fillStyle = '#faf6f0';
-    const nameSize = W > 1000 && String(card.name || '').length > 22 ? 68 : 88;
-    ctx.font = `700 ${nameSize}px Georgia, serif`;
-    const nameLines = wrapLines(ctx, card.name || '', W - 144);
-    let y = H - 168 - (nameLines.length - 1) * (nameSize + 8);
-    nameLines.forEach((l) => { ctx.fillText(l, 72, y); y += nameSize + 8; });
-
-    if (card.role_line) {
-      ctx.fillStyle = 'rgba(250,246,240,0.7)';
-      ctx.font = 'italic 30px Georgia, serif';
-      ctx.fillText(card.role_line, 72, H - 104);
-    }
-
-    if (card.quote) {
-      ctx.fillStyle = 'rgba(250,246,240,0.9)';
-      ctx.font = '400 38px Georgia, serif';
-      const quoteLines = wrapLines(ctx, '“' + card.quote + '”', W - 144).slice(0, 6);
-      let qy = Math.round(H * 0.36);
-      quoteLines.forEach((l) => { ctx.fillText(l, 72, qy); qy += 54; });
-    }
-
-    ctx.fillStyle = 'rgba(250,246,240,0.45)';
-    ctx.font = '400 22px Inter, Arial, sans-serif';
-    ctx.fillText('unplugnews.com', 72, H - 52);
-
+    // Tiled and faint. Over the top it would be the strongest thing on the
+    // card and nobody could proof-read their own quote; underneath it still
+    // makes the preview obviously unusable without making it unreadable.
     if (watermarked) {
       ctx.save();
-      ctx.translate(W / 2, H / 2);
-      ctx.rotate(-Math.PI / 9);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(210,7,9,0.30)';
-      ctx.font = '700 84px Inter, Arial, sans-serif';
-      ctx.fillText('PENDING APPROVAL', 0, 0);
-      ctx.font = '400 34px Inter, Arial, sans-serif';
-      ctx.fillStyle = 'rgba(250,246,240,0.35)';
-      ctx.fillText('not for sharing yet', 0, 62);
+      ctx.globalAlpha = 0.09;
+      ctx.fillStyle = INK;
+      ctx.font = `700 ${px(46)}px Inter, Arial, sans-serif`;
+      ctx.translate(CX, H / 2);
+      ctx.rotate(-Math.PI / 7);
+      const step = px(190);
+      const reach = Math.max(W, H);
+      for (let y = -reach; y < reach; y += step) {
+        for (let x = -reach; x < reach; x += px(620)) {
+          ctx.fillText('PENDING APPROVAL', x, y);
+        }
+      }
       ctx.restore();
     }
+
+    // --- the frame ------------------------------------------------------
+    ctx.strokeStyle = 'rgba(200,16,46,0.55)';
+    ctx.lineWidth = Math.max(1, px(2));
+    roundRect(ctx, px(26), px(26), W - px(52), H - px(52), px(24));
+    ctx.stroke();
+
+    let y = px(96);
+
+    // --- masthead -------------------------------------------------------
+    ctx.font = `700 ${px(34)}px Georgia, serif`;
+    const nameW = ctx.measureText('UNPLUG ').width;
+    const magW = ctx.measureText('MAGAZINE').width;
+    const badgeR = px(21);
+    const blockW = badgeR * 2 + px(14) + nameW + magW;
+    let mx = CX - blockW / 2;
+
+    ctx.beginPath();
+    ctx.arc(mx + badgeR, y - px(10), badgeR, 0, Math.PI * 2);
+    ctx.fillStyle = RED;
+    ctx.fill();
+    ctx.fillStyle = INK;
+    ctx.font = `700 ${px(24)}px Georgia, serif`;
+    centred(ctx, 'U', mx + badgeR, y - px(2));
+    mx += badgeR * 2 + px(14);
+
+    ctx.font = `700 ${px(34)}px Georgia, serif`;
+    ctx.fillStyle = INK;
+    ctx.fillText('UNPLUG ', mx, y);
+    ctx.fillStyle = RED;
+    ctx.fillText('MAGAZINE', mx + nameW, y);
+
+    y += px(46);
+    ctx.fillStyle = GOLD;
+    ctx.font = `600 ${px(19)}px Inter, Arial, sans-serif`;
+    trackedText(ctx, '★ SEEN AND HEARD', CX, y, px(4));
+
+    // --- everything between the masthead and the footer is CENTRED --------
+    //
+    // Measured first, then drawn. Stacking downwards from the masthead left a
+    // dead third at the bottom on a short card and crowded the footer on a
+    // long one; the amount of content varies a lot, because the quote, the
+    // role and the category are all optional.
+    const R = px(168);
+    const nameSize = String(card.name || '').length > 20 ? px(62) : px(80);
+    ctx.font = `700 ${nameSize}px Georgia, serif`;
+    const nameLines = wrapLines(ctx, card.name || 'Your Name', W - px(160)).slice(0, 2);
+
+    let quoteLines = [];
+    if (card.quote) {
+      ctx.font = `italic ${px(34)}px Georgia, serif`;
+      quoteLines = wrapLines(ctx, '“' + card.quote + '”', W - px(200)).slice(0, 4);
+    }
+
+    const pillH = px(19) + px(13) * 2;
+    const blockH = R * 2 + px(84)
+      + nameLines.length * (nameSize + px(8))
+      + (card.role_line ? px(44) : 0)
+      + px(18) + px(4) + px(46)
+      + quoteLines.length * px(46) + (quoteLines.length ? px(16) : 0)
+      + (card.category ? pillH : 0);
+
+    const top = y + px(30);
+    const bottom = H - px(120);
+    y = Math.max(top, top + ((bottom - top) - blockH) / 2);
+
+    const cy = y + R;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(CX, cy, R, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.fillStyle = '#241f1f';
+    ctx.fillRect(CX - R, cy - R, R * 2, R * 2);
+
+    if (photoImg && photoImg.complete && photoImg.naturalWidth) {
+      // COVER, then the reader's own framing on top. Almost no photograph is
+      // square; without the offsets an approved card would be a centre crop of
+      // a picture somebody had already positioned, which is how you email
+      // a person a card with the top of their head missing.
+      const zoom = Math.min(4, Math.max(1, Number(card.photo_zoom) || 1));
+      const natural = Math.max((R * 2) / photoImg.naturalWidth, (R * 2) / photoImg.naturalHeight);
+      const k = natural * zoom;
+      const dw = photoImg.naturalWidth * k;
+      const dh = photoImg.naturalHeight * k;
+      // BOUNDED TO THE SLACK THAT ACTUALLY EXISTS, so the picture can never be
+      // moved far enough to expose the circle behind it. Without this a drag
+      // could push the photo half out and leave a dark crescent, which looks
+      // like the image failed to load rather than like a choice somebody made.
+      //
+      // Clamped HERE rather than only in the drag handler, because this also
+      // governs values that arrive from the database — a card approved months
+      // ago must still render as a filled circle.
+      const slackX = Math.max(0, (dw - R * 2) / 2);
+      const slackY = Math.max(0, (dh - R * 2) / 2);
+      const wanted = (v, slack) => Math.max(-slack, Math.min(slack, (Number(v) || 0) * R * 2));
+      const ox = wanted(card.photo_offset_x, slackX);
+      const oy = wanted(card.photo_offset_y, slackY);
+      ctx.drawImage(photoImg, CX - dw / 2 + ox, cy - dh / 2 + oy, dw, dh);
+    } else {
+      ctx.fillStyle = GOLD;
+      ctx.font = `700 ${px(150)}px Georgia, serif`;
+      const m = ctx.measureText('U');
+      const asc = m.actualBoundingBoxAscent || px(105);
+      centred(ctx, 'U', CX, cy + asc / 2);
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = RED;
+    ctx.lineWidth = Math.max(2, px(5));
+    ctx.beginPath();
+    ctx.arc(CX, cy, R, 0, Math.PI * 2);
+    ctx.stroke();
+
+    y = cy + R + px(84);
+
+    // --- name -----------------------------------------------------------
+    ctx.fillStyle = INK;
+    ctx.font = `700 ${nameSize}px Georgia, serif`;
+    nameLines.forEach((line) => { centred(ctx, line, CX, y); y += nameSize + px(8); });
+
+    // --- role -----------------------------------------------------------
+    //
+    // "Baker, Bo-Kaap". The redesign dropped this line and the field stayed on
+    // the form, so anybody who filled it in would have watched it disappear
+    // from their own card with nothing to say why.
+    if (card.role_line) {
+      ctx.fillStyle = 'rgba(247,243,238,0.62)';
+      ctx.font = `italic ${px(28)}px Georgia, serif`;
+      centred(ctx, card.role_line, CX, y + px(14));
+      y += px(44);
+    }
+
+    // --- rule -----------------------------------------------------------
+    y += px(18);
+    ctx.fillStyle = RED;
+    ctx.fillRect(CX - px(38), y, px(76), Math.max(2, px(4)));
+    y += px(46);
+
+    // --- quote ----------------------------------------------------------
+    if (quoteLines.length) {
+      ctx.fillStyle = 'rgba(247,243,238,0.92)';
+      ctx.font = `italic ${px(34)}px Georgia, serif`;
+      quoteLines.forEach((line) => { centred(ctx, line, CX, y); y += px(46); });
+      y += px(16);
+    }
+
+    // --- category pill --------------------------------------------------
+    if (card.category) {
+      ctx.font = `600 ${px(19)}px Inter, Arial, sans-serif`;
+      const label = String(card.category).toUpperCase();
+      const spacing = px(2);
+      const textW = label.split('').reduce((w, c) => w + ctx.measureText(c).width + spacing, -spacing);
+      const padX = px(24);
+      const pillW = textW + padX * 2;
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = Math.max(1, px(2));
+      roundRect(ctx, CX - pillW / 2, y - px(19), pillW, pillH, pillH / 2);
+      ctx.stroke();
+      ctx.fillStyle = GOLD;
+      trackedText(ctx, label, CX, y + px(9), spacing);
+      y += pillH + px(20);
+    }
+
+    // --- footer ---------------------------------------------------------
+    ctx.fillStyle = 'rgba(247,243,238,0.42)';
+    ctx.font = `400 ${px(21)}px Inter, Arial, sans-serif`;
+    centred(ctx, 'Real People. Real Impact.  ·  unplugnews.com', CX, H - px(72));
   }
 
   function currentFields() {
@@ -7882,6 +8112,9 @@ async function loadContributor(slug) {
       quote: document.getElementById('cardQuote').value.trim(),
       category: document.getElementById('cardCategory').value.trim(),
       format: document.getElementById('cardFormat').value,
+      photo_offset_x: photo.x,
+      photo_offset_y: photo.y,
+      photo_zoom: photo.zoom,
     };
   }
 
@@ -7892,6 +8125,141 @@ async function loadContributor(slug) {
     if (el) el.addEventListener('input', redraw);
   });
   document.getElementById('cardFormat').addEventListener('change', redraw);
+
+  // ---- the photo -------------------------------------------------------
+  //
+  // The member's token lives in localStorage for this origin — the member
+  // dashboard puts it there and says so — so the magazine can tell whether
+  // somebody is signed in without having a login of its own.
+  // NOT CAPTURED ONCE AT SETUP. UnplugAPI.getToken() reads an in-memory value
+  // that restoreSession() fills in, and restoreSession runs after this block
+  // and is asynchronous — reading it here always returned null, so the photo
+  // field told every member they were signed out.
+  //
+  // The token is read fresh at the moment it is used, and the controls are
+  // shown off the site's own signal: restoreSession puts `is-member` on the
+  // body once it has actually verified the session against /auth/me.
+  const memberToken = () => UnplugAPI.getToken();
+
+  const photoControls = document.getElementById('cardPhotoControls');
+  const photoSignedOut = document.getElementById('cardPhotoSignedOut');
+  const photoAdjust = document.getElementById('cardPhotoAdjust');
+  const photoMsg = document.getElementById('cardPhotoMsg');
+  const photoRemove = document.getElementById('cardPhotoRemove');
+  const photoZoom = document.getElementById('cardPhotoZoom');
+
+  function refreshPhotoGate() {
+    const member = document.body.classList.contains('is-member') && !!memberToken();
+    photoControls.hidden = !member;
+    photoSignedOut.hidden = member;
+  }
+  refreshPhotoGate();
+  // The session is confirmed a moment after load, so watch for the class
+  // rather than guessing at a delay.
+  new MutationObserver(refreshPhotoGate)
+    .observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+  function say(text, bad) {
+    photoMsg.textContent = text || '';
+    photoMsg.style.color = bad ? 'var(--red)' : 'var(--slate)';
+  }
+
+  const photoFile = document.getElementById('cardPhotoFile');
+  if (photoFile) photoFile.addEventListener('change', async () => {
+    const file = photoFile.files && photoFile.files[0];
+    if (!file) return;
+    // Checked here as a courtesy so somebody is told immediately rather than
+    // after an upload. The real check is on the server, against the bytes.
+    if (file.size > 8 * 1024 * 1024) { say('That picture is larger than 8MB. Try a smaller one.', true); return; }
+    say('Uploading…');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(UnplugAPI.getApiBase() + '/uploads', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + memberToken() },
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'That upload did not work.');
+      photo.url = data.url;
+      photo.x = 0; photo.y = 0; photo.zoom = 1;
+      photoZoom.value = '1';
+      loadPhoto(photo.url, () => {
+        photoAdjust.hidden = false;
+        photoRemove.hidden = false;
+        say('Drag it in the circle to move it.');
+        redraw();
+      });
+    } catch (err) {
+      say(err.message || 'That upload did not work.', true);
+    }
+  });
+
+  if (photoRemove) photoRemove.addEventListener('click', () => {
+    photo.url = null; photo.x = 0; photo.y = 0; photo.zoom = 1;
+    photoImg = null;
+    photoFile.value = '';
+    photoAdjust.hidden = true;
+    photoRemove.hidden = true;
+    say('');
+    redraw();
+  });
+
+  if (photoZoom) photoZoom.addEventListener('input', () => {
+    photo.zoom = Number(photoZoom.value) || 1;
+    redraw();
+  });
+
+  // Dragging, in the canvas itself.
+  //
+  // Converted through the canvas's own scale: it is displayed at whatever
+  // width the column allows but drawn at 1080, so a pointer movement in CSS
+  // pixels is a different distance in card pixels. Ignoring that makes the
+  // picture crawl away from the cursor.
+  (function enableDrag() {
+    let dragging = false, lastX = 0, lastY = 0;
+
+    const start = (e) => {
+      if (!photoImg) return;
+      dragging = true;
+      const p = e.touches ? e.touches[0] : e;
+      lastX = p.clientX; lastY = p.clientY;
+      if (e.cancelable) e.preventDefault();
+    };
+    const move = (e) => {
+      if (!dragging || !photoImg) return;
+      const p = e.touches ? e.touches[0] : e;
+      const rect = canvas.getBoundingClientRect();
+      // The circle is 336 card-pixels across on a 1080 card; the offsets are
+      // expressed as a fraction of that.
+      const perCardPx = canvas.width / rect.width;
+      const diameter = 336 * (canvas.width / 1080);
+      photo.x += ((p.clientX - lastX) * perCardPx) / diameter;
+      photo.y += ((p.clientY - lastY) * perCardPx) / diameter;
+      // The same bound the renderer applies, so the slider and the drag stop
+      // where the picture stops rather than letting somebody drag into a dead
+      // zone and wonder why nothing moves.
+      const cover = Math.max((diameter) / photoImg.naturalWidth, (diameter) / photoImg.naturalHeight) * photo.zoom;
+      const slackX = Math.max(0, (photoImg.naturalWidth * cover - diameter) / 2) / diameter;
+      const slackY = Math.max(0, (photoImg.naturalHeight * cover - diameter) / 2) / diameter;
+      photo.x = Math.max(-slackX, Math.min(slackX, photo.x));
+      photo.y = Math.max(-slackY, Math.min(slackY, photo.y));
+      lastX = p.clientX; lastY = p.clientY;
+      if (e.cancelable) e.preventDefault();
+      redraw();
+    };
+    const stop = () => { dragging = false; };
+
+    canvas.addEventListener('mousedown', start);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', stop);
+    canvas.addEventListener('touchstart', start, { passive: false });
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', stop);
+    canvas.style.cursor = 'grab';
+  })();
+
   redraw();
 
   function downloadCanvas(filename) {
@@ -7929,6 +8297,14 @@ async function loadContributor(slug) {
         body: JSON.stringify({
           name, roleLine: f.role_line, quote: f.quote, category: f.category,
           format: f.format, submitterEmail,
+          // The framing goes with the file. Sending only the URL would mean
+          // the approved card is a centre crop of a picture they had already
+          // positioned — the card they are emailed has to be the card they
+          // signed off.
+          photoUrl: photo.url,
+          photoOffsetX: photo.x,
+          photoOffsetY: photo.y,
+          photoZoom: photo.zoom,
           website: document.getElementById('cardWebsite').value,
         }),
       });
@@ -7949,6 +8325,11 @@ async function loadContributor(slug) {
     const maker = document.getElementById('cardMaker');
     try {
       const d = await api('/share-cards/' + encodeURIComponent(token));
+      // DRAWN ONLY ONCE THE PICTURE IS IN HAND. draw() renders whatever is
+      // loaded at the moment it runs, so drawing first would give somebody an
+      // approved card showing the monogram, and the download button would
+      // hand them that.
+      await new Promise((done) => loadPhoto(d.card.photo_url, done));
       draw(d.card, false);
       box.hidden = false;
       box.innerHTML = '<strong>Approved.</strong> Here is your card &mdash; press Download and post it wherever you like.';

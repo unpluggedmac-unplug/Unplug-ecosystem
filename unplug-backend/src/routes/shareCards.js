@@ -11,7 +11,7 @@
 
 const express = require('express');
 const pool = require('../db');
-const { requireRole } = require('../middleware/auth');
+const { requireRole, attachUser } = require('../middleware/auth');
 const { spamCheck } = require('../middleware/spamCheck');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const honeypot = require('../middleware/honeypot');
@@ -25,8 +25,46 @@ const FORMATS = ['post', 'story'];
 
 const trim = (v, max) => (v === null || v === undefined ? null : String(v).trim().slice(0, max) || null);
 
+// THE PHOTO MUST BE A FILE WE STORED, not any address somebody sends.
+//
+// This URL is drawn onto a card carrying the masthead and is handed back by a
+// public endpoint. Accepting an arbitrary URL would let anyone put any picture
+// on the internet onto an Unplug card, and would make this API fetch whatever
+// they named. It has to be a file that came through our own upload — which
+// requires a member account, which is the whole point of gating the photo.
+const { isPublicStorageUrl } = require('./uploads');
+
+function photoFrom(body, user) {
+  const url = trim(body.photoUrl, 500);
+  if (!url) return { url: null, x: 0, y: 0, zoom: 1, userId: null };
+
+  // A photo needs an account. The card itself does not, and that stays true —
+  // somebody we just featured should not meet a login screen.
+  if (!user) {
+    return { status: 401, error: 'Sign in as an Unplug member to add a photo to your card.' };
+  }
+  if (!isPublicStorageUrl(url)) {
+    return { status: 400, error: 'That photo was not uploaded here. Please choose the picture again.' };
+  }
+
+  // Bounded to what the design can actually render. The offsets are fractions
+  // of the circle, so anything beyond half a diameter has pushed the picture
+  // entirely out of view.
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v) || 0));
+  return {
+    url,
+    x: clamp(body.photoOffsetX, -1, 1),
+    y: clamp(body.photoOffsetY, -1, 1),
+    zoom: Math.min(4, Math.max(1, Number(body.photoZoom) || 1)),
+    userId: user.id,
+  };
+}
+
 // POST /share-cards — public. Anyone can submit; nobody can publish.
-router.post('/', publicSubmitLimiter, honeypot, spamCheck('share card'), async (req, res, next) => {
+// attachUser, NOT requireAuth: the route stays public so anybody featured can
+// make a text-only card, but a member who IS signed in is recognised so their
+// photo can be accepted.
+router.post('/', publicSubmitLimiter, attachUser, honeypot, spamCheck('share card'), async (req, res, next) => {
   try {
     const name = trim(req.body.name, 160);
     const email = (req.body.submitterEmail || '').trim().toLowerCase();
@@ -38,11 +76,16 @@ router.post('/', publicSubmitLimiter, honeypot, spamCheck('share card'), async (
 
     const format = FORMATS.includes(req.body.format) ? req.body.format : 'post';
 
+    const photo = photoFrom(req.body, req.user);
+    if (photo.error) return res.status(photo.status || 400).json({ error: photo.error });
+
     const result = await pool.query(
-      `INSERT INTO share_cards (name, role_line, quote, category, format, submitter_email)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, review_token`,
+      `INSERT INTO share_cards (name, role_line, quote, category, format, submitter_email,
+                                photo_url, photo_offset_x, photo_offset_y, photo_zoom, photo_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, review_token`,
       [name, trim(req.body.roleLine, 160), trim(req.body.quote, 400),
-        trim(req.body.category, 80), format, email]
+        trim(req.body.category, 80), format, email,
+        photo.url, photo.x, photo.y, photo.zoom, photo.userId]
     );
 
     res.status(201).json({
@@ -86,7 +129,9 @@ router.get('/:token', async (req, res, next) => {
     }
 
     const r = await pool.query(
-      `SELECT id, name, role_line, quote, category, format, status FROM share_cards WHERE review_token = $1`,
+      `SELECT id, name, role_line, quote, category, format, status,
+              photo_url, photo_offset_x, photo_offset_y, photo_zoom
+         FROM share_cards WHERE review_token = $1`,
       [token]
     );
     if (r.rows.length === 0) return res.status(404).json({ error: 'That card link is not valid.' });

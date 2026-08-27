@@ -158,7 +158,8 @@ const SOURCES = [
                  NULL::integer AS user_id, sc.created_at AS submitted_at,
                  sc.status AS item_status,
                  NULL AS reference, NULL AS pay_status, NULL::numeric AS pay_amount,
-                 NULL AS pop_url, NULL AS invoice_url
+                 NULL AS pop_url, NULL AS invoice_url,
+                 sc.photo_url
             FROM share_cards sc
            WHERE sc.status = 'pending'`,
     actions: (r) => ({
@@ -496,6 +497,10 @@ function fileList(row) {
   const files = [];
   if (row.pop_url) files.push({ label: 'Proof of payment', url: row.pop_url });
   if (row.invoice_url) files.push({ label: 'Invoice', url: row.invoice_url });
+  // A share card's photograph. THE EDITOR HAS TO SEE THIS BEFORE APPROVING —
+  // the picture goes onto a card carrying the masthead, and approving an image
+  // you were never shown is not approval, it is a rubber stamp.
+  if (row.photo_url) files.push({ label: 'Card photo', url: row.photo_url });
   return files;
 }
 

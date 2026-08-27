@@ -305,3 +305,100 @@ test('re-running every migration is idempotent', async () => {
   const after = await pool.query('SELECT COUNT(*)::int AS n FROM share_cards');
   assert.equal(after.rows[0].n, before.rows[0].n, 'a re-deploy must not disturb submitted cards');
 });
+
+// ---------------------------------------------------------------------------
+// The photograph
+// ---------------------------------------------------------------------------
+//
+// The picture is the only part of this that needs an account, and the reason
+// is worth stating: an unauthenticated upload that becomes a publicly readable
+// file is free image hosting for whoever finds the endpoint, and there is no
+// account to suspend when it is abused. The card itself stays open.
+
+const STORED = 'https://x.supabase.co/storage/v1/object/public/uploads/a.png';
+
+test('A PHOTO NEEDS AN ACCOUNT; the card itself does not', async () => {
+  const anonymous = await req('POST', '/share-cards', {
+    body: { name: 'No Login', submitterEmail: 'a@b.com', photoUrl: STORED },
+  });
+  assert.equal(anonymous.status, 401);
+  assert.match(anonymous.body.error, /member/i);
+
+  // The same submission without a picture is still perfectly welcome.
+  const plain = await req('POST', '/share-cards', {
+    body: { name: 'No Login', submitterEmail: 'a@b.com' },
+  });
+  assert.equal(plain.status, 201, 'the card stays open to anybody');
+});
+
+test('THE PHOTO MUST BE A FILE WE STORED, not any address somebody sends', async () => {
+  // This URL is drawn onto a card carrying the masthead. Accepting an
+  // arbitrary address would let anyone put any picture on the internet onto an
+  // Unplug card.
+  const member = tokenFor(await makeUser('member'), 'member');
+  const res = await req('POST', '/share-cards', {
+    token: member,
+    body: { name: 'Elsewhere', submitterEmail: 'a@b.com', photoUrl: 'https://evil.test/whatever.png' },
+  });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /not uploaded here/i);
+});
+
+test('the framing is stored with the file, and clamped to something drawable', async () => {
+  const member = tokenFor(await makeUser('member'), 'member');
+  const res = await req('POST', '/share-cards', {
+    token: member,
+    body: {
+      name: 'Framed', submitterEmail: 'a@b.com', photoUrl: STORED,
+      photoOffsetX: 0.25, photoOffsetY: -0.4, photoZoom: 99,
+    },
+  });
+  assert.equal(res.status, 201);
+  const row = await pool.query(
+    'SELECT photo_url, photo_offset_x, photo_offset_y, photo_zoom, photo_user_id FROM share_cards WHERE id = $1',
+    [res.body.id]);
+  const card = row.rows[0];
+  assert.equal(card.photo_url, STORED);
+  assert.equal(Number(card.photo_offset_x), 0.25);
+  assert.equal(Number(card.photo_offset_y), -0.4);
+  // Without the offsets the approved card would be a centre crop of a picture
+  // somebody had already positioned — which is how you email a person a card
+  // with the top of their head missing.
+  assert.equal(Number(card.photo_zoom), 4, 'a nonsense zoom is clamped, not stored');
+  assert.ok(card.photo_user_id, 'and who uploaded it is recorded');
+});
+
+test('AN APPROVED CARD HANDS BACK ITS PHOTO AND ITS FRAMING', async () => {
+  const member = tokenFor(await makeUser('member'), 'member');
+  const made = await req('POST', '/share-cards', {
+    token: member,
+    body: {
+      name: 'Approved Photo', submitterEmail: 'a@b.com', photoUrl: STORED,
+      photoOffsetX: 0.1, photoOffsetY: 0.2, photoZoom: 1.5,
+    },
+  });
+  await req('PATCH', `/share-cards/admin/${made.body.id}/approve`, { token: adminToken });
+
+  const row = await pool.query('SELECT review_token FROM share_cards WHERE id = $1', [made.body.id]);
+  const fetched = await req('GET', `/share-cards/${row.rows[0].review_token}`);
+  assert.equal(fetched.status, 200);
+  assert.equal(fetched.body.card.photo_url, STORED);
+  assert.equal(Number(fetched.body.card.photo_zoom), 1.5,
+    'the card they are emailed is the card they signed off');
+});
+
+test('THE EDITOR SEES THE PHOTO BEFORE APPROVING IT', async () => {
+  // Approving a picture you were never shown is a rubber stamp, not approval —
+  // and it goes onto a card carrying the masthead.
+  const member = tokenFor(await makeUser('member'), 'member');
+  await req('POST', '/share-cards', {
+    token: member,
+    body: { name: 'In The Queue', submitterEmail: 'a@b.com', photoUrl: STORED },
+  });
+  const queue = await req('GET', '/admin/approval-queue?type=share_card', { token: adminToken });
+  const item = (queue.body.items || []).find((i) => i.title === 'In The Queue');
+  assert.ok(item, 'it is in the queue');
+  const photo = (item.files || []).find((f) => f.label === 'Card photo');
+  assert.ok(photo, 'with the photograph attached');
+  assert.equal(photo.url, STORED);
+});
