@@ -3418,11 +3418,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <li><strong>Things you submit</strong> — names, birthdays and photos, Directory profile details, job vacancies, Opportunity Passports, event details, shout-out nominations, gallery images and article content.</li>
       <li><strong>Contact &amp; newsletter</strong> — the name, email and message you send us, or the email you use to subscribe.</li>
       <li><strong>Payments</strong> — the amount and reference for EFT payments. We do not receive or store your card or banking login details.</li>
+      <!-- Added when saved carts were introduced. The site began keeping
+           something about signed-in members it had never kept before — what
+           they intended to buy and did not — and a policy that does not say so
+           is a policy that is wrong. -->
+      <li><strong>Your cart</strong> — if you are signed in, the services you add to your cart are saved to your account so they are still there on your next visit or a different device. We may send you up to two reminders about an unfinished cart or order, and then we stop. You can clear your cart at any time, which deletes it, and every reminder carries a link to stop them.</li>
       <li><strong>Automatically</strong> — anonymous usage analytics (page views, a random session ID) and your IP address, used only to keep the site secure and prevent spam.</li>
     </ul>
 
     <h3>3. How we use your information</h3>
-    <p>To create and manage your account; to display content you have submitted and approved for publication; to process payments; to respond to you; to send you the newsletter if you subscribed; to keep the platform safe (spam/abuse prevention); and to understand, in aggregate, how the site is used.</p>
+    <p>To create and manage your account; to display content you have submitted and approved for publication; to process payments; to respond to you; to send you the newsletter if you subscribed; to keep the platform safe (spam/abuse prevention); to remind you about a cart or an order you did not finish; and to understand, in aggregate, how the site is used.</p>
 
     <h3>4. Content that becomes public</h3>
     <p>Some submissions are <strong>published publicly once approved by an admin</strong> — for example Directory profiles, approved shout-outs, job listings and Opportunity Passports. Please only submit information you are comfortable making public. Opportunity Passports never display your contact details; your email is used for verification only.</p>
@@ -3645,6 +3650,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <p style="font-size:12.5px; color:var(--slate); margin-top:28px; font-style:italic;">Unplug Magazine — unplug from the noise, plug into your purpose.</p>
   </div>
 </main>
+
+<!-- SOCIAL — posts an admin enters by hand.
+     No Meta API anywhere: Instagram's Basic Display API was switched off on
+     4 December 2024, and its replacement needs a Business account, an app,
+     Meta's review and a token that lapses every sixty days. The failure mode
+     of that token quietly expiring is a feed that empties itself one morning
+     with nothing in any log, which on a homepage looks like abandonment.
+
+     Hidden until it has something to show. -->
+<section class="wrap" id="socialFeedSection" hidden style="padding-top:8px;">
+  <div class="section-head">
+    <div><span class="eyebrow">From our feed</span><h2>Unplug, out in the world</h2></div>
+  </div>
+  <div id="socialFeedGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:14px;"></div>
+</section>
 
 <section class="newsletter">
   <div class="wrap newsletter-inner">
@@ -10013,6 +10033,81 @@ function setupPosterCarousel(widget) {
   }
 })();
 
+
+// ---------------------------------------------------------------------------
+// The social feed
+//
+// Built with createElement and textContent. A caption and a handle are typed
+// by an admin and stored, which is the exact shape of value that produced two
+// stored-XSS holes in this project already. The URLs were parsed server-side
+// before they were saved and are checked again here, because a value that
+// crossed a network is a value worth checking twice.
+// ---------------------------------------------------------------------------
+(function setupSocialFeed() {
+  const section = document.getElementById('socialFeedSection');
+  const grid = document.getElementById('socialFeedGrid');
+  if (!section || !grid) return;
+
+  function httpUrl(value) {
+    try {
+      const url = new URL(String(value || ''));
+      return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null;
+    } catch (e) { return null; }
+  }
+
+  api('/social/feed?limit=8').then((posts) => {
+    if (!Array.isArray(posts) || !posts.length) return;   // stays hidden
+
+    posts.forEach((post) => {
+      const href = httpUrl(post.permalink);
+      if (!href) return;   // a row that cannot be linked is not rendered
+
+      const card = document.createElement('a');
+      card.href = href;
+      card.target = '_blank';
+      // noopener because these go to another origin, and without it the
+      // opened page can reach back through window.opener.
+      card.rel = 'noopener noreferrer';
+      card.setAttribute('style',
+        'display:block; border:1px solid var(--paper-line); border-radius:8px; overflow:hidden;'
+        + ' background:var(--cream); text-decoration:none; color:inherit;');
+
+      const img = httpUrl(post.image_url);
+      if (img) {
+        const picture = document.createElement('img');
+        picture.src = img;
+        picture.loading = 'lazy';
+        picture.decoding = 'async';
+        // The caption is the meaning; the picture repeats it. Empty alt rather
+        // than a caption read out twice by a screen reader.
+        picture.alt = '';
+        picture.setAttribute('style', 'display:block; width:100%; aspect-ratio:1/1; object-fit:cover;');
+        card.appendChild(picture);
+      }
+
+      const body = document.createElement('div');
+      body.setAttribute('style', 'padding:10px 12px;');
+      if (post.handle) {
+        const who = document.createElement('div');
+        who.textContent = post.handle.charAt(0) === '@' ? post.handle : '@' + post.handle;
+        who.setAttribute('style', 'font-size:12px; font-weight:700; color:var(--red);');
+        body.appendChild(who);
+      }
+      if (post.caption) {
+        const cap = document.createElement('p');
+        cap.textContent = post.caption;
+        cap.setAttribute('style',
+          'font-size:13px; line-height:1.5; color:var(--slate); margin:4px 0 0;'
+          + ' display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;');
+        body.appendChild(cap);
+      }
+      card.appendChild(body);
+      grid.appendChild(card);
+    });
+
+    if (grid.children.length) section.hidden = false;
+  }).catch(() => { /* no feed is the correct failure for a decorative strip */ });
+})();
 </script>
 <script src="i18n.js" defer></script>
 <script src="accessibility.js" defer></script>

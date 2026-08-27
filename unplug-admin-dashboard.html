@@ -378,6 +378,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="crm">Sales &amp; CRM</a>
         <a data-section="emailmarketing">Email Marketing</a>
         <a data-section="popups">Popups</a>
+        <a data-section="social">Social Feed</a>
         <a data-section="spam">Spam Filter</a>
       </div>
     </div>
@@ -1674,6 +1675,52 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <button class="btn btn-solid" id="puNew">New popup</button>
         </div>
         <div class="panel-body" id="puList" style="padding:0;"><div class="loading-state">Loading&hellip;</div></div>
+      </div>
+    </div>
+
+
+    <!-- SOCIAL FEED -->
+    <!--
+      Entered by hand, deliberately. Instagram's Basic Display API was switched
+      off on 4 December 2024 and its replacement needs a Business account, a
+      Meta app, Meta's review, and a token that expires every sixty days. When
+      that token lapses the feed empties itself with nothing in any log to say
+      why — which on a magazine's homepage looks like the site has been
+      abandoned. Typing a post in is more work and cannot fail on its own.
+    -->
+    <div class="admin-section" id="section-social">
+      <div class="main-head"><div><h1>Social Feed</h1>
+        <p>Posts shown on the homepage. Nothing is fetched from Instagram or Facebook &mdash; you paste
+           the link, the picture and the caption, and it stays exactly as you left it.
+           The strip is hidden on the site until at least one post is switched on.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+          <div style="flex:1; min-width:240px;">
+            <label for="soLink" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Link to the post</label>
+            <input id="soLink" type="url" placeholder="https://www.instagram.com/p/&hellip;" style="width:100%;">
+          </div>
+          <div style="flex:1; min-width:240px;">
+            <label for="soImage" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Image URL</label>
+            <input id="soImage" type="url" placeholder="https://&hellip;" style="width:100%;">
+          </div>
+          <button class="btn btn-solid" id="soAdd" style="margin-bottom:2px;">Add</button>
+        </div>
+        <div class="panel-head" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+          <div style="flex:2; min-width:240px;">
+            <label for="soCaption" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Caption</label>
+            <input id="soCaption" type="text" placeholder="What the post says" style="width:100%;">
+          </div>
+          <div style="min-width:150px;">
+            <label for="soHandle" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Account</label>
+            <input id="soHandle" type="text" placeholder="@unplugmagazine" style="width:100%;">
+          </div>
+          <div style="min-width:170px;">
+            <label for="soPosted" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Posted on</label>
+            <input id="soPosted" type="date" style="width:100%;">
+          </div>
+        </div>
+        <div class="panel-body" id="soList" style="padding:0;"><div class="loading-state">Loading&hellip;</div></div>
       </div>
     </div>
 
@@ -3320,6 +3367,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'crm') crmShowTab('pipeline');
     if (section === 'emailmarketing') emShowTab('campaigns');
     if (section === 'popups') loadPopups();
+    if (section === 'social') loadSocialPosts();
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
@@ -13750,6 +13798,134 @@ document.addEventListener('click', async (e) => {
       puEdit(made.id);
     } catch (err) { showToast(err.message || 'Could not create it.', true); }
   }
+});
+
+
+// ---------------------------------------------------------------------------
+// Social Feed
+//
+// createElement and textContent, like the rest of this dashboard. A caption is
+// text somebody typed and it ends up on the public homepage.
+// ---------------------------------------------------------------------------
+
+function soEl(tag, text, style) {
+  const el = document.createElement(tag);
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  if (style) el.setAttribute('style', style);
+  return el;
+}
+
+function soBtn(label, onClick, cls) {
+  const b = soEl('button', label);
+  b.type = 'button';
+  b.className = cls || 'btn';
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+async function loadSocialPosts() {
+  const host = document.getElementById('soList');
+  if (!host) return;
+  host.textContent = '';
+  host.appendChild(soEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const rows = await api('/social');
+    host.textContent = '';
+
+    if (!rows.length) {
+      host.appendChild(soEl('p',
+        'No posts yet. Paste a link above to add the first one — the strip stays hidden '
+        + 'on the site until something is switched on.',
+        'padding:16px; color:var(--slate); line-height:1.6;'));
+      return;
+    }
+
+    rows.forEach((post) => {
+      const card = soEl('div', null,
+        'padding:12px 16px; border-bottom:1px solid var(--paper-line); display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;');
+
+      if (post.image_url) {
+        const img = document.createElement('img');
+        img.src = post.image_url;
+        img.alt = '';
+        img.loading = 'lazy';
+        img.setAttribute('style', 'width:64px; height:64px; object-fit:cover; border-radius:6px; flex:none;');
+        card.appendChild(img);
+      }
+
+      const left = soEl('div', null, 'flex:1; min-width:200px;');
+      const head = soEl('div', null, 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;');
+      head.appendChild(soEl('span', post.active ? 'Showing' : 'Hidden',
+        'font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; background:'
+        + (post.active ? 'var(--green)' : 'var(--slate)') + ';'));
+      if (post.handle) head.appendChild(soEl('strong', post.handle, 'font-size:13px;'));
+      if (post.position) head.appendChild(soEl('span', 'pinned', 'font-size:11px; color:var(--red); font-weight:700;'));
+      left.appendChild(head);
+
+      left.appendChild(soEl('div', post.caption || '(no caption)',
+        'font-size:13px; color:var(--slate); margin-top:3px;'));
+      // The link as text, not as an anchor: an admin screen listing links
+      // people pasted is not a place to make them one click from following.
+      left.appendChild(soEl('div', post.permalink,
+        'font-size:11.5px; color:var(--slate); margin-top:3px; word-break:break-all;'));
+      card.appendChild(left);
+
+      const actions = soEl('div', null, 'display:flex; gap:6px; flex-wrap:wrap;');
+      actions.appendChild(soBtn(post.active ? 'Hide' : 'Show', async () => {
+        try {
+          await api('/social/' + post.id, { method: 'PATCH', body: JSON.stringify({ active: !post.active }) });
+          loadSocialPosts();
+        } catch (e) { showToast(e.message || 'Could not change that.', true); }
+      }, post.active ? 'btn' : 'btn btn-solid'));
+      actions.appendChild(soBtn(post.position ? 'Unpin' : 'Pin', async () => {
+        try {
+          await api('/social/' + post.id, {
+            method: 'PATCH', body: JSON.stringify({ position: post.position ? 0 : 10 }),
+          });
+          loadSocialPosts();
+        } catch (e) { showToast(e.message || 'Could not change that.', true); }
+      }));
+      actions.appendChild(soBtn('Remove', async () => {
+        if (!confirm('Remove this post from the feed?')) return;
+        try {
+          await api('/social/' + post.id, { method: 'DELETE' });
+          showToast('Removed.');
+          loadSocialPosts();
+        } catch (e) { showToast(e.message || 'Could not remove it.', true); }
+      }));
+      card.appendChild(actions);
+
+      host.appendChild(card);
+    });
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(soEl('p', e.message || 'Could not load the feed.', 'padding:16px; color:var(--red);'));
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  if (!e.target || e.target.id !== 'soAdd') return;
+  const link = document.getElementById('soLink');
+  if (!link.value.trim()) return showToast('Paste the link to the post first.', true);
+  const posted = document.getElementById('soPosted').value;
+  try {
+    await api('/social', {
+      method: 'POST',
+      body: JSON.stringify({
+        permalink: link.value.trim(),
+        imageUrl: document.getElementById('soImage').value.trim() || null,
+        caption: document.getElementById('soCaption').value.trim() || null,
+        handle: document.getElementById('soHandle').value.trim() || null,
+        // A date with no time is midnight local, which is what somebody means
+        // when they type a day.
+        postedAt: posted ? new Date(posted + 'T12:00:00').toISOString() : null,
+      }),
+    });
+    ['soLink', 'soImage', 'soCaption', 'soPosted'].forEach((id) => { document.getElementById(id).value = ''; });
+    showToast('Added — switch it on to show it on the site.');
+    loadSocialPosts();
+  } catch (err) { showToast(err.message || 'Could not add that post.', true); }
 });
 
 </script>

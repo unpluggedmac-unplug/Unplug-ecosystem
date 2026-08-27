@@ -450,12 +450,18 @@ test('an article carrying several tags counts as a read of each of them', async 
 test('A TAP ON A TOPIC IS COUNTED SEPARATELY FROM A READ', async () => {
   // A read is attention; a tap is a reader asking for MORE of this subject.
   // Folding them together would bury the stronger signal in the larger number.
-  await req('POST', '/analytics/event', {
-    body: { eventName: 'topic_click', label: 'Wellness', sessionId: 'tp-1', visitorId: 'tpv-1' },
-  });
-  await req('POST', '/analytics/event', {
-    body: { eventName: 'topic_click', label: 'Wellness', sessionId: 'tp-2', visitorId: 'tpv-2' },
-  });
+  // THE STATUS IS ASSERTED. This test has failed intermittently under a full
+  // suite run with "1 !== 2" — one of these two taps missing — and it was not
+  // diagnosable, because a 500 here passed silently and the failure surfaced
+  // several lines later as a wrong count. If it happens again, this says which
+  // request failed and what the server said about it.
+  for (const n of [1, 2]) {
+    const posted = await req('POST', '/analytics/event', {
+      body: { eventName: 'topic_click', label: 'Wellness', sessionId: `tp-${n}`, visitorId: `tpv-${n}` },
+    });
+    assert.equal(posted.status, 201,
+      `tap ${n} was not recorded: ${JSON.stringify(posted.body)}`);
+  }
 
   const res = await req('GET', '/analytics-reports/topics', { token: adminToken });
   const tap = res.body.tagTaps.find((t) => t.label === 'Wellness');

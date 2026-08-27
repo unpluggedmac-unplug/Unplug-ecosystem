@@ -163,6 +163,13 @@ async function claimDueCart() {
        SELECT c.user_id FROM saved_carts c
         WHERE c.converted_at IS NULL
           AND c.reminders_sent < $1
+          -- The type check comes FIRST and is not decoration. items is a JSONB
+          -- column, so it can in principle hold an object or a string, and
+          -- jsonb_array_length THROWS on anything that is not an array rather
+          -- than returning null. One such row would make this query fail every
+          -- hour from then on, and the failure would be silent — carts simply
+          -- stop being chased and nobody notices a thing that never happens.
+          AND jsonb_typeof(c.items) = 'array'
           AND jsonb_array_length(c.items) > 0
           AND c.updated_at > now() - ($4 || ' days')::interval
           AND c.updated_at < now() - (CASE WHEN c.reminders_sent = 0 THEN $2 ELSE $3 END || ' hours')::interval

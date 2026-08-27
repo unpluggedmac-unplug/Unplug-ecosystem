@@ -1348,6 +1348,15 @@ function showWelcome(user){
   if (lo) lo.addEventListener('click', () => { localStorage.removeItem('unplug_auth_token'); location.reload(); });
   showCard('welcomeCard');
   document.getElementById('dashboard').classList.add('section-hidden');
+
+  // Bring back a cart saved on another device. Hooked HERE rather than at each
+  // of the three places a session is established (password login, magic link,
+  // restored token) because three copies of one call is three chances for a
+  // later fourth path to forget it.
+  //
+  // Deliberately not awaited: the welcome screen must not wait on it, and if
+  // it never answers nothing is lost.
+  if (typeof restoreCartFromServer === 'function') restoreCartFromServer();
 }
 document.getElementById('goDashboardBtn').addEventListener('click', () => enterMemberDashboard(CURRENT_USER));
 // goSiteBtn is a plain link to the magazine — the session token stays in
@@ -2891,7 +2900,72 @@ document.getElementById('submitAndPayBtn').addEventListener('click', async () =>
 // handles the actual checkout, once, for everything in it.
 // ---------------------------------------------------------------------------
 let CART = JSON.parse(localStorage.getItem('unplug_cart') || '[]');
-function saveCart() { localStorage.setItem('unplug_cart', JSON.stringify(CART)); }
+
+// THE BROWSER STAYS THE SOURCE OF TRUTH. The cart is written to localStorage
+// first and always, exactly as before; the server copy is a mirror, sent
+// afterwards and allowed to fail. A cart that could not be added to because
+// the API was asleep would be a worse cart than one that only lived here.
+//
+// The mirror is what makes the cart survive a new device and a cleared
+// browser, and it is what a reminder about an unfinished cart is sent from.
+// Signed-out visitors have no mirror: there is nowhere to put it and nobody to
+// send it to.
+function saveCart() {
+  localStorage.setItem('unplug_cart', JSON.stringify(CART));
+  syncCartToServer();
+}
+
+// Debounced, because adding three services is three clicks in a row and that
+// should be one request, not three.
+let cartSyncTimer = null;
+function syncCartToServer() {
+  if (!AUTH_TOKEN) return;
+  clearTimeout(cartSyncTimer);
+  cartSyncTimer = setTimeout(() => {
+    const items = CART.map((i) => ({ linkedType: i.linkedType, linkedId: i.linkedId }));
+    const request = items.length
+      ? api('/orders/cart', { method: 'PUT', body: JSON.stringify({ items }) })
+      // An emptied cart is DELETED rather than saved as empty. Somebody who
+      // cleared their cart asked for it to be gone, and a kept empty row that
+      // records they once had one is not what they meant.
+      : api('/orders/cart', { method: 'DELETE' });
+    // Never surfaced. The cart already worked before this line existed; a
+    // toast saying "could not save your cart" would alarm somebody about
+    // something that is fine.
+    request.catch(() => {});
+  }, 800);
+}
+
+// On sign-in, bring back whatever was saved.
+//
+// THE TWO ARE MERGED, not overwritten in either direction. Somebody who added
+// something on their phone and something else on a laptop should find both —
+// picking a winner silently throws away a choice they made.
+async function restoreCartFromServer() {
+  if (!AUTH_TOKEN) return;
+  try {
+    const saved = await api('/orders/cart');
+    const items = Array.isArray(saved.items) ? saved.items : [];
+    if (!items.length) return;
+    const seen = new Set(CART.map((i) => i.linkedType + ':' + i.linkedId));
+    let added = 0;
+    items.forEach((i) => {
+      const key = i.linkedType + ':' + i.linkedId;
+      if (seen.has(key)) return;
+      seen.add(key);
+      CART.push(i);
+      added += 1;
+    });
+    if (added) {
+      localStorage.setItem('unplug_cart', JSON.stringify(CART));
+      if (typeof renderCart === 'function') renderCart();
+      if (typeof showToast === 'function') {
+        showToast(added === 1 ? '1 item from your saved cart is back.'
+          : added + ' items from your saved cart are back.');
+      }
+    }
+  } catch (e) { /* no saved cart, or the API is asleep — neither matters */ }
+}
 
 async function renderCart() {
   const card = document.getElementById('cartCard');

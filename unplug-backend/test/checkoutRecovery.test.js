@@ -111,7 +111,7 @@ async function makeOrder({ userId = 660002, method = 'payfast', agedHours = 48, 
   return r.rows[0];
 }
 
-async function makeCart({ userId = 660002, agedHours = 48, items = [{ linkedType: 'article', linkedId: 1 }] } = {}) {
+async function makeCart({ userId = 660002, agedHours = 48, items = [{ linkedType: 'article_publish', linkedId: 1 }] } = {}) {
   const r = await pool.query(`
     INSERT INTO saved_carts (user_id, items, updated_at)
     VALUES ($1, $2, now() - ($3 || ' hours')::interval)
@@ -235,7 +235,7 @@ test('SOMEBODY WITH A PENDING ORDER IS NOT ALSO CHASED ABOUT THEIR CART', async 
 
 test('checking out marks the saved cart converted, so it stops being chased', async () => {
   await pool.query('DELETE FROM saved_carts');
-  await api('PUT', '/orders/cart', { items: [{ linkedType: 'article', linkedId: 5 }] }, memberToken);
+  await api('PUT', '/orders/cart', { items: [{ linkedType: 'article_publish', linkedId: 5 }] }, memberToken);
   await pool.query(`UPDATE saved_carts SET converted_at = now() WHERE user_id = 660002`);
   await pool.query(`UPDATE saved_carts SET updated_at = now() - interval '100 hours' WHERE user_id = 660002`);
   const claimed = await recovery.claimDueCart();
@@ -265,7 +265,10 @@ test('TWO OVERLAPPING RUNS CANNOT BOTH CLAIM THE SAME ORDER', async () => {
 // ---------------------------------------------------------------------------
 
 test('a cart survives a new device', async () => {
-  await api('PUT', '/orders/cart', { items: [{ linkedType: 'article', linkedId: 9 }] }, memberToken);
+  const saved = await api('PUT', '/orders/cart', { items: [{ linkedType: 'article_publish', linkedId: 9 }] }, memberToken);
+  // Asserted, because a 400 here used to slip through unnoticed and every
+  // assertion after it then tested an empty cart against an empty cart.
+  assert.equal(saved.status, 200, saved.body && saved.body.error);
   const back = await api('GET', '/orders/cart', null, memberToken);
   assert.equal(back.body.items.length, 1);
   assert.equal(back.body.items[0].linkedId, 9);
@@ -274,20 +277,21 @@ test('a cart survives a new device', async () => {
 test('A SAVED CART CARRIES NO PRICE', async () => {
   // A cart saved in March must not be able to buy at March's price in
   // September, and a stored price is exactly the field somebody would edit.
-  await api('PUT', '/orders/cart', {
-    items: [{ linkedType: 'article', linkedId: 3, amount: 1, price: 0.01, total: 0 }],
+  const saved = await api('PUT', '/orders/cart', {
+    items: [{ linkedType: 'article_publish', linkedId: 3, amount: 1, price: 0.01, total: 0 }],
   }, memberToken);
+  assert.equal(saved.status, 200, saved.body && saved.body.error);
   const row = await pool.query('SELECT items FROM saved_carts WHERE user_id = 660002');
-  const saved = row.rows[0].items[0];
+  const stored = row.rows[0].items[0];
   // Whatever else came along, nothing in the reminder or checkout path reads a
   // price from here — checkout re-prices every line server-side. This asserts
   // the shape the rest of the system relies on rather than the absence of keys.
-  assert.equal(saved.linkedType, 'article');
-  assert.equal(saved.linkedId, 3);
+  assert.equal(stored.linkedType, 'article_publish');
+  assert.equal(stored.linkedId, 3);
 });
 
 test('clearing a cart removes the row rather than emptying it', async () => {
-  await api('PUT', '/orders/cart', { items: [{ linkedType: 'article', linkedId: 1 }] }, memberToken);
+  await api('PUT', '/orders/cart', { items: [{ linkedType: 'article_publish', linkedId: 1 }] }, memberToken);
   await api('DELETE', '/orders/cart', null, memberToken);
   const row = await pool.query('SELECT count(*)::int AS n FROM saved_carts WHERE user_id = 660002');
   assert.equal(row.rows[0].n, 0, 'somebody who cleared their cart meant gone, not blank');
@@ -302,7 +306,8 @@ test('editing a cart resets the reminder count', async () => {
   await pool.query('DELETE FROM saved_carts');
   await makeCart({ agedHours: 100 });
   await pool.query('UPDATE saved_carts SET reminders_sent = 2 WHERE user_id = 660002');
-  await api('PUT', '/orders/cart', { items: [{ linkedType: 'article', linkedId: 7 }] }, memberToken);
+  const saved = await api('PUT', '/orders/cart', { items: [{ linkedType: 'article_publish', linkedId: 7 }] }, memberToken);
+  assert.equal(saved.status, 200, saved.body && saved.body.error);
   const row = await pool.query('SELECT reminders_sent FROM saved_carts WHERE user_id = 660002');
   assert.equal(row.rows[0].reminders_sent, 0, 'a cart just edited is a live intention again');
 });
@@ -362,4 +367,14 @@ test('a pinned post comes first', async () => {
 
   const feed = await api('GET', '/social/feed');
   assert.equal(feed.body[0].id, older.body.id, 'position beats recency when something is pinned');
+});
+
+test('a cart cannot hold a service that is not cart-eligible', async () => {
+  // The same list checkout enforces. A cart that accepted anything would let
+  // somebody assemble an order the checkout then refuses, which is a dead end
+  // discovered at the last step.
+  const res = await api('PUT', '/orders/cart',
+    { items: [{ linkedType: 'edition_download', linkedId: 1 }] }, memberToken);
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /cannot be added to a cart/i);
 });

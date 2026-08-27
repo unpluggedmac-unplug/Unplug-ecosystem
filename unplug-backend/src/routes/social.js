@@ -51,9 +51,16 @@ router.get('/feed', async (req, res, next) => {
        ORDER BY position DESC, posted_at DESC NULLS LAST, id DESC
        LIMIT $1`, [limit]);
 
-    // Cached for ten minutes. This is on the homepage, it changes when a
-    // person types something in, and the instance it comes from sleeps.
-    res.set('Cache-Control', 'public, max-age=600');
+    // A minute, the same as the popup feed and for the same reason.
+    //
+    // Ten minutes was the first choice — this is homepage decoration that
+    // changes when somebody types something in, so caching it hard is
+    // tempting. It was wrong in the way that matters: an admin switches a post
+    // on, opens the site to check, and sees nothing. They then switch it on
+    // again, or conclude it is broken. A minute still spares the database
+    // almost every page view and keeps the loop between doing a thing and
+    // seeing it short enough to trust.
+    res.set('Cache-Control', 'public, max-age=60');
     res.json(r.rows);
   } catch (err) { next(err); }
 });

@@ -325,6 +325,29 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
   }
 });
 
+// POST /orders/recovery-run — one pass of the reminder runner, by hand.
+//
+// The runner is OFF by default (UNPLUG_CHECKOUT_RECOVERY). This is how to
+// watch what it would do before handing it to a timer, and how an external
+// scheduler drives it on an instance that sleeps — the same shared-secret
+// shape as /maintenance/cleanup, /backups/run and /admin/email/tick.
+//
+// IT REALLY SENDS. There is no dry-run mode, on purpose: a dry run that
+// reports what it "would" send is a second code path, and the one that never
+// runs is the one that is wrong. Run it once with the thresholds in mind and
+// look at what arrived.
+router.post('/recovery-run', async (req, res, next) => {
+  try {
+    const secret = process.env.UNPLUG_CLEANUP_SECRET;
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      if (!secret) return res.status(503).json({ error: 'No scheduler secret is configured.' });
+      if (req.get('X-Cron-Secret') !== secret) return res.status(401).json({ error: 'Not authorised.' });
+    }
+    res.json(await require('../utils/checkoutRecovery').run());
+  } catch (err) { next(err); }
+});
+
 // ---------------------------------------------------------------------------
 // The saved cart
 // ---------------------------------------------------------------------------
