@@ -15,6 +15,23 @@ const router = express.Router();
 
 const VALID_ROLES = ['member', 'investor', 'advertiser']; // admin is never self-registered
 
+// A contact number is REQUIRED to sign up, and this is where that is decided.
+// It was previously enforced only in the browser, which means it was not
+// enforced at all: anything can POST to /auth/register.
+//
+// Deliberately permissive about FORM. South Africans write their numbers as
+// 082 123 4567, +27 82 123 4567, 0821234567 and (082) 123-4567, and all four
+// are the same number. Rejecting a real number because of a space is a worse
+// failure than accepting an oddly punctuated one — nothing is dialled or
+// texted automatically, this is so a person can be phoned back.
+function isValidPhone(phone) {
+  const raw = String(phone || '').trim();
+  if (!raw) return false;
+  if (!/^[0-9+()\-.\s]+$/.test(raw)) return false;
+  const digits = raw.replace(/\D/g, '');
+  return digits.length >= 9 && digits.length <= 15;
+}
+
 function isValidEmail(email) {
   return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -38,6 +55,12 @@ router.post('/register', registerLimiter, async (req, res, next) => {
     if (!password || password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     }
+    // Required, not optional. The sign-up form has always asked for it; until
+    // now the API did not, so an account could exist with no way to reach the
+    // person behind it.
+    if (!isValidPhone(phone)) {
+      return res.status(400).json({ error: 'A contact number is required, and must be a real phone number.' });
+    }
     const finalRole = VALID_ROLES.includes(role) ? role : 'member';
     // Individual / business is optional (older clients don't send it) but must
     // be one of the two when present.
@@ -54,7 +77,7 @@ router.post('/register', registerLimiter, async (req, res, next) => {
       `INSERT INTO users (email, phone, alt_email, password_hash, role, full_name, member_type)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, email, role, created_at`,
-      [email, phone || null, altEmail || null, passwordHash, finalRole, finalName, finalMemberType]
+      [email, String(phone).trim(), altEmail || null, passwordHash, finalRole, finalName, finalMemberType]
     );
     const user = result.rows[0];
 
@@ -510,3 +533,4 @@ router.get('/me', requireAuth, async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.isValidPhone = isValidPhone;
