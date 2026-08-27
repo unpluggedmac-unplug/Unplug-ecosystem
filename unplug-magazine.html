@@ -195,6 +195,57 @@ nav.main-nav .nav-item.active .nav-item-label{ color:var(--red); }
 .nav-toggle{ display:none; background:none; border:none; cursor:pointer; }
 
 /* ---- site-wide search overlay ---- */
+/* ---- THE CARD MAKER, GIVEN SOME PRESENCE ----
+   Two treatments, on purpose, because the two places it appears are doing
+   different jobs.
+
+   On /nominate the card maker IS the page, so it gets an ink slab: heavy
+   Playfair on near-black with a red rule. THE SLAB IS THE HEADER BAND ONLY.
+   The form below it stays on cream — putting the inputs on black would mean
+   restyling every field, and dark form fields are harder to read and to fill
+   in. This is the one screen on the site where somebody actually has to type.
+
+   On the contact page it sits in a 300px sidebar under "Nominate someone",
+   where a black slab would be a brick. It gets the framed treatment instead:
+   an ink frame, oversized italic Playfair, and the U monogram ghosted behind
+   it. The two blocks there DELIBERATELY no longer match — the card is the
+   thing we want people to do, and Nominate is reachable from elsewhere. */
+.card-slab{
+  background:var(--black); padding:clamp(24px,4vw,38px);
+  /* A LIGHTER RED, USED ONLY ON THIS DARK PANEL.
+     The brand red #d20709 on near-black measures 3.46:1, and the eyebrow is
+     11px — small text, so AA wants 4.5:1. It fails, and on a publication with
+     a Deaf and accessibility strand that is not a detail to wave through.
+     #e8393b is 4.66:1 and is the CLOSEST of the reds that pass, so the brand
+     colour moves as little as it can while still being readable. Scoped to
+     the slab: everywhere else on the site keeps #d20709, which measures
+     4.89:1 on paper and passes as it is. */
+  --red-on-dark:#e8393b;
+}
+.card-slab .eyebrow{ color:var(--red-on-dark); margin-bottom:14px; }
+.card-slab h2{ color:var(--cream); font-weight:900; letter-spacing:-0.015em;
+  line-height:1.05; font-size:clamp(30px,4.6vw,46px); margin:0; }
+.card-slab-rule{ width:56px; height:3px; background:var(--red-on-dark); margin:18px 0 15px; }
+.card-slab .lede{ color:rgba(255,255,255,0.74); margin:0; max-width:58ch; }
+/* The sign-in prompt inside the form keeps its own colours; only the slab's
+   own children are recoloured, so nothing below the band is affected. */
+
+.card-frame{ margin-top:28px; border:2px solid var(--ink); background:var(--paper);
+  padding:22px 20px; position:relative; overflow:hidden; }
+.card-frame-mono{ position:absolute; right:-16px; bottom:-48px;
+  font-family:'Playfair Display',serif; font-size:150px; font-weight:900;
+  color:rgba(210,7,9,0.07); line-height:1; pointer-events:none; user-select:none; }
+.card-frame-eb{ display:block; position:relative; font-size:10px; font-weight:700;
+  letter-spacing:0.2em; text-transform:uppercase; color:var(--red); margin-bottom:10px; }
+.card-frame h3{ position:relative; font-family:'Playfair Display',serif; font-size:26px;
+  font-style:italic; font-weight:700; color:var(--ink); line-height:1.1; margin:0 0 9px; }
+.card-frame p{ position:relative; color:var(--slate); line-height:1.55; font-size:13.5px;
+  margin:0 0 15px; }
+.card-frame .btn{ position:relative; }
+@media (max-width:640px){
+  .card-frame-mono{ font-size:120px; bottom:-38px; }
+  .card-frame h3{ font-size:23px; }
+}
 /* ---- SASL SIGNED VIDEO ---- */
 .sasl-block{ border:1px solid var(--paper-line); border-left:3px solid var(--red);
   background:var(--paper); padding:18px 20px; margin:0 0 26px; }
@@ -3218,13 +3269,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 <div id="nominateCardSlot">
 <div class="wrap" id="nominate-card" style="padding-top:8px; max-width:900px; scroll-margin-top:90px;">
-    <span class="eyebrow" data-cms="card.eyebrow">Share Your Acknowledgement</span>
-    <!-- An h2, not an h1. It was the h1 of its own page; on the nominate page
+    <!-- The header band. Sizing lives in .card-slab rather than inline so the
+         slab can set it — an inline font-size would beat the stylesheet and
+         the headline would stay at its old scale on a panel built for a
+         bigger one. -->
+    <div class="card-slab">
+      <span class="eyebrow" data-cms="card.eyebrow">Share Your Acknowledgement</span>
+      <!-- An h2, not an h1. It was the h1 of its own page; on the nominate page
            the h1 is "Know someone who deserves to be seen?" and a second one
            would give the document two top-level titles — which is a broken
            outline for anyone navigating this page by heading. -->
-      <h2 style="font-size:clamp(28px,3.8vw,40px); margin:14px 0 10px;" data-cms="card.title">Make your &ldquo;Seen and Heard by Unplug&rdquo; card</h2>
-    <p class="lede" data-cms="card.lede">Been seen and heard by Unplug? Make a card to post on your own accounts. Fill it in, see how it looks, and send it to us &mdash; we check every card before it goes out with our name on it, then email you the finished one.</p>
+      <h2 data-cms="card.title">Make your &ldquo;Seen and Heard by Unplug&rdquo; card</h2>
+      <div class="card-slab-rule"></div>
+      <p class="lede" data-cms="card.lede">Been seen and heard by Unplug? Make a card to post on your own accounts. Fill it in, see how it looks, and send it to us &mdash; we check every card before it goes out with our name on it, then email you the finished one.</p>
+    </div>
 
     <div id="cardApproved" hidden style="margin-top:24px; padding:16px 18px; border:1px solid var(--paper-line); background:var(--paper);"></div>
 
@@ -3495,13 +3553,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
              ?p=card rather than /nominate: it lands on the same page and
              scrolls straight to the card, instead of leaving somebody at the
              top of a page about nominating other people. -->
-        <div style="margin-top:28px; padding-top:24px; border-top:1px solid var(--paper-line);">
-          <h3 style="margin:0 0 8px;">Make your card</h3>
-          <p style="color:var(--slate); line-height:1.6; margin:0 0 14px; font-size:14px;">
+        <div class="card-frame">
+          <!-- Decorative only. aria-hidden so a screen reader does not read a
+               stray "U" between the heading and the text. -->
+          <span class="card-frame-mono" aria-hidden="true">U</span>
+          <span class="card-frame-eb">Seen and heard</span>
+          <h3>Make your card</h3>
+          <p>
             Been seen and heard by Unplug? Make a &ldquo;Seen and Heard&rdquo; card to post on
             your own accounts &mdash; we check every one before it goes out with our name on it.
           </p>
-          <a class="btn btn-line" href="?p=card" style="width:auto; display:inline-block;">Make your card &rarr;</a>
+          <a class="btn btn-solid" href="?p=card" style="width:auto; display:inline-block;">Make your card &rarr;</a>
         </div>
       </div>
       <form id="contactForm">
