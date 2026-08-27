@@ -195,6 +195,62 @@ nav.main-nav .nav-item.active .nav-item-label{ color:var(--red); }
 .nav-toggle{ display:none; background:none; border:none; cursor:pointer; }
 
 /* ---- site-wide search overlay ---- */
+/* ---- FREE-ACCOUNT GATE ----
+   The preview above it is genuinely all the browser was sent, so there is no
+   need for the usual fade-to-white trick that hides text which is still in the
+   page source. The rule and the panel simply mark where the article stops. */
+.art-gate{ margin:28px 0 8px; padding:26px 24px; border:1px solid var(--paper-line);
+  border-top:3px solid var(--red); background:var(--paper); }
+.art-gate h2{ font-family:'Playfair Display',serif; font-size:clamp(21px,3vw,28px);
+  margin:0 0 8px; }
+.art-gate p{ color:var(--slate); font-size:15.5px; line-height:1.65; margin:0 0 16px; max-width:52ch; }
+.art-gate .btn-row{ margin-bottom:6px; }
+.art-gate .art-gate-note{ font-size:12.5px; color:var(--slate); margin:10px 0 0; }
+.story-lock{ display:inline-block; margin-left:6px; font-size:10.5px; text-transform:uppercase;
+  letter-spacing:0.07em; color:var(--red); border:1px solid var(--red); padding:1px 5px; }
+/* ---- SEARCH RESULTS PAGE ---- */
+.search-form{ display:flex; gap:10px; max-width:620px; margin:18px 0 6px; }
+.search-form input{ flex:1; padding:12px 14px; border:1px solid var(--paper-line);
+  font-family:'Inter',sans-serif; font-size:16px; background:var(--cream); color:var(--ink); }
+.search-summary{ color:var(--slate); font-size:14.5px; margin:10px 0 0; }
+.search-suggest{ font-size:15px; margin:8px 0 0; }
+.search-suggest[hidden]{ display:none; }
+.search-suggest button{ background:none; border:none; padding:0; font:inherit; color:var(--red);
+  text-decoration:underline; cursor:pointer; }
+.search-filters{ display:flex; flex-direction:column; gap:12px; margin:26px 0 18px;
+  padding-bottom:16px; border-bottom:1px solid var(--paper-line); }
+.search-tabs{ display:flex; flex-wrap:wrap; gap:8px; }
+.search-tab{ padding:8px 14px; border:1px solid var(--paper-line); background:var(--cream);
+  color:var(--slate); font-size:13.5px; cursor:pointer; font-family:'Inter',sans-serif; }
+.search-tab[aria-pressed="true"]{ background:var(--red); border-color:var(--red); color:#fff; }
+.search-refine{ display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; }
+.search-refine label{ display:flex; flex-direction:column; gap:4px; font-size:12px;
+  text-transform:uppercase; letter-spacing:0.06em; color:var(--slate); }
+.search-refine select, .search-refine input{ padding:8px 10px; border:1px solid var(--paper-line);
+  font-family:'Inter',sans-serif; font-size:14px; background:var(--cream); color:var(--ink); }
+.search-group{ margin:26px 0 0; }
+.search-group h2{ font-size:15px; text-transform:uppercase; letter-spacing:0.08em;
+  color:var(--slate); font-family:'Inter',sans-serif; font-weight:600; margin-bottom:12px; }
+.search-hit{ display:block; padding:16px 0; border-bottom:1px solid var(--paper-line);
+  text-decoration:none; color:inherit; }
+.search-hit:hover h3{ color:var(--red); }
+.search-hit h3{ font-family:'Playfair Display',serif; font-size:20px; line-height:1.25; margin:0 0 6px; }
+.search-hit p{ font-size:14.5px; line-height:1.6; color:var(--slate); margin:0 0 6px; }
+/* The one place <mark> is used on the site, so it gets an explicit colour
+   rather than inheriting the browser's yellow, which fights the palette. */
+.search-hit mark{ background:rgba(190,30,45,0.14); color:inherit; font-weight:600; padding:0 1px; }
+.search-hit .search-hit-meta{ font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--slate); }
+.search-more{ display:inline-block; margin-top:12px; background:none; border:none; padding:0;
+  font:inherit; color:var(--red); cursor:pointer; text-decoration:underline; }
+.search-pager{ display:flex; gap:8px; align-items:center; margin:26px 0 0; }
+.search-pager[hidden]{ display:none; }
+.search-pager button{ padding:8px 14px; border:1px solid var(--paper-line); background:var(--cream);
+  color:var(--ink); cursor:pointer; font-size:14px; }
+.search-pager button[disabled]{ opacity:0.45; cursor:default; }
+.search-pager .search-page-of{ font-size:13.5px; color:var(--slate); }
+.site-search-all{ border-top:1px solid var(--paper-line); padding:12px 18px; }
+.site-search-all button{ background:none; border:none; padding:0; font:inherit;
+  color:var(--red); cursor:pointer; text-decoration:underline; }
 .site-search-overlay{ position:fixed; inset:0; z-index:99997; background:rgba(15,14,14,0.55); display:none; padding:64px 20px 20px; }
 .site-search-overlay.open{ display:block; }
 .site-search-box{ max-width:640px; margin:0 auto; background:var(--cream); border:1px solid var(--paper-line); box-shadow:0 20px 60px rgba(0,0,0,0.3); }
@@ -1030,6 +1086,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .welcome-option:active{ transform:scale(0.995); }
 .welcome-option h3{ font-family:'Playfair Display',serif; font-size:18px; margin:0 0 3px; color:var(--ink,#22201e); }
 .welcome-option p{ font-size:13px; color:var(--slate,#7a726a); margin:0; line-height:1.5; }
+/* Sign Up is the one thing on this dialog we actually want people to do, so it
+   does not look like the other two.
+   AFTER `.welcome-option h3`, deliberately: both selectors are one class and
+   one type, so they have identical specificity and the later one simply wins.
+   Written above it, the heading colour silently did nothing. */
+.welcome-option-primary{ border-color:var(--red,#be1e2d); border-left-width:4px; background:#fffdfa; }
+.welcome-option-primary h3{ color:var(--red,#be1e2d); }
 
 .cms-blocks:empty{ display:none; }
 .cms-block{ display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:center; margin:34px 0; border:1px solid var(--paper-line); }
@@ -1604,9 +1667,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <h3 data-cms="welcome.visit.title">Visit Site</h3>
         <p data-cms="welcome.visit.body">Browse Unplug Magazine — no account needed.</p>
       </button>
-      <a class="welcome-option" id="welcomeJoin" href="unplug-member-dashboard.html">
-        <h3 data-cms="welcome.join.title">Become a Member</h3>
-        <p data-cms="welcome.join.body">Free to join. You only pay when you use a paid service (like publishing an article).</p>
+      <a class="welcome-option welcome-option-primary" id="welcomeJoin" href="unplug-member-dashboard.html?signup=1">
+        <h3 data-cms="welcome.join.title">Sign Up — it’s free</h3>
+        <p data-cms="welcome.join.body">Create your free Unplug account with your email address and mobile number. We email you a 6-digit code to confirm it’s really you. You only pay if you later use a paid service, like publishing an article.</p>
       </a>
       <a class="welcome-option" id="welcomeSignin" href="unplug-member-dashboard.html">
         <h3 data-cms="welcome.signin.title">Sign In</h3>
@@ -1690,42 +1753,42 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <nav class="main-nav" id="mainNav" aria-label="Main">
       <button data-page="home" class="active" data-i18n="nav.home">Home</button>
       <div class="nav-group" data-nav-group="read">
-        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-read" data-nav-trigger="read">Read<span class="nav-chev" aria-hidden="true">▾</span></button>
-        <div class="nav-panel" id="navpanel-read" role="group" aria-label="Read" hidden>
-          <a class="nav-item" href="?p=news" data-page="news"><span class="nav-item-label">Latest News</span><span class="nav-item-desc">Stories from around the country</span></a>
-          <a class="nav-item" href="?p=editions" data-page="editions"><span class="nav-item-label">Editions</span><span class="nav-item-desc">Read and download the magazine</span></a>
-          <a class="nav-item" href="?p=gallery" data-page="gallery"><span class="nav-item-label">Gallery</span><span class="nav-item-desc">Pictures from the community</span></a>
+        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-read" data-nav-trigger="read"><span class="nav-trigger-label" data-i18n="nav.group.read">Read</span><span class="nav-chev" aria-hidden="true">▾</span></button>
+        <div class="nav-panel" id="navpanel-read" role="group" aria-label="Read" data-i18n-aria="nav.group.read" hidden>
+          <a class="nav-item" href="?p=news" data-page="news"><span class="nav-item-label" data-i18n="nav.news">Latest News</span><span class="nav-item-desc" data-i18n="nav.news.desc">Stories from around the country</span></a>
+          <a class="nav-item" href="?p=editions" data-page="editions"><span class="nav-item-label" data-i18n="nav.editions">Editions</span><span class="nav-item-desc" data-i18n="nav.editions.desc">Read and download the magazine</span></a>
+          <a class="nav-item" href="?p=gallery" data-page="gallery"><span class="nav-item-label" data-i18n="nav.gallery">Gallery</span><span class="nav-item-desc" data-i18n="nav.gallery.desc">Pictures from the community</span></a>
         </div>
       </div>
       <div class="nav-group" data-nav-group="community">
-        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-community" data-nav-trigger="community">Community<span class="nav-chev" aria-hidden="true">▾</span></button>
-        <div class="nav-panel" id="navpanel-community" role="group" aria-label="Community" hidden>
-          <a class="nav-item" href="?p=directory" data-page="directory"><span class="nav-item-label">Directory</span><span class="nav-item-desc">Find people and businesses</span></a>
-          <a class="nav-item" href="?p=members" data-page="members"><span class="nav-item-label">Members</span><span class="nav-item-desc">Everyone with an Unplug profile</span></a>
-          <a class="nav-item" href="?p=deafcommunity" data-page="deafcommunity"><span class="nav-item-label">Deaf Community</span><span class="nav-item-desc">Jobs, SASL and the Passport</span></a>
+        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-community" data-nav-trigger="community"><span class="nav-trigger-label" data-i18n="nav.group.community">Community</span><span class="nav-chev" aria-hidden="true">▾</span></button>
+        <div class="nav-panel" id="navpanel-community" role="group" aria-label="Community" data-i18n-aria="nav.group.community" hidden>
+          <a class="nav-item" href="?p=directory" data-page="directory"><span class="nav-item-label" data-i18n="nav.directory">Directory</span><span class="nav-item-desc" data-i18n="nav.directory.desc">Find people and businesses</span></a>
+          <a class="nav-item" href="?p=members" data-page="members"><span class="nav-item-label" data-i18n="nav.members">Members</span><span class="nav-item-desc" data-i18n="nav.members.desc">Everyone with an Unplug profile</span></a>
+          <a class="nav-item" href="?p=deafcommunity" data-page="deafcommunity"><span class="nav-item-label" data-i18n="nav.deafcommunity">Deaf Community</span><span class="nav-item-desc" data-i18n="nav.deafcommunity.desc">Jobs, SASL and the Passport</span></a>
         </div>
       </div>
       <div class="nav-group" data-nav-group="takepart">
-        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-takepart" data-nav-trigger="takepart">Take Part<span class="nav-chev" aria-hidden="true">▾</span></button>
-        <div class="nav-panel" id="navpanel-takepart" role="group" aria-label="Take Part" hidden>
-          <a class="nav-item" href="?p=competitions" data-page="competitions"><span class="nav-item-label">Competitions</span><span class="nav-item-desc">What is open to enter now</span></a>
-          <a class="nav-item" href="?p=top10" data-page="top10"><span class="nav-item-label">Top 10</span><span class="nav-item-desc">This month’s most-voted</span></a>
-          <a class="nav-item" href="/nominate" data-page="nominate"><span class="nav-item-label">Nominate</span><span class="nav-item-desc">Tell us about someone</span></a>
+        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-takepart" data-nav-trigger="takepart"><span class="nav-trigger-label" data-i18n="nav.group.takepart">Take Part</span><span class="nav-chev" aria-hidden="true">▾</span></button>
+        <div class="nav-panel" id="navpanel-takepart" role="group" aria-label="Take Part" data-i18n-aria="nav.group.takepart" hidden>
+          <a class="nav-item" href="?p=competitions" data-page="competitions"><span class="nav-item-label" data-i18n="nav.competitions">Competitions</span><span class="nav-item-desc" data-i18n="nav.competitions.desc">What is open to enter now</span></a>
+          <a class="nav-item" href="?p=top10" data-page="top10"><span class="nav-item-label" data-i18n="nav.top10">Top 10</span><span class="nav-item-desc" data-i18n="nav.top10.desc">This month’s most-voted</span></a>
+          <a class="nav-item" href="/nominate" data-page="nominate"><span class="nav-item-label" data-i18n="nav.nominate">Nominate</span><span class="nav-item-desc" data-i18n="nav.nominate.desc">Tell us about someone</span></a>
         </div>
       </div>
       <div class="nav-group" data-nav-group="business">
-        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-business" data-nav-trigger="business">Business<span class="nav-chev" aria-hidden="true">▾</span></button>
-        <div class="nav-panel" id="navpanel-business" role="group" aria-label="Business" hidden>
-          <a class="nav-item" href="?p=brandplacement" data-page="brandplacement"><span class="nav-item-label">Marketplace</span><span class="nav-item-desc">Advertise with us</span></a>
-          <a class="nav-item" href="?p=investors" data-page="investors"><span class="nav-item-label">Investors</span><span class="nav-item-desc">Projects and sponsorships</span></a>
+        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-business" data-nav-trigger="business"><span class="nav-trigger-label" data-i18n="nav.group.business">Business</span><span class="nav-chev" aria-hidden="true">▾</span></button>
+        <div class="nav-panel" id="navpanel-business" role="group" aria-label="Business" data-i18n-aria="nav.group.business" hidden>
+          <a class="nav-item" href="?p=brandplacement" data-page="brandplacement"><span class="nav-item-label" data-i18n="nav.marketplace">Marketplace</span><span class="nav-item-desc" data-i18n="nav.marketplace.desc">Advertise with us</span></a>
+          <a class="nav-item" href="?p=investors" data-page="investors"><span class="nav-item-label" data-i18n="nav.investors">Investors</span><span class="nav-item-desc" data-i18n="nav.investors.desc">Projects and sponsorships</span></a>
         </div>
       </div>
       <div class="nav-group" data-nav-group="about">
-        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-about" data-nav-trigger="about">About<span class="nav-chev" aria-hidden="true">▾</span></button>
-        <div class="nav-panel" id="navpanel-about" role="group" aria-label="About" hidden>
-          <a class="nav-item" href="?p=about" data-page="about"><span class="nav-item-label">About Us</span><span class="nav-item-desc">Who we are</span></a>
-          <a class="nav-item" href="?p=contact" data-page="contact"><span class="nav-item-label">Contact</span><span class="nav-item-desc">Get in touch</span></a>
-          <a class="nav-item" href="?p=refunds" data-page="refunds"><span class="nav-item-label">Terms &amp; Policies</span><span class="nav-item-desc">Terms, refunds and privacy</span></a>
+        <button class="nav-trigger" type="button" aria-expanded="false" aria-controls="navpanel-about" data-nav-trigger="about"><span class="nav-trigger-label" data-i18n="nav.group.about">About</span><span class="nav-chev" aria-hidden="true">▾</span></button>
+        <div class="nav-panel" id="navpanel-about" role="group" aria-label="About" data-i18n-aria="nav.group.about" hidden>
+          <a class="nav-item" href="?p=about" data-page="about"><span class="nav-item-label" data-i18n="nav.about">About Us</span><span class="nav-item-desc" data-i18n="nav.about.desc">Who we are</span></a>
+          <a class="nav-item" href="?p=contact" data-page="contact"><span class="nav-item-label" data-i18n="nav.contact">Contact</span><span class="nav-item-desc" data-i18n="nav.contact.desc">Get in touch</span></a>
+          <a class="nav-item" href="?p=refunds" data-page="refunds"><span class="nav-item-label" data-i18n="nav.refunds">Terms &amp; Policies</span><span class="nav-item-desc" data-i18n="nav.refunds.desc">Terms, refunds and privacy</span></a>
         </div>
       </div>
       <!-- Account entry point. Lives inside the nav (not the header row) so it
@@ -1756,6 +1819,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button class="site-search-close" id="siteSearchClose" aria-label="Close search">&times;</button>
     </div>
     <div class="site-search-results" id="siteSearchResults"><p class="site-search-hint">Type at least 2 letters to search.</p></div>
+    <div class="site-search-all" id="siteSearchAll" hidden>
+      <button type="button" id="siteSearchAllBtn">See all results →</button>
+    </div>
   </div>
 </div>
 
@@ -1785,7 +1851,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="section-head">
       <div>
         <span class="eyebrow">This week</span>
-        <h2>Featured Stories</h2>
+        <h2 data-i18n="home.featured.title">Featured Stories</h2>
       </div>
       <button class="view-all" data-page="news">View all stories →</button>
     </div>
@@ -1811,7 +1877,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="social-follow">
       <div class="social-follow-head">
         <span class="eyebrow">Stay connected</span>
-        <h2>Follow Unplug everywhere</h2>
+        <h2 data-i18n="home.social.title">Follow Unplug everywhere</h2>
         <p>Daily shout-outs, new stories and behind-the-scenes moments — join us on your favourite platform.</p>
       </div>
       <div class="social-follow-grid">
@@ -3030,6 +3096,46 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
      The same definition also renders inside any page through a
      <div data-unplug-form="slug"> block, so one form serves both a link you
      send out and a form at the bottom of the page that explains it. -->
+<!-- ============ SEARCH RESULTS ============
+     A real page, not just the overlay, because a search result is something
+     people bookmark, share and come back to. The whole state lives in the URL
+     (?p=search&q=...&type=...) so all three of those work. -->
+<main class="page" id="page-search">
+  <section class="wrap" style="padding-top:44px;">
+    <span class="eyebrow">Search</span>
+    <h1 style="font-size:clamp(30px,4.4vw,46px); margin:10px 0 0;" data-i18n="search.title">Search Unplug</h1>
+    <form class="search-form" id="searchPageForm" role="search">
+      <input type="search" id="searchPageInput" aria-label="Search stories, directory, members and editions"
+             placeholder="Search stories, directory, editions…" autocomplete="off">
+      <button class="btn btn-solid" type="submit">Search</button>
+    </form>
+    <p class="search-summary" id="searchSummary" role="status" aria-live="polite"></p>
+    <p class="search-suggest" id="searchSuggest" hidden></p>
+  </section>
+
+  <section class="wrap">
+    <div class="search-filters" id="searchFilters" hidden>
+      <div class="search-tabs" role="group" aria-label="Filter results by type">
+        <button class="search-tab" type="button" data-type="all" aria-pressed="true">Everything</button>
+        <button class="search-tab" type="button" data-type="articles" aria-pressed="false">Stories</button>
+        <button class="search-tab" type="button" data-type="profiles" aria-pressed="false">Directory</button>
+        <button class="search-tab" type="button" data-type="members" aria-pressed="false">Members</button>
+        <button class="search-tab" type="button" data-type="editions" aria-pressed="false">Editions</button>
+      </div>
+      <div class="search-refine">
+        <label for="searchCategory">Category
+          <select id="searchCategory"><option value="">Any</option></select>
+        </label>
+        <label for="searchFrom">Published from <input type="date" id="searchFrom"></label>
+        <label for="searchTo">Published to <input type="date" id="searchTo"></label>
+        <button class="btn btn-line" type="button" id="searchClear">Clear filters</button>
+      </div>
+    </div>
+    <div id="searchResults"></div>
+    <nav class="search-pager" id="searchPager" hidden aria-label="Search result pages"></nav>
+  </section>
+</main>
+
 <main class="page" id="page-form">
   <div class="wrap" style="padding-top:56px; max-width:760px;">
     <div id="formHost"></div>
@@ -5426,6 +5532,31 @@ function articleBodyHtml(a) {
   return renderRichText(a.body);
 }
 
+// The free-account gate.
+//
+// This panel is a SIGNPOST, not the gate itself. The gate is in the server:
+// a.body already contains only the preview by the time it gets here, and the
+// sections array is empty. Nothing is hidden with CSS, because nothing that
+// should be hidden was ever sent — see unplug-backend/src/utils/accountGate.js.
+function articleGateHtml(a) {
+  if (!a.gated) return '';
+  // Come back to this article after signing in. Relative, and read back
+  // defensively at the other end — a `next` that could point anywhere is an
+  // open redirect, and this one is on the end of a link we invite people to
+  // click.
+  const back = encodeURIComponent('?p=article&id=' + a.id);
+  const join = MEMBER_DASHBOARD_URL + '?next=' + back;
+  return `<aside class="art-gate" role="note" aria-labelledby="artGateTitle">
+    <h2 id="artGateTitle" data-cms="gate.title">Keep reading \u2014 it\u2019s free</h2>
+    <p data-cms="gate.body">The rest of this story is for Unplug members. An account costs nothing, takes a minute, and opens every gated story on the site.</p>
+    <div class="btn-row">
+      <a class="btn btn-solid" href="${join}">Create a free account</a>
+      <a class="btn btn-line" href="${join}">I already have one</a>
+    </div>
+    <p class="art-gate-note" data-cms="gate.note">No payment, no card details. We ask for an email address so we know who you are.</p>
+  </aside>`;
+}
+
 function articleGalleryHtml(a) {
   const images = a.gallery_images || [];
   if (images.length === 0) return '';
@@ -6066,6 +6197,7 @@ async function loadArticleDetail(id) {
       </div>
       ${articleVideoHtml(a)}
       <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${articleBodyHtml(a)}${articleSectionsHtml(data.sections)}${articleGalleryHtml(a)}${articleConclusionHtml(a)}</div>
+      ${articleGateHtml(a)}
       ${articleTakeawaysHtml(a)}
       ${articleLinksHtml(a)}
       ${articleCtaHtml(a)}
@@ -6750,7 +6882,7 @@ function homeStoryCardHtml(article, idPrefix) {
   const thumbImg = coverImgTag(article.banner_image_url, article.title);
   return `<article class="story-card" data-id="${article.id}" role="link" tabindex="0" style="cursor:pointer;">
         <div class="story-thumb">${thumbImg}</div>
-        <span class="story-tag">${category}</span>
+        <span class="story-tag">${category}</span>${article.requires_account ? '<span class="story-lock">Members</span>' : ''}
         <h3>${title}</h3>
         <p>${excerpt}</p>
         <span class="story-meta">${readMinutes(article.body)} min read${category ? ' · ' + category : ''}</span>
@@ -7938,6 +8070,20 @@ function routeFromUrl(){
     else if (p === 'card') { goToPage('nominate'); scrollToCardMaker(); }
     // ?p=nominate still works. It is printed in social bios that were set
     // before /nominate existed, and those are not editable in bulk.
+    // A search is bookmarked and shared, so the whole of its state is read
+    // back out of the URL rather than being reset to a blank page.
+    else if (p === 'search') {
+      searchState.q = params.get('q') || '';
+      searchState.type = ['articles', 'profiles', 'editions', 'members'].includes(params.get('type'))
+        ? params.get('type') : 'all';
+      searchState.category = params.get('category') || '';
+      searchState.from = params.get('from') || '';
+      searchState.to = params.get('to') || '';
+      searchState.page = Math.max(1, Number(params.get('page')) || 1);
+      goToPage('search');
+      syncSearchControls();
+      runSitePageSearch();
+    }
     else if (p && document.getElementById('page-' + p)) { goToPage(p); }
     // A clean path, served here by a Cloudflare Pages rewrite.
     else if (cleanPathPage() === 'form') {
@@ -9221,6 +9367,7 @@ function goToPage(pageId){
     brandplacement: 'Marketplace — Unplug Magazine',
     nominate: 'Nominate Someone — Unplug Magazine',
     card: 'Your Unplug Card — Unplug Magazine',
+    search: 'Search — Unplug Magazine',
     members: 'Members — Unplug Magazine',
     about: 'About Us — Unplug Magazine',
     contact: 'Contact Us — Unplug Magazine',
@@ -9764,6 +9911,306 @@ function setupDcPassportModal() {
 // directory profiles and editions, grouped, with clickable results that
 // jump straight to the relevant page.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// SEARCH RESULTS PAGE
+//
+// The state of a search is entirely in the URL. That is the point of having a
+// page at all: an overlay cannot be bookmarked, shared, or arrived back at
+// with the back button, and a search someone wants to send to a friend is a
+// completely ordinary thing to want.
+// ---------------------------------------------------------------------------
+const searchState = { q: '', type: 'all', category: '', from: '', to: '', page: 1 };
+
+// The server marks matched words with chr(2)/chr(3) rather than <mark> tags,
+// because ts_headline does not escape the text it is given — see
+// routes/search.js. So: ESCAPE FIRST, then turn the markers into elements.
+// Doing it the other way round would hand article bodies straight to innerHTML.
+function searchSnippet(raw) {
+  if (!raw) return '';
+  let html = escapeHtml(raw);
+  let open = 0;
+  html = html.split('\u0002').join('<mark>');
+  open = (html.match(/<mark>/g) || []).length;
+  html = html.split('\u0003').join('</mark>');
+  const closed = (html.match(/<\/mark>/g) || []).length;
+  // A fragment can be cut mid-highlight, leaving an unclosed tag. Balance it
+  // rather than letting it swallow the rest of the results list.
+  for (let i = closed; i < open; i += 1) html += '</mark>';
+  return html;
+}
+
+function searchHitHtml(opts) {
+  return `<a class="search-hit" href="${opts.href}" data-search-nav="${escapeHtml(opts.nav)}">
+    <h3>${escapeHtml(opts.title)}</h3>
+    ${opts.snippet ? `<p>${opts.snippet}</p>` : ''}
+    ${opts.meta ? `<span class="search-hit-meta">${escapeHtml(opts.meta)}</span>` : ''}
+  </a>`;
+}
+
+function searchGroupHtml(heading, hits, total, type) {
+  if (!hits.length) return '';
+  const more = (searchState.type === 'all' && total > hits.length)
+    ? `<button class="search-more" type="button" data-search-type="${type}">See all ${total} \u2192</button>`
+    : '';
+  return `<section class="search-group">
+    <h2>${escapeHtml(heading)}</h2>
+    ${hits.join('')}
+    ${more}
+  </section>`;
+}
+
+async function runSitePageSearch() {
+  const resultsEl = document.getElementById('searchResults');
+  const summaryEl = document.getElementById('searchSummary');
+  const suggestEl = document.getElementById('searchSuggest');
+  const filtersEl = document.getElementById('searchFilters');
+  const pagerEl = document.getElementById('searchPager');
+  if (!resultsEl) return;
+
+  const q = searchState.q.trim();
+  document.getElementById('searchPageInput').value = q;
+  if (q.length < 2) {
+    resultsEl.innerHTML = '';
+    pagerEl.hidden = true;
+    filtersEl.hidden = true;
+    suggestEl.hidden = true;
+    summaryEl.textContent = 'Type at least two letters to search.';
+    return;
+  }
+
+  filtersEl.hidden = false;
+  summaryEl.textContent = 'Searching\u2026';
+  resultsEl.innerHTML = '';
+  pagerEl.hidden = true;
+
+  const params = new URLSearchParams({ q });
+  if (searchState.type !== 'all') { params.set('type', searchState.type); params.set('page', searchState.page); }
+  if (searchState.category) params.set('category', searchState.category);
+  if (searchState.from) params.set('from', searchState.from);
+  if (searchState.to) params.set('to', searchState.to);
+
+  let data;
+  try {
+    data = await api('/search?' + params.toString());
+  } catch (err) {
+    summaryEl.textContent = '';
+    resultsEl.innerHTML = '<div class="dir-empty-state">Search is unavailable right now.</div>';
+    return;
+  }
+
+  const r = data.results || {};
+  const t = data.totals || {};
+  const found = (t.articles || 0) + (t.profiles || 0) + (t.editions || 0) + (t.members || 0);
+
+  // The same editorial signal the overlay already records: a search that found
+  // nothing is a subject the audience asked for and the magazine does not
+  // cover. Traffic figures can never tell you that.
+  if (window.UnplugAnalytics) {
+    window.UnplugAnalytics.event('site_search', { label: q });
+    if (found === 0) window.UnplugAnalytics.event('site_search_empty', { label: q });
+  }
+
+  if (data.suggestion) {
+    suggestEl.hidden = false;
+    suggestEl.innerHTML = 'Did you mean <button type="button" id="searchSuggestBtn">'
+      + escapeHtml(data.suggestion) + '</button>?';
+    document.getElementById('searchSuggestBtn').addEventListener('click', () => {
+      searchState.q = data.suggestion;
+      searchState.page = 1;
+      pushSearchUrl();
+      runSitePageSearch();
+    });
+  } else {
+    suggestEl.hidden = true;
+  }
+
+  if (found === 0) {
+    summaryEl.textContent = 'No matches for \u201c' + q + '\u201d.';
+    resultsEl.innerHTML = '<div class="dir-empty-state">Nothing found. Try a different word, or fewer of them.</div>';
+    return;
+  }
+
+  summaryEl.textContent = found + (found === 1 ? ' result' : ' results') + ' for \u201c' + q + '\u201d';
+
+  const parts = [];
+  parts.push(searchGroupHtml('Stories', (r.articles || []).map((a) => searchHitHtml({
+    href: '?p=article&id=' + encodeURIComponent(a.id),
+    nav: 'article:' + a.id,
+    title: a.title,
+    snippet: searchSnippet(a.snippet),
+    meta: [a.category, a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA',
+      { year: 'numeric', month: 'short', day: 'numeric' }) : ''].filter(Boolean).join(' \u00b7 '),
+  })), t.articles || 0, 'articles'));
+
+  parts.push(searchGroupHtml('Directory', (r.profiles || []).map((p) => searchHitHtml({
+    href: '?p=profile&slug=' + encodeURIComponent(p.slug || ''),
+    nav: 'profile:' + (p.slug || ''),
+    title: p.display_name + (p.deaf_owned_verified ? ' \ud83e\udd1f' : ''),
+    snippet: '',
+    meta: [p.category, p.type === 'business' ? 'Business' : 'Individual'].filter(Boolean).join(' \u00b7 '),
+  })), t.profiles || 0, 'profiles'));
+
+  parts.push(searchGroupHtml('Members', (r.members || []).map((m) => searchHitHtml({
+    href: '?p=myunplug&u=' + encodeURIComponent(m.username || ''),
+    nav: 'member:' + (m.username || ''),
+    title: m.display_name || ('@' + m.username),
+    snippet: '',
+    meta: '@' + (m.username || ''),
+  })), t.members || 0, 'members'));
+
+  parts.push(searchGroupHtml('Editions', (r.editions || []).map((e) => searchHitHtml({
+    href: '?p=editions',
+    nav: 'editions:' + e.id,
+    title: e.title,
+    snippet: '',
+    meta: 'Issue ' + e.issue_number,
+  })), t.editions || 0, 'editions'));
+
+  resultsEl.innerHTML = parts.join('');
+  renderSearchPager(t[searchState.type] || 0, data.limit || 0);
+}
+
+function renderSearchPager(total, limit) {
+  const pagerEl = document.getElementById('searchPager');
+  // Paging only makes sense inside one type — "page 2 of everything" would
+  // have to mean page 2 of four different lists at once.
+  if (searchState.type === 'all' || !limit || total <= limit) { pagerEl.hidden = true; return; }
+  const pages = Math.ceil(total / limit);
+  pagerEl.hidden = false;
+  pagerEl.innerHTML = `
+    <button type="button" data-search-page="${searchState.page - 1}" ${searchState.page <= 1 ? 'disabled' : ''}>\u2039 Previous</button>
+    <span class="search-page-of">Page ${searchState.page} of ${pages}</span>
+    <button type="button" data-search-page="${searchState.page + 1}" ${searchState.page >= pages ? 'disabled' : ''}>Next \u203a</button>`;
+}
+
+function pushSearchUrl() {
+  const params = new URLSearchParams({ p: 'search' });
+  if (searchState.q) params.set('q', searchState.q);
+  if (searchState.type !== 'all') params.set('type', searchState.type);
+  if (searchState.category) params.set('category', searchState.category);
+  if (searchState.from) params.set('from', searchState.from);
+  if (searchState.to) params.set('to', searchState.to);
+  if (searchState.page > 1) params.set('page', searchState.page);
+  history.replaceState(null, '', '?' + params.toString());
+}
+
+function openSearchPage(q) {
+  searchState.q = q || '';
+  searchState.type = 'all';
+  searchState.category = '';
+  searchState.from = '';
+  searchState.to = '';
+  searchState.page = 1;
+  syncSearchControls();
+  goToPage('search');
+  pushSearchUrl();
+  runSitePageSearch();
+}
+
+function syncSearchControls() {
+  document.querySelectorAll('.search-tab').forEach((b) => {
+    b.setAttribute('aria-pressed', b.dataset.type === searchState.type ? 'true' : 'false');
+  });
+  const cat = document.getElementById('searchCategory');
+  const from = document.getElementById('searchFrom');
+  const to = document.getElementById('searchTo');
+  if (cat) cat.value = searchState.category;
+  if (from) from.value = searchState.from;
+  if (to) to.value = searchState.to;
+}
+
+(function setupSearchPage() {
+  const form = document.getElementById('searchPageForm');
+  if (!form) return;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    searchState.q = document.getElementById('searchPageInput').value.trim();
+    searchState.page = 1;
+    pushSearchUrl();
+    runSitePageSearch();
+  });
+
+  document.addEventListener('click', (e) => {
+    const tab = e.target.closest && e.target.closest('.search-tab');
+    if (tab) {
+      searchState.type = tab.dataset.type;
+      searchState.page = 1;
+      syncSearchControls();
+      pushSearchUrl();
+      runSitePageSearch();
+      return;
+    }
+    const more = e.target.closest && e.target.closest('[data-search-type]');
+    if (more) {
+      searchState.type = more.dataset.searchType;
+      searchState.page = 1;
+      syncSearchControls();
+      pushSearchUrl();
+      runSitePageSearch();
+      return;
+    }
+    const pageBtn = e.target.closest && e.target.closest('[data-search-page]');
+    if (pageBtn && !pageBtn.disabled) {
+      searchState.page = Math.max(1, Number(pageBtn.dataset.searchPage) || 1);
+      pushSearchUrl();
+      runSitePageSearch();
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+    // Results are real links so they can be opened in a new tab or copied.
+    // A plain click routes in-page; a modified click belongs to the browser.
+    const hit = e.target.closest && e.target.closest('[data-search-nav]');
+    if (hit) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      const [kind, value] = hit.dataset.searchNav.split(':');
+      if (kind === 'article') { goToPage('articledetail'); loadArticleDetail(value); }
+      else if (kind === 'profile') { goToPage('directoryprofile'); loadProfileDetail(value); }
+      else if (kind === 'editions') { goToPage('editions'); }
+      else { location.href = hit.getAttribute('href'); }
+    }
+  });
+
+  ['searchCategory', 'searchFrom', 'searchTo'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', () => {
+      searchState.category = document.getElementById('searchCategory').value;
+      searchState.from = document.getElementById('searchFrom').value;
+      searchState.to = document.getElementById('searchTo').value;
+      searchState.page = 1;
+      pushSearchUrl();
+      runSitePageSearch();
+    });
+  });
+
+  const clear = document.getElementById('searchClear');
+  if (clear) clear.addEventListener('click', () => {
+    searchState.category = '';
+    searchState.from = '';
+    searchState.to = '';
+    searchState.page = 1;
+    syncSearchControls();
+    pushSearchUrl();
+    runSitePageSearch();
+  });
+
+  // Category options come from the real list, so the filter can never offer a
+  // category that has no articles in it.
+  api('/news/categories').then((d) => {
+    const sel = document.getElementById('searchCategory');
+    if (!sel || !d || !Array.isArray(d.categories)) return;
+    d.categories.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+    syncSearchControls();
+  }).catch(() => { /* the filter simply stays on "Any" */ });
+})();
+
 (function setupSiteSearch() {
   const overlay = document.getElementById('siteSearch');
   const openBtn = document.getElementById('searchOpenBtn');
@@ -9778,6 +10225,8 @@ function setupDcPassportModal() {
     overlay.setAttribute('aria-hidden', 'false');
     inputEl.value = '';
     resultsEl.innerHTML = '<p class="site-search-hint">Type at least 2 letters to search.</p>';
+    const box = document.getElementById('siteSearchAll');
+    if (box) box.hidden = true;
     setTimeout(() => inputEl.focus(), 30);
   }
   function close() { overlay.classList.remove('open'); overlay.setAttribute('aria-hidden', 'true'); }
@@ -9787,12 +10236,35 @@ function setupDcPassportModal() {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
+  const allBox = document.getElementById('siteSearchAll');
+  const allBtn = document.getElementById('siteSearchAllBtn');
+
   inputEl.addEventListener('input', () => {
     const q = inputEl.value.trim();
     clearTimeout(timer);
+    if (allBox) allBox.hidden = q.length < 2;
     if (q.length < 2) { resultsEl.innerHTML = '<p class="site-search-hint">Type at least 2 letters to search.</p>'; return; }
     resultsEl.innerHTML = '<p class="site-search-hint">Searching…</p>';
     timer = setTimeout(() => runSearch(q), 250);
+  });
+
+  // Enter goes to the full results page. The overlay shows the first few of
+  // each kind; anybody who presses Enter has decided the quick list was not
+  // enough.
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const q = inputEl.value.trim();
+    if (q.length < 2) return;
+    close();
+    openSearchPage(q);
+  });
+
+  if (allBtn) allBtn.addEventListener('click', () => {
+    const q = inputEl.value.trim();
+    if (q.length < 2) return;
+    close();
+    openSearchPage(q);
   });
 
   async function runSearch(q) {

@@ -1067,6 +1067,14 @@ function showCard(cardId){
 // Registration is now two steps: pick a membership type, then fill the form.
 let SELECTED_MEMBER_TYPE = 'individual';
 document.getElementById('showRegisterBtn').addEventListener('click', () => showCard('typeCard'));
+
+// Arriving from the magazine's Sign Up button. Without this, somebody who
+// pressed "Sign Up" lands on the generic choose-an-option card and has to
+// press Sign Up a second time, which is the sort of small friction that loses
+// people at exactly the moment they had decided to join.
+if (new URLSearchParams(location.search).get('signup') === '1') {
+  showCard('typeCard');
+}
 document.getElementById('backFromTypeBtn').addEventListener('click', () => showCard('gateCard'));
 document.querySelectorAll('#typeCard [data-member-type]').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -1271,6 +1279,9 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     AUTH_TOKEN = data.token;
     localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
     localStorage.setItem('unplug_api_base', API_BASE);
+    // Straight back to the gated article they came from, if that is why they
+    // are here. Otherwise the dashboard, as always.
+    if (returnAfterSignIn()) return;
     showWelcome(data.user);
   } catch (err) {
     errorBanner.textContent = err.message + ' (Is the API running at that URL?)';
@@ -1279,6 +1290,34 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     btn.disabled = false; btn.textContent = 'Sign In';
   }
 });
+
+// Where to send somebody after they sign in, when they arrived here from a
+// gated article and we promised to take them back to it.
+//
+// SAME-ORIGIN, RELATIVE, QUERY-ONLY, ON PURPOSE. `next` travels in a URL we
+// hand out on a link people are invited to click, which is the exact shape of
+// an open redirect: if this accepted "https://evil.example" it would turn the
+// Unplug sign-in page into a credible way of sending a member somewhere else.
+// So the value must look like a magazine query string and nothing else, and it
+// is appended to a FIXED relative page rather than being used as a URL.
+function gatedReturnTarget() {
+  try {
+    const next = new URLSearchParams(location.search).get('next');
+    if (!next) return null;
+    if (!/^\?p=[a-zA-Z]+(&[a-zA-Z0-9_]+=[^&#]*)*$/.test(next)) return null;
+    return 'unplug-magazine.html' + next;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Returns true when it has taken over the page, so the caller stops.
+function returnAfterSignIn() {
+  const target = gatedReturnTarget();
+  if (!target) return false;
+  location.href = target;
+  return true;
+}
 
 // Passwordless sign-in: ask for a one-time link by email.
 document.getElementById('magicLinkBtn').addEventListener('click', async () => {
@@ -1323,6 +1362,7 @@ async function consumeMagicLinkIfPresent() {
     });
     AUTH_TOKEN = data.token;
     localStorage.setItem('unplug_auth_token', AUTH_TOKEN);
+    if (returnAfterSignIn()) return true;
     showWelcome(data.user);
     showToast('Signed in.');
     return true;
