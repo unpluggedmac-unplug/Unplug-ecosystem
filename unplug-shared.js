@@ -8,10 +8,23 @@ const UnplugAPI = (function () {
   // localStorage.unplug_api_base to 'http://localhost:4000', or use the API
   // base input on the admin/checkout/member dashboards.
   const LIVE_API_BASE = 'https://unplug-ecosystem.onrender.com';
-  // Migrate returning visitors off the old Railway backend: if their browser
-  // still has the retired Railway URL cached, drop it so they pick up Render.
+  // Drop a saved API base that cannot possibly work from here.
+  //
+  // Two cases, both of which leave the site looking broken with no clue why:
+  //
+  //   railway.app — the retired backend. A returning visitor whose browser
+  //     still has it cached would keep calling a host that no longer answers.
+  //
+  //   localhost / 127.0.0.1 on a page that is NOT itself being served locally
+  //     — a developer's leftover. On https the browser blocks it as mixed
+  //     content or, now, as a CSP violation, and every fetch on the site fails
+  //     at once. The dashboards have discarded these for a while; the magazine
+  //     did not, which meant one stale value could break the actual site for
+  //     whoever's browser held it. Found by hitting it.
   const savedApiBase = localStorage.getItem('unplug_api_base');
-  if (savedApiBase && savedApiBase.indexOf('railway.app') !== -1) {
+  const servedLocally = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (savedApiBase && (savedApiBase.indexOf('railway.app') !== -1
+      || (!servedLocally && /(?:localhost|127\.0\.0\.1)/.test(savedApiBase)))) {
     localStorage.removeItem('unplug_api_base');
   }
   let apiBase = localStorage.getItem('unplug_api_base') || LIVE_API_BASE;

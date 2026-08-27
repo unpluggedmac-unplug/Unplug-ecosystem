@@ -2789,7 +2789,10 @@ const LIVE_API_BASE = "https://unplug-ecosystem.onrender.com";
   const saved = localStorage.getItem("unplug_api_base");
   if (!saved) return;
   const servedLocally = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  if (saved.indexOf("railway.app") !== -1 || (!servedLocally && saved.indexOf("localhost") !== -1)) {
+  // 127.0.0.1 as well as localhost: they are the same machine, and a base
+  // saved as one was sailing straight past a check that only knew the other.
+  if (saved.indexOf("railway.app") !== -1
+      || (!servedLocally && /(?:localhost|127\.0\.0\.1)/.test(saved))) {
     localStorage.removeItem("unplug_api_base");
   }
 })();
