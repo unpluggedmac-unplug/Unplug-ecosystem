@@ -3921,6 +3921,140 @@ function aqPaymentColour(label) {
   return '#a15c00';
 }
 
+// ---------------------------------------------------------------------------
+// REVIEWING A SUBMISSION BEFORE DECIDING ON IT
+//
+// Fetched one item at a time rather than with the list: putting every article
+// body into the queue response would make the whole screen slow to load for
+// the one row somebody is actually looking at.
+//
+// The editable fields come from the SERVER, not from a list kept here. A
+// second copy of "what may be edited on a gallery image" living in the admin
+// page would drift from the whitelist that actually enforces it, and the
+// browser's copy is the one that would be wrong.
+// ---------------------------------------------------------------------------
+function aqReviewModal() {
+  let el = document.getElementById('aqReviewOverlay');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'aqReviewOverlay';
+  el.style.cssText = 'position:fixed; inset:0; background:rgba(15,14,14,0.55); z-index:9999;'
+    + ' display:none; padding:32px 16px; overflow-y:auto;';
+  el.innerHTML = '<div id="aqReviewCard" style="max-width:720px; margin:0 auto; background:#fff;'
+    + ' border:1px solid var(--paper-line,#e2ddd6); padding:22px 24px;"></div>';
+  el.addEventListener('click', (e) => { if (e.target === el) aqCloseReview(); });
+  document.body.appendChild(el);
+  return el;
+}
+
+function aqCloseReview() {
+  const el = document.getElementById('aqReviewOverlay');
+  if (el) el.style.display = 'none';
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') aqCloseReview();
+});
+
+async function aqOpenReview(row) {
+  const overlay = aqReviewModal();
+  const card = overlay.querySelector('#aqReviewCard');
+  overlay.style.display = 'block';
+  card.innerHTML = '<p style="margin:0; color:var(--slate);">Loading…</p>';
+
+  let data;
+  try {
+    data = await api(`/admin/approval-queue/${encodeURIComponent(row.type)}/${row.id}`);
+  } catch (err) {
+    card.innerHTML = `<p style="color:var(--red);">Could not load this submission: ${escapeHtmlAdmin(err.message)}</p>`
+      + '<button class="btn btn-line" id="aqRevClose" style="width:auto; margin-top:12px;">Close</button>';
+    card.querySelector('#aqRevClose').addEventListener('click', aqCloseReview);
+    return;
+  }
+
+  const head = `<div style="display:flex; gap:12px; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+      <h2 style="margin:0; font-size:20px;">${escapeHtmlAdmin(data.typeLabel)}</h2>
+      <button id="aqRevClose" style="background:none; border:none; font-size:24px; line-height:1; cursor:pointer; color:var(--slate);" aria-label="Close">&times;</button>
+    </div>
+    <p style="margin:0 0 16px; font-size:13px; color:var(--slate);">${escapeHtmlAdmin(String(row.title || ''))}</p>`;
+
+  // The preview opens the REAL page. It works on something still pending
+  // because the public endpoints let a signed-in admin through — and this
+  // dashboard and the magazine share an origin and a token, so the other tab
+  // is already signed in as the same admin.
+  const preview = data.previewUrl
+    ? `<a class="btn btn-line" id="aqRevPreview" href="unplug-magazine.html${escapeHtmlAdmin(data.previewUrl)}" target="_blank" rel="noopener" style="width:auto; display:inline-block;">View as the public &rarr;</a>`
+    : `<span style="font-size:12.5px; color:var(--slate);">This kind of submission has no public page of its own — what is below is all of it.</span>`;
+
+  let form = '';
+  if (!data.fields.length) {
+    form = '<p style="font-size:13px; color:var(--slate); background:var(--paper,#f4f1ec); padding:12px 14px;">'
+      + 'Nothing on this kind of submission can be edited here. Money and status are deliberately not editable &mdash; '
+      + 'a payment records what actually happened at the gateway, and approving is what the Approve button is for.</p>';
+  } else {
+    form = data.fields.map((f) => {
+      const raw = data.item[f.col];
+      const val = raw === null || raw === undefined ? '' : String(raw);
+      // A date column arrives as a full timestamp; the input wants YYYY-MM-DD.
+      const dateVal = f.type === 'date' && val ? val.slice(0, 10) : val;
+      const id = 'aqf_' + f.col;
+      const label = `<label for="${id}" style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.07em; color:var(--slate); margin:14px 0 5px;">${escapeHtmlAdmin(f.label)}</label>`;
+      if (f.type === 'html' || f.type === 'textarea') {
+        return label + `<textarea id="${id}" data-col="${escapeHtmlAdmin(f.col)}" rows="${f.type === 'html' ? 10 : 3}" style="width:100%; font-family:inherit; font-size:13.5px; padding:8px 10px; border:1px solid var(--paper-line,#e2ddd6);"></textarea>`;
+      }
+      const inputType = f.type === 'date' ? 'date' : (f.type === 'email' ? 'email' : 'text');
+      return label + `<input id="${id}" data-col="${escapeHtmlAdmin(f.col)}" type="${inputType}" style="width:100%; font-size:13.5px; padding:8px 10px; border:1px solid var(--paper-line,#e2ddd6);">`;
+    }).join('');
+  }
+
+  card.innerHTML = head
+    + `<div style="margin-bottom:6px;">${preview}</div>`
+    + form
+    + '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:22px; padding-top:16px; border-top:1px solid var(--paper-line,#e2ddd6);">'
+    + (data.fields.length ? '<button class="btn btn-solid" id="aqRevSave" style="width:auto;">Save changes</button>' : '')
+    + '<button class="btn btn-line" id="aqRevDone" style="width:auto;">Close</button>'
+    + '<span id="aqRevNote" style="font-size:12.5px; color:var(--slate); align-self:center;"></span>'
+    + '</div>'
+    + '<p style="font-size:12px; color:var(--slate); margin:14px 0 0;">Saving does not approve. Approve and Reject stay on the queue row, so a correction and a decision are two separate acts.</p>';
+
+  // Values are set as PROPERTIES, never interpolated into the markup above —
+  // this is somebody else's submitted text going into an admin's page.
+  data.fields.forEach((f) => {
+    const el = card.querySelector(`[data-col="${f.col}"]`);
+    if (!el) return;
+    const raw = data.item[f.col];
+    const val = raw === null || raw === undefined ? '' : String(raw);
+    el.value = f.type === 'date' && val ? val.slice(0, 10) : val;
+  });
+
+  card.querySelector('#aqRevClose').addEventListener('click', aqCloseReview);
+  card.querySelector('#aqRevDone').addEventListener('click', aqCloseReview);
+
+  const saveBtn = card.querySelector('#aqRevSave');
+  if (saveBtn) saveBtn.addEventListener('click', async () => {
+    const note = card.querySelector('#aqRevNote');
+    const fields = {};
+    data.fields.forEach((f) => {
+      const el = card.querySelector(`[data-col="${f.col}"]`);
+      if (el) fields[f.col] = el.value;
+    });
+    saveBtn.disabled = true;
+    note.textContent = 'Saving…';
+    try {
+      await api(`/admin/approval-queue/${encodeURIComponent(row.type)}/${row.id}`, {
+        method: 'PATCH', body: JSON.stringify({ fields }),
+      });
+      note.textContent = 'Saved.';
+      showToast('Changes saved. This has not been approved yet.');
+      loadApprovalQueue();
+    } catch (err) {
+      note.textContent = '';
+      showToast(err.message, true);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+}
+
 async function loadApprovalQueue() {
   const body = document.getElementById('queueBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
@@ -4032,11 +4166,20 @@ async function loadApprovalQueue() {
       // this button reflects that rather than deciding it — the same rule then
       // holds however the row is reached, including bulk approve.
       const canApprove = !!(row.actions && row.actions.approve);
+      // REVIEW COMES FIRST, and is deliberately the leftmost button.
+      //
+      // The queue used to offer Approve and Reject and nothing else, on a row
+      // showing a title and a name. An admin was deciding on a headline and
+      // finding out what they had published by reading the live site. Review
+      // opens the whole submission, lets it be corrected, and links to the
+      // real public page.
       actionTd.innerHTML = '<div class="row-actions">'
+        + '<button class="aq-review" style="background:#fff; border:1px solid var(--ink,#272626); color:var(--ink,#272626);">Review</button>'
         + (canApprove
             ? '<button class="approve">Approve</button>'
             : `<button class="approve" disabled title="${escapeHtmlAdmin(row.approveBlockedReason || 'Not available for this item.')}" style="opacity:0.45; cursor:not-allowed;">Approve</button>`)
         + '<button class="reject">Reject</button></div>';
+      actionTd.querySelector('.aq-review').addEventListener('click', () => aqOpenReview(row));
       if (canApprove) {
         actionTd.querySelector('.approve').addEventListener('click', async () => {
           try {

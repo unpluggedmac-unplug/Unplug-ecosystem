@@ -181,13 +181,22 @@ router.get('/profiles/me', requireAuth, async (req, res, next) => {
 // ---------------------------------------------------------------------------
 router.get('/profiles/:slug', async (req, res, next) => {
   try {
+    // AN ADMIN CAN OPEN A LISTING THAT IS STILL PENDING, so the approval queue
+    // can show them the real page before they decide on it. Same shape as the
+    // article route, and for the same reason: approving something you have
+    // only seen as a row in a table is how things get published that nobody
+    // read.
+    //
+    // Gated on the role in a VERIFIED token, not on a query parameter — the
+    // only thing separating a pending listing from the public is this line.
+    const isAdmin = req.user && req.user.role === 'admin';
     const result = await pool.query(
       `SELECT p.*, c.name AS category, c2.name AS secondary_category
        FROM profiles p
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN categories c2 ON c2.id = p.secondary_category_id
-       WHERE p.slug = $1 AND p.status = 'approved'`,
-      [req.params.slug]
+       WHERE p.slug = $1 AND ($2::boolean OR p.status = 'approved')`,
+      [req.params.slug, isAdmin]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Profile not found.' });

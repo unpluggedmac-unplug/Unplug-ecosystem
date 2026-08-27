@@ -7,8 +7,11 @@
 // genuinely need approving — page banners, edition purchases, listing claims
 // and self-serve highlights split by kind — appeared in neither.
 //
-// This router is READ-ONLY. It does not reimplement approving or rejecting
-// anything: every source already has its own correct, tested endpoint, and
+// THIS ROUTER NEVER APPROVES OR REJECTS. It reads, and it lets an admin
+// correct a submission before deciding on it — but the decision itself always
+// goes to the source's own endpoint. It does not reimplement approving or
+// rejecting anything: every source already has its own correct, tested
+// endpoint, and
 // each row carries an `actions` block naming the endpoint the frontend should
 // call. That is deliberate — those endpoints are where the real effects live
 // (publishing the article, allocating the votes, releasing the download), and
@@ -22,6 +25,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
@@ -578,6 +582,249 @@ router.get('/', requireRole('admin'), async (req, res, next) => {
     next(err);
   }
 });
+
+// ---------------------------------------------------------------------------
+// READING AND EDITING A SUBMISSION BEFORE DECIDING ON IT
+//
+// The list above deliberately returns a SUMMARY — title, who sent it, what was
+// paid. Putting every article body and every bio in the list response would
+// make the queue enormous to load for the one row an admin is actually looking
+// at. So the full record is fetched one item at a time, here.
+//
+// That summary was also the bug this fixes. An admin approving from the queue
+// could see an article's title and its author and nothing else: no body, no
+// images, no links. They were approving things sight unseen, then finding out
+// what they had published by reading the live site.
+//
+// EDITABLE COLUMNS ARE A WHITELIST, PER TYPE, and the list lives here rather
+// than in the request. The table name and every column name below are constants
+// in this file; nothing an admin sends can name a table or a column. Values are
+// parameterised. So the worst a malformed request can do is be rejected.
+//
+// WHAT IS DELIBERATELY NOT EDITABLE:
+//   - status, on anything. Approving is what the approve action is for, and a
+//     status editable from two places is a status that ends up disagreeing
+//     with itself.
+//   - money. amount, price, entry_fee, order totals, payment_status,
+//     gateway_reference. Those record what actually happened at the gateway;
+//     an editable amount is how the books stop matching the bank. An admin who
+//     needs to change what somebody paid should refund and re-take it, so
+//     there is a trail.
+//   - anything that identifies the submitter. Correcting somebody's own email
+//     to something else, on a record they own, is not an edit.
+// ---------------------------------------------------------------------------
+
+const f = (col, label, type) => ({ col, label, type: type || 'text' });
+
+const DETAILS = {
+  article: {
+    table: 'articles',
+    fields: [f('title', 'Title'), f('subtitle', 'Standfirst'),
+             f('kicker_supplied_by', 'Supplied by'), f('author_name', 'Written by'),
+             f('meta_description', 'Search summary', 'textarea'),
+             f('body', 'Body', 'html'),
+             f('conclusion', 'In closing', 'html'),
+             f('cta_label', 'Button label'), f('cta_url', 'Button link', 'url'),
+             f('banner_image_url', 'Cover image', 'url')],
+    // The one public endpoint that already lets an admin see a pending item.
+    preview: (r) => `?p=article&id=${r.id}`,
+  },
+  share_card: {
+    table: 'share_cards',
+    fields: [f('name', 'Name'), f('role_line', 'Role or town'),
+             f('quote', 'Their line', 'textarea'), f('category', 'Category')],
+    // The card is drawn from these fields, and the review token renders the
+    // real thing — the same link the approval email sends.
+    preview: (r) => (r.review_token ? `?p=card&token=${r.review_token}` : null),
+  },
+  directory_profile: {
+    table: 'profiles',
+    fields: [f('display_name', 'Name'), f('bio', 'Bio', 'textarea'),
+             f('achievements', 'Achievements', 'textarea'), f('career', 'Career', 'textarea'),
+             f('quote', 'Quote', 'textarea'), f('contact_website', 'Website', 'url'),
+             f('city', 'Town'), f('province', 'Province'),
+             f('feature_image_url', 'Feature image', 'url')],
+    preview: (r) => (r.slug ? `?p=profile&slug=${encodeURIComponent(r.slug)}` : null),
+  },
+  gallery: {
+    table: 'gallery_images',
+    fields: [f('title', 'Title'), f('caption', 'Caption', 'textarea'),
+             f('alt_text', 'Image description'), f('supplied_by', 'Supplied by'),
+             f('link_url', 'Link', 'url'), f('image_url', 'Image', 'url')],
+    preview: () => '?p=gallery',
+  },
+  event: {
+    table: 'events',
+    fields: [f('name', 'Event name'), f('description', 'Description', 'textarea'),
+             f('venue', 'Venue'), f('event_date', 'Date', 'date'),
+             f('entrance_fee', 'Entrance fee'), f('contact_details', 'Contact'),
+             f('event_link', 'Link', 'url'), f('image_url', 'Image', 'url')],
+    preview: () => '?p=home',
+  },
+  competition_entry: {
+    table: 'competition_entries',
+    fields: [f('manual_name', 'Entrant name'), f('manual_image_url', 'Image', 'url')],
+    preview: () => '?p=competitions',
+  },
+  top10_entry: {
+    // Nothing editorial on the row itself — it points at a profile, and the
+    // profile is edited as a Directory Listing.
+    table: 'top10_entries',
+    fields: [],
+    preview: () => '?p=top10',
+  },
+  investor: {
+    table: 'investors',
+    fields: [f('name', 'Name'), f('about', 'About', 'textarea'),
+             f('contact_website', 'Website', 'url')],
+    preview: () => '?p=investors',
+  },
+  marketplace: {
+    table: 'marketplace_listings',
+    fields: [f('headline', 'Headline'), f('poster_image_url', 'Poster', 'url')],
+    preview: () => '?p=brandplacement',
+  },
+  article_highlight: {
+    table: 'highlights',
+    fields: [f('start_date', 'Starts', 'date'), f('end_date', 'Ends', 'date'),
+             f('priority', 'Order'), f('admin_image_url', 'Cover override', 'url')],
+    preview: (r) => `?p=article&id=${r.target_id}`,
+  },
+  directory_highlight: {
+    table: 'highlights',
+    fields: [f('start_date', 'Starts', 'date'), f('end_date', 'Ends', 'date'),
+             f('priority', 'Order'), f('admin_image_url', 'Cover override', 'url')],
+    preview: () => '?p=directory',
+  },
+  page_banner: {
+    table: 'ad_slots',
+    fields: [f('name', 'Name'), f('image_url', 'Image', 'url'),
+             f('mobile_image_url', 'Mobile image', 'url'), f('link_url', 'Link', 'url'),
+             f('cta_text', 'Button text'), f('starts_at', 'Starts', 'date'),
+             f('ends_at', 'Ends', 'date')],
+    preview: () => '?p=home',
+  },
+  shoutout: {
+    table: 'shoutout_nominations',
+    fields: [f('nominee_name', 'Who'), f('message', 'Message', 'textarea'),
+             f('nominee_social', 'Social handle'), f('nominee_social_url', 'Social link', 'url'),
+             f('available_from', 'Show from', 'date')],
+    preview: () => '?p=home',
+  },
+  listing_claim: {
+    table: 'profile_claims',
+    fields: [f('message', 'Their message', 'textarea')],
+    preview: () => '?p=directory',
+  },
+  cancellation: {
+    // The note an admin writes is theirs to edit. The refund amount is not:
+    // see the money rule above.
+    table: 'service_cancellations',
+    fields: [f('admin_note', 'Admin note', 'textarea')],
+    preview: () => null,
+  },
+  edition_purchase: {
+    // Descriptive only. Not amount, not payment_status.
+    table: 'edition_purchases',
+    fields: [f('customer_name', 'Customer name'), f('customer_email', 'Customer email', 'email')],
+    preview: () => '?p=editions',
+  },
+  cart_order: { table: 'orders', fields: [], preview: () => null },
+  service_payment: { table: 'payments', fields: [], preview: () => null },
+  top10_votes: { table: 'vote_bundles', fields: [], preview: () => '?p=top10' },
+};
+
+// Every column name that may appear in SQL, gathered once from the constants
+// above. A column not in here never reaches a query.
+function editableCols(type) {
+  const d = DETAILS[type];
+  return d ? d.fields.map((x) => x.col) : [];
+}
+
+// GET /admin/approval-queue/:type/:id — the whole record, plus what may be
+// edited and where it can be previewed.
+router.get('/:type/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const type = String(req.params.type);
+    const d = DETAILS[type];
+    if (!d) return res.status(404).json({ error: 'Unknown submission type.' });
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid id is required.' });
+
+    // d.table is a constant in this file, never anything from the request.
+    const result = await pool.query(`SELECT * FROM ${d.table} WHERE id = $1`, [id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Not found.' });
+    const item = result.rows[0];
+
+    res.json({
+      type,
+      typeLabel: TYPES[type] ? TYPES[type].label : type,
+      item,
+      fields: d.fields,
+      // Null where the thing has no public page of its own. Saying so beats a
+      // button that opens the homepage and looks broken.
+      previewUrl: d.preview ? d.preview(item) : null,
+      editable: d.fields.length > 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /admin/approval-queue/:type/:id — save an admin's corrections.
+//
+// Deliberately does NOT approve. Editing and deciding are two acts, and a save
+// that also published would mean an admin could never fix a typo without
+// committing to the whole thing.
+router.patch('/:type/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const type = String(req.params.type);
+    const d = DETAILS[type];
+    if (!d) return res.status(404).json({ error: 'Unknown submission type.' });
+    if (!d.fields.length) {
+      return res.status(400).json({ error: 'Nothing on this kind of submission can be edited.' });
+    }
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid id is required.' });
+
+    const sent = (req.body && req.body.fields) || {};
+    const allowed = editableCols(type);
+    const sets = [];
+    const values = [];
+    const changed = [];
+    for (const [col, raw] of Object.entries(sent)) {
+      if (!allowed.includes(col)) continue;          // silently ignored, not an error
+      const spec = d.fields.find((x) => x.col === col);
+      let value = raw;
+      if (typeof value === 'string') value = value.trim();
+      // An empty box means "clear it", except where a column cannot be null.
+      if (value === '') value = null;
+      if (spec.type === 'date' && value !== null && isNaN(new Date(value).getTime())) {
+        return res.status(400).json({ error: `${spec.label} is not a date I can read.` });
+      }
+      values.push(value);
+      sets.push(`${col} = $${values.length}`);
+      changed.push(col);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'No editable fields were sent.' });
+
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE ${d.table} SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING *`, values);
+    if (!result.rows.length) return res.status(404).json({ error: 'Not found.' });
+
+    // An admin changing somebody else's submission before publishing it is
+    // exactly what an audit trail is for.
+    await logActivity(req.user.id, 'submission_edited',
+      `Edited ${TYPES[type] ? TYPES[type].label : type} #${id} before approval (${changed.join(', ')})`);
+
+    res.json({ item: result.rows[0], changed });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.DETAILS = DETAILS;
 
 router.TYPES = TYPES;
 router.SOURCES = SOURCES;
