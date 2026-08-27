@@ -3518,7 +3518,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 
 
   <!-- FEATURED ADVERTISERS POSTER SLIDESHOW -->
-  <section class="wrap poster-section" style="padding-top:0;">
+  <!-- padding-top restored. Every poster section on the site carries
+       padding-top:0 and leans on whatever sits above it for separation.
+       On this page that used to be the card maker and its "or" divider;
+       with those gone the Sponsored heading ran straight into the contact
+       block with a 0px gap. Set here rather than on .poster-section
+       because the inline style would win anyway, and because the pages
+       that already have room (home, news) would gain a gap they do not
+       need. -->
+  <section class="wrap poster-section" style="padding-top:48px;">
     <div class="section-head">
       <div><span class="eyebrow">Sponsored</span><h2>Featured Advertisers</h2></div>
     </div>
