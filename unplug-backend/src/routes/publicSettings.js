@@ -9,7 +9,15 @@ const router = express.Router();
 // nothing — an unlisted page is fully public to anybody with the link, and it
 // stays in the sitemap. This is decluttering, never privacy, and nothing that
 // actually needs protecting should ever rely on it.
-const PUBLIC_KEYS = ['youtube_image_url', 'unlisted_pages'];
+const PUBLIC_KEYS = [
+  'youtube_image_url',
+  'unlisted_pages',
+  // The assistant's "talk to a person" handoff. A business WhatsApp number
+  // that is already printed on a card is not a secret, and the page cannot
+  // offer the button without knowing it.
+  'whatsapp_number',
+  'whatsapp_hours',
+];
 
 // GET /public-settings — returns a whitelisted subset of settings for the
 // public site (e.g. the admin-chosen YouTube section image).

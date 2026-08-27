@@ -14,6 +14,45 @@
 
   var EMAIL = 'info@unplugnews.com';
 
+  // ---------------------------------------------------------------------
+  // Handing over to a person.
+  //
+  // The assistant answers what it knows and then gets out of the way. Until
+  // now it could not: the most it could do was print an email address in the
+  // middle of a conversation and hope.
+  //
+  // WHATSAPP RATHER THAN A CHAT WINDOW, and the reason is the hosting. This
+  // API sleeps when nobody is using it, so a WebSocket or an SSE stream dies
+  // with it and the reader is left watching a window that implies somebody is
+  // listening. Polling survives the sleep but only moves the problem — an
+  // unattended chat box is worse than none, because it promises a person.
+  //
+  // WhatsApp works while the site is asleep, costs nothing, and the reply
+  // comes from a phone instead of an admin screen somebody has to be watching.
+  // ---------------------------------------------------------------------
+  var HANDOFF = { number: '', hours: '' };
+  var transcript = [];
+
+  // The number is a setting rather than a constant here, so it can be changed
+  // without a deploy — and so this file does not have to carry somebody's
+  // personal phone number in a public repository.
+  (function loadHandoff() {
+    var base;
+    try {
+      base = localStorage.getItem('unplug_api_base') || 'https://unplug-ecosystem.onrender.com';
+    } catch (e) {
+      base = 'https://unplug-ecosystem.onrender.com';
+    }
+    fetch(base.replace(/\/$/, '') + '/public-settings')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.settings) return;
+        HANDOFF.number = (d.settings.whatsapp_number || '').replace(/[^0-9]/g, '');
+        HANDOFF.hours = d.settings.whatsapp_hours || '';
+      })
+      .catch(function () { /* no number means the email offer, which still works */ });
+  })();
+
   // Knowledge base: each entry has trigger keywords, a reply (HTML allowed),
   // and optional follow-up quick-reply chips.
   var KB = [
@@ -57,7 +96,13 @@
 
   var GREETING = 'Hi! I’m the Unplug Assistant 👋 How can I help? Pick a topic below or type your question.';
   var DEFAULT_CHIPS = ['Submit a story', 'Pricing', 'Deaf Community', 'Jobs', 'Contact'];
-  var FALLBACK = 'Sorry, I’m not sure about that one. Try a topic below, or email <a href="mailto:' + EMAIL + '">' + EMAIL + '</a>.';
+  var TALK = 'Talk to a person';
+
+  // Offered on the fallback especially. Not knowing the answer is exactly the
+  // moment somebody needs a human, and it used to be the moment they were
+  // handed an email address and left to it.
+  var FALLBACK = 'Sorry, I’m not sure about that one — but a person can help. '
+    + 'Try a topic below, or ask to talk to somebody.';
 
   // --- styles -------------------------------------------------------------
   var css = `
@@ -79,6 +124,8 @@
   .ub-bot a{ color:#d20709; }
   .ub-user{ background:#161616; color:#fff; align-self:flex-end; border-bottom-right-radius:3px; }
   .ub-chips{ display:flex; flex-wrap:wrap; gap:6px; padding:0 14px 8px; background:#f7f5f2; }
+  .ub-handoff{ display:inline-block; margin-top:8px; background:#25D366; color:#fff; font-weight:700;
+               padding:8px 14px; border-radius:6px; text-decoration:none; font-size:13px; }
   .ub-chip{ border:1px solid #d20709; color:#d20709; background:#fff; border-radius:16px; padding:6px 12px; font-size:12px;
     font-weight:600; cursor:pointer; font-family:inherit; }
   .ub-chip:hover{ background:#d20709; color:#fff; }
@@ -130,6 +177,9 @@
   function scrollDown() { body.scrollTop = body.scrollHeight; }
 
   function botSay(html, chips) {
+    // Kept as plain text for the handoff — the reply is written as HTML here,
+    // and pasting markup into a WhatsApp message would be unreadable.
+    transcript.push('Assistant: ' + String(html).replace(/<[^>]*>/g, ''));
     var m = document.createElement('div');
     m.className = 'ub-msg ub-bot';
     m.innerHTML = html;
@@ -138,6 +188,7 @@
     scrollDown();
   }
   function userSay(text) {
+    transcript.push('Them: ' + text);
     var m = document.createElement('div');
     m.className = 'ub-msg ub-user';
     m.textContent = text;
@@ -172,12 +223,49 @@
     return bestScore > 0 ? best : null;
   }
 
+  function escapeHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function handOff() {
+    // THE CONVERSATION GOES WITH THEM. Somebody who has just explained their
+    // question to a machine should not have to explain it again to a person;
+    // that repetition is the single most irritating thing about a handoff.
+    var recent = transcript.slice(-8).join('\n');
+    var intro = 'Hi Unplug — I was chatting on your website and would like to speak to someone.';
+    var text = recent ? intro + '\n\n--- what I asked ---\n' + recent : intro;
+
+    if (HANDOFF.number) {
+      var url = 'https://wa.me/' + HANDOFF.number + '?text=' + encodeURIComponent(text);
+      botSay('Opening WhatsApp so you can talk to one of us.'
+        + (HANDOFF.hours ? ' We answer ' + escapeHtml(HANDOFF.hours) + '.' : '')
+        + '<br><a class="ub-handoff" href="' + url + '" target="_blank" rel="noopener">'
+        + 'Open WhatsApp</a>', DEFAULT_CHIPS);
+      // Opened from the click that asked for it, so the browser does not treat
+      // it as a popup — a blocked handoff is a dead end.
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+
+    // No number configured. Say so plainly rather than offering a button that
+    // goes nowhere, and give the address that does work.
+    botSay('I cannot open a chat right now, but a person will answer by email: '
+      + '<a href="mailto:' + EMAIL + '">' + EMAIL + '</a>. '
+      + 'Send what you asked me and we will pick it up.', DEFAULT_CHIPS);
+  }
+
   function handle(text) {
     userSay(text);
+    if (text.toLowerCase() === TALK.toLowerCase()
+        || /\b(human|a person|real person|speak to|talk to someone|talk to somebody|agent)\b/i.test(text)) {
+      setTimeout(handOff, 200);
+      return;
+    }
     var entry = findEntry(text);
     setTimeout(function () {
-      if (entry) botSay(entry.reply, entry.chips || DEFAULT_CHIPS);
-      else botSay(FALLBACK, DEFAULT_CHIPS);
+      if (entry) botSay(entry.reply, (entry.chips || DEFAULT_CHIPS).concat([TALK]));
+      else botSay(FALLBACK, DEFAULT_CHIPS.concat([TALK]));
     }, 250);
   }
 
