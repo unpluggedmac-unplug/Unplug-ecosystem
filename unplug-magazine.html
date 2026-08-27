@@ -8525,6 +8525,27 @@ async function loadContributor(slug) {
 
   function centred(ctx, text, cx, y) { ctx.fillText(text, cx - ctx.measureText(text).width / 2, y); }
 
+  // The typefaces. THE SERIF IS A WEBFONT AND CANVAS DOES NOT WAIT FOR IT.
+  //
+  // ctx.fillText draws with whatever is available at that instant and silently
+  // falls through the stack — so a card drawn before Playfair Display arrives
+  // comes out in Georgia. It does not look broken, it just looks like the old
+  // card, which is the one thing this redesign was moving away from. Worse, it
+  // is intermittent: fine on a warm cache, wrong on a first visit.
+  //
+  // So the weights the card actually uses are requested explicitly, and
+  // everything is drawn again once they land.
+  const SERIF = '"Playfair Display", Georgia, serif';
+  const SANS = 'Inter, Arial, sans-serif';
+  if (document.fonts && document.fonts.load) {
+    Promise.all([
+      document.fonts.load('900 120px "Playfair Display"'),
+      document.fonts.load('700 30px "Playfair Display"'),
+      document.fonts.load('italic 400 38px "Playfair Display"'),
+      document.fonts.load('600 26px Inter'),
+    ]).then(() => { if (typeof redraw === 'function') redraw(); }).catch(() => { /* Georgia is a fine fallback */ });
+  }
+
   function draw(card, watermarked) {
     const size = FORMATS[card.format] || FORMATS.post;
     canvas.width = size.w;
@@ -8556,14 +8577,14 @@ async function loadContributor(slug) {
       ctx.save();
       ctx.globalAlpha = 0.09;
       ctx.fillStyle = INK;
-      ctx.font = `700 ${px(46)}px Inter, Arial, sans-serif`;
+      ctx.font = `700 ${px(46)}px ${SANS}`;
       ctx.translate(CX, H / 2);
       ctx.rotate(-Math.PI / 7);
       const step = px(190);
       const reach = Math.max(W, H);
-      for (let y = -reach; y < reach; y += step) {
-        for (let x = -reach; x < reach; x += px(620)) {
-          ctx.fillText('PENDING APPROVAL', x, y);
+      for (let wy = -reach; wy < reach; wy += step) {
+        for (let wx = -reach; wx < reach; wx += px(620)) {
+          ctx.fillText('PENDING APPROVAL', wx, wy);
         }
       }
       ctx.restore();
@@ -8575,74 +8596,98 @@ async function loadContributor(slug) {
     roundRect(ctx, px(26), px(26), W - px(52), H - px(52), px(24));
     ctx.stroke();
 
-    let y = px(96);
+    let y = px(100);
 
     // --- masthead -------------------------------------------------------
-    ctx.font = `700 ${px(34)}px Georgia, serif`;
+    ctx.font = `700 ${px(38)}px ${SERIF}`;
     const nameW = ctx.measureText('UNPLUG ').width;
     const magW = ctx.measureText('MAGAZINE').width;
-    const badgeR = px(21);
+    const badgeR = px(23);
     const blockW = badgeR * 2 + px(14) + nameW + magW;
     let mx = CX - blockW / 2;
 
     ctx.beginPath();
-    ctx.arc(mx + badgeR, y - px(10), badgeR, 0, Math.PI * 2);
+    ctx.arc(mx + badgeR, y - px(11), badgeR, 0, Math.PI * 2);
     ctx.fillStyle = RED;
     ctx.fill();
     ctx.fillStyle = INK;
-    ctx.font = `700 ${px(24)}px Georgia, serif`;
+    ctx.font = `700 ${px(26)}px ${SERIF}`;
     centred(ctx, 'U', mx + badgeR, y - px(2));
     mx += badgeR * 2 + px(14);
 
-    ctx.font = `700 ${px(34)}px Georgia, serif`;
+    ctx.font = `700 ${px(38)}px ${SERIF}`;
     ctx.fillStyle = INK;
     ctx.fillText('UNPLUG ', mx, y);
     ctx.fillStyle = RED;
     ctx.fillText('MAGAZINE', mx + nameW, y);
 
-    y += px(46);
+    y += px(50);
     ctx.fillStyle = GOLD;
-    ctx.font = `600 ${px(19)}px Inter, Arial, sans-serif`;
-    trackedText(ctx, '★ SEEN AND HEARD', CX, y, px(4));
+    ctx.font = `600 ${px(21)}px ${SANS}`;
+    trackedText(ctx, '\u2605 SEEN AND HEARD', CX, y, px(4));
 
     // --- everything between the masthead and the footer is CENTRED --------
     //
-    // Measured first, then drawn. Stacking downwards from the masthead left a
-    // dead third at the bottom on a short card and crowded the footer on a
-    // long one; the amount of content varies a lot, because the quote, the
-    // role and the category are all optional.
-    const R = px(168);
-    const nameSize = String(card.name || '').length > 20 ? px(62) : px(80);
-    ctx.font = `700 ${nameSize}px Georgia, serif`;
-    const nameLines = wrapLines(ctx, card.name || 'Your Name', W - px(160)).slice(0, 2);
+    // Measured first, then drawn, because the amount of content varies a lot:
+    // the quote, the role and the category are all optional, and the story
+    // format is 570px taller than the post.
+    //
+    // AS BIG AS IT FITS, rather than one fixed set of sizes. The portrait and
+    // the type are both much larger than they were, and at the top of that
+    // range a two-line name plus a five-line quote does not fit on the shorter
+    // card. So the layout is measured at the largest size first and steps down
+    // only as far as it has to. A card with a short name and no quote gets the
+    // full scale; a card with a lot in it gets slightly less, instead of
+    // overflowing the frame or being clipped.
+    const top = y + px(34);
+    const bottom = H - px(128);
+    const available = bottom - top;
 
-    let quoteLines = [];
-    if (card.quote) {
-      ctx.font = `italic ${px(34)}px Georgia, serif`;
-      quoteLines = wrapLines(ctx, '“' + card.quote + '”', W - px(200)).slice(0, 4);
+    let L = null;
+    for (const k of [1, 0.94, 0.88, 0.82, 0.76, 0.7, 0.64]) {
+      const R = px(216 * k);
+      const gapAfterPhoto = px(86 * k);
+      const nameSize = px(104 * k);
+      const nameLH = Math.round(nameSize * 1.06);
+      ctx.font = `700 ${nameSize}px ${SERIF}`;
+      const nameLines = wrapLines(ctx, card.name || 'Your Name', W - px(150)).slice(0, 2);
+
+      const roleSize = px(30 * k);
+      const roleH = card.role_line ? Math.round(roleSize * 1.7) : 0;
+
+      const ruleH = px(24 * k) + px(6) + px(50 * k);
+
+      const quoteSize = px(42 * k);
+      const quoteLH = Math.round(quoteSize * 1.38);
+      let quoteLines = [];
+      if (card.quote) {
+        ctx.font = `italic ${quoteSize}px ${SERIF}`;
+        quoteLines = wrapLines(ctx, '\u201c' + card.quote + '\u201d', W - px(190)).slice(0, 5);
+      }
+      const quoteH = quoteLines.length ? quoteLines.length * quoteLH + px(18) : 0;
+
+      const pillH = px(21) + px(13) * 2;
+      const catH = card.category ? pillH + px(24) : 0;
+
+      const blockH = R * 2 + gapAfterPhoto + nameLines.length * nameLH
+        + roleH + ruleH + quoteH + catH;
+
+      L = { R, gapAfterPhoto, nameSize, nameLH, nameLines, roleSize, roleH,
+            ruleH, quoteSize, quoteLH, quoteLines, quoteH, pillH, catH, blockH };
+      if (blockH <= available) break;
     }
 
-    const pillH = px(19) + px(13) * 2;
-    const blockH = R * 2 + px(84)
-      + nameLines.length * (nameSize + px(8))
-      + (card.role_line ? px(44) : 0)
-      + px(18) + px(4) + px(46)
-      + quoteLines.length * px(46) + (quoteLines.length ? px(16) : 0)
-      + (card.category ? pillH : 0);
+    y = top + Math.max(0, (available - L.blockH) / 2);
+    const cy = y + L.R;
 
-    const top = y + px(30);
-    const bottom = H - px(120);
-    y = Math.max(top, top + ((bottom - top) - blockH) / 2);
-
-    const cy = y + R;
-
+    // --- portrait -------------------------------------------------------
     ctx.save();
     ctx.beginPath();
-    ctx.arc(CX, cy, R, 0, Math.PI * 2);
+    ctx.arc(CX, cy, L.R, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
     ctx.fillStyle = '#241f1f';
-    ctx.fillRect(CX - R, cy - R, R * 2, R * 2);
+    ctx.fillRect(CX - L.R, cy - L.R, L.R * 2, L.R * 2);
 
     if (photoImg && photoImg.complete && photoImg.naturalWidth) {
       // COVER, then the reader's own framing on top. Almost no photograph is
@@ -8650,10 +8695,10 @@ async function loadContributor(slug) {
       // a picture somebody had already positioned, which is how you email
       // a person a card with the top of their head missing.
       const zoom = Math.min(4, Math.max(1, Number(card.photo_zoom) || 1));
-      const natural = Math.max((R * 2) / photoImg.naturalWidth, (R * 2) / photoImg.naturalHeight);
-      const k = natural * zoom;
-      const dw = photoImg.naturalWidth * k;
-      const dh = photoImg.naturalHeight * k;
+      const natural = Math.max((L.R * 2) / photoImg.naturalWidth, (L.R * 2) / photoImg.naturalHeight);
+      const kk = natural * zoom;
+      const dw = photoImg.naturalWidth * kk;
+      const dh = photoImg.naturalHeight * kk;
       // BOUNDED TO THE SLACK THAT ACTUALLY EXISTS, so the picture can never be
       // moved far enough to expose the circle behind it. Without this a drag
       // could push the photo half out and leave a dark crescent, which looks
@@ -8662,81 +8707,89 @@ async function loadContributor(slug) {
       // Clamped HERE rather than only in the drag handler, because this also
       // governs values that arrive from the database — a card approved months
       // ago must still render as a filled circle.
-      const slackX = Math.max(0, (dw - R * 2) / 2);
-      const slackY = Math.max(0, (dh - R * 2) / 2);
-      const wanted = (v, slack) => Math.max(-slack, Math.min(slack, (Number(v) || 0) * R * 2));
+      const slackX = Math.max(0, (dw - L.R * 2) / 2);
+      const slackY = Math.max(0, (dh - L.R * 2) / 2);
+      const wanted = (v, slack) => Math.max(-slack, Math.min(slack, (Number(v) || 0) * L.R * 2));
       const ox = wanted(card.photo_offset_x, slackX);
       const oy = wanted(card.photo_offset_y, slackY);
       ctx.drawImage(photoImg, CX - dw / 2 + ox, cy - dh / 2 + oy, dw, dh);
     } else {
+      // NO PHOTO IS THE NORMAL CASE, not a failure — it needs a member
+      // account. The monogram is drawn to fill the circle so it reads as a
+      // deliberate mark rather than a gap where a face should be.
       ctx.fillStyle = GOLD;
-      ctx.font = `700 ${px(150)}px Georgia, serif`;
+      ctx.font = `700 ${Math.round(L.R * 1.15)}px ${SERIF}`;
       const m = ctx.measureText('U');
-      const asc = m.actualBoundingBoxAscent || px(105);
+      const asc = m.actualBoundingBoxAscent || L.R * 0.8;
       centred(ctx, 'U', CX, cy + asc / 2);
     }
     ctx.restore();
 
     ctx.strokeStyle = RED;
-    ctx.lineWidth = Math.max(2, px(5));
+    ctx.lineWidth = Math.max(2, px(6));
     ctx.beginPath();
-    ctx.arc(CX, cy, R, 0, Math.PI * 2);
+    ctx.arc(CX, cy, L.R, 0, Math.PI * 2);
     ctx.stroke();
 
-    y = cy + R + px(84);
+    y = cy + L.R + L.gapAfterPhoto;
 
     // --- name -----------------------------------------------------------
     ctx.fillStyle = INK;
-    ctx.font = `700 ${nameSize}px Georgia, serif`;
-    nameLines.forEach((line) => { centred(ctx, line, CX, y); y += nameSize + px(8); });
+    ctx.font = `700 ${L.nameSize}px ${SERIF}`;
+    L.nameLines.forEach((line) => { centred(ctx, line, CX, y); y += L.nameLH; });
 
     // --- role -----------------------------------------------------------
     //
-    // "Baker, Bo-Kaap". The redesign dropped this line and the field stayed on
-    // the form, so anybody who filled it in would have watched it disappear
-    // from their own card with nothing to say why.
+    // "Baker, Bo-Kaap". Was a faint white italic at 62% opacity. That measured
+    // 7.09:1 so it PASSED contrast — the problem was hierarchy, not legibility:
+    // it read as an afterthought next to the name, on the line that says who
+    // somebody actually is. Gold at full strength is 9.94:1 and looks
+    // deliberate.
     if (card.role_line) {
-      ctx.fillStyle = 'rgba(247,243,238,0.62)';
-      ctx.font = `italic ${px(28)}px Georgia, serif`;
-      centred(ctx, card.role_line, CX, y + px(14));
-      y += px(44);
+      ctx.fillStyle = GOLD;
+      ctx.font = `italic ${L.roleSize}px ${SERIF}`;
+      centred(ctx, card.role_line, CX, y + Math.round(L.roleSize * 0.5));
+      y += L.roleH;
     }
 
     // --- rule -----------------------------------------------------------
-    y += px(18);
+    y += px(24 * 1);
     ctx.fillStyle = RED;
-    ctx.fillRect(CX - px(38), y, px(76), Math.max(2, px(4)));
-    y += px(46);
+    ctx.fillRect(CX - px(44), y, px(88), Math.max(2, px(6)));
+    y += px(50);
 
     // --- quote ----------------------------------------------------------
-    if (quoteLines.length) {
-      ctx.fillStyle = 'rgba(247,243,238,0.92)';
-      ctx.font = `italic ${px(34)}px Georgia, serif`;
-      quoteLines.forEach((line) => { centred(ctx, line, CX, y); y += px(46); });
-      y += px(16);
+    if (L.quoteLines.length) {
+      ctx.fillStyle = 'rgba(247,243,238,0.95)';
+      ctx.font = `italic ${L.quoteSize}px ${SERIF}`;
+      L.quoteLines.forEach((line) => { centred(ctx, line, CX, y); y += L.quoteLH; });
+      y += px(18);
     }
 
     // --- category pill --------------------------------------------------
     if (card.category) {
-      ctx.font = `600 ${px(19)}px Inter, Arial, sans-serif`;
+      ctx.font = `600 ${px(21)}px ${SANS}`;
       const label = String(card.category).toUpperCase();
       const spacing = px(2);
       const textW = label.split('').reduce((w, c) => w + ctx.measureText(c).width + spacing, -spacing);
-      const padX = px(24);
+      const padX = px(26);
       const pillW = textW + padX * 2;
       ctx.strokeStyle = GOLD;
       ctx.lineWidth = Math.max(1, px(2));
-      roundRect(ctx, CX - pillW / 2, y - px(19), pillW, pillH, pillH / 2);
+      roundRect(ctx, CX - pillW / 2, y - px(21), pillW, L.pillH, L.pillH / 2);
       ctx.stroke();
       ctx.fillStyle = GOLD;
-      trackedText(ctx, label, CX, y + px(9), spacing);
-      y += pillH + px(20);
+      trackedText(ctx, label, CX, y + px(10), spacing);
     }
 
     // --- footer ---------------------------------------------------------
-    ctx.fillStyle = 'rgba(247,243,238,0.42)';
-    ctx.font = `400 ${px(21)}px Inter, Arial, sans-serif`;
-    centred(ctx, 'Real People. Real Impact.  ·  unplugnews.com', CX, H - px(72));
+    // THE ONE THING HERE THAT ACTUALLY FAILED. At 42% opacity, composited over
+    // this background, the footer measured 3.79:1 — under the 4.5:1 AA wants —
+    // on a card most people only ever see at thumbnail size in a feed. 78% is
+    // 10.84:1 and still sits behind the name in the hierarchy.
+    ctx.fillStyle = 'rgba(247,243,238,0.78)';
+    ctx.font = `400 ${px(22)}px ${SANS}`;
+    centred(ctx, 'Real People. Real Impact.  \u00b7  unplugnews.com', CX, H - px(74));
   }
 
   function currentFields() {
