@@ -335,6 +335,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
       <button class="ms-navlink" data-ms="editions"><span>📖</span> My Editions</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
+      <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
       <a class="ms-navlink" href="unplug-magazine.html"><span>🌐</span> View Official Site</a>
       <button class="ms-navlink ms-logout" id="msLogout"><span>↩</span> Logout</button>
@@ -512,6 +513,35 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
         <p class="sub">Likes, saves, comments, reviews, follows, badges, achievements, recognition and status changes on your profile — and updates from members you follow.</p>
         <div id="notifCentreList"></div>
+      </div>
+    </section>
+
+    <!-- POPIA gives a person the right to see what is held about them. This
+         is that, self-service, so it does not depend on somebody answering an
+         email. Deletion deliberately goes through a request instead: an
+         account can own paid listings, published articles and payment records
+         that cannot simply vanish, and what happens to each of those is a
+         decision, not a button. -->
+    <section class="ms-section section-hidden" data-ms-section="privacy">
+      <div class="card">
+        <h2 style="margin:0 0 6px;">Your data</h2>
+        <p class="sub">Everything Unplug holds about you, as a file you can keep.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:14px 0 6px;">
+          <button class="btn btn-solid" id="exportDataBtn" type="button" style="width:auto; padding:9px 18px;">Download my data</button>
+          <span id="exportDataNote" class="sub" style="margin:0;"></span>
+        </div>
+        <p class="sub" style="margin-top:12px;">
+          The file leaves out sign-in tokens, verification codes and two-factor
+          recovery codes on purpose — it should not be a way for anyone who
+          gets hold of it to take over your account. Anonymous analytics are
+          left out too: they were never linked to you.
+        </p>
+        <p class="sub" style="margin-top:10px;">
+          To have your account removed, email
+          <a href="mailto:info@unplugnews.com">info@unplugnews.com</a> and we
+          will confirm what happens to anything you have published or paid for
+          before anything is deleted.
+        </p>
       </div>
     </section>
 
@@ -1399,6 +1429,35 @@ function showWelcome(user){
   if (typeof restoreCartFromServer === 'function') restoreCartFromServer();
 }
 document.getElementById('goDashboardBtn').addEventListener('click', () => enterMemberDashboard(CURRENT_USER));
+
+// Download my data. Built in the browser from the JSON the API returns, rather
+// than linking straight to the endpoint, because the endpoint needs the bearer
+// token and a plain <a href> cannot send one.
+const exportBtn = document.getElementById('exportDataBtn');
+if (exportBtn) exportBtn.addEventListener('click', async () => {
+  const note = document.getElementById('exportDataNote');
+  exportBtn.disabled = true;
+  note.textContent = 'Gathering everything…';
+  try {
+    const data = await api('/privacy/export');
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'unplug-my-data-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoked on the next tick: revoking immediately can cancel the download
+    // in some browsers before it has actually started.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    note.textContent = 'Downloaded.';
+  } catch (err) {
+    note.textContent = 'Could not build the file just now: ' + err.message;
+  } finally {
+    exportBtn.disabled = false;
+  }
+});
 // goSiteBtn is a plain link to the magazine — the session token stays in
 // localStorage for the origin, so the member stays signed in over there.
 

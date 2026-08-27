@@ -22,9 +22,30 @@ their own language and still read each piece as it was written.
 **SASL is not a written language.** There is no correct string to put in a
 dictionary for it, and anything that looked like one would be wrong.
 
-SASL belongs on the site as **signed video with captions**, recorded by a
-signer — not as text, and never as a machine translation. That is a content
-job with a real person in front of a camera, not a `data-i18n` attribute.
+SASL is on the site as **signed video with captions** — `sasl_videos`, admin →
+**SASL Videos**. One recording per article or standing page, made by a signer.
+Nothing about it is generated.
+
+### Captions are required to publish, and become the transcript
+
+A signed video with no captions leaves out every deaf person who does not sign
+— a large group that signed video alone excludes entirely — and everybody
+watching with the sound off. So publishing without them is refused, on both the
+create call and the publish call. (Saving a draft without them is fine.)
+
+The caption text is stored as WebVTT in the database rather than as an uploaded
+`.vtt` file: no new upload type, no bucket content-type to get wrong, and
+captions can be corrected in the admin without re-uploading anything.
+
+**It is rendered as a readable transcript, not as a `<track>`.** The videos are
+platform embeds — YouTube and the rest — and a `<track>` cannot be attached to
+somebody else's iframe, so the stored VTT could never drive the player's own
+captions. That is not a consolation prize: a transcript works with a screen
+reader, can be copied and translated, and unlike a caption track a search
+engine can read it.
+
+The player loads nothing until it is asked to. An iframe that loads on sight is
+a third-party request, and a cost, for every reader whether they watch or not.
 
 ## Partial languages are partial on purpose
 
@@ -95,4 +116,8 @@ preferred over guessed.
 | | |
 |---|---|
 | `i18n.js` | The dictionary, the picker, and the apply logic. |
-| `unplug-magazine.html` | `data-i18n` / `data-i18n-aria` attributes. |
+| `unplug-magazine.html` | `data-i18n` / `data-i18n-aria` attributes, and the SASL player. |
+| `unplug-backend/db/migrations/153_sasl_videos.sql` | `sasl_videos`. |
+| `unplug-backend/src/routes/sasl.js` | Public lookup and admin CRUD. |
+| `unplug-backend/test/sasl.test.js` | 15 tests against a real PostgreSQL. |
+| `unplug-admin-dashboard.html` | The SASL Videos screen. |

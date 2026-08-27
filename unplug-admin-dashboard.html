@@ -315,6 +315,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="editions">Editions</a>
         <a data-section="deafjobs">Deaf Jobs <span id="deafJobsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="deafpassports">Deaf Passports <span id="deafPassportsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="sasl">SASL Videos</a>
       </div>
     </div>
 
@@ -2658,6 +2659,59 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
 
     <!-- CONTRIBUTORS — the people whose names appear on articles. -->
+    <!-- SASL. Not a translation screen: South African Sign Language is not a
+         written language, so there is nothing here that turns text into it.
+         This attaches a recording of a person signing to an article or a
+         standing page, with the caption text that becomes the transcript. -->
+    <div class="admin-section" id="section-sasl">
+      <h1>SASL Videos</h1>
+      <p class="sub">A signed version of a story or a page, recorded by a signer. SASL is not a written language — nothing here is translated automatically, and it never should be.</p>
+
+      <div class="card" style="margin-bottom:18px;">
+        <h2 style="margin-top:0;">Add or replace a signed video</h2>
+        <div class="grid-2">
+          <div>
+            <label for="saslTargetType">Attach to</label>
+            <select id="saslTargetType">
+              <option value="article">An article</option>
+              <option value="page">A page</option>
+            </select>
+          </div>
+          <div>
+            <label for="saslTargetId">Which one</label>
+            <input id="saslTargetId" placeholder="Article id, e.g. 42 — or a page name, e.g. deafcommunity">
+          </div>
+        </div>
+        <label for="saslVideoUrl">Link to the signed video</label>
+        <input id="saslVideoUrl" placeholder="https://www.youtube.com/watch?v=...">
+        <small style="color:#7a726a; display:block; margin:-6px 0 12px;">YouTube, TikTok, Instagram or Google Drive — the same links the rest of the site accepts. An unlisted YouTube video is fine.</small>
+
+        <label for="saslSigner">Signer's name (optional)</label>
+        <input id="saslSigner" placeholder="Who is signing">
+
+        <label for="saslCaptions">Captions (WebVTT)</label>
+        <textarea id="saslCaptions" rows="8" placeholder="WEBVTT&#10;&#10;00:00:00.000 --> 00:00:04.000&#10;What is being signed, in words."></textarea>
+        <small style="color:#7a726a; display:block; margin:-6px 0 12px;">
+          <strong>Required before this can go live.</strong> A signed video with no captions leaves out deaf people who do not sign, and anyone watching without sound. The text also becomes the readable transcript under the video, which a search engine can index and a screen reader can read.
+        </small>
+
+        <label for="saslNote">Note shown under the video (optional)</label>
+        <input id="saslNote" placeholder="e.g. Recorded July 2026">
+
+        <label style="display:flex; gap:8px; align-items:center; font-weight:400; text-transform:none; letter-spacing:0;">
+          <input type="checkbox" id="saslPublish" style="width:auto;"> Publish it now
+        </label>
+
+        <button class="btn btn-solid" id="saslSaveBtn" type="button" style="width:auto; padding:10px 22px; margin-top:10px;">Save</button>
+        <div id="saslSaveNote" class="sub" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0;">Signed videos</h2>
+        <div id="saslList">Loading…</div>
+      </div>
+    </div>
+
     <div class="admin-section" id="section-contributors">
       <div class="main-head"><div><h1>Contributors</h1>
       <p>The writers whose names appear on articles. A contributor gets a public page with their photo, a short bio and everything they have written &mdash; which is what turns a byline from a name into something a reader can check.</p>
@@ -3362,6 +3416,104 @@ document.addEventListener('click', async (e) => {
   });
 })();
 
+// ---------------------------------------------------------------------------
+// SASL videos.
+// ---------------------------------------------------------------------------
+async function loadSaslAdmin() {
+  const el = document.getElementById('saslList');
+  if (!el) return;
+  el.textContent = 'Loading…';
+  try {
+    const d = await api('/sasl/admin/all');
+    if (!d.videos.length) {
+      el.innerHTML = '<p class="sub">No signed videos yet.</p>';
+      return;
+    }
+    el.innerHTML = d.videos.map((v) => {
+      const where = v.target_type === 'article'
+        ? 'Article ' + escapeHtml(v.target_id) + (v.article_title ? ' — ' + escapeHtml(v.article_title) : '')
+        : 'Page: ' + escapeHtml(v.target_id);
+      // Said plainly rather than only enforced by the server: an admin looking
+      // at the list should be able to see why a row will not publish.
+      const captions = v.captions_vtt
+        ? '<span style="color:#2e7d32;">Captions ✓</span>'
+        : '<span style="color:var(--red);">No captions — cannot be published</span>';
+      return `<div style="border:1px solid var(--paper-line); padding:12px 14px; margin-bottom:10px;">
+        <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:space-between; align-items:center;">
+          <div>
+            <strong>${where}</strong><br>
+            <span class="sub">${v.is_published ? 'Live' : 'Draft'} · ${captions}${v.signer_name ? ' · Signed by ' + escapeHtml(v.signer_name) : ''}</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-line" type="button" data-sasl-toggle="${v.id}" data-sasl-to="${v.is_published ? 'false' : 'true'}" style="width:auto; padding:6px 14px; font-size:12.5px;">${v.is_published ? 'Unpublish' : 'Publish'}</button>
+            <button class="btn btn-line" type="button" data-sasl-delete="${v.id}" style="width:auto; padding:6px 14px; font-size:12.5px;">Delete</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    el.innerHTML = '<p class="sub">Could not load: ' + escapeHtml(err.message) + '</p>';
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  const toggle = e.target.closest && e.target.closest('[data-sasl-toggle]');
+  if (toggle) {
+    try {
+      await api('/sasl/admin/' + toggle.dataset.saslToggle + '/publish', {
+        method: 'PATCH',
+        body: JSON.stringify({ isPublished: toggle.dataset.saslTo === 'true' }),
+      });
+      loadSaslAdmin();
+    } catch (err) {
+      alert(err.message);
+    }
+    return;
+  }
+  const del = e.target.closest && e.target.closest('[data-sasl-delete]');
+  if (del) {
+    if (!confirm('Remove this signed video? The article or page keeps everything else.')) return;
+    try {
+      await api('/sasl/admin/' + del.dataset.saslDelete, { method: 'DELETE' });
+      loadSaslAdmin();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+});
+
+const saslSaveBtn = document.getElementById('saslSaveBtn');
+if (saslSaveBtn) saslSaveBtn.addEventListener('click', async () => {
+  const note = document.getElementById('saslSaveNote');
+  note.textContent = 'Saving…';
+  try {
+    const res = await api('/sasl/admin', {
+      method: 'POST',
+      body: JSON.stringify({
+        targetType: document.getElementById('saslTargetType').value,
+        targetId: document.getElementById('saslTargetId').value.trim(),
+        videoUrl: document.getElementById('saslVideoUrl').value.trim(),
+        captionsVtt: document.getElementById('saslCaptions').value,
+        signerName: document.getElementById('saslSigner').value.trim(),
+        note: document.getElementById('saslNote').value.trim(),
+        isPublished: document.getElementById('saslPublish').checked,
+      }),
+    });
+    // The Google Drive sharing warning is not an error and must not look like
+    // one — it is the thing that catches people out, and now is the only
+    // moment we can say it.
+    note.textContent = res.warning ? 'Saved. ' + res.warning : 'Saved.';
+    document.getElementById('saslVideoUrl').value = '';
+    document.getElementById('saslCaptions').value = '';
+    document.getElementById('saslSigner').value = '';
+    document.getElementById('saslNote').value = '';
+    document.getElementById('saslPublish').checked = false;
+    loadSaslAdmin();
+  } catch (err) {
+    note.textContent = err.message;
+  }
+});
+
 document.querySelectorAll('[data-section]').forEach((link) => {
   link.addEventListener('click', () => {
     document.querySelectorAll('[data-section]').forEach((l) => l.classList.remove('active'));
@@ -3390,6 +3542,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'top10monthly') loadTop10MonthlyRankings();
     if (section === 'partmembers') loadParticipationMembers();
     if (section === 'contributors') loadContributorsAdmin();
+    if (section === 'sasl') loadSaslAdmin();
     if (section === 'tags') loadTagsAdmin();
     if (section === 'editions') loadEditionsAdmin();
     if (section === 'shoutouts') loadShoutoutNominations();

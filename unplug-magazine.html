@@ -195,6 +195,24 @@ nav.main-nav .nav-item.active .nav-item-label{ color:var(--red); }
 .nav-toggle{ display:none; background:none; border:none; cursor:pointer; }
 
 /* ---- site-wide search overlay ---- */
+/* ---- SASL SIGNED VIDEO ---- */
+.sasl-block{ border:1px solid var(--paper-line); border-left:3px solid var(--red);
+  background:var(--paper); padding:18px 20px; margin:0 0 26px; }
+.sasl-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+.sasl-head h2{ font-family:'Inter',sans-serif; font-size:14px; text-transform:uppercase;
+  letter-spacing:0.08em; margin:0; color:var(--ink); }
+.sasl-signer{ font-size:12.5px; color:var(--slate); }
+.sasl-frame{ position:relative; aspect-ratio:16/9; background:#000; }
+.sasl-frame iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; }
+.sasl-poster{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.sasl-play{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.35); border:0; cursor:pointer; color:#fff; font-size:15px; gap:8px; }
+.sasl-play:hover{ background:rgba(0,0,0,0.5); }
+.sasl-transcript{ margin-top:14px; }
+.sasl-transcript summary{ cursor:pointer; font-size:13.5px; font-weight:600; color:var(--ink); }
+.sasl-transcript .sasl-lines{ margin-top:10px; font-size:14.5px; line-height:1.7; color:var(--slate); }
+.sasl-transcript .sasl-lines p{ margin:0 0 8px; }
+.sasl-note{ font-size:12.5px; color:var(--slate); margin:10px 0 0; }
 /* ---- FREE-ACCOUNT GATE ----
    The preview above it is genuinely all the browser was sent, so there is no
    need for the usual fade-to-white trick that hides text which is still in the
@@ -4863,10 +4881,41 @@ function analyticsAllowed() {
   catch (e) { return false; }
 }
 
+// Tell the server what was chosen.
+//
+// The localStorage key above and this record answer DIFFERENT questions, which
+// is why both exist. localStorage answers "may I count this page view", on the
+// next page load, with no round trip. This answers "can you show that they
+// agreed, and to which version of the policy" — and a key sitting on somebody
+// else's device is not evidence of anything.
+//
+// DECLINING SENDS NO VISITOR KEY. guestSessionId() MINTS an id and writes it to
+// localStorage, and the standing rule is that declining leaves nothing behind
+// on the device. Calling it here to label a refusal would break that rule at
+// the exact moment somebody exercised it. The row is still recorded — with the
+// policy version and the time — which is the part that matters.
+//
+// Fire-and-forget, always. A reader has made their choice and the interface
+// has already acted on it; a failed request must never undo it or hold it up.
+function recordConsentChoice(choice) {
+  try {
+    const payload = { choice };
+    if (choice === 'accepted') payload.visitorKey = guestSessionId();
+    // Through the shared helper, not a hand-built fetch: the API base has
+    // been a recurring source of bugs in this codebase every time a second
+    // copy of it appeared.
+    api('/privacy/consent', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }).catch(() => { /* the choice already applies locally */ });
+  } catch (e) { /* ditto */ }
+}
+
 function setConsent(choice) {
   try { localStorage.setItem(CONSENT_KEY, choice); } catch (e) { /* private mode */ }
   const bar = document.getElementById('consentBar');
   if (bar) bar.hidden = true;
+  recordConsentChoice(choice);
   // Accepting mid-visit should count this visit, not silently start next time.
   // Google Analytics is started here too: it is deliberately not loaded until
   // consent exists, so accepting has to be what switches it on rather than the
@@ -5557,6 +5606,105 @@ function articleGateHtml(a) {
   </aside>`;
 }
 
+// ---------------------------------------------------------------------------
+// SOUTH AFRICAN SIGN LANGUAGE
+//
+// SASL is not a written language, so none of this translates text. It shows a
+// video of a person signing, recorded by a signer, with the caption text
+// beneath it.
+//
+// WHY THE CAPTIONS BECOME A TRANSCRIPT RATHER THAN A <track>.
+//
+// The videos are platform embeds — YouTube and the rest — because that is what
+// the rest of the site already supports and it costs nothing to host. A
+// <track> element cannot be attached to somebody else's iframe, so the WebVTT
+// we store could never drive the player's own captions.
+//
+// Rendering it as a readable transcript is not a consolation prize. It serves
+// deaf readers who do not sign — a large group, and one that signed video
+// alone leaves out entirely — it works with a screen reader, it can be copied
+// and translated, and unlike a caption track a search engine can read it.
+// ---------------------------------------------------------------------------
+
+// Pull the spoken lines out of WebVTT: drop the header, the cue numbers and
+// the timing lines, keep the text. Deliberately forgiving — a transcript that
+// renders a slightly odd file imperfectly is better than one that renders
+// nothing because a cue setting was unexpected.
+function saslTranscriptLines(vtt) {
+  if (!vtt) return [];
+  return String(vtt)
+    .replace(/\r/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line
+      && !/^WEBVTT/.test(line)
+      && !/^NOTE\b/.test(line)
+      && !/^\d+$/.test(line)
+      && line.indexOf('-->') === -1);
+}
+
+function saslBlockHtml(v) {
+  const signer = v.signer_name
+    ? `<span class="sasl-signer">Signed by ${escapeHtml(v.signer_name)}</span>` : '';
+  const lines = saslTranscriptLines(v.captions_vtt);
+  const transcript = lines.length
+    ? `<details class="sasl-transcript">
+         <summary>Read the transcript</summary>
+         <div class="sasl-lines">${lines.map((l) => `<p>${escapeHtml(l)}</p>`).join('')}</div>
+       </details>`
+    : '';
+  const note = v.note ? `<p class="sasl-note">${escapeHtml(v.note)}</p>` : '';
+  // The frame is NOT loaded until it is asked for — same rule as the article
+  // video embeds. An iframe that loads on sight is a third-party request, and
+  // a cost, for every reader whether they watch or not.
+  const poster = v.poster_url
+    ? `<img class="sasl-poster" src="${escapeHtml(v.poster_url)}" alt="" loading="lazy" decoding="async">`
+    : '';
+  return `<section class="sasl-block" aria-label="This story in South African Sign Language">
+    <div class="sasl-head">
+      <h2>Watch in SASL</h2>
+      ${signer}
+    </div>
+    <div class="sasl-frame" data-sasl-embed="${escapeHtml(v.embed_url || '')}">
+      ${poster}
+      <button class="sasl-play" type="button">\u25b6 Play the signed version</button>
+    </div>
+    ${transcript}
+    ${note}
+  </section>`;
+}
+
+// One delegated handler for every signed video on the page.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest && e.target.closest('.sasl-play');
+  if (!btn) return;
+  const frame = btn.closest('.sasl-frame');
+  const src = frame && frame.dataset.saslEmbed;
+  if (!src) return;
+  const iframe = document.createElement('iframe');
+  iframe.src = src + (src.indexOf('?') === -1 ? '?' : '&') + 'autoplay=1';
+  iframe.title = 'This story in South African Sign Language';
+  iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture';
+  iframe.setAttribute('allowfullscreen', '');
+  frame.innerHTML = '';
+  frame.appendChild(iframe);
+});
+
+// Fetch and render, if there is one. Silent when there is not: most things do
+// not have a signed version yet, and an empty "no video" box on every article
+// would be noise.
+async function loadSaslFor(targetType, targetId, container) {
+  if (!container) return;
+  container.innerHTML = '';
+  try {
+    const d = await api('/sasl?targetType=' + encodeURIComponent(targetType)
+      + '&targetId=' + encodeURIComponent(targetId));
+    if (d && d.video) container.innerHTML = saslBlockHtml(d.video);
+  } catch (err) {
+    /* a missing signed video must never break the page it sits on */
+  }
+}
+
 function articleGalleryHtml(a) {
   const images = a.gallery_images || [];
   if (images.length === 0) return '';
@@ -6196,6 +6344,7 @@ async function loadArticleDetail(id) {
         ${shareRowHtml(shareUrl, a.title)}
       </div>
       ${articleVideoHtml(a)}
+      <div id="articleSasl"></div>
       <div class="rich-bio article-body" id="artBody" style="line-height:1.7; font-size:16px;">${articleBodyHtml(a)}${articleSectionsHtml(data.sections)}${articleGalleryHtml(a)}${articleConclusionHtml(a)}</div>
       ${articleGateHtml(a)}
       ${articleTakeawaysHtml(a)}
@@ -6211,6 +6360,9 @@ async function loadArticleDetail(id) {
       if (badge) badge.innerHTML = svgMarkup;
     }
     initArticleReader(a, id, shareUrl, el);
+    // Above the body on purpose: a reader who wants the signed version should
+    // not have to scroll past the whole written article to discover it exists.
+    loadSaslFor('article', id, document.getElementById('articleSasl'));
     // Deep-link this article: distinct, shareable, indexable URL + its own
     // title/description (replaceState overwrites the ?p=articledetail entry).
     const q = '?p=article&id=' + id;
