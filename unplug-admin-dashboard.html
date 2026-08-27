@@ -1319,6 +1319,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div><label for="artContributor">Link to contributor <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; optional; makes the byline click through to their page</span></label><select id="artContributor"><option value="">&mdash; no linked profile &mdash;</option></select></div>
             <div><label for="artKicker">Supplied by <span style="font-weight:400; text-transform:none; letter-spacing:0;">&mdash; who sent the story in, if not the writer</span></label><input id="artKicker" placeholder="e.g. Thandi M."></div>
             <div><label for="artEmotion">Emotion (optional)</label><select id="artEmotion"><option value="">— none —</option><option value="inspiring">Inspiring</option><option value="business">Business</option><option value="community">Community</option><option value="breaking">Breaking</option><option value="celebration">Celebration</option></select></div>
+            <div>
+              <label for="artRequiresAccount">Reading access</label>
+              <label style="display:flex; gap:8px; align-items:flex-start; font-weight:400; text-transform:none; letter-spacing:0;">
+                <input type="checkbox" id="artRequiresAccount" style="width:auto; margin-top:3px;">
+                <span>Require a free account to read in full.
+                  <small style="display:block; color:#7a726a;">Everyone still sees the opening and the photo. The rest needs a (free) sign-in. Leave off for ordinary stories.</small>
+                </span>
+              </label>
+            </div>
             <div><label>Main image <span style="font-weight:400; color:var(--slate);">— 1920 × 1080px (16:9)</span></label><div id="artBannerUpload"></div></div>
           </div>
 
@@ -5526,6 +5535,7 @@ function artReset() {
   document.getElementById('artCategory').value = '';
   document.getElementById('artContributor').value = '';
   document.getElementById('artEmotion').value = '';
+  document.getElementById('artRequiresAccount').checked = false;
   document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '');
   artRenderSections([]);
   document.getElementById("artGallery").innerHTML = "";
@@ -5588,6 +5598,7 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     document.getElementById('artContributor').value = a.contributor_id || '';
     document.getElementById('artCategory').value = a.category_id || '';
     document.getElementById('artEmotion').value = a.emotion || '';
+    document.getElementById('artRequiresAccount').checked = a.requires_account === true;
     document.getElementById('artBody').value = a.body || '';
     document.getElementById('artConclusion').value = a.conclusion || '';
     // The RAW link, not the embed url — the editor edits what was pasted, and
@@ -5636,6 +5647,8 @@ async function artSave(asDraft) {
     authorName: document.getElementById('artAuthor').value.trim() || null,
     contributorId: document.getElementById('artContributor').value || null,
     emotion: document.getElementById('artEmotion').value || null,
+    // Ignored by the server for anyone who is not an admin — see routes/articles.js.
+    requiresAccount: document.getElementById('artRequiresAccount').checked,
     bannerImageUrl: UnplugUpload.valueOf(document.getElementById('artBannerUpload')) || null,
     // Sent even when blank, so clearing the box removes the video from a story.
     videoUrl: document.getElementById('artVideo').value.trim(),

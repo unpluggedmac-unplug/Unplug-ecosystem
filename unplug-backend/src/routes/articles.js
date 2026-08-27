@@ -9,6 +9,8 @@ const { normaliseTags } = require('../utils/tags');
 const { publishesFree, statusForNewSubmission } = require('../utils/publishingRights');
 const { recordParticipationAsync } = require('../utils/participation');
 
+const { applyGate, previewWords } = require('../utils/accountGate');
+
 const router = express.Router();
 
 // Slugs are URLs, so they have to be unique. If the natural slug is taken we
@@ -111,7 +113,7 @@ router.get('/', async (req, res, next) => {
 
     const result = await pool.query(
       `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at,
-              a.banner_image_url, a.subtitle, c.name AS category,
+              a.banner_image_url, a.subtitle, c.name AS category, a.requires_account,
               a.author_name, con.name AS contributor_name, con.slug AS contributor_slug,
               -- WHO IT IS PUBLISHED BY, decided once here rather than in each
               -- front end. A typed byline wins; failing that, the name on the
@@ -130,6 +132,13 @@ router.get('/', async (req, res, next) => {
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
       [...values, limit, offset]
     );
+    // THE LIST HAS TO BE GATED TOO. It selects a.body in full, so gating only
+    // the single-article endpoint would hand the whole piece over anyway — one
+    // request to /articles and the gate is decorative. Cards only ever show
+    // the first 140 characters, so a truncated body costs them nothing.
+    const words = await previewWords();
+    result.rows.forEach((a) => applyGate(a, req.user, words));
+
     res.json({
       articles: result.rows,
       pagination: paginationMeta(page, limit, parseInt(countResult.rows[0].count, 10)),
@@ -151,7 +160,7 @@ router.get('/most-viewed', async (req, res, next) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 6, 1), 12);
     const result = await pool.query(
       `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at,
-              a.banner_image_url, c.name AS category, COUNT(pv.id) AS views
+              a.banner_image_url, c.name AS category, a.requires_account, COUNT(pv.id) AS views
          FROM articles a
          LEFT JOIN categories c ON c.id = a.category_id
          LEFT JOIN page_views pv
@@ -165,6 +174,8 @@ router.get('/most-viewed', async (req, res, next) => {
         LIMIT $2`,
       [String(days), limit]
     );
+    const mvWords = await previewWords();
+    result.rows.forEach((a) => applyGate(a, req.user, mvWords));
     res.json({ articles: result.rows, windowDays: days });
   } catch (err) {
     next(err);
@@ -251,9 +262,17 @@ router.get('/:id', async (req, res, next) => {
     article.tags = cleanTopicTerms(article.tags);
     article.keywords = cleanTopicTerms(article.keywords);
 
+    // The gate. An admin, or any signed-in account, reads the whole thing;
+    // everyone else gets a preview. Truncation happens HERE rather than in the
+    // browser — see utils/accountGate.js.
+    const gateWords = await previewWords();
+    applyGate(article, req.user, gateWords);
+
     res.json({
       article,
-      sections: await loadSections(article.id),
+      // Sections ARE the rest of the article. Sending them alongside a
+      // truncated body would be the whole piece in a different shape.
+      sections: article.gated ? [] : await loadSections(article.id),
     });
   } catch (err) {
     next(err);
@@ -323,8 +342,9 @@ router.post('/', requireAuth, async (req, res, next) => {
          status, published_at, seo_title, subtitle, meta_description, conclusion, cta_label, cta_url,
          slug, key_takeaways, keywords, tags, suggested_category_id,
          gallery_images, links, body_format, author_name,
-         video_url, video_platform, video_embed_url, video_thumbnail_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+         video_url, video_platform, video_embed_url, video_thumbnail_url,
+         requires_account)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
        RETURNING *`,
       [
         req.user.id, categoryId || null, title, body, kickerSuppliedBy || null,
@@ -350,6 +370,11 @@ router.post('/', requireAuth, async (req, res, next) => {
         // story; see migration 117 for why the two are not the same fact.
         (req.body.authorName || '').trim() || null,
         video.url, video.platform, video.embedUrl, video.thumbnailUrl,
+        // ADMIN ONLY. Whether a piece is gated is an editorial decision about
+        // the publication, not a property of the submission — a member paying
+        // to place an article must not be able to decide who may read it.
+        // Anyone else sending requiresAccount is simply ignored.
+        req.user.role === 'admin' ? req.body.requiresAccount === true : false,
       ]
     );
     const article = result.rows[0];
@@ -431,6 +456,16 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
         return res.status(400).json({ error: 'emotion must be one of: ' + ALLOWED_EMOTIONS.join(', ') + '.' });
       }
       values.push(emotion || null); setClauses.push(`emotion = $${values.length}`);
+    }
+
+    // The free-account gate. ADMIN ONLY, for the same reason as on create:
+    // whether a piece is gated is a decision about the publication, not about
+    // the submission. A non-admin sending requiresAccount is ignored rather
+    // than refused — it is not their field to set, and erroring would leak
+    // that the field exists at all.
+    if (req.body.requiresAccount !== undefined && req.user.role === 'admin') {
+      values.push(req.body.requiresAccount === true);
+      setClauses.push(`requires_account = $${values.length}`);
     }
 
     // The editorial fields, including the derived ones — an editor correcting

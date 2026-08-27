@@ -168,8 +168,20 @@ function searchArticles(q, like, limit, offset, categoryId, from, to) {
 
   return pool.query(
     `SELECT a.id, a.title, a.kicker_supplied_by, a.tags, a.banner_image_url,
-            a.published_at, c.name AS category,
-            ts_headline('english', left(coalesce(a.body, ''), 4000), ${TSQ}, ${HEADLINE_OPTS}) AS snippet,
+            a.published_at, c.name AS category, a.requires_account,
+            -- A GATED ARTICLE NEVER GETS A BODY SNIPPET.
+            --
+            -- ts_headline returns the text surrounding the match, from
+            -- anywhere in the piece. On a gated article that is a way to read
+            -- it a fragment at a time by searching for word after word, which
+            -- would make the gate pointless. Gated pieces show the summary
+            -- they were published with instead — the same text a share card
+            -- and a search engine already see.
+            CASE WHEN a.requires_account
+                 THEN left(coalesce(NULLIF(TRIM(a.meta_description), ''),
+                                    NULLIF(TRIM(a.subtitle), ''), ''), 240)
+                 ELSE ts_headline('english', left(coalesce(a.body, ''), 4000), ${TSQ}, ${HEADLINE_OPTS})
+            END AS snippet,
             ts_rank(
               setweight(to_tsvector('english', coalesce(a.title, '')), 'A') ||
               setweight(to_tsvector('english', coalesce(a.subtitle, '') || ' ' ||
