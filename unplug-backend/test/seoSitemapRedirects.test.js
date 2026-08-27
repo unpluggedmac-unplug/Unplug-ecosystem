@@ -22,6 +22,7 @@ const path = require('path');
 const os = require('os');
 const EmbeddedPostgres = require('embedded-postgres').default;
 const { stopPostgres } = require('./helpers/stopPostgres');
+const { waitFor } = require('./helpers/waitFor');
 
 let pg;
 let pool;
@@ -276,9 +277,13 @@ test('a redirect is found and counted', async () => {
   assert.equal(found.body.redirect.to, '/?p=news');
   assert.equal(found.body.redirect.status, 301);
 
-  // The counter is updated without the reader waiting for it, so allow it a
-  // moment before asserting.
-  await new Promise((r) => setTimeout(r, 200));
+  // The counter is updated without the reader waiting for it. Waiting for the
+  // count to actually rise, rather than sleeping a fixed 200ms and hoping:
+  // under load the write can land later than any figure picked in advance.
+  await waitFor(
+    async () => (await pool.query(
+      `SELECT hit_count FROM redirects WHERE from_path = '/old-page'`)).rows[0].hit_count >= 1,
+    'the redirect hit counter to rise');
   const row = await pool.query(`SELECT hit_count FROM redirects WHERE from_path = '/old-page'`);
   assert.ok(row.rows[0].hit_count >= 1, 'following a redirect is counted');
 });

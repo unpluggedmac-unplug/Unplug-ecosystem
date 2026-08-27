@@ -23,6 +23,7 @@ const path = require('path');
 const os = require('os');
 const EmbeddedPostgres = require('embedded-postgres').default;
 const { stopPostgres } = require('./helpers/stopPostgres');
+const { waitFor } = require('./helpers/waitFor');
 
 let pg;
 let pool;
@@ -293,9 +294,13 @@ test('A CORRECT PASSWORD STILL WORKS AFTER A FEW MISSES', async () => {
   assert.equal(ok.status, 200, 'the right password is accepted');
   assert.ok(ok.body.token);
 
-  // recordSuccess is fired without awaiting on the response path, so give it
-  // a moment before checking that the slate was wiped.
-  await new Promise((r) => setTimeout(r, 100));
+  // recordSuccess is fired without awaiting on the response path. Wait for the
+  // slate to actually be wiped rather than sleeping a fixed 100ms — that is a
+  // guess about how busy the machine is, and it was wrong often enough
+  // elsewhere in this suite to cause real intermittent failures.
+  await waitFor(
+    async () => (await attempts.check('real@example.com')).failedCount === 0,
+    'the successful sign-in to clear the failed-attempt record');
   assert.equal((await attempts.check('real@example.com')).failedCount, 0,
     'and the successful sign-in cleared the record');
 });

@@ -21,6 +21,7 @@ const path = require('path');
 const os = require('os');
 const EmbeddedPostgres = require('embedded-postgres').default;
 const { stopPostgres } = require('./helpers/stopPostgres');
+const { waitFor } = require('./helpers/waitFor');
 
 let pg;
 let pool;
@@ -34,6 +35,15 @@ const port = 37600 + (process.pid % 300); // bases are 400 apart so ranges canno
 
 let adminToken;
 let memberToken;
+
+// The audit write is fired by the route and NOT awaited, so it lands some time
+// after the HTTP response. This used to be a fixed 120ms sleep, which was a
+// real intermittent failure — see test/helpers/waitFor.js for the whole story.
+const waitForEntry = (action) => waitFor(
+  async () => (await pool.query(
+    `SELECT * FROM admin_activity_log WHERE action = $1 ORDER BY id DESC LIMIT 1`,
+    [action])).rows[0],
+  `an admin_activity_log entry for "${action}"`);
 
 async function get(urlPath, token) {
   const res = await fetch(baseUrl + urlPath, {
@@ -119,10 +129,8 @@ test('THE ADDRESS IS RECORDED THOUGH NO CALL SITE PASSED ONE', async () => {
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + adminToken },
     body: JSON.stringify({ action: 'article_approved', details: 'Article #1' }),
   });
-  await new Promise((r) => setTimeout(r, 120)); // the write is not awaited by the route
-
-  const row = (await pool.query(
-    `SELECT * FROM admin_activity_log WHERE action = 'article_approved' ORDER BY id DESC LIMIT 1`)).rows[0];
+  // No fixed sleep: wait for the row the route did not await. See waitForEntry.
+  const row = await waitForEntry('article_approved');
   assert.ok(row, 'the entry exists');
   assert.ok(row.ip_address, `an address was captured, got ${row.ip_address}`);
   assert.ok(row.user_agent !== undefined);
@@ -133,8 +141,10 @@ test('an IPv4 address is stored in the form somebody would search for', async ()
   // A v4 client on a dual-stack listener arrives as "::ffff:127.0.0.1".
   // Storing it that way means an address copied from a firewall log never
   // matches.
-  const row = (await pool.query(
-    `SELECT ip_address FROM admin_activity_log WHERE action = 'article_approved' ORDER BY id DESC LIMIT 1`)).rows[0];
+  // Waits for the row itself rather than assuming the previous test has
+  // already landed it — otherwise a slow write fails this one too, with a
+  // TypeError about undefined that says nothing about the real cause.
+  const row = await waitForEntry('article_approved');
   assert.ok(!String(row.ip_address).startsWith('::ffff:'), `got ${row.ip_address}`);
 });
 
