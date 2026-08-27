@@ -379,6 +379,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="emailmarketing">Email Marketing</a>
         <a data-section="popups">Popups</a>
         <a data-section="social">Social Feed</a>
+        <a data-section="pagevisibility">Page Visibility</a>
         <a data-section="spam">Spam Filter</a>
       </div>
     </div>
@@ -1721,6 +1722,27 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
         </div>
         <div class="panel-body" id="soList" style="padding:0;"><div class="loading-state">Loading&hellip;</div></div>
+      </div>
+    </div>
+
+
+    <!-- PAGE VISIBILITY -->
+    <div class="admin-section" id="section-pagevisibility">
+      <div class="main-head"><div><h1>Page Visibility</h1>
+        <p>Take a page out of the menus without taking it down. An <strong>unlisted</strong> page
+           still works for anybody you send the link to, and search engines are still told about
+           it &mdash; it just stops appearing in the navigation and the footer.</p></div></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <p style="margin:0; font-size:13px; color:var(--slate); font-weight:400; line-height:1.6;">
+            <strong>This is not privacy.</strong> An unlisted page is completely public to anyone
+            with the address, and it stays in the sitemap. It is for a page you hand out &mdash; a
+            campaign link, a form in a social bio &mdash; rather than one people browse into.
+            Anything that genuinely needs protecting needs an account, not this.
+          </p>
+        </div>
+        <div class="panel-body" id="pvList" style="padding:0;"><div class="loading-state">Loading&hellip;</div></div>
       </div>
     </div>
 
@@ -3368,6 +3390,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'emailmarketing') emShowTab('campaigns');
     if (section === 'popups') loadPopups();
     if (section === 'social') loadSocialPosts();
+    if (section === 'pagevisibility') loadPageVisibility();
     if (section === 'vouchers') loadVouchers();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
@@ -13485,12 +13508,40 @@ const PU_KINDS = {
 
 // The magazine's own page ids. Matches what goToPage uses, so what is chosen
 // here is what the popup script compares against at runtime.
-const PU_PAGES = [
-  ['home', 'Home'], ['news', 'News'], ['articledetail', 'Article pages'],
-  ['directory', 'Directory'], ['editions', 'Editions'], ['top10', 'Top 10'],
-  ['competitions', 'Competitions'], ['gallery', 'Gallery'], ['deafcommunity', 'Deaf Community'],
-  ['members', 'Members'], ['about', 'About'], ['contact', 'Contact'], ['nominate', 'Nominate'],
+// THE MAGAZINE'S PAGES, in one place.
+//
+// Used by the popup targeting screen AND by Page Visibility. It was written
+// twice at one point, which is how a page ends up on one screen and missing
+// from the other with nothing to say why.
+//
+// The ids match the <main id="page-*"> elements in unplug-magazine.html and
+// the data-page attributes on every link to them. `nav` marks the ones that
+// actually appear in a menu — article pages and profile pages are real pages
+// a popup can target, but there is no menu entry to hide, so Page Visibility
+// leaves them out.
+const UNPLUG_PAGES = [
+  { id: 'home', label: 'Home', nav: true },
+  { id: 'news', label: 'Latest News', nav: true },
+  { id: 'directory', label: 'Directory', nav: true },
+  { id: 'gallery', label: 'Gallery', nav: true },
+  { id: 'editions', label: 'Editions', nav: true },
+  { id: 'top10', label: 'Top 10', nav: true },
+  { id: 'competitions', label: 'Competitions', nav: true },
+  { id: 'investors', label: 'Investors', nav: true },
+  { id: 'brandplacement', label: 'Marketplace', nav: true },
+  { id: 'nominate', label: 'Nominate', nav: true },
+  { id: 'members', label: 'Members', nav: true },
+  { id: 'deafcommunity', label: 'Deaf Community', nav: true },
+  { id: 'about', label: 'About', nav: true },
+  { id: 'contact', label: 'Contact', nav: true },
+  { id: 'refunds', label: 'Terms & Policies', nav: true },
+  { id: 'privacy', label: 'Privacy Policy', nav: true },
+  { id: 'terms', label: 'Terms of Use', nav: true },
+  // Reachable, but never from a menu — nothing to unlist.
+  { id: 'articledetail', label: 'Article pages', nav: false },
 ];
+
+const PU_PAGES = UNPLUG_PAGES.map((p) => [p.id, p.label]);
 
 function puEl(tag, text, style) {
   const el = document.createElement(tag);
@@ -13927,6 +13978,79 @@ document.addEventListener('click', async (e) => {
     loadSocialPosts();
   } catch (err) { showToast(err.message || 'Could not add that post.', true); }
 });
+
+
+// ---------------------------------------------------------------------------
+// Page Visibility
+//
+// Stored as one setting — a comma-separated list of page ids — read by the
+// public site, which hides those entries from its own menus. The list is
+// short, changes rarely, and lives beside the other platform settings rather
+// than in a table of its own; the magazine has no pages table, because its
+// "pages" are <main> elements in one document.
+// ---------------------------------------------------------------------------
+
+let PV_UNLISTED = new Set();
+
+async function loadPageVisibility() {
+  const host = document.getElementById('pvList');
+  if (!host) return;
+  host.textContent = '';
+  host.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
+
+  try {
+    const data = await api('/admin/settings');
+    const row = (data.settings || []).find((r) => r.key === 'unlisted_pages');
+    PV_UNLISTED = new Set(String((row && row.value) || '').split(',').map((x) => x.trim()).filter(Boolean));
+    host.textContent = '';
+
+    UNPLUG_PAGES.filter((page) => page.nav).forEach((page) => {
+      const unlisted = PV_UNLISTED.has(page.id);
+      const rowEl = puEl('div', null,
+        'padding:12px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
+
+      const left = puEl('div', null, 'min-width:220px;');
+      const head = puEl('div', null, 'display:flex; align-items:center; gap:8px; flex-wrap:wrap;');
+      head.appendChild(puEl('strong', page.label));
+      head.appendChild(puEl('span', unlisted ? 'Unlisted' : 'Listed',
+        'font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; background:'
+        + (unlisted ? 'var(--slate)' : 'var(--green)') + ';'));
+      left.appendChild(head);
+      left.appendChild(puEl('div',
+        unlisted
+          ? 'Not in the menus. The link still works and search engines still see it.'
+          : 'Appears in the navigation and the footer.',
+        'font-size:12.5px; color:var(--slate); margin-top:3px;'));
+      rowEl.appendChild(left);
+
+      rowEl.appendChild(puBtn(unlisted ? 'Put back in the menu' : 'Unlist', async () => {
+        // Home is deliberately not special-cased in the backend — an admin who
+        // really wants to unlist it may — but it is worth one question, because
+        // it is the entry everything else is navigated from.
+        if (!unlisted && page.id === 'home'
+            && !confirm('Unlist the Home page? It will disappear from the menus, which is '
+              + 'almost certainly not what you want.')) return;
+        const next = new Set(PV_UNLISTED);
+        if (unlisted) next.delete(page.id); else next.add(page.id);
+        try {
+          await api('/admin/settings/unlisted_pages', {
+            method: 'PATCH',
+            body: JSON.stringify({ value: [...next].join(',') }),
+          });
+          showToast(unlisted ? page.label + ' is back in the menu.'
+            : page.label + ' is unlisted — the link still works.');
+          loadPageVisibility();
+        } catch (e) { showToast(e.message || 'Could not change that.', true); }
+      }, unlisted ? 'btn btn-solid' : 'btn'));
+
+      host.appendChild(rowEl);
+    });
+  } catch (e) {
+    host.textContent = '';
+    host.appendChild(puEl('p', e.message || 'Could not load the page list.',
+      'padding:16px; color:var(--red);'));
+  }
+}
 
 </script>
 <script src="accessibility.js" defer></script>

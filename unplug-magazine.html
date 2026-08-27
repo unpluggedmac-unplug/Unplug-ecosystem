@@ -1618,6 +1618,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <button data-page="competitions" data-i18n="nav.competitions">Competitions</button>
       <button data-page="investors" data-i18n="nav.investors">Investors</button>
       <button data-page="brandplacement" data-i18n="nav.marketplace">Marketplace</button>
+      <button data-page="nominate" data-i18n="nav.nominate">Nominate</button>
       <button data-page="members" data-i18n="nav.members">Members</button>
       <button data-page="deafcommunity" data-i18n="nav.deafcommunity">Deaf Community</button>
       <button data-page="about" data-i18n="nav.about">About</button>
@@ -10107,6 +10108,90 @@ function setupPosterCarousel(widget) {
 
     if (grid.children.length) section.hidden = false;
   }).catch(() => { /* no feed is the correct failure for a decorative strip */ });
+})();
+
+// ---------------------------------------------------------------------------
+// Unlisted pages — in the site, but not in the menus.
+//
+// An admin can take any page out of the navigation without it being taken
+// down. The link keeps working, the page keeps its place in the sitemap, and
+// search engines are still told about it. It is for a page you hand out — a
+// campaign landing page, a nomination form in a social bio — rather than one
+// people browse into.
+//
+// THIS IS NOT PRIVACY, and it must never be treated as though it were. An
+// unlisted page is completely public to anybody holding the address. Anything
+// that genuinely needs protecting needs an account and a role.
+//
+// TWO RULES:
+//
+//   IT FAILS OPEN. If the settings request fails, is slow, or the reader is
+//   offline, every menu entry stays exactly where it is. Hiding parts of a
+//   site's navigation because an API was asleep would be a far worse bug than
+//   an unlisted page showing for a moment.
+//
+//   THE LAST ANSWER IS REMEMBERED, so the second visit does not flash. Applied
+//   from localStorage immediately, then reconciled with the server a moment
+//   later. A stale value corrects itself within the same page load, and the
+//   worst case is one entry appearing or disappearing shortly after arrival.
+// ---------------------------------------------------------------------------
+(function setupUnlistedPages() {
+  const CACHE_KEY = 'unplug_unlisted_pages';
+
+  function parse(value) {
+    return String(value || '')
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+
+  function apply(pages) {
+    const hidden = new Set(pages);
+    // Every link to a page anywhere — the top menu, the footer, and anything
+    // rendered later — is a [data-page]. One selector rather than a list of
+    // places, so a link added somewhere new is covered without this knowing.
+    document.querySelectorAll('[data-page]').forEach((el) => {
+      const page = el.getAttribute('data-page');
+      if (!page) return;
+      const shouldHide = hidden.has(page);
+      // Only ever touched when it needs to change, so this cannot fight
+      // anything else that sets display on the same element.
+      if (shouldHide && el.dataset.unlistedHidden !== '1') {
+        el.dataset.unlistedHidden = '1';
+        el.dataset.unlistedDisplay = el.style.display || '';
+        el.style.display = 'none';
+        // The footer wraps its links in <li>; hiding only the anchor leaves a
+        // bullet and a gap where the entry used to be.
+        const li = el.closest('li');
+        if (li) { li.dataset.unlistedHidden = '1'; li.style.display = 'none'; }
+      } else if (!shouldHide && el.dataset.unlistedHidden === '1') {
+        el.style.display = el.dataset.unlistedDisplay || '';
+        delete el.dataset.unlistedHidden;
+        const li = el.closest('li');
+        if (li && li.dataset.unlistedHidden === '1') {
+          li.style.display = '';
+          delete li.dataset.unlistedHidden;
+        }
+      }
+    });
+  }
+
+  // Immediately, from what the last visit learned.
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached !== null) apply(parse(cached));
+  } catch (e) { /* private mode — just means no head start */ }
+
+  // Then the truth.
+  api('/public-settings').then((data) => {
+    const value = (data && data.settings && data.settings.unlisted_pages) || '';
+    try { localStorage.setItem(CACHE_KEY, value); } catch (e) { /* ignore */ }
+    apply(parse(value));
+    // Re-applied after the page has settled, because directory cards, CMS
+    // blocks and the marketplace buttons render their own [data-page] links
+    // after this runs.
+    setTimeout(() => apply(parse(value)), 2500);
+  }).catch(() => { /* fails open: the menus stay as they are */ });
 })();
 </script>
 <script src="i18n.js" defer></script>
