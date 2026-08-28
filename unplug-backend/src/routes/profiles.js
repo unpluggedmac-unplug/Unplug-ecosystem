@@ -334,6 +334,13 @@ router.patch('/profiles/:id', requireOwnerOrAdmin(getProfileOwnerId), async (req
     // tested with IS NULL (map eligibility, Near Me), and an empty string
     // would read as a value and keep an unplaceable listing on the map queue.
     const LOCATION_KEYS = new Set(['streetAddress', 'suburb', 'city', 'province', 'country']);
+    // Fields where an empty box means "clear it", stored as NULL rather than
+    // an empty string. THIS MATTERS FOR THE IMAGE, not just for tidiness:
+    // competition entries and the Top 10 fall back with
+    // COALESCE(ce.manual_image_url, p.feature_image_url), and COALESCE only
+    // falls through on NULL. A listing image cleared to '' would be inherited
+    // as '' — an <img src=""> where the fallback should have taken over.
+    const CLEAR_TO_NULL_KEYS = new Set([...LOCATION_KEYS, 'featureImageUrl', 'demoReelUrl']);
     const setClauses = [];
     const values = [];
 
@@ -348,7 +355,7 @@ router.patch('/profiles/:id', requireOwnerOrAdmin(getProfileOwnerId), async (req
     for (const [bodyKey, column] of Object.entries(bodyKeyMap)) {
       if (req.body[bodyKey] !== undefined) {
         let value = req.body[bodyKey];
-        if (LOCATION_KEYS.has(bodyKey) && typeof value === 'string' && value.trim() === '') value = null;
+        if (CLEAR_TO_NULL_KEYS.has(bodyKey) && typeof value === 'string' && value.trim() === '') value = null;
         values.push(value);
         setClauses.push(`${column} = $${values.length}`);
       }

@@ -1793,6 +1793,19 @@ async function loadProfile() {
         <div class="field"><label for="editTags">Tags <span style="font-weight:400; opacity:0.7;">&mdash; up to 10, separated by commas. This is how people find you in search.</span></label><input id="editTags" value="${(p.tags || []).join(', ')}" placeholder="e.g. Coffee, Roastery, Cape Town"></div>
         <div class="field"><label for="editQuote">Quote</label><textarea id="editQuote" rows="3">${p.quote || ''}</textarea></div>
       </div>
+      <div class="field">
+        <!-- THE LISTING'S OWN COVER IMAGE.
+             The column and the API have accepted this all along — PATCH
+             /profiles/:id maps featureImageUrl — and an admin could set it
+             from Cover Images. There was simply no field here, so a member
+             could never choose the picture that represents their own listing
+             in the Directory, on the map, or in a Top 10 entry.
+             No pixel size is quoted on purpose: the spec document says
+             1200x1200 in one place and 1920x1080 in another for this same
+             field, and inventing a third number here would make it worse. -->
+        <label>Listing image <span style="font-weight:400; opacity:0.7;">&mdash; the picture shown with your listing. A landscape photo works best.</span></label>
+        <div id="editCoverHost">${UnplugUpload.fieldHtml('profileCover', p.feature_image_url || '')}</div>
+      </div>
       <div class="field-row">
         <div class="field"><label for="editEmail">Contact Email</label><input id="editEmail" value="${p.contact_email || ''}"></div>
         <div class="field"><label for="editPhone">Contact Phone</label><input id="editPhone" value="${p.contact_phone || ''}"></div>
@@ -1890,6 +1903,10 @@ async function loadProfile() {
             quote: document.getElementById('editQuote').value,
             contactEmail: document.getElementById('editEmail').value,
             contactPhone: document.getElementById('editPhone').value,
+            // Sent as '' rather than omitted when cleared, so removing the
+            // picture actually removes it instead of silently keeping the old
+            // one — the PATCH only touches fields that are present.
+            featureImageUrl: UnplugUpload.valueOf(document.getElementById('editCoverHost')) || '',
             ...locationPayload(),
           }),
         });

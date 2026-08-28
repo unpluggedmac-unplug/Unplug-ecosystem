@@ -2312,9 +2312,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="main-head"><div><h1>Cover Images</h1><p>One place to see and change the cover image on every article and directory profile. Your image always wins — it becomes the public cover everywhere that item appears.</p></div></div>
       <div class="panel" style="margin-bottom:16px;">
         <div class="panel-body" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <strong style="margin-right:6px;">Show:</strong>
-          <button class="btn btn-line cover-type-btn active" data-covertype="article" style="width:auto;">Articles</button>
-          <button class="btn btn-line cover-type-btn" data-covertype="profile" style="width:auto;">Directory Profiles</button>
+          <!-- Built from the server's list, not hardcoded here. A second copy
+               of "what kinds of image exist" living in this page would drift
+               from the one that actually serves them. -->
+          <div id="coverTypeBtns" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <span style="color:var(--slate); font-size:13px;">Loading…</span>
+          </div>
           <input id="coverSearch" placeholder="Filter by title…" style="padding:8px; margin-left:auto; min-width:200px;">
         </div>
       </div>
@@ -2325,6 +2328,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
             <div><div style="font-size:12px; color:#666; margin-bottom:4px;">Current</div><img id="coverCurrentImg" src="" alt="" onerror="this.style.visibility='hidden'" style="width:150px; height:110px; object-fit:cover; background:#eee; border-radius:6px;"></div>
             <div style="flex:1; min-width:240px;"><div style="font-size:12px; color:#666; margin-bottom:4px;">New cover image</div><div id="coverUpload"></div></div>
+          </div>
+          <!-- Projects choose a cover from the pictures they already have,
+               rather than uploading a separate one that would appear nowhere
+               in the project's own gallery. -->
+          <div id="coverPick" style="display:none; margin-top:14px;">
+            <div style="font-size:12px; color:#666; margin-bottom:6px;">Choose which of this project's images is the cover</div>
+            <div id="coverPickGrid" style="display:flex; gap:10px; flex-wrap:wrap;"></div>
+          </div>
+          <div style="display:none;">
           </div>
           <div id="coverEditorError" style="color:var(--red); margin:8px 0; display:none;"></div>
           <div style="margin-top:10px;">
@@ -6819,91 +6831,162 @@ async function removeHighlight(id) {
 // the admin's image becomes the authoritative public cover everywhere.
 // ---------------------------------------------------------------------------
 let _coverWired = false;
-let _coverType = 'article';
+let _coverType = null;
+let _coverTypes = [];
 let _coverItems = [];
+let _coverMode = 'upload';
 let _coverEditId = null;
+let _coverPickId = null;   // project image chosen in the picker
 
 async function loadCoverManager() {
   if (!_coverWired) {
     _coverWired = true;
-    document.querySelectorAll('.cover-type-btn').forEach((b) => b.addEventListener('click', () => {
-      document.querySelectorAll('.cover-type-btn').forEach((x) => x.classList.remove('active'));
-      b.classList.add('active');
-      _coverType = b.dataset.covertype;
-      cancelCoverEdit();
-      loadCoverManager();
-    }));
     document.getElementById('coverSearch').addEventListener('input', renderCoverList);
     document.getElementById('coverSaveBtn').addEventListener('click', () => saveCover(false));
     document.getElementById('coverRemoveBtn').addEventListener('click', () => saveCover(true));
     document.getElementById('coverCancelBtn').addEventListener('click', cancelCoverEdit);
   }
+
+  // The kinds of image come from the server. Grouped, so a contributor's
+  // portrait is not filed next to an article cover as though they were the
+  // same kind of thing.
+  if (!_coverTypes.length) {
+    try {
+      const d = await api('/admin/covers/types');
+      _coverTypes = d.types || [];
+      _coverType = _coverType || (_coverTypes[0] && _coverTypes[0].key);
+    } catch (e) {
+      document.getElementById('coverTypeBtns').innerHTML =
+        `<span style="color:var(--red); font-size:13px;">${escapeHtmlAdmin(e.message || 'Could not load.')}</span>`;
+      return;
+    }
+    renderCoverTypeButtons();
+  }
+
   const el = document.getElementById('coverList');
   el.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
   try {
-    if (_coverType === 'article') {
-      const d = await api('/articles/admin/all');
-      _coverItems = (d.articles || []).map((a) => ({
-        id: a.id, title: a.title, cover: a.banner_image_url, meta: `Article · ${a.status}${a.author_email ? ' · ' + a.author_email : ''}`,
-      }));
-    } else {
-      const d = await api('/admin/profiles/approved');
-      _coverItems = (d.profiles || []).map((p) => ({
-        id: p.id, title: p.display_name, cover: p.feature_image_url, meta: `Profile · ${p.category || ''}${p.submitted_by ? ' · ' + p.submitted_by : ''}`,
-      }));
-    }
+    const d = await api('/admin/covers/' + encodeURIComponent(_coverType));
+    _coverItems = d.items || [];
+    _coverMode = d.mode || 'upload';
     renderCoverList();
   } catch (e) {
     el.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load.')}</div>`;
   }
 }
 
+function renderCoverTypeButtons() {
+  const host = document.getElementById('coverTypeBtns');
+  const groups = [];
+  _coverTypes.forEach((t) => {
+    let g = groups.find((x) => x.name === t.group);
+    if (!g) { g = { name: t.group, types: [] }; groups.push(g); }
+    g.types.push(t);
+  });
+  host.innerHTML = groups.map((g) => `<span style="font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--slate); margin:0 2px 0 6px;">${escapeHtmlAdmin(g.name)}</span>`
+    + g.types.map((t) => `<button class="btn btn-line cover-type-btn${t.key === _coverType ? ' active' : ''}" data-covertype="${escapeHtmlAdmin(t.key)}" style="width:auto;">${escapeHtmlAdmin(t.label)}</button>`).join('')).join('');
+  host.querySelectorAll('.cover-type-btn').forEach((b) => b.addEventListener('click', () => {
+    _coverType = b.dataset.covertype;
+    host.querySelectorAll('.cover-type-btn').forEach((x) => x.classList.toggle('active', x === b));
+    cancelCoverEdit();
+    loadCoverManager();
+  }));
+}
+
 function renderCoverList() {
   const el = document.getElementById('coverList');
   const q = (document.getElementById('coverSearch').value || '').toLowerCase();
-  const items = _coverItems.filter((it) => !q || (it.title || '').toLowerCase().includes(q));
+  const items = _coverItems.filter((it) => !q || String(it.title || '').toLowerCase().includes(q));
   if (!items.length) { el.innerHTML = '<div style="padding:16px; color:#666;">Nothing to show.</div>'; return; }
-  el.innerHTML = items.map((it) => `<div style="display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--paper-line);">
+  el.innerHTML = items.map((it) => {
+    // A project with no images of its own has nothing to choose between, so
+    // the button says why rather than opening an empty picker.
+    const disabled = _coverMode === 'pick' && it.pickable === false;
+    return `<div style="display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--paper-line);">
       <img src="${escapeHtmlAdmin(it.cover || '')}" alt="" onerror="this.style.visibility='hidden'" style="width:72px; height:52px; object-fit:cover; background:#eee; border-radius:4px; flex:none;">
       <div style="flex:1; min-width:0;">
         <strong>${escapeHtmlAdmin(it.title || ('#' + it.id))}</strong>
-        <div style="font-size:12px; color:#666;">${escapeHtmlAdmin(it.meta)}${it.cover ? '' : ' · <span style="color:var(--red);">no cover</span>'}</div>
+        <div style="font-size:12px; color:#666;">${escapeHtmlAdmin(it.meta || '')}${it.cover ? '' : ' · <span style="color:var(--red);">no image</span>'}</div>
       </div>
-      <button class="btn btn-line" style="width:auto;" onclick="editCover(${it.id})">Change cover</button>
-    </div>`).join('');
+      ${disabled
+        ? '<button class="btn btn-line" style="width:auto; opacity:0.45; cursor:not-allowed;" disabled title="This project has no images yet — add some in Investor Projects first.">Choose cover</button>'
+        : `<button class="btn btn-line cover-edit-btn" data-coverid="${it.id}" style="width:auto;">${_coverMode === 'pick' ? 'Choose cover' : 'Change image'}</button>`}
+    </div>`;
+  }).join('');
+  // Bound rather than inline onclick, so an id never has to survive being
+  // interpolated into an attribute.
+  el.querySelectorAll('.cover-edit-btn').forEach((b) =>
+    b.addEventListener('click', () => editCover(Number(b.dataset.coverid))));
 }
 
-function editCover(id) {
+async function editCover(id) {
   const it = _coverItems.find((x) => x.id === id);
   if (!it) return;
   _coverEditId = id;
-  document.getElementById('coverEditorTitle').textContent = 'Cover for: ' + (it.title || ('#' + id));
+  _coverPickId = null;
+  document.getElementById('coverEditorTitle').textContent = 'Image for: ' + (it.title || ('#' + id));
   const img = document.getElementById('coverCurrentImg');
   img.style.visibility = it.cover ? 'visible' : 'hidden';
   img.src = it.cover || '';
-  document.getElementById('coverUpload').innerHTML = UnplugUpload.fieldHtml('coverImg', it.cover || '');
   document.getElementById('coverEditorError').style.display = 'none';
+
+  const upload = document.getElementById('coverUpload');
+  const pick = document.getElementById('coverPick');
+  if (_coverMode === 'pick') {
+    upload.closest('div').style.display = 'none';
+    pick.style.display = 'block';
+    const grid = document.getElementById('coverPickGrid');
+    grid.innerHTML = '<span style="color:#666; font-size:13px;">Loading images…</span>';
+    try {
+      const d = await api(`/admin/covers/project/${id}/images`);
+      grid.innerHTML = (d.images || []).map((im) => `
+        <button type="button" class="cover-pick-btn" data-imgid="${im.id}"
+          style="padding:0; border:3px solid ${im.is_cover ? 'var(--red)' : 'transparent'}; background:none; cursor:pointer; border-radius:6px;">
+          <img src="${escapeHtmlAdmin(im.image_url)}" alt="" style="width:120px; height:88px; object-fit:cover; border-radius:3px; display:block;">
+        </button>`).join('') || '<span style="color:#666; font-size:13px;">This project has no images yet.</span>';
+      grid.querySelectorAll('.cover-pick-btn').forEach((b) => b.addEventListener('click', () => {
+        _coverPickId = Number(b.dataset.imgid);
+        grid.querySelectorAll('.cover-pick-btn').forEach((x) => {
+          x.style.borderColor = (x === b) ? 'var(--red)' : 'transparent';
+        });
+      }));
+    } catch (e) {
+      grid.innerHTML = `<span style="color:var(--red); font-size:13px;">${escapeHtmlAdmin(e.message)}</span>`;
+    }
+  } else {
+    pick.style.display = 'none';
+    upload.closest('div').style.display = '';
+    upload.innerHTML = UnplugUpload.fieldHtml('coverImg', it.cover || '');
+  }
+
   document.getElementById('coverEditor').style.display = 'block';
   document.getElementById('coverEditor').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function cancelCoverEdit() {
   _coverEditId = null;
-  document.getElementById('coverEditor').style.display = 'none';
+  _coverPickId = null;
+  const ed = document.getElementById('coverEditor');
+  if (ed) ed.style.display = 'none';
 }
 
 async function saveCover(remove) {
   if (!_coverEditId) return;
   const err = document.getElementById('coverEditorError');
   err.style.display = 'none';
-  const value = remove ? '' : (UnplugUpload.valueOf(document.getElementById('coverUpload')) || '');
   try {
-    if (_coverType === 'article') {
-      await api('/articles/' + _coverEditId, { method: 'PATCH', body: JSON.stringify({ bannerImageUrl: value }) });
+    if (_coverMode === 'pick') {
+      if (!remove && !_coverPickId) throw new Error('Choose one of the images first.');
+      await api(`/admin/covers/project/${_coverEditId}`, {
+        method: 'PATCH', body: JSON.stringify({ imageId: remove ? null : _coverPickId }),
+      });
     } else {
-      await api('/profiles/' + _coverEditId, { method: 'PATCH', body: JSON.stringify({ featureImageUrl: value }) });
+      const value = remove ? '' : (UnplugUpload.valueOf(document.getElementById('coverUpload')) || '');
+      await api(`/admin/covers/${encodeURIComponent(_coverType)}/${_coverEditId}`, {
+        method: 'PATCH', body: JSON.stringify({ imageUrl: value }),
+      });
     }
-    showToast(remove ? 'Cover removed.' : 'Cover updated — live everywhere this item appears.');
+    showToast(remove ? 'Image removed.' : 'Image updated — live everywhere this item appears.');
     cancelCoverEdit();
     loadCoverManager();
   } catch (e) {
