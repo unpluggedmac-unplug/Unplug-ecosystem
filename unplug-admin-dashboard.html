@@ -14605,24 +14605,48 @@ function puBehaviourSection(state, onChange) {
   return section;
 }
 
+// Opens the popup editor.
+//
+// `id` is the popup to edit, or null to start a new one. A new popup is not
+// saved until Create is pressed, so the whole thing — blocks, colours,
+// behaviour — is built first and stored once, the same way an article is
+// written before it is published rather than created empty and then filled in.
 async function puEdit(id) {
   const panel = document.getElementById('puEditor');
   if (!panel) return;
+  const isNew = id === null || id === undefined;
   panel.hidden = false;
   panel.textContent = '';
   panel.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
 
   try {
     await puLoadOptions();
-    const all = await api('/popups');
-    const p = all.find((x) => x.id === id);
-    if (!p) throw new Error('That popup is gone.');
+    let p;
+    if (isNew) {
+      // The defaults a popup is created with. They are the same values the
+      // database would have used, written here so the editor shows what will
+      // be stored rather than blanks that turn into something else on save.
+      p = {
+        id: null, name: '', title: '', body: '', kind: 'newsletter',
+        image_url: '', button_label: '', button_url: '', list_id: null,
+        scroll_percent: 50, pages: [], frequency: 'days', frequency_days: 30,
+        starts_at: null, ends_at: null, active: false,
+        blocks: [], style: {}, media: {},
+        position: 'center', animation: 'fade-up',
+        trigger_type: 'scroll', trigger_seconds: null, auto_close_seconds: null,
+      };
+    } else {
+      const all = await api('/popups');
+      p = all.find((x) => x.id === id);
+      if (!p) throw new Error('That popup is gone.');
+    }
     panel.textContent = '';
 
     const head = puEl('div', null,
       'padding:14px 16px; border-bottom:1px solid var(--paper-line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;');
-    head.appendChild(puEl('strong', p.name));
-    head.appendChild(puBtn('Close', () => { panel.hidden = true; panel.textContent = ''; }));
+    head.appendChild(puEl('strong', isNew ? 'New popup' : p.name));
+    head.appendChild(puBtn(isNew ? 'Cancel' : 'Close',
+      () => { panel.hidden = true; panel.textContent = ''; }));
     panel.appendChild(head);
 
     const body = puEl('div', null, 'padding:16px;');
@@ -14634,7 +14658,9 @@ async function puEdit(id) {
       return input;
     };
 
-    body.appendChild(puField('Name (only you see this)', bind(puInput(p.name), 'name')));
+    const nameInput = bind(puInput(p.name), 'name');
+    body.appendChild(puField('Name (only you see this)', nameInput,
+      isNew ? 'Something you will recognise in the list — "October competition", not "Popup 3".' : null));
 
     const kind = puSelect(Object.entries(PU_KINDS), p.kind);
     kind.addEventListener('change', () => { draft.kind = kind.value; });
@@ -14844,7 +14870,34 @@ async function puEdit(id) {
 
     refreshPreview();
 
-    const save = puBtn('Save', async () => {
+    const save = puBtn(isNew ? 'Create popup' : 'Save', async () => {
+      if (isNew) {
+        // Checked here rather than by the server refusing, so the message
+        // points at the field instead of appearing as a red banner about a
+        // request the admin did not know they had made.
+        const name = (nameInput.value || '').trim();
+        const heading = (draft.title !== undefined ? draft.title : p.title || '').trim();
+        if (!name) { showToast('Give it a name first — only you see it.', true); nameInput.focus(); return; }
+        if (!heading) { showToast('It needs a heading for readers.', true); return; }
+        try {
+          // Everything built in the panel is sent in ONE request, so a popup
+          // never exists in a half-made state — there is no window in which a
+          // row is saved but its blocks are not.
+          const made = await api('/popups', {
+            method: 'POST',
+            body: JSON.stringify(Object.assign({}, draft, { name, title: heading })),
+          });
+          showToast('Created. It stays switched off until you turn it on.');
+          panel.hidden = true;
+          panel.textContent = '';
+          await loadPopups();
+          // Straight back into it, now that it has an id — the same place the
+          // admin already was, so nothing they just built goes off screen.
+          puEdit(made.id);
+        } catch (e) { showToast(e.message || 'Could not create it.', true); }
+        return;
+      }
+
       if (!Object.keys(draft).length) return showToast('Nothing changed.');
       try {
         await api('/popups/' + p.id, { method: 'PATCH', body: JSON.stringify(draft) });
@@ -14856,6 +14909,13 @@ async function puEdit(id) {
     }, 'btn btn-solid');
     body.appendChild(save);
 
+    if (isNew) {
+      body.appendChild(puEl('p',
+        'It is created switched off. Nothing appears in front of a reader until you '
+        + 'switch it on in the list below.',
+        'font-size:12.5px; color:var(--slate); margin:8px 0 0;'));
+    }
+
     panel.appendChild(body);
   } catch (e) {
     panel.textContent = '';
@@ -14865,16 +14925,15 @@ async function puEdit(id) {
 
 document.addEventListener('click', async (e) => {
   if (e.target && e.target.id === 'puNew') {
-    const name = prompt('What is this popup called? (only you see this)');
-    if (!name) return;
-    const title = prompt('The heading readers see:');
-    if (!title) return;
-    try {
-      const made = await api('/popups', { method: 'POST', body: JSON.stringify({ name, title }) });
-      showToast('Created — it is switched off until you turn it on.');
-      await loadPopups();
-      puEdit(made.id);
-    } catch (err) { showToast(err.message || 'Could not create it.', true); }
+    // Opens the editor blank. It used to ask for the name and the heading in
+    // two browser prompt() boxes before showing anything — which cannot be
+    // corrected without starting again, cannot be styled, and is the only
+    // place in this dashboard that created something that way.
+    await puEdit(null);
+    const panel = document.getElementById('puEditor');
+    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const first = panel && panel.querySelector('input');
+    if (first) first.focus();
   }
 });
 

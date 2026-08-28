@@ -309,3 +309,59 @@ test('the block types the builder offers are the ones the server accepts', async
   assert.ok(body.blockTypes.includes('transcript'),
     'a written version must be offerable, or media popups exclude Deaf readers');
 });
+
+// --------------------------------------------------------------- creating
+
+test('A POPUP IS CREATED COMPLETE, IN ONE REQUEST', async () => {
+  // The admin screen used to ask for the name and heading in two browser
+  // prompt() boxes, create an empty popup, and only then let anything be built
+  // on it. So a popup existed half-made, and abandoning the editor left a
+  // pointless row behind.
+  //
+  // Everything is now sent together, which means this create path has to
+  // accept the whole thing — not just a name and a title.
+  const { status, body } = await api('POST', '/popups', {
+    name: 'October competition',
+    title: 'Win a weekend away',
+    blocks: [{ type: 'text', text: 'Two nights, all in.' },
+      { type: 'button', label: 'Enter', url: '/nominate' }],
+    style: { font: 'display', width: 'large', buttonBg: '#0a7d3c' },
+    position: 'bottom-right', animation: 'zoom',
+    triggerType: 'delay', triggerSeconds: 15, autoCloseSeconds: 30,
+    media: { autoplay: true },
+  }, adminToken);
+
+  assert.equal(status, 201);
+  assert.equal(body.name, 'October competition');
+  assert.deepEqual(body.blocks.map((b) => b.type), ['text', 'button']);
+  assert.equal(body.style.font, 'display');
+  assert.equal(body.position, 'bottom-right');
+  assert.equal(body.animation, 'zoom');
+  assert.equal(body.trigger_type, 'delay');
+  assert.equal(body.trigger_seconds, 15);
+  assert.equal(body.auto_close_seconds, 30);
+  assert.equal(body.media.autoplay, true);
+});
+
+test('a new popup is created switched OFF', async () => {
+  // Nothing an admin makes should start interrupting readers because it was
+  // saved. Switching it on is a separate, deliberate act.
+  const { body } = await api('POST', '/popups',
+    { name: 'Not yet', title: 'Hello', blocks: [{ type: 'text', text: 'x' }] }, adminToken);
+  assert.equal(body.active, false);
+});
+
+test('creating still refuses a popup with no name or no heading', async () => {
+  assert.equal((await api('POST', '/popups', { title: 'No name' }, adminToken)).status, 400);
+  assert.equal((await api('POST', '/popups', { name: 'No heading' }, adminToken)).status, 400);
+});
+
+test('the whitelist applies on the way in, not only on edit', async () => {
+  const { body } = await api('POST', '/popups', {
+    name: 'Hostile', title: 'Hello',
+    blocks: [{ type: 'script', text: 'alert(1)' },
+      { type: 'button', label: 'x', url: 'javascript:alert(1)' },
+      { type: 'text', text: 'kept' }],
+  }, adminToken);
+  assert.deepEqual(body.blocks.map((b) => b.type), ['text']);
+});
