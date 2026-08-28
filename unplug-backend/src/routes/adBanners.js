@@ -8,6 +8,8 @@ const router = express.Router();
 // Placements a member can buy — the human labels for the stable slot_keys that
 // exist on the public site (data-ad-slot). Keeping this server-side stops the
 // client inventing placements.
+const { AD_SLOT_SIZES } = require('../utils/imageSpecs');
+
 const AD_PLACEMENTS = [
   { key: 'home-sponsor-1', label: 'Homepage — Featured Sponsor' },
   { key: 'news-leaderboard', label: 'Latest News — Leaderboard' },
@@ -32,7 +34,13 @@ router.get('/options', async (req, res, next) => {
     const prices = {};
     list.forEach((p) => { prices[p.durationDays] = p.price; });
     res.json({
-      placements: AD_PLACEMENTS,
+      // Each placement carries the size that slot actually is. The buy form
+      // had this dropdown all along and told people "1920 × 600" regardless,
+      // which is not the size of any slot on the site.
+      placements: AD_PLACEMENTS.map((p) => {
+        const s = AD_SLOT_SIZES[p.key];
+        return s ? { ...p, size: { w: s.w, h: s.h, label: s.label, text: `${s.w} × ${s.h}px (${s.label})` } } : p;
+      }),
       durations: list.map((p) => p.durationDays),
       prices,
       packages: list,

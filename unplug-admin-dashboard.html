@@ -580,7 +580,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div><label for="calevContact">Contact details</label><input id="calevContact" placeholder="phone / email shown on the event"></div>
             <div><label for="calevLink">Event link (tickets / info)</label><input id="calevLink" placeholder="https://…"></div>
           </div>
-          <div class="field" style="margin-top:12px;"><label>Feature image <span style="font-weight:400; color:var(--slate);">— 800 × 1200px (2:3 portrait)</span></label><div id="calevImgUpload"></div></div>
+          <div class="field" style="margin-top:12px;"><label>Feature image</label><div id="calevImgUpload"></div></div>
           <div class="field" style="margin-top:12px;"><label for="calevDesc">Description</label><textarea id="calevDesc" rows="3"></textarea></div>
           <div class="field" style="margin-top:12px;"><label for="calevDisplayStart">Show on calendar from (optional)</label><input id="calevDisplayStart" type="date"></div>
           <button class="btn btn-solid" style="width:auto; margin-top:14px;" id="calevSaveBtn">Add event</button>
@@ -1329,7 +1329,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
                 </span>
               </label>
             </div>
-            <div><label>Main image <span style="font-weight:400; color:var(--slate);">— 1920 × 1080px (16:9)</span></label><div id="artBannerUpload"></div></div>
+            <div><label>Main image</label><div id="artBannerUpload"></div></div>
           </div>
 
           <div style="margin-top:14px;"><label for="artBody">Opening / main story</label>
@@ -1413,7 +1413,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">For someone who has no Directory profile — just a name and a photo. Goes onto the Top 10 list approved, free of charge.</p>
           <div class="form-row">
             <div><label for="top10ManualName">Name and surname</label><input id="top10ManualName" placeholder="e.g. Naledi Mokoena"></div>
-            <div style="grid-column:span 1;"><label>Photo <span style="font-weight:400; color:var(--slate);">— 1080 × 1350px (4:5)</span></label><div id="top10ManualImgUpload"></div></div>
+            <div style="grid-column:span 1;"><label>Photo</label><div id="top10ManualImgUpload"></div></div>
           </div>
           <button class="btn btn-solid" style="width:auto; margin-top:10px;" id="addTop10ManualBtn">Add to Top 10</button>
           <span id="top10ManualNote" style="font-size:12px; color:var(--slate); display:block; margin-top:8px;"></span>
@@ -2812,6 +2812,71 @@ let API_BASE = localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
 
 // The upload widget needs to know where the API is and who is signed in.
 UnplugUpload.init({ getApiBase: () => API_BASE, getToken: () => AUTH_TOKEN });
+
+// ---------------------------------------------------------------------------
+// RECOMMENDED IMAGE SIZES — fetched once, from the server.
+//
+// These numbers used to be typed into each upload field by hand in this file
+// AND in the other dashboard, and they had already drifted: an event image was
+// 16:9 here and 2:3 portrait there, and an ad banner had three different
+// answers across the two files. One copy, served by /image-specs, cannot
+// disagree with itself.
+//
+// Failing to load is not fatal: every field still works, it just shows no size
+// hint. Guidance going missing must never stop somebody submitting.
+// ---------------------------------------------------------------------------
+let IMG_SPECS = null;
+let AD_SLOT_SIZES = null;
+async function loadImageSpecs() {
+  if (IMG_SPECS) return IMG_SPECS;
+  try {
+    const d = await api('/image-specs');
+    IMG_SPECS = d.specs || {};
+    AD_SLOT_SIZES = d.adSlots || {};
+  } catch (e) {
+    // DELIBERATELY NOT CACHED. The backend sleeps when idle and the first
+    // request after that can time out, so a failure here is ordinary rather
+    // than permanent. Caching `{}` would leave every upload field on the page
+    // with no size for the rest of the session, and the person filling the
+    // form would have no way of knowing anything was missing.
+    return {};
+  }
+  return IMG_SPECS;
+}
+
+// The shape image-upload.js wants, including the note, so the widget's own
+// hint says everything there is to say about the field.
+function imgSpecFull(key) {
+  const s = IMG_SPECS && IMG_SPECS[key];
+  return s ? { w: s.w, h: s.h, label: s.label, note: s.note || '' } : undefined;
+}
+
+// The shape image-upload.js wants as its 4th argument: { w, h, label }.
+function imgSpec(key) {
+  const s = IMG_SPECS && IMG_SPECS[key];
+  return s ? { w: s.w, h: s.h, label: s.label } : undefined;
+}
+
+// The sentence to put beside a field, or '' when the specs did not load.
+function imgSpecText(key) {
+  const s = IMG_SPECS && IMG_SPECS[key];
+  return s ? s.text : '';
+}
+
+// Fills in any element marked data-imgspec="<key>" with its size sentence.
+//
+// Nothing uses this at the moment: every field states its size through the
+// upload widget instead, which puts the wording beside the file input and
+// keeps it in step with the dimension warning. Kept because a size that needs
+// to appear somewhere that ISN'T an upload field has nowhere else to go.
+function applyImageSpecLabels(root) {
+  if (!IMG_SPECS) return;
+  (root || document).querySelectorAll('[data-imgspec]').forEach((el) => {
+    const t = imgSpecText(el.dataset.imgspec);
+    if (t) el.textContent = '— ' + t;
+  });
+}
+
 let AUTH_TOKEN = null;
 let CURRENT_USER = null;
 
@@ -3041,6 +3106,9 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 });
 
 function enterDashboard(user){
+  // Sizes first, then paint the labels already in the markup. If it fails the
+  // fields still work, they just show no hint.
+  loadImageSpecs().then(() => applyImageSpecLabels());
   document.getElementById('currentUserEmail').textContent = user.email;
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appShell').classList.add('active');
@@ -4779,8 +4847,8 @@ async function dpLoadProfile(id, slug) {
     document.getElementById('dpAchievements').value = p.achievements || '';
     document.getElementById('dpCareer').value = p.career || '';
     document.getElementById('dpQuote').value = p.quote || '';
-    document.getElementById('dpFeatureUpload').innerHTML = UnplugUpload.fieldHtml('dpFeature', p.feature_image_url || '');
-    document.getElementById('dpGalleryUpload').innerHTML = UnplugUpload.fieldHtml('dpGalleryImage', '');
+    document.getElementById('dpFeatureUpload').innerHTML = UnplugUpload.fieldHtml('dpFeature', p.feature_image_url || '', '', imgSpecFull('directory_listing'));
+    document.getElementById('dpGalleryUpload').innerHTML = UnplugUpload.fieldHtml('dpGalleryImage', '', '', imgSpecFull('profile_gallery'));
 
     // Location. Street address is a business-only field, so it's hidden for
     // individual listings (their home address is never stored or shown).
@@ -4922,7 +4990,7 @@ document.getElementById('dpAddGalleryBtn').addEventListener('click', async () =>
   try {
     await api(`/admin/profiles/${DP_CURRENT.id}/gallery`, { method: 'POST', body: JSON.stringify({ imageUrl }) });
     showToast('Image added to gallery.');
-    document.getElementById('dpGalleryUpload').innerHTML = UnplugUpload.fieldHtml('dpGalleryImage', '');
+    document.getElementById('dpGalleryUpload').innerHTML = UnplugUpload.fieldHtml('dpGalleryImage', '', '', imgSpecFull('profile_gallery'));
     dpLoadGallery();
   } catch (err) {
     showToast(err.message, true);
@@ -4974,10 +5042,19 @@ function adBannerRowHtml(uid) {
     <span class="ad-note" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>`;
 }
 
-function fillAdBannerRow(row, banner) {
+// A SPONSOR SLOT AND A LEADERBOARD ARE NOT THE SAME SHAPE, so this row cannot
+// state one size for both. `slotKey` is the placement the row sits under, and
+// the server sends each placement's real format, so the field says the size of
+// the slot being filled rather than an average of all of them.
+function adSlotSpec(slotKey) {
+  const s = AD_SLOT_SIZES && AD_SLOT_SIZES[slotKey];
+  return s ? { w: s.w, h: s.h, label: s.label, note: 'The exact format this slot is sold as.' } : undefined;
+}
+
+function fillAdBannerRow(row, banner, slotKey) {
   const uploadHost = row.querySelector('.ad-img-upload');
-  uploadHost.innerHTML = UnplugUpload.fieldHtml('adImage_' + Math.random().toString(36).slice(2), banner.image_url || '');
-  row.querySelector('.ad-mimg-upload').innerHTML = UnplugUpload.fieldHtml('adMImage_' + Math.random().toString(36).slice(2), banner.mobile_image_url || '');
+  uploadHost.innerHTML = UnplugUpload.fieldHtml('adImage_' + Math.random().toString(36).slice(2), banner.image_url || '', '', adSlotSpec(slotKey));
+  row.querySelector('.ad-mimg-upload').innerHTML = UnplugUpload.fieldHtml('adMImage_' + Math.random().toString(36).slice(2), banner.mobile_image_url || '', '', imgSpecFull('ad_banner_mobile'));
   row.querySelector('.ad-name').value = banner.name || '';
   row.querySelector('.ad-cta').value = banner.cta_text || '';
   row.querySelector('.ad-link').value = banner.link_url || '';
@@ -5097,7 +5174,7 @@ async function loadAdBanners() {
       row.style.cssText = 'padding:12px; margin-bottom:10px; border:1px solid var(--paper-line); border-radius:8px;';
       row.innerHTML = adBannerRowHtml();
       rowsWrap.appendChild(row);
-      fillAdBannerRow(row, banner);
+      fillAdBannerRow(row, banner, slot.key);
       wireAdBannerRow(row, slot.key, banner.id);
     });
 
@@ -5106,7 +5183,7 @@ async function loadAdBanners() {
       row.style.cssText = 'padding:12px; margin-bottom:10px; border:1px solid var(--paper-line); border-radius:8px;';
       row.innerHTML = adBannerRowHtml();
       rowsWrap.appendChild(row);
-      fillAdBannerRow(row, {});
+      fillAdBannerRow(row, {}, slot.key);
       wireAdBannerRow(row, slot.key, null);
     });
   });
@@ -5161,7 +5238,7 @@ async function saveSiteImage(key, index) {
 }
 
 async function loadPageCms() {
-  if (!document.querySelector("#cmsBlockImgUpload .img-upload")) document.getElementById("cmsBlockImgUpload").innerHTML = UnplugUpload.fieldHtml("blockImage", "");
+  if (!document.querySelector("#cmsBlockImgUpload .img-upload")) document.getElementById("cmsBlockImgUpload").innerHTML = UnplugUpload.fieldHtml("blockImage", "", '', imgSpecFull('cms_block'));
   const blocksBody = document.getElementById('cmsBlocksBody');
   const contentBody = document.getElementById('cmsContentBody');
   if (!blocksBody) return;
@@ -5242,7 +5319,7 @@ document.getElementById('cmsAddBlockBtn').addEventListener('click', async () => 
       'cmsBlockImageLink', 'cmsBlockHintText'].forEach((id) => { document.getElementById(id).value = ''; });
     document.getElementById('cmsBlockShowHint').checked = false;
     document.getElementById('cmsBlockOrientation').value = 'landscape';
-    document.getElementById('cmsBlockImgUpload').innerHTML = UnplugUpload.fieldHtml('blockImage', '');
+    document.getElementById('cmsBlockImgUpload').innerHTML = UnplugUpload.fieldHtml('blockImage', '', '', imgSpecFull('cms_block'));
     loadPageCms();
   } catch (err) {
     showToast(err.message, true);
@@ -5255,7 +5332,7 @@ document.getElementById('cmsAddBlockBtn').addEventListener('click', async () => 
 // ---------------------------------------------------------------------------
 function plEnsureUpload(value) {
   document.getElementById('plImgUpload').innerHTML =
-    UnplugUpload.fieldHtml('plImage', value || '', '', { w: 1200, h: 900, label: '4:3' });
+    UnplugUpload.fieldHtml('plImage', value || '', '', imgSpecFull('placement_example'));
 }
 
 function plResetForm() {
@@ -5686,11 +5763,11 @@ async function loadPublishSection() {
   }
   // Seed the editor: an empty banner upload field and the article picker.
   if (!document.querySelector('#artBannerUpload .img-upload')) {
-    document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '');
+    document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '', '', imgSpecFull('article_cover'));
   }
   // Photo upload for the manual Top 10 entry form.
   if (!document.querySelector('#top10ManualImgUpload .img-upload')) {
-    document.getElementById('top10ManualImgUpload').innerHTML = UnplugUpload.fieldHtml('top10ManualImage', '');
+    document.getElementById('top10ManualImgUpload').innerHTML = UnplugUpload.fieldHtml('top10ManualImage', '', '', imgSpecFull('competition_entry'));
   }
   artLoadPickList();
   // Needs TOP10_COMPETITION_ID, which is resolved above.
@@ -5719,7 +5796,7 @@ function artSectionHtml(index, data) {
     <label>Paragraph</label>
     <textarea class="art-sec-para" rows="4" placeholder="Write this part of the story…">${d.paragraph || ''}</textarea>
     <label>Picture (optional)</label>
-    <div class="art-sec-image">${UnplugUpload.fieldHtml('sectionImage', d.image_url || '')}</div>
+    <div class="art-sec-image">${UnplugUpload.fieldHtml('sectionImage', d.image_url || '', '', imgSpecFull('article_body_image'))}</div>
     <label>Note by the picture (optional)</label>
     <input class="art-sec-note" value="${(d.image_note || '').replace(/"/g, '&quot;')}" placeholder="Caption or credit">
   </div>`;
@@ -5762,7 +5839,7 @@ function artAddGallerySlot(value) {
   const row = document.createElement('div');
   row.className = 'art-gallery-row';
   row.style.cssText = 'display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;';
-  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', value || '')}</div>`;
+  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', value || '', '', imgSpecFull('article_body_image'))}</div>`;
   const remove = document.createElement('button');
   remove.type = 'button'; remove.className = 'btn btn-line';
   remove.style.cssText = 'width:auto; padding:6px 12px;'; remove.textContent = '×';
@@ -5847,7 +5924,7 @@ function artReset() {
   document.getElementById('artContributor').value = '';
   document.getElementById('artEmotion').value = '';
   document.getElementById('artRequiresAccount').checked = false;
-  document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '');
+  document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '', '', imgSpecFull('article_cover'));
   artRenderSections([]);
   document.getElementById("artGallery").innerHTML = "";
   document.getElementById("artLinks").innerHTML = "";
@@ -5917,7 +5994,7 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     document.getElementById('artVideo').value = a.video_url || '';
     document.getElementById('artCtaLabel').value = a.cta_label || '';
     document.getElementById('artCtaUrl').value = a.cta_url || '';
-    document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', a.banner_image_url || '');
+    document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', a.banner_image_url || '', '', imgSpecFull('article_cover'));
     artRenderSections(data.sections || []);
     document.getElementById("artGallery").innerHTML = "";
     (a.gallery_images || []).forEach((url) => artAddGallerySlot(url));
@@ -6097,7 +6174,7 @@ document.getElementById('addTop10ManualBtn').addEventListener('click', async () 
     showToast(res.message || 'Added to the Top 10.');
     note.textContent = 'Added — it appears on the Top 10 list straight away.';
     document.getElementById('top10ManualName').value = '';
-    document.getElementById('top10ManualImgUpload').innerHTML = UnplugUpload.fieldHtml('top10ManualImage', '');
+    document.getElementById('top10ManualImgUpload').innerHTML = UnplugUpload.fieldHtml('top10ManualImage', '', '', imgSpecFull('competition_entry'));
   } catch (err) {
     note.textContent = '';
     showToast(err.message, true);
@@ -6693,7 +6770,7 @@ function fillHighlightTargets(keepValue) {
 
 async function loadHighlightsAdmin() {
   if (!_hlImageReady) {
-    document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', '');
+    document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', '', '', imgSpecFull('article_cover'));
     _hlImageReady = true;
     document.getElementById('hlSaveBtn').addEventListener('click', saveHighlight);
     document.getElementById('hlCancelBtn').addEventListener('click', resetHighlightForm);
@@ -6787,7 +6864,7 @@ function editHighlight(id) {
   document.getElementById('hlEnd').disabled = !h.end_date;
   document.getElementById('hlEnd').value = h.end_date ? h.end_date.slice(0, 10) : '';
   document.getElementById('hlPriority').value = h.priority || 0;
-  document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', h.admin_image_url || '');
+  document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', h.admin_image_url || '', '', imgSpecFull('article_cover'));
   document.getElementById('hlFormTitle').textContent = 'Edit highlight';
   document.getElementById('hlCancelBtn').style.display = 'inline-block';
   document.getElementById('section-highlights').scrollIntoView({ behavior: 'smooth' });
@@ -6802,7 +6879,7 @@ function resetHighlightForm() {
   document.getElementById('hlEnd').disabled = false;
   document.getElementById('hlNoEnd').checked = false;
   document.getElementById('hlPriority').value = 0;
-  document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', '');
+  document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', '', '', imgSpecFull('article_cover'));
   document.getElementById('hlFormTitle').textContent = 'Add a highlight';
   document.getElementById('hlCancelBtn').style.display = 'none';
   document.getElementById('hlFormError').style.display = 'none';
@@ -6838,6 +6915,7 @@ let _coverMode = 'upload';
 let _coverEditId = null;
 let _coverPickId = null;   // project image chosen in the picker
 let _coverHint = null;
+let _coverSpecKey = null;
 
 async function loadCoverManager() {
   if (!_coverWired) {
@@ -6873,6 +6951,7 @@ async function loadCoverManager() {
     // The recommended size lives in the route's descriptor, so there is one
     // copy of it rather than a number typed into this page as well.
     _coverHint = d.hint || null;
+    _coverSpecKey = d.specKey || null;   // which entry in the size list this kind of cover uses
     renderCoverList();
   } catch (e) {
     el.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load.')}</div>`;
@@ -6963,7 +7042,7 @@ async function editCover(id) {
     upload.innerHTML = (_coverHint
         ? `<div style="font-size:12px; color:var(--slate); margin-bottom:6px;">${escapeHtmlAdmin(_coverHint)}</div>`
         : '')
-      + UnplugUpload.fieldHtml('coverImg', it.cover || '');
+      + UnplugUpload.fieldHtml('coverImg', it.cover || '', '', imgSpecFull(_coverSpecKey));
   }
 
   document.getElementById('coverEditor').style.display = 'block';
@@ -7097,8 +7176,8 @@ function openProjectEditor(id) {
   document.getElementById('projSaveHint').textContent = id ? '' : 'Save the info first, then add sponsors, video and images.';
   updateWordCount();
   if (!_projUploadsReady) {
-    document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', '');
-    document.getElementById('projImgUpload').innerHTML = UnplugUpload.fieldHtml('projImg', '') +
+    document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', '', '', imgSpecFull('sponsor_logo'));
+    document.getElementById('projImgUpload').innerHTML = UnplugUpload.fieldHtml('projImg', '', '', imgSpecFull('project_image')) +
       '<button class="approve" id="projImgAddBtn" type="button" style="padding:7px 12px; margin-top:6px;">Add uploaded image</button>';
     document.getElementById('projImgAddBtn').addEventListener('click', addProjectImage);
     _projUploadsReady = true;
@@ -7231,7 +7310,7 @@ async function saveSponsor() {
     _spEditId = null;
     document.getElementById('spName').value = '';
     document.getElementById('spLink').value = '';
-    document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', '');
+    document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', '', '', imgSpecFull('sponsor_logo'));
     document.getElementById('spAddBtn').textContent = 'Add sponsor';
     editProject(projectId);
   } catch (e) { err.textContent = e.message || 'Could not save sponsor.'; err.style.display = 'block'; }
@@ -7245,7 +7324,7 @@ function editSponsor(id) {
   document.getElementById('spLink').value = s.link_url || '';
   document.getElementById('spLinkType').value = s.link_type;
   document.getElementById('spOrder').value = s.display_order;
-  document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', s.logo_url || '');
+  document.getElementById('spLogoUpload').innerHTML = UnplugUpload.fieldHtml('spLogo', s.logo_url || '', '', imgSpecFull('sponsor_logo'));
   document.getElementById('spAddBtn').textContent = 'Update sponsor';
   document.getElementById('spName').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -7306,7 +7385,7 @@ async function addProjectImage() {
   if (!url) { err.textContent = 'Upload an image first.'; err.style.display = 'block'; return; }
   try {
     await api('/projects/admin/' + id + '/images', { method: 'POST', body: JSON.stringify({ imageUrl: url }) });
-    document.getElementById('projImgUpload').innerHTML = UnplugUpload.fieldHtml('projImg', '') +
+    document.getElementById('projImgUpload').innerHTML = UnplugUpload.fieldHtml('projImg', '', '', imgSpecFull('project_image')) +
       '<button class="approve" id="projImgAddBtn" type="button" style="padding:7px 12px; margin-top:6px;">Add uploaded image</button>';
     document.getElementById('projImgAddBtn').addEventListener('click', addProjectImage);
     editProject(id);
@@ -7554,7 +7633,7 @@ function calevResetForm() {
   CALEV_EDITING_ID = null;
   CALEV_ORIGINAL = null;
   ['calevName', 'calevDate', 'calevStart', 'calevEnd', 'calevVenue', 'calevFee', 'calevContact', 'calevLink', 'calevDesc', 'calevDisplayStart'].forEach((id) => { document.getElementById(id).value = ''; });
-  document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', '');
+  document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', '', '', imgSpecFull('event_image'));
   document.getElementById('calevFormTitle').textContent = 'Add an event';
   document.getElementById('calevSaveBtn').textContent = 'Add event';
   document.getElementById('calevCancelBtn').style.display = 'none';
@@ -7563,7 +7642,7 @@ function calevResetForm() {
 
 async function loadCalEvents() {
   if (!document.querySelector('#calevImgUpload .img-upload')) {
-    document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', '');
+    document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', '', '', imgSpecFull('event_image'));
   }
   const body = document.getElementById('calevBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
@@ -7605,7 +7684,7 @@ function calevLoadForEdit(ev) {
   document.getElementById('calevLink').value = ev.event_link || '';
   document.getElementById('calevDesc').value = ev.description || '';
   document.getElementById('calevDisplayStart').value = ev.display_start_date ? String(ev.display_start_date).slice(0, 10) : '';
-  document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', ev.image_url || '');
+  document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', ev.image_url || '', '', imgSpecFull('event_image'));
   CALEV_ORIGINAL = calevReadForm(); // snapshot after fields are set
   document.getElementById('calevFormTitle').textContent = 'Edit — ' + ev.name;
   document.getElementById('calevSaveBtn').textContent = 'Update event';
@@ -7789,14 +7868,14 @@ document.getElementById('addHofBtn').addEventListener('click', async () => {
     HOF_EDITING_ID = null;
     document.getElementById('addHofBtn').textContent = 'Add Winner';
     ['hofYear', 'hofName', 'hofTitle', 'hofDesc'].forEach((id) => document.getElementById(id).value = '');
-    document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', '');
+    document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', '', '', imgSpecFull('person_portrait'));
     document.getElementById('hofLinkedUserId').value = '';
     loadHallOfFame();
   } catch (err) { showToast(err.message, true); }
 });
 
 async function loadHallOfFame() {
-  if (!document.querySelector("#hofPhotoUpload .img-upload")) document.getElementById("hofPhotoUpload").innerHTML = UnplugUpload.fieldHtml("hofPhoto", "");
+  if (!document.querySelector("#hofPhotoUpload .img-upload")) document.getElementById("hofPhotoUpload").innerHTML = UnplugUpload.fieldHtml("hofPhoto", "", '', imgSpecFull('person_portrait'));
   const body = document.getElementById('hofBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {
@@ -7817,7 +7896,7 @@ async function loadHallOfFame() {
         document.getElementById('hofName').value = w.name || '';
         document.getElementById('hofTitle').value = w.title || '';
         document.getElementById('hofDesc').value = w.description || '';
-        document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', w.photo_url || '');
+        document.getElementById('hofPhotoUpload').innerHTML = UnplugUpload.fieldHtml('hofPhoto', w.photo_url || '', '', imgSpecFull('person_portrait'));
         await populateHofUserPicker();
         document.getElementById('hofLinkedUserId').value = w.linked_user_id || '';
         HOF_EDITING_ID = w.id;
@@ -8023,7 +8102,7 @@ async function loadSiteSettings() {
   try {
     const data = await api('/admin/settings');
     const yt = (data.settings || []).find((s) => s.key === 'youtube_image_url');
-    document.getElementById('ytImageUpload').innerHTML = UnplugUpload.fieldHtml('ytImage', yt ? yt.value : '');
+    document.getElementById('ytImageUpload').innerHTML = UnplugUpload.fieldHtml('ytImage', yt ? yt.value : '', '', imgSpecFull('youtube_thumb'));
     const fm = (data.settings || []).find((s) => s.key === 'featured_members_count');
     document.getElementById('featuredMembersCount').value = fm ? fm.value : '5';
   } catch (err) {
@@ -11148,8 +11227,7 @@ function openGalleryEditor(id) {
   const img = id ? _galAll.find((x) => x.id === id) : null;
   document.getElementById('galEditorTitle').textContent = img ? 'Edit: ' + (img.title || 'Gallery image') : 'Add Gallery Image';
   document.getElementById('galId').value = id || '';
-  document.getElementById('galImgUpload').innerHTML = UnplugUpload.fieldHtml('galImage', img ? img.image_url : '', '',
-    { w: 1080, h: 1350, label: '4:5 portrait' });
+  document.getElementById('galImgUpload').innerHTML = UnplugUpload.fieldHtml('galImage', img ? img.image_url : '', '', imgSpecFull('gallery_photo'));
   document.getElementById('galTitle').value = img ? (img.title || '') : '';
   document.getElementById('galDesc').value = img ? (img.caption || '') : '';
   document.getElementById('galAlt').value = img ? (img.alt_text || '') : '';
@@ -11361,7 +11439,7 @@ async function renderTop10EntriesInto(elementId) {
       if (e.profile_id === null) {
         const hostId = `${elementId}-t10Img-${e.id}`;
         const host = document.getElementById(hostId);
-        if (host) host.innerHTML = UnplugUpload.fieldHtml(hostId, e.manual_image_url || '', '', { w: 1080, h: 1350, label: '4:5 portrait' });
+        if (host) host.innerHTML = UnplugUpload.fieldHtml(hostId, e.manual_image_url || '', '', imgSpecFull('competition_entry'));
       }
     });
   } catch (e) {
@@ -11578,7 +11656,7 @@ async function loadEditionsAdmin() {
     monthSel.innerHTML = ED_MONTHS.map((m, i) =>
       `<option value="${m}"${i === now.getMonth() ? ' selected' : ''}>${m}</option>`).join('');
     document.getElementById('edNewYear').value = now.getFullYear();
-    document.getElementById('edNewCover').innerHTML = UnplugUpload.fieldHtml('edCover', '');
+    document.getElementById('edNewCover').innerHTML = UnplugUpload.fieldHtml('edCover', '', '', imgSpecFull('edition_cover'));
     document.getElementById('edNewPdf').innerHTML = edPdfFieldHtml('edNewPdfBox', '');
     document.getElementById('edNewDownloadPdf').innerHTML = edDownloadPdfFieldHtml('edNewDownloadPdfBox', '');
   }
@@ -11597,7 +11675,7 @@ async function loadEditionsAdmin() {
     // Cover/PDF widgets have to be mounted after the rows are in the DOM.
     rows.forEach((e) => {
       const cover = document.getElementById(`edCoverBox-${e.id}`);
-      if (cover) cover.innerHTML = UnplugUpload.fieldHtml(`edCover-${e.id}`, e.cover_image_url || '');
+      if (cover) cover.innerHTML = UnplugUpload.fieldHtml(`edCover-${e.id}`, e.cover_image_url || '', '', imgSpecFull('edition_cover'));
       const pdf = document.getElementById(`edPdfWrap-${e.id}`);
       if (pdf) pdf.innerHTML = edPdfFieldHtml(`edPdfBox-${e.id}`, e.pdf_url || '');
       const dlPdf = document.getElementById(`edDownloadPdfWrap-${e.id}`);
@@ -11815,7 +11893,7 @@ document.getElementById('edAddBtn').addEventListener('click', async () => {
     }) });
     showToast('Edition added.');
     ['edNewTitle', 'edNewNumber', 'edNewDate', 'edNewDesc'].forEach((f) => { document.getElementById(f).value = ''; });
-    document.getElementById('edNewCover').innerHTML = UnplugUpload.fieldHtml('edCover', '');
+    document.getElementById('edNewCover').innerHTML = UnplugUpload.fieldHtml('edCover', '', '', imgSpecFull('edition_cover'));
     document.getElementById('edNewPdf').innerHTML = edPdfFieldHtml('edNewPdfBox', '');
     document.getElementById('edNewDownloadPdf').innerHTML = edDownloadPdfFieldHtml('edNewDownloadPdfBox', '');
     loadEditionsAdmin();
@@ -12420,7 +12498,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadContributorsAdmin() {
   if (!document.querySelector('#conPhotoUpload .img-upload')) {
     document.getElementById('conPhotoUpload').innerHTML =
-      UnplugUpload.fieldHtml('conPhoto', '', '', { w: 400, h: 400, label: 'square' });
+      UnplugUpload.fieldHtml('conPhoto', '', '', imgSpecFull('person_portrait'));
   }
 
   const body = document.getElementById('conBody');

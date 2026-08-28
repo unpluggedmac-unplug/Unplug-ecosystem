@@ -301,17 +301,36 @@ test("a member cannot set somebody ELSE's listing image", async () => {
   assert.ok(other);
 });
 
-test('the Directory size guidance is served from one place', async () => {
-  // The number lives in the route's descriptor, not typed into the admin page
-  // as well. The spec document says 1200x1200 in one place and 1920x1080 in
-  // another for this same field; the site renders it square everywhere
-  // (.dir-photo is aspect-ratio 1/1, .profile-photo-lg is a circle), so a
-  // 16:9 upload is centre-cropped and loses 44% of its width.
-  const { body } = await api('GET', '/admin/covers/directory', null, adminToken);
-  assert.match(body.hint, /1200/);
-  assert.match(body.hint, /square/i);
+test('every kind of cover says which size it needs', async () => {
+  // This used to send the Directory's size as a sentence, and every other kind
+  // of cover sent nothing — an admin swapping a Hall of Fame portrait or an
+  // edition cover was told nothing at all. Each type now names an entry in
+  // src/utils/imageSpecs.js and the admin's upload field reads the numbers
+  // from there, so the size is stated once and the same everywhere.
+  //
+  // The Directory is still the one worth naming: the spec document says
+  // 1200x1200 in one place and 1920x1080 in another for this same field, and
+  // the site renders it square everywhere (.dir-photo is aspect-ratio 1/1,
+  // .profile-photo-lg is a circle), so a 16:9 upload loses 44% of its width.
+  const { IMAGE_SPECS } = require('../src/utils/imageSpecs');
 
-  // Types with no verified size say nothing rather than inventing one.
+  const dir = await api('GET', '/admin/covers/directory', null, adminToken);
+  assert.equal(dir.body.specKey, 'directory_listing');
+  assert.equal(IMAGE_SPECS.directory_listing.w, IMAGE_SPECS.directory_listing.h, 'square');
+
+  // The event image is the other one that was wrong: the admin used to say
+  // 800x1200 (2:3 portrait) while the site renders it landscape.
   const ev = await api('GET', '/admin/covers/event', null, adminToken);
-  assert.equal(ev.body.hint, null);
+  assert.equal(ev.body.specKey, 'event_image');
+  assert.ok(IMAGE_SPECS.event_image.w > IMAGE_SPECS.event_image.h, 'landscape');
+
+  // And no type may be silent.
+  const { body } = await api('GET', '/admin/covers/types', null, adminToken);
+  const uploads = body.types.filter((t) => t.mode === 'upload');
+  assert.ok(uploads.length >= 10);
+  for (const t of uploads) {
+    const r = await api('GET', '/admin/covers/' + t.key, null, adminToken);
+    assert.ok(r.body.specKey && IMAGE_SPECS[r.body.specKey],
+      `${t.key} does not say what size its cover should be`);
+  }
 });

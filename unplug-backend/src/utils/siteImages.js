@@ -21,13 +21,17 @@
 // FIRST dot, exactly like the text keys: "home.feature_edition.image" is
 // page "home", key "feature_edition.image".
 
+const { IMAGE_SPECS } = require('./imageSpecs');
+
 const SITE_IMAGES = [
   {
     key: 'home.feature_edition.image',
     label: 'Homepage — "Let\'s feature you in our upcoming edition"',
     hint: 'The picture in the invitation block near the bottom of the homepage. Swap it whenever the next edition changes.',
-    // Guidance for the upload widget, not a hard crop.
-    ratio: { w: 1200, h: 900, label: '4:3 landscape' },
+    // Guidance for the upload widget, not a hard crop. Taken from the one
+    // size list rather than written out again here: a second copy of a number
+    // is a number that will drift, which is the whole reason that list exists.
+    ratio: IMAGE_SPECS.site_feature_edition,
   },
 ];
 

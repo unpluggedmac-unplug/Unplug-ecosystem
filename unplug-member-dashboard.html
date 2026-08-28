@@ -416,7 +416,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
 
         <div class="field">
-          <label>Profile picture <span style="font-weight:400; opacity:0.7;">— 1080 × 1080px (square)</span></label>
+          <label>Profile picture</label>
           <div id="mu-avatar-upload"></div>
         </div>
 
@@ -685,7 +685,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
         <div class="field"><label for="art-author">Written by <span style="font-weight:400; opacity:0.7;">&mdash; the byline readers see. Your name, or whoever wrote it.</span></label><input id="art-author" placeholder="e.g. Thandi Mokoena"></div>
         <div class="field"><label for="art-kicker">Supplied by <span style="font-weight:400; opacity:0.7;">&mdash; optional, only if someone else sent the story in</span></label><input id="art-kicker"></div>
-        <div class="field"><label>Cover image <span style="font-weight:400; opacity:0.7;">— 1920 × 1080px (16:9)</span></label>
+        <div class="field"><label>Cover image</label>
           <div id="art-cover-upload"></div>
           <span style="font-size:12px; color:var(--slate);">The main picture shown with your story.</span>
         </div>
@@ -730,7 +730,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
         <div class="field"><label for="evt-venue">Venue</label><input id="evt-venue"></div>
         <div class="field"><label for="evt-fee">Entrance Fee (what attendees pay, e.g. "R50" or "Free")</label><input id="evt-fee" placeholder="Free"></div>
-        <div class="field"><label>Feature Image <span style="font-weight:400; opacity:0.7;">— 1600 × 900px (16:9 landscape)</span></label><div id="evt-image-upload"></div></div>
+        <div class="field"><label>Feature Image</label><div id="evt-image-upload"></div></div>
         <div class="field"><label for="evt-contact">Contact Details (shown on the event)</label><input id="evt-contact" placeholder="e.g. 082 000 0000 / email"></div>
         <div class="field"><label for="evt-link">Event Link (tickets / more info)</label><input id="evt-link" placeholder="https://..."></div>
         <div class="field"><label for="evt-desc">Description</label><textarea id="evt-desc" rows="3"></textarea></div>
@@ -743,7 +743,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
       <!-- Gallery fields -->
       <div id="fields-gallery" class="section-hidden">
-        <p class="sub" style="margin-top:0;">Upload up to 3 images — 1080 × 1350px (4:5 portrait) works best.</p>
+        <p class="sub" style="margin-top:0;">Upload up to 3 images.</p>
         <div class="field"><label>Image 1</label><div id="gal-image-upload-1"></div></div>
         <div class="field"><label for="gal-cap-1">Caption 1 (optional)</label><input id="gal-cap-1"></div>
         <div class="field"><label>Image 2 (optional)</label><div id="gal-image-upload-2"></div></div>
@@ -760,7 +760,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <!-- Marketplace fields -->
       <div id="fields-marketplace" class="section-hidden">
         <div class="field"><label for="mkt-business">Business Name (first-time advertisers only)</label><input id="mkt-business"></div>
-        <div class="field"><label>Poster Image <span style="font-weight:400; opacity:0.7;">— 1600 × 900px (16:9 landscape)</span></label><div id="mkt-poster-upload"></div></div>
+        <div class="field"><label>Poster Image</label><div id="mkt-poster-upload"></div></div>
         <div class="field"><label for="mkt-headline">Headline</label><input id="mkt-headline"></div>
         <div class="field"><label for="mkt-start">Requested Start Date (optional — defaults to today)</label><input id="mkt-start" type="date"></div>
         <div class="field">
@@ -774,7 +774,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field"><label for="ab-placement">Where should it appear?</label><select id="ab-placement"><option value="">Loading placements…</option></select></div>
         <div class="field"><label for="ab-duration">Campaign length</label><select id="ab-duration"><option value="">Loading…</option></select></div>
         <div class="field"><label for="ab-start">Start date (optional — defaults to today)</label><input id="ab-start" type="date"></div>
-        <div class="field"><label>Banner image <span style="font-weight:400; opacity:0.7;">— 1920 × 600px, landscape 16:5, JPG/PNG/WEBP, max 5 MB. Keep text/logos away from the edges.</span></label><div id="ab-image-upload"></div></div>
+        <div class="field"><label>Banner image <span style="font-weight:400; opacity:0.7;" id="ab-size-hint">— choose a placement to see the exact size it needs.</span></label><div id="ab-image-upload"></div></div>
         <div class="field"><label>Mobile image (optional — narrower crop for phones)</label><div id="ab-mimage-upload"></div></div>
         <div class="field"><label for="ab-link">Click-through link (optional)</label><input id="ab-link" placeholder="https://…"></div>
         <div class="field"><label for="ab-name">Advertiser / banner name (optional)</label><input id="ab-name" placeholder="e.g. ABC Investments"></div>
@@ -1466,7 +1466,9 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
 
 function enterMemberDashboard(user){
   CURRENT_USER = user || CURRENT_USER;
-  showCard(null); // hide all auth cards including the welcome screen
+  showCard(null);
+  // Sizes first, then paint the labels that are already in the markup.
+  loadImageSpecs().then(() => applyImageSpecLabels()); // hide all auth cards including the welcome screen
   const who = (CURRENT_USER && CURRENT_USER.email) || '';
   document.getElementById('topRight').innerHTML = `Signed in as ${who} &nbsp;·&nbsp; <button id="logoutBtn">Log out</button>`;
   document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -1547,7 +1549,72 @@ const TIER_PRICES = {
   individual: { basic: 150, pro: 280, premium: 400 },
   business: { basic: 500, pro: 700, premium: 1000 },
 };
-  let MY_PROFILE_ID = null;
+  
+// ---------------------------------------------------------------------------
+// RECOMMENDED IMAGE SIZES — fetched once, from the server.
+//
+// These numbers used to be typed into each upload field by hand in this file
+// AND in the other dashboard, and they had already drifted: an event image was
+// 16:9 here and 2:3 portrait there, and an ad banner had three different
+// answers across the two files. One copy, served by /image-specs, cannot
+// disagree with itself.
+//
+// Failing to load is not fatal: every field still works, it just shows no size
+// hint. Guidance going missing must never stop somebody submitting.
+// ---------------------------------------------------------------------------
+let IMG_SPECS = null;
+let AD_SLOT_SIZES = null;
+async function loadImageSpecs() {
+  if (IMG_SPECS) return IMG_SPECS;
+  try {
+    const d = await api('/image-specs');
+    IMG_SPECS = d.specs || {};
+    AD_SLOT_SIZES = d.adSlots || {};
+  } catch (e) {
+    // DELIBERATELY NOT CACHED. The backend sleeps when idle and the first
+    // request after that can time out, so a failure here is ordinary rather
+    // than permanent. Caching `{}` would leave every upload field on the page
+    // with no size for the rest of the session, and the person filling the
+    // form would have no way of knowing anything was missing.
+    return {};
+  }
+  return IMG_SPECS;
+}
+
+// The shape image-upload.js wants, including the note, so the widget's own
+// hint says everything there is to say about the field.
+function imgSpecFull(key) {
+  const s = IMG_SPECS && IMG_SPECS[key];
+  return s ? { w: s.w, h: s.h, label: s.label, note: s.note || '' } : undefined;
+}
+
+// The shape image-upload.js wants as its 4th argument: { w, h, label }.
+function imgSpec(key) {
+  const s = IMG_SPECS && IMG_SPECS[key];
+  return s ? { w: s.w, h: s.h, label: s.label } : undefined;
+}
+
+// The sentence to put beside a field, or '' when the specs did not load.
+function imgSpecText(key) {
+  const s = IMG_SPECS && IMG_SPECS[key];
+  return s ? s.text : '';
+}
+
+// Fills in any element marked data-imgspec="<key>" with its size sentence.
+//
+// Nothing uses this at the moment: every field states its size through the
+// upload widget instead, which puts the wording beside the file input and
+// keeps it in step with the dimension warning. Kept because a size that needs
+// to appear somewhere that ISN'T an upload field has nowhere else to go.
+function applyImageSpecLabels(root) {
+  if (!IMG_SPECS) return;
+  (root || document).querySelectorAll('[data-imgspec]').forEach((el) => {
+    const t = imgSpecText(el.dataset.imgspec);
+    if (t) el.textContent = '— ' + t;
+  });
+}
+
+let MY_PROFILE_ID = null;
 
 // The mandatory payment-reference notice. Deliberately a large, high-contrast
 // block rather than fine print — an EFT paid without this reference can't be
@@ -1809,7 +1876,7 @@ async function loadProfile() {
              losing 44% of its width — which is how people end up with their
              own faces cut off. -->
         <label>Listing image <span style="font-weight:400; opacity:0.7;">&mdash; 1200 &times; 1200px (square). Shown as a square on the Directory and as a circle on your listing, so keep the subject centred.</span></label>
-        <div id="editCoverHost">${UnplugUpload.fieldHtml('profileCover', p.feature_image_url || '')}</div>
+        <div id="editCoverHost">${UnplugUpload.fieldHtml('profileCover', p.feature_image_url || '', '', imgSpecFull('directory_listing'))}</div>
       </div>
       <div class="field-row">
         <div class="field"><label for="editEmail">Contact Email</label><input id="editEmail" value="${p.contact_email || ''}"></div>
@@ -2304,7 +2371,7 @@ const ART_MAX_GALLERY = 5;
 
 function artEnsureCoverField() {
   const el = document.getElementById('art-cover-upload');
-  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('cover', '', '', { w: 1920, h: 1080, label: '16:9 landscape' });
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('cover', '', '', imgSpecFull('article_cover'));
 }
 
 function artAddGallerySlot(value) {
@@ -2316,7 +2383,7 @@ function artAddGallerySlot(value) {
   const row = document.createElement('div');
   row.className = 'art-gallery-row';
   row.style.cssText = 'display:flex; gap:8px; align-items:flex-start; margin-bottom:8px;';
-  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', value || '', '', { w: 1200, h: 900, label: '4:3 landscape' })}</div>`;
+  row.innerHTML = `<div style="flex:1;">${UnplugUpload.fieldHtml('galleryImage', value || '', '', imgSpecFull('article_body_image'))}</div>`;
   const remove = document.createElement('button');
   remove.type = 'button';
   remove.className = 'btn btn-line';
@@ -2382,7 +2449,7 @@ function artSectionHtml(index, data) {
     <label>Paragraph</label>
     <textarea class="art-sec-para" rows="4" placeholder="Write this part of the story…">${d.paragraph || ''}</textarea>
     <label>Picture (optional)</label>
-    <div class="art-sec-image">${UnplugUpload.fieldHtml('sectionImage', d.image_url || '')}</div>
+    <div class="art-sec-image">${UnplugUpload.fieldHtml('sectionImage', d.image_url || '', '', imgSpecFull('article_body_image'))}</div>
     <label>Note by the picture (optional)</label>
     <input class="art-sec-note" value="${(d.image_note || '').replace(/"/g, '&quot;')}" placeholder="Caption or credit">
   </div>`;
@@ -2449,17 +2516,17 @@ document.getElementById('artSections').addEventListener('click', (e) => {
 // which would have cropped the top and bottom off most uploaded photos.
 function evtEnsureImageField() {
   const el = document.getElementById('evt-image-upload');
-  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('evtImage', '', '', { w: 1600, h: 900, label: '16:9 landscape' });
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('evtImage', '', '', imgSpecFull('event_image'));
 }
 function galEnsureImageFields() {
   [1, 2, 3].forEach((i) => {
     const el = document.getElementById(`gal-image-upload-${i}`);
-    if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml(`galImage${i}`, '', '', { w: 1080, h: 1350, label: '4:5 portrait' });
+    if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml(`galImage${i}`, '', '', imgSpecFull('gallery_photo'));
   });
 }
 function mktEnsurePosterField() {
   const el = document.getElementById('mkt-poster-upload');
-  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('mktPoster', '', '', { w: 1600, h: 900, label: '16:9 landscape' });
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('mktPoster', '', '', imgSpecFull('marketplace_poster'));
 }
 // Which types' draft-recovery banner has already been offered this page
 // load — declared here (not down by maybeOfferDraftRecovery, where it
@@ -2729,12 +2796,31 @@ let _bannerFieldsReady = false;
 async function setupBannerFields() {
   if (_bannerFieldsReady) return;
   _bannerFieldsReady = true;
-  document.getElementById('ab-image-upload').innerHTML = UnplugUpload.fieldHtml('abImage', '', '', { w: 1920, h: 600, label: '16:5 landscape' });
-  document.getElementById('ab-mimage-upload').innerHTML = UnplugUpload.fieldHtml('abMImage', '');
+  document.getElementById('ab-image-upload').innerHTML = UnplugUpload.fieldHtml('abImage', '');
+  document.getElementById('ab-mimage-upload').innerHTML = UnplugUpload.fieldHtml('abMImage', '', '', imgSpecFull('ad_banner_mobile'));
   try {
     const o = await api('/ad-banners/options');
-    document.getElementById('ab-placement').innerHTML = '<option value="">Select a placement…</option>' +
+    const sel = document.getElementById('ab-placement');
+    sel.innerHTML = '<option value="">Select a placement…</option>' +
       (o.placements || []).map((p) => `<option value="${p.key}">${p.label}</option>`).join('');
+
+    // EACH SLOT IS ITS OWN SIZE. The form used to say "1920 × 600" whatever
+    // was chosen, which is not the size of any slot on the site — the
+    // sponsor slots are 300 × 250 and the leaderboards are 728 × 90. The
+    // placement now carries its own, so the guidance changes with the choice.
+    const abSizes = {};
+    (o.placements || []).forEach((p) => { if (p.size) abSizes[p.key] = p.size; });
+    const abHint = document.getElementById('ab-size-hint');
+    const showAbSize = () => {
+      const s = abSizes[sel.value];
+      if (abHint) abHint.textContent = s
+        ? '— ' + s.text + '. Keep any text well inside the edges.'
+        : '— choose a placement to see the exact size it needs.';
+      const widget = document.querySelector('#ab-image-upload .img-upload');
+      if (widget && s) { widget.dataset.ratioW = s.w; widget.dataset.ratioH = s.h; }
+    };
+    sel.addEventListener('change', showAbSize);
+    showAbSize();
     document.getElementById('ab-duration').innerHTML =
       (o.durations || []).map((d) => `<option value="${d}">${d} days — R${Number(o.prices[d]).toFixed(0)}</option>`).join('');
     _abPrices = o.prices || null;
@@ -3581,7 +3667,7 @@ function muFillForm() {
   if (avatarHost && !avatarHost.querySelector('.img-upload')) {
     // Square, because this avatar is reused as a circle in comments,
     // leaderboards and rankings — a landscape crop would lose faces.
-    avatarHost.innerHTML = UnplugUpload.fieldHtml('muAvatar', p.avatar_url || '', '', { w: 1080, h: 1080, label: '1:1 square' });
+    avatarHost.innerHTML = UnplugUpload.fieldHtml('muAvatar', p.avatar_url || '', '', imgSpecFull('person_portrait'));
   }
   muRenderPublishState();
 }

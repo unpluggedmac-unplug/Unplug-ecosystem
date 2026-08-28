@@ -26,39 +26,45 @@ const COVERS = {
   // --- things that appear in a public listing --------------------------
   article: {
     label: 'Articles', group: 'Content',
+    specKey: 'article_cover',
     table: 'articles', image: 'banner_image_url',
     titleSql: 'title', metaSql: "status", order: 'created_at DESC',
   },
   directory: {
     label: 'Directory Listings', group: 'Content',
+    specKey: 'directory_listing',
     table: 'profiles', image: 'feature_image_url',
     titleSql: 'display_name', metaSql: "status", order: 'display_name ASC',
-    // SQUARE. Taken from what the site actually renders, not from the spec
-    // document, which says 1200x1200 on one page and 1920x1080 on another for
-    // this same field: .dir-photo is aspect-ratio 1/1 on the Directory card
-    // and in the members grid, and .profile-photo-lg is a 110x110 circle on
-    // the listing page. A 16:9 upload is centre-cropped everywhere.
-    hint: '1200 × 1200px (square) — shown as a square in the Directory and as a circle on the listing, so keep the subject centred.',
+    // The size itself now comes from specKey above, so it is stated once. The
+    // reasoning is worth keeping: the spec document says 1200x1200 on one page
+    // and 1920x1080 on another for this same field, and neither is authority.
+    // .dir-photo is aspect-ratio 1/1 on the Directory card and in the members
+    // grid, and .profile-photo-lg is a 110x110 circle on the listing page, so
+    // a 16:9 upload is centre-cropped everywhere.
   },
   event: {
     label: 'Events', group: 'Content',
+    specKey: 'event_image',
     table: 'events', image: 'image_url',
     titleSql: 'name', metaSql: "status", order: 'event_date DESC NULLS LAST',
   },
   edition: {
     label: 'Editions', group: 'Content',
+    specKey: 'edition_cover',
     table: 'editions', image: 'cover_image_url',
     titleSql: "COALESCE(NULLIF(TRIM(title), ''), 'Issue ' || issue_number)",
     metaSql: "'Issue ' || issue_number", order: 'issue_number DESC',
   },
   marketplace: {
     label: 'Marketplace Posters', group: 'Content',
+    specKey: 'marketplace_poster',
     table: 'marketplace_listings', image: 'poster_image_url',
     titleSql: "COALESCE(NULLIF(TRIM(headline), ''), 'Listing #' || id)",
     metaSql: 'status', order: 'created_at DESC',
   },
   competition: {
     label: 'Competition Entries', group: 'Content',
+    specKey: 'competition_entry',
     table: 'competition_entries', image: 'manual_image_url',
     // An entry linked to a Directory profile carries no name of its own; the
     // public page shows the profile's. Saying so beats printing "Entry #12".
@@ -74,22 +80,26 @@ const COVERS = {
   // kind of act from changing the picture on a story.
   contributor: {
     label: 'Contributors', group: 'People',
+    specKey: 'person_portrait',
     table: 'contributors', image: 'photo_url',
     titleSql: 'name', metaSql: "COALESCE(role_title, '')", order: 'name ASC',
   },
   halloffame: {
     label: 'Hall of Fame', group: 'People',
+    specKey: 'person_portrait',
     table: 'hall_of_fame', image: 'photo_url',
     titleSql: 'name', metaSql: "COALESCE(title, '') || ' ' || COALESCE(year::text, '')",
     order: 'year DESC NULLS LAST, name ASC',
   },
   birthday: {
     label: 'Birthdays', group: 'People',
+    specKey: 'person_portrait',
     table: 'birthdays', image: 'photo_url',
     titleSql: 'name', metaSql: 'status', order: 'name ASC',
   },
   passport: {
     label: 'Deaf Passports', group: 'People',
+    specKey: 'person_portrait',
     table: 'deaf_passports', image: 'profile_image_url',
     titleSql: 'name', metaSql: 'status', order: 'name ASC',
   },
@@ -151,7 +161,7 @@ router.get('/:type', requireRole('admin'), async (req, res, next) => {
     const r = await pool.query(
       `SELECT id, ${c.titleSql} AS title, ${c.image} AS cover, ${c.metaSql} AS meta
          FROM ${c.table} ORDER BY ${c.order}`);
-    res.json({ type, label: c.label, mode: 'upload', hint: c.hint || null, items: r.rows });
+    res.json({ type, label: c.label, mode: 'upload', hint: c.hint || null, specKey: c.specKey || null, items: r.rows });
   } catch (err) {
     next(err);
   }

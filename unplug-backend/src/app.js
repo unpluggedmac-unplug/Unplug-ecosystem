@@ -195,6 +195,7 @@ app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);
 app.use('/admin/approval-queue', require('./routes/adminApprovalQueue'));
 app.use('/admin/covers', require('./routes/adminCovers'));
+app.use('/image-specs', require('./routes/imageSpecs'));
 app.use('/admin/links', require('./routes/adminProfileLinks'));
 app.use('/cancellations', require('./routes/cancellations'));
 app.use('/acquisition', require('./routes/acquisition'));

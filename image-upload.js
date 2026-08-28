@@ -39,8 +39,12 @@
   // existing caller that doesn't pass it behaves exactly as before.
   function fieldHtml(name, value, label, recommended) {
     const safe = String(value || '').replace(/"/g, '&quot;');
+    // `note` explains what the shape is FOR ("the calendar card shows a wide
+    // strip"), which is the part that stops somebody bringing a portrait
+    // photo for a landscape slot. It comes from the same server entry as the
+    // numbers, so a field can never state a size without its reason.
     const hint = recommended
-      ? `<p class="img-upload-hint">Recommended size: ${recommended.w} × ${recommended.h}px${recommended.label ? ' — ' + recommended.label : ''}. JPG, PNG or WEBP, max 5MB.</p>`
+      ? `<p class="img-upload-hint">Recommended size: ${recommended.w} × ${recommended.h}px${recommended.label ? ' — ' + recommended.label : ''}. JPG, PNG or WEBP, max 5MB.${recommended.note ? ' ' + recommended.note : ''}</p>`
       : '';
     const ratioAttrs = recommended ? ` data-ratio-w="${recommended.w}" data-ratio-h="${recommended.h}"` : '';
     return `<div class="img-upload" data-name="${name}"${ratioAttrs}>
