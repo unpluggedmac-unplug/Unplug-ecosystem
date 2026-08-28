@@ -606,15 +606,22 @@ router.post('/backfill-metadata', requireRole('admin'), async (req, res, next) =
       });
       const slug = article.slug || await uniqueSlug(derived.slug, article.id);
       await pool.query(
+        // EVERY PARAMETER IS CAST. Postgres infers a bare $n from its
+        // context, and inside `CASE WHEN ... THEN $6 ELSE NULL END` there is
+        // no context to infer from — so it assumed text, and
+        // COALESCE(integer, text) is an error. This endpoint returned 500 on
+        // its first row every time it was ever called; nothing had noticed
+        // because the button that calls it was never wired up.
         `UPDATE articles SET
-           slug = COALESCE(slug, $1),
-           meta_description = COALESCE(meta_description, $2),
-           key_takeaways = COALESCE(key_takeaways, $3),
-           keywords = COALESCE(keywords, $4),
-           tags = COALESCE(tags, $5),
+           slug = COALESCE(slug, $1::varchar),
+           meta_description = COALESCE(meta_description, $2::varchar),
+           key_takeaways = COALESCE(key_takeaways, $3::text[]),
+           keywords = COALESCE(keywords, $4::text[]),
+           tags = COALESCE(tags, $5::text[]),
            seo_title = COALESCE(seo_title, title),
-           suggested_category_id = COALESCE(suggested_category_id, CASE WHEN category_id IS NULL THEN $6 ELSE NULL END)
-         WHERE id = $7`,
+           suggested_category_id = COALESCE(suggested_category_id,
+             CASE WHEN category_id IS NULL THEN $6::integer ELSE NULL END)
+         WHERE id = $7::integer`,
         [slug, derived.metaDescription, derived.keyTakeaways, derived.keywords,
           derived.tags, derived.suggestedCategoryId, article.id]
       );

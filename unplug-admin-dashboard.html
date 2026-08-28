@@ -12259,6 +12259,37 @@ async function loadTagsAdmin() {
   }
 }
 
+// "Fill in missing metadata" — THIS BUTTON HAD NO HANDLER AT ALL.
+//
+// The markup, the explanatory copy and the backend endpoint
+// (POST /articles/backfill-metadata) all existed; the click was simply never
+// wired up. So the button sat in the Publish screen doing nothing, silently,
+// while the task it performs stayed on the to-do list as "somebody needs to
+// click this". Found by auditing every button in this file for a handler.
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('backfillMetaBtn');
+  if (!btn) return;
+  const note = document.getElementById('backfillMetaNote');
+
+  btn.addEventListener('click', async () => {
+    // No confirm dialog on purpose: the endpoint only fills fields that are
+    // EMPTY and never overwrites an editor's own wording, so there is nothing
+    // here to be careful about.
+    btn.disabled = true;
+    note.textContent = 'Working through the articles…';
+    try {
+      const r = await api('/articles/backfill-metadata', { method: 'POST' });
+      // The server writes the sentence, so the count and the wording cannot
+      // disagree with what actually happened.
+      note.textContent = r.message;
+    } catch (e) {
+      note.textContent = 'Could not finish: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   const suggest = document.getElementById('tagsSuggestBtn');
   if (!suggest) return;
