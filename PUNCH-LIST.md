@@ -55,9 +55,16 @@ profile gallery images. Ad banners already had this from the rotation work.
 
 **Still open, needs a decision before coding — three items now, not one:**
 
-1. **Directory Profile Feature/Cover image size** — Pierre's own document
-   contradicts itself: page 1 says `1200×1200 (1:1)`, page 3 says
-   `1920×1080 (16:9)` for the same field. Don't guess.
+1. ~~**Directory Profile Feature/Cover image size**~~ — **RESOLVED
+   2026-08-28, from the code rather than the document.** Pierre's document
+   contradicts itself (page 1 `1200×1200`, page 3 `1920×1080`), so the answer
+   came from what the site actually renders: `.dir-photo` is
+   `aspect-ratio:1/1` on the Directory card and in the members grid, and
+   `.profile-photo-lg` is a `110×110` circle on the listing page. It is
+   **square everywhere**, so `1200×1200` is right and a 16:9 upload is
+   centre-cropped, losing 44% of its width. Now stated on the member field and
+   served from the `directory` descriptor in `routes/adminCovers.js` so there
+   is one copy of the number.
 2. **Event feature image size** — the PDF wants `1920×1080 (16:9)` for
    Events, but the live site (member submission form AND the admin Calendar
    Events editor, consistently) has always used `800×1200 (2:3 portrait)`.

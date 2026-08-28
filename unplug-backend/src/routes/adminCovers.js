@@ -33,6 +33,12 @@ const COVERS = {
     label: 'Directory Listings', group: 'Content',
     table: 'profiles', image: 'feature_image_url',
     titleSql: 'display_name', metaSql: "status", order: 'display_name ASC',
+    // SQUARE. Taken from what the site actually renders, not from the spec
+    // document, which says 1200x1200 on one page and 1920x1080 on another for
+    // this same field: .dir-photo is aspect-ratio 1/1 on the Directory card
+    // and in the members grid, and .profile-photo-lg is a 110x110 circle on
+    // the listing page. A 16:9 upload is centre-cropped everywhere.
+    hint: '1200 × 1200px (square) — shown as a square in the Directory and as a circle on the listing, so keep the subject centred.',
   },
   event: {
     label: 'Events', group: 'Content',
@@ -145,7 +151,7 @@ router.get('/:type', requireRole('admin'), async (req, res, next) => {
     const r = await pool.query(
       `SELECT id, ${c.titleSql} AS title, ${c.image} AS cover, ${c.metaSql} AS meta
          FROM ${c.table} ORDER BY ${c.order}`);
-    res.json({ type, label: c.label, mode: 'upload', items: r.rows });
+    res.json({ type, label: c.label, mode: 'upload', hint: c.hint || null, items: r.rows });
   } catch (err) {
     next(err);
   }

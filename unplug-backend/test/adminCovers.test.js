@@ -300,3 +300,18 @@ test("a member cannot set somebody ELSE's listing image", async () => {
   assert.equal(row.rows[0].feature_image_url, null, 'unchanged');
   assert.ok(other);
 });
+
+test('the Directory size guidance is served from one place', async () => {
+  // The number lives in the route's descriptor, not typed into the admin page
+  // as well. The spec document says 1200x1200 in one place and 1920x1080 in
+  // another for this same field; the site renders it square everywhere
+  // (.dir-photo is aspect-ratio 1/1, .profile-photo-lg is a circle), so a
+  // 16:9 upload is centre-cropped and loses 44% of its width.
+  const { body } = await api('GET', '/admin/covers/directory', null, adminToken);
+  assert.match(body.hint, /1200/);
+  assert.match(body.hint, /square/i);
+
+  // Types with no verified size say nothing rather than inventing one.
+  const ev = await api('GET', '/admin/covers/event', null, adminToken);
+  assert.equal(ev.body.hint, null);
+});

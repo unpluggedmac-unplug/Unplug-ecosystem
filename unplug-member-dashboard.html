@@ -1800,10 +1800,15 @@ async function loadProfile() {
              from Cover Images. There was simply no field here, so a member
              could never choose the picture that represents their own listing
              in the Directory, on the map, or in a Top 10 entry.
-             No pixel size is quoted on purpose: the spec document says
-             1200x1200 in one place and 1920x1080 in another for this same
-             field, and inventing a third number here would make it worse. -->
-        <label>Listing image <span style="font-weight:400; opacity:0.7;">&mdash; the picture shown with your listing. A landscape photo works best.</span></label>
+             SQUARE, 1200x1200. The spec document contradicts itself here
+             (1200x1200 on one page, 1920x1080 on another), so the size comes
+             from what the site actually does instead: .dir-photo is
+             aspect-ratio 1/1 on the Directory card and in the members grid,
+             and .profile-photo-lg is a 110x110 circle on the listing page. A
+             16:9 upload is centre-cropped to a square everywhere it appears,
+             losing 44% of its width — which is how people end up with their
+             own faces cut off. -->
+        <label>Listing image <span style="font-weight:400; opacity:0.7;">&mdash; 1200 &times; 1200px (square). Shown as a square on the Directory and as a circle on your listing, so keep the subject centred.</span></label>
         <div id="editCoverHost">${UnplugUpload.fieldHtml('profileCover', p.feature_image_url || '')}</div>
       </div>
       <div class="field-row">

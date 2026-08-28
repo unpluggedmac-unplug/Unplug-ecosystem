@@ -6837,6 +6837,7 @@ let _coverItems = [];
 let _coverMode = 'upload';
 let _coverEditId = null;
 let _coverPickId = null;   // project image chosen in the picker
+let _coverHint = null;
 
 async function loadCoverManager() {
   if (!_coverWired) {
@@ -6869,6 +6870,9 @@ async function loadCoverManager() {
     const d = await api('/admin/covers/' + encodeURIComponent(_coverType));
     _coverItems = d.items || [];
     _coverMode = d.mode || 'upload';
+    // The recommended size lives in the route's descriptor, so there is one
+    // copy of it rather than a number typed into this page as well.
+    _coverHint = d.hint || null;
     renderCoverList();
   } catch (e) {
     el.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load.')}</div>`;
@@ -6956,7 +6960,10 @@ async function editCover(id) {
   } else {
     pick.style.display = 'none';
     upload.closest('div').style.display = '';
-    upload.innerHTML = UnplugUpload.fieldHtml('coverImg', it.cover || '');
+    upload.innerHTML = (_coverHint
+        ? `<div style="font-size:12px; color:var(--slate); margin-bottom:6px;">${escapeHtmlAdmin(_coverHint)}</div>`
+        : '')
+      + UnplugUpload.fieldHtml('coverImg', it.cover || '');
   }
 
   document.getElementById('coverEditor').style.display = 'block';
