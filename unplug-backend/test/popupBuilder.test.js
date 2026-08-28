@@ -365,3 +365,95 @@ test('the whitelist applies on the way in, not only on edit', async () => {
   }, adminToken);
   assert.deepEqual(body.blocks.map((b) => b.type), ['text']);
 });
+
+// ------------------------------------------------------- what it is for
+
+test('WHAT IT IS FOR IS THE ADMIN\'S OWN WORDS', async () => {
+  // It used to be one of three fixed values, held down by a CHECK constraint:
+  // newsletter, announcement, nominate. A community magazine announces more
+  // kinds of thing than three, and the cost of the wrong list is somebody
+  // filing a popup under a heading that does not describe it.
+  const p = await makePopup({ purpose: 'Heritage Day competition' });
+  assert.equal(p.purpose, 'Heritage Day competition');
+});
+
+test('a purpose is tidied, not rejected', async () => {
+  // Free text still gets the obvious tidying, so trailing spaces and double
+  // spaces do not turn one purpose into two.
+  const p = await makePopup({ purpose: '  Community   Awards  ' });
+  assert.equal(p.purpose, 'Community Awards');
+  const empty = await makePopup({ purpose: '   ' });
+  assert.equal(empty.purpose, null, 'blank is no purpose, not an empty string');
+});
+
+test('the builder is told which purposes are already in use', async () => {
+  // This is the whole mitigation for free text: "Competition", "competition"
+  // and "Comp" become three different things only if nobody is shown what
+  // already exists.
+  await makePopup({ purpose: 'Winter drive' });
+  const { body } = await api('GET', '/popups/options', null, adminToken);
+  assert.ok(Array.isArray(body.purposes));
+  assert.ok(body.purposes.includes('Winter drive'));
+});
+
+test('the purpose can be changed later', async () => {
+  const p = await makePopup({ purpose: 'Draft name' });
+  const { body } = await api('PATCH', '/popups/' + p.id, { purpose: 'Better name' }, adminToken);
+  assert.equal(body.purpose, 'Better name');
+});
+
+test('THE OLD FIXED TYPE IS UNTOUCHED', async () => {
+  // `kind` still decides the layout of every popup made before the builder.
+  // Repurposing or dropping it would change how those render, which is a thing
+  // that would only be discovered on the live site.
+  const p = await makePopup({ kind: 'newsletter', purpose: 'Anything I like' });
+  assert.equal(p.kind, 'newsletter');
+  assert.equal(p.purpose, 'Anything I like');
+  // And it still refuses a value it does not know, rather than storing it.
+  const odd = await makePopup({ kind: 'not-a-kind' });
+  assert.equal(odd.kind, 'newsletter', 'falls back rather than breaking the constraint');
+});
+
+// ------------------------------------------------------------- starters
+
+test('every starting point is made of blocks that survive saving', async () => {
+  // A starter that offered a block the whitelist then dropped would put an
+  // admin in front of a piece that vanishes when they save it.
+  const { body } = await api('GET', '/popups/options', null, adminToken);
+  assert.ok(body.starters.length >= 6);
+  const { BLOCK_TYPES } = require('../src/utils/popupBuilder');
+  body.starters.forEach((st) => {
+    assert.ok(st.key && st.label, 'a starter needs a name');
+    assert.ok(st.blocks.length, st.key + ' starts with nothing');
+    st.blocks.forEach((b) => {
+      assert.ok(BLOCK_TYPES.includes(b.type), `${st.key} offers an unknown block: ${b.type}`);
+    });
+  });
+});
+
+test('A STARTER ARRIVES EMPTY, so no placeholder can go live', async () => {
+  // Wording that came pre-filled would end up in front of readers with the
+  // placeholder still on it.
+  const { body } = await api('GET', '/popups/options', null, adminToken);
+  body.starters.forEach((st) => {
+    st.blocks.forEach((b) => {
+      if (b.type === 'heading' || b.type === 'text' || b.type === 'transcript') {
+        assert.equal(b.text, '', `${st.key} ships wording in a ${b.type}`);
+      }
+    });
+  });
+});
+
+test('a video starting point brings its written version with it', async () => {
+  // Not something to remember afterwards. A popup that only speaks excludes
+  // every Deaf reader, on a magazine that exists partly for them.
+  const { body } = await api('GET', '/popups/options', null, adminToken);
+  const video = body.starters.find((x) => x.key === 'video');
+  assert.ok(video, 'there is a video starting point');
+  assert.ok(video.blocks.some((b) => b.type === 'transcript'),
+    'a video starter with no written version is the thing this magazine should not ship');
+});
+
+test('starters are admin-only, like everything else in the builder', async () => {
+  assert.equal((await api('GET', '/popups/options')).status, 401);
+});

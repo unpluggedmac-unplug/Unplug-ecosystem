@@ -14182,7 +14182,9 @@ async function loadPopups() {
       head.appendChild(puEl('span', p.active ? 'Live' : 'Off',
         'font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; background:'
         + (p.active ? 'var(--green)' : 'var(--slate)') + ';'));
-      head.appendChild(puEl('span', PU_KINDS[p.kind] || p.kind,
+      // What the admin called it. Popups made before there was such a field
+      // fall back to the old fixed type, so no row is left unlabelled.
+      head.appendChild(puEl('span', p.purpose || PU_KINDS[p.kind] || p.kind,
         'font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:0.04em;'));
       left.appendChild(head);
 
@@ -14453,6 +14455,8 @@ function puBlockList(state, onChange) {
   section.appendChild(addRow);
 
   redraw();
+  // Handed back so a starter layout can add blocks and have the list repaint.
+  section._redraw = redraw;
   return section;
 }
 
@@ -14662,9 +14666,82 @@ async function puEdit(id) {
     body.appendChild(puField('Name (only you see this)', nameInput,
       isNew ? 'Something you will recognise in the list — "October competition", not "Popup 3".' : null));
 
-    const kind = puSelect(Object.entries(PU_KINDS), p.kind);
-    kind.addEventListener('change', () => { draft.kind = kind.value; });
-    body.appendChild(puField('What it is for', kind));
+    // ---- what it is for ---------------------------------------------------
+    //
+    // Free text, because a fixed list cannot anticipate what a community
+    // magazine needs to announce. The list of what has been used before is
+    // offered as suggestions rather than as the only choices: it is the whole
+    // mitigation for free text, since "Competition", "competition" and "Comp"
+    // become three different things only if nobody is shown what exists.
+    const purposeInput = bind(puInput(p.purpose || '', 'text', 'Competition, Event, Advertisement…'), 'purpose');
+    const purposeList = document.createElement('datalist');
+    purposeList.id = 'puPurposeOptions';
+    const knownPurposes = new Set(
+      ((PU_OPTIONS && PU_OPTIONS.purposes) || [])
+        .concat(((PU_OPTIONS && PU_OPTIONS.starters) || []).map((x) => x.label)));
+    knownPurposes.forEach((v) => {
+      const o = document.createElement('option');
+      o.value = v;
+      purposeList.appendChild(o);
+    });
+    purposeInput.setAttribute('list', 'puPurposeOptions');
+    body.appendChild(purposeList);
+    body.appendChild(puField('What it is for', purposeInput,
+      'Your words — whatever you would call it. Start typing to see what you have used before, '
+      + 'so the same kind of popup keeps the same name and the numbers can be compared.'));
+
+    // ---- start from -------------------------------------------------------
+    //
+    // A blank popup is a blank page. These drop in the pieces that kind of
+    // popup nearly always needs, ready to fill in. Nothing keys off which one
+    // was chosen — every piece can be changed, reordered or deleted straight
+    // after — so this is a starting point rather than a type the popup is
+    // stuck as.
+    const starterRow = puEl('div', null, 'display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;');
+    const starterPick = puSelect(
+      [['', '\u2014 choose \u2014']].concat(((PU_OPTIONS && PU_OPTIONS.starters) || []).map((x) => [x.key, x.label])),
+      '');
+    starterPick.setAttribute('style', 'max-width:240px;');
+    starterRow.appendChild(puField('Start from', starterPick,
+      'Adds the usual pieces for that kind of popup, empty and ready to fill in.'));
+    starterRow.appendChild(puBtn('Add the pieces', () => {
+      const chosen = ((PU_OPTIONS && PU_OPTIONS.starters) || []).find((x) => x.key === starterPick.value);
+      if (!chosen) { showToast('Choose one first.', true); return; }
+      // ADDED, NEVER REPLACED. Wiping what somebody has already built because
+      // they were curious what a starter looks like is not a recoverable
+      // mistake — there is no undo in this panel.
+      if (state.blocks.length
+        && !confirm('Add the ' + chosen.label + ' pieces below what is already there?')) return;
+      chosen.blocks.forEach((b) => state.blocks.push(Object.assign({}, b)));
+      // Name it too, but only if it has no name yet — never overwrite one.
+      if (!purposeInput.value.trim()) {
+        purposeInput.value = chosen.label;
+        draft.purpose = chosen.label;
+      }
+      redrawBlocks();
+      refreshPreview();
+      showToast('Added. Fill the pieces in, or delete any you do not want.');
+    }, 'btn btn-line'));
+    body.appendChild(starterRow);
+
+    // The OLD layout setting, shown only where it still decides anything.
+    //
+    // For a popup made before the builder, `kind` is the layout: newsletter
+    // means an email box, nominate means a button to /nominate. For a composed
+    // popup it decides nothing, so showing it there would be a control that
+    // looks like it does something and does not.
+    // Only an EXISTING popup with no pieces is still governed by it. A new one
+    // has no pieces either, but it is about to be built from them, so showing
+    // the old control there would be offering a setting that will stop applying
+    // the moment they add anything.
+    if (!isNew && !(Array.isArray(p.blocks) && p.blocks.length)) {
+      const kind = puSelect(Object.entries(PU_KINDS), p.kind);
+      kind.addEventListener('change', () => { draft.kind = kind.value; });
+      body.appendChild(puField('Old layout style', kind,
+        'This popup uses the original fixed layout, and this setting is what chooses it. '
+        + 'Add any piece under "What is in the popup" below and it stops applying — '
+        + 'the pieces take over.'));
+    }
 
     body.appendChild(puField('Heading', bind(puInput(p.title), 'title')));
 
@@ -14846,7 +14923,9 @@ async function puEdit(id) {
       }, 250);
     }
 
-    body.appendChild(puBlockList(state, refreshPreview));
+    const blockList = puBlockList(state, refreshPreview);
+    const redrawBlocks = () => { if (blockList._redraw) blockList._redraw(); };
+    body.appendChild(blockList);
     body.appendChild(puStyleSection(state, refreshPreview));
     behaviour = puBehaviourSection(state, refreshPreview);
     body.appendChild(behaviour);

@@ -18,7 +18,7 @@ const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const {
-  cleanBlocks, cleanStyle, cleanMedia, contrastWarnings,
+  cleanBlocks, cleanStyle, cleanMedia, cleanPurpose, contrastWarnings, STARTERS,
   BLOCK_TYPES, FONTS, WIDTHS, POSITIONS, ANIMATIONS, TRIGGERS, MAX_BLOCKS, pick,
 } = require('../utils/popupBuilder');
 
@@ -117,8 +117,22 @@ router.post('/:id/event', publicSubmitLimiter, async (req, res) => {
 // Served rather than typed into the admin page, for the same reason the image
 // sizes are: two lists of block types in two files drift, and the one that
 // matters is the one the server will actually accept on save.
-router.get('/options', requireRole('admin'), (req, res) => {
+router.get('/options', requireRole('admin'), async (req, res, next) => {
+  // The purposes already in use, so the admin can pick one they have used
+  // before instead of retyping a variant of it. This is the whole mitigation
+  // for free text: "Competition", "competition" and "Comp" become three
+  // different things only if nobody is shown what already exists.
+  let purposes = [];
+  try {
+    const r = await pool.query(
+      `SELECT DISTINCT purpose FROM popups
+        WHERE purpose IS NOT NULL AND purpose <> '' ORDER BY purpose`);
+    purposes = r.rows.map((x) => x.purpose);
+  } catch (err) { return next(err); }
+
   res.json({
+    starters: STARTERS,
+    purposes,
     blockTypes: BLOCK_TYPES,
     fonts: FONTS,
     widths: WIDTHS,
@@ -175,13 +189,14 @@ router.post('/', requireRole('admin'), async (req, res, next) => {
     const blocks = cleanBlocks(req.body.blocks);
     const style = cleanStyle(req.body.style);
     const media = cleanMedia(req.body.media);
+    const purpose = cleanPurpose(req.body.purpose);
 
     const r = await pool.query(
       `INSERT INTO popups (name, kind, title, body, image_url, button_label, button_url,
                            list_id, scroll_percent, pages, frequency, frequency_days, created_by,
                            blocks, style, position, animation,
-                           trigger_type, trigger_seconds, auto_close_seconds, media)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+                           trigger_type, trigger_seconds, auto_close_seconds, media, purpose)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        RETURNING *`,
       [name.slice(0, 160), kind, title.slice(0, 200), req.body.body || null,
         req.body.imageUrl || null, req.body.buttonLabel || null, req.body.buttonUrl || null,
@@ -197,7 +212,7 @@ router.post('/', requireRole('admin'), async (req, res, next) => {
         pick(TRIGGERS, req.body.triggerType, 'scroll'),
         seconds(req.body.triggerSeconds, 120),
         seconds(req.body.autoCloseSeconds, 300),
-        JSON.stringify(media)]);
+        JSON.stringify(media), purpose]);
 
     await logActivity(req.user.id, 'popup_created', `Created the popup "${name}"`);
     res.status(201).json(r.rows[0]);
@@ -237,6 +252,7 @@ router.patch('/:id', requireRole('admin'), async (req, res, next) => {
     if (req.body.blocks !== undefined) set('blocks', JSON.stringify(cleanBlocks(req.body.blocks)));
     if (req.body.style !== undefined) set('style', JSON.stringify(cleanStyle(req.body.style)));
     if (req.body.media !== undefined) set('media', JSON.stringify(cleanMedia(req.body.media)));
+    if (req.body.purpose !== undefined) set('purpose', cleanPurpose(req.body.purpose));
     if (req.body.position !== undefined) set('position', pick(POSITIONS, req.body.position, 'center'));
     if (req.body.animation !== undefined) set('animation', pick(ANIMATIONS, req.body.animation, 'fade-up'));
     if (req.body.triggerType !== undefined) set('trigger_type', pick(TRIGGERS, req.body.triggerType, 'scroll'));

@@ -265,12 +265,84 @@ function contrastWarnings(style) {
   }).filter((r) => r.ratio !== null);
 }
 
+// ---------------------------------------------------------------------------
+// Starting points
+// ---------------------------------------------------------------------------
+//
+// A blank popup is a blank page, and the hardest part of a blank page is the
+// first line. Each of these drops in the pieces that kind of popup nearly
+// always needs, ready to fill in.
+//
+// THEY ARE STARTING POINTS, NOT TYPES. Every block can be changed, reordered or
+// deleted straight after, and nothing anywhere keys off which one was chosen —
+// the popup is whatever it ends up being. That is deliberate: a starter that
+// quietly constrained what the popup could become would be the old fixed
+// `kind` field again, with friendlier wording.
+//
+// Empty text is on purpose. A starter that arrived with wording already in it
+// would end up live with the placeholder still on it — which is the failure
+// this saves nobody from.
+const STARTERS = [
+  { key: 'newsletter', label: 'Newsletter sign-up', blocks: [
+    { type: 'heading', text: '' },
+    { type: 'text', text: '' },
+    { type: 'email', label: 'Subscribe' },
+  ] },
+  { key: 'announcement', label: 'Announcement', blocks: [
+    { type: 'heading', text: '' },
+    { type: 'text', text: '' },
+    { type: 'button', label: '', url: '' },
+  ] },
+  { key: 'competition', label: 'Competition', blocks: [
+    { type: 'heading', text: '' },
+    { type: 'image', url: '', alt: '' },
+    { type: 'text', text: '' },
+    { type: 'button', label: '', url: '' },
+  ] },
+  { key: 'event', label: 'Event', blocks: [
+    { type: 'heading', text: '' },
+    { type: 'image', url: '', alt: '' },
+    { type: 'text', text: '' },
+    { type: 'button', label: '', url: '' },
+  ] },
+  { key: 'advert', label: 'Advertisement', blocks: [
+    { type: 'image', url: '', alt: '' },
+    { type: 'heading', text: '' },
+    { type: 'button', label: '', url: '' },
+  ] },
+  { key: 'video', label: 'Video message', blocks: [
+    { type: 'heading', text: '' },
+    { type: 'video', url: '', title: '' },
+    // The written version comes WITH it, not as something to remember. A popup
+    // that only speaks excludes every Deaf reader, on a magazine that exists
+    // partly for them.
+    { type: 'transcript', text: '' },
+  ] },
+  { key: 'nominate', label: 'Nominate prompt', blocks: [
+    { type: 'heading', text: '' },
+    { type: 'text', text: '' },
+    { type: 'button', label: 'Nominate someone', url: '/nominate' },
+  ] },
+  { key: 'notice', label: 'Notice', blocks: [
+    { type: 'heading', text: '' },
+    { type: 'text', text: '' },
+  ] },
+];
+
+// What an admin typed into "what it is for". Free text, because a fixed list
+// cannot anticipate what a community magazine needs to announce.
+function cleanPurpose(raw) {
+  const v = String(raw == null ? '' : raw).trim().replace(/\s+/g, ' ');
+  return v ? v.slice(0, 80) : null;
+}
+
 function pick(list, value, fallback) {
   return list.includes(value) ? value : fallback;
 }
 
 module.exports = {
-  cleanBlocks, cleanStyle, cleanMedia,
+  cleanBlocks, cleanStyle, cleanMedia, cleanPurpose,
+  STARTERS,
   contrastRatio, contrastWarnings,
   toEmbed, safeUrl,
   BLOCK_TYPES: Object.keys(BLOCKS),
