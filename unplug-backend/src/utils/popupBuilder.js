@@ -181,8 +181,24 @@ const ANIMATIONS = ['none', 'fade', 'fade-up', 'slide-up', 'slide-down', 'slide-
 const TRIGGERS = ['scroll', 'delay', 'exit'];
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
+
+// A colour code, in any of the forms somebody actually writes one.
+//
+// The admin screen offers a swatch and a box to type a code into, because a
+// brand colour arrives as a code and matching it by dragging around a gradient
+// is guesswork. Whatever comes in is normalised to one stored form, so the
+// same colour typed three ways is one value and not three:
+//
+//   #d20709   d20709   #D20709   #d27   d27   ->   #d20709
+//
+// Everything downstream — the contrast arithmetic, the renderer's own check
+// before it writes a style attribute — expects the six-digit form, and gets it
+// from here rather than each doing its own tidying.
 function colour(raw) {
-  const v = String(raw == null ? '' : raw).trim();
+  let v = String(raw == null ? '' : raw).trim().replace(/^#/, '');
+  // The three-character shorthand, which is what a style guide often gives.
+  if (/^[0-9a-fA-F]{3}$/.test(v)) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+  v = '#' + v;
   return HEX.test(v) ? v.toLowerCase() : null;
 }
 

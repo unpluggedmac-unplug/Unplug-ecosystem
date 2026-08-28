@@ -457,3 +457,59 @@ test('a video starting point brings its written version with it', async () => {
 test('starters are admin-only, like everything else in the builder', async () => {
   assert.equal((await api('GET', '/popups/options')).status, 401);
 });
+
+// ------------------------------------------------------------ colour codes
+
+test('A COLOUR CAN BE TYPED, IN THE FORMS PEOPLE WRITE', async () => {
+  // The builder offers a swatch and a box to type a code into. A brand colour
+  // arrives as a code — from a designer, a style guide, a sponsor's kit — and
+  // matching it by dragging around a gradient is guesswork that gets close and
+  // stays wrong.
+  const forms = ['#d20709', 'd20709', '#D20709', '  #D20709  '];
+  for (const form of forms) {
+    const p = await makePopup({ style: { background: form } });
+    assert.equal(p.style.background, '#d20709', `${JSON.stringify(form)} should be accepted`);
+  }
+});
+
+test('the three-character shorthand is understood', async () => {
+  // What a style guide often gives. Refusing "#FFF" because it is not
+  // "#ffffff" would be pedantry aimed at somebody who has already said exactly
+  // what they want.
+  const p = await makePopup({ style: { background: '#fff', titleColor: 'd27' } });
+  assert.equal(p.style.background, '#ffffff');
+  assert.equal(p.style.titleColor, '#dd2277');
+});
+
+test('THE SAME COLOUR IS ONE STORED VALUE, NOT THREE', async () => {
+  // Normalising happens in one place. Without it, "#FFF", "ffffff" and
+  // "#ffffff" are three different strings for one colour, and the contrast
+  // check has to re-tidy each of them before it can measure anything.
+  const a = await makePopup({ style: { background: '#FFF' } });
+  const b = await makePopup({ style: { background: 'ffffff' } });
+  const c = await makePopup({ style: { background: '#ffffff' } });
+  assert.equal(a.style.background, b.style.background);
+  assert.equal(b.style.background, c.style.background);
+});
+
+test('something that is not a colour is still refused', async () => {
+  // The value ends up in a style attribute on a page shown to every reader, so
+  // "close enough" is not a category here.
+  for (const junk of ['red', 'rgb(1,2,3)', '#gggggg', '#d2070', 'javascript:alert(1)',
+    'url(x)', '#d20709; background:url(x)']) {
+    const p = await makePopup({ style: { background: junk } });
+    assert.equal(p.style.background, undefined, `${junk} should not be stored`);
+  }
+});
+
+test('a typed colour is measured for contrast like any other', async () => {
+  // The shorthand has to be expanded BEFORE the arithmetic, or the check reads
+  // it as an invalid colour and quietly reports nothing.
+  const { body } = await api('POST', '/popups/preview', {
+    blocks: [{ type: 'heading', text: 'Hi' }],
+    style: { background: '#fff', titleColor: '#eee' },
+  }, adminToken);
+  const heading = body.contrast.find((c) => c.what === 'Heading');
+  assert.ok(heading, 'contrast was reported at all');
+  assert.equal(heading.passes, false, 'near-white on white is not readable');
+});

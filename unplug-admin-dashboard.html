@@ -14481,22 +14481,102 @@ function puStyleSection(state, onChange) {
   section.appendChild(puField('Width', width));
 
   const colours = puEl('div', null,
-    'display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px;');
+    'display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px;');
   [['background', 'Background'], ['titleColor', 'Heading colour'], ['textColor', 'Text colour'],
     ['buttonBg', 'Button colour'], ['buttonText', 'Button text']].forEach(([key, label]) => {
     const wrap = puEl('div');
+
+    // TWO WAYS TO SET THE SAME COLOUR: the swatch, and the code.
+    //
+    // The swatch is quicker for choosing something and useless for matching
+    // something. A brand colour arrives as a code — from a designer, a style
+    // guide, a sponsor's kit — and finding it by dragging around a gradient is
+    // guesswork that gets close and stays wrong. So the code can be typed
+    // straight in, and the two are kept in step: whichever one is changed
+    // updates the other, and both write the same single stored value.
     const input = document.createElement('input');
     input.type = 'color';
     input.value = state.style[key] || PU_DEFAULT_COLOURS[key];
     input.setAttribute('style', 'width:100%; height:38px; padding:2px;');
-    input.addEventListener('input', () => { state.style[key] = input.value; onChange(); });
+
+    const hexBox = puInput(state.style[key] || '', 'text', PU_DEFAULT_COLOURS[key]);
+    hexBox.setAttribute('style',
+      'width:100%; font-family:ui-monospace,Menlo,Consolas,monospace; text-transform:lowercase;');
+    hexBox.setAttribute('spellcheck', 'false');
+    hexBox.setAttribute('autocapitalize', 'off');
+    hexBox.setAttribute('autocomplete', 'off');
+    hexBox.setAttribute('aria-label', label + ' as a colour code');
+    hexBox.maxLength = 7;
+
+    const note = puEl('p', '', 'font-size:11.5px; color:var(--red); margin:2px 0 0; min-height:15px;');
+
+    // What counts as a colour code.
+    //
+    // Written to accept what people actually type rather than only the one
+    // exact form: with or without the #, upper or lower case, and the
+    // three-character shorthand, which is what a style guide often gives.
+    // Refusing "#FFF" because it is not "#ffffff" would be pedantry aimed at
+    // somebody who has already told us exactly what they want.
+    const readHex = (raw) => {
+      let v = String(raw || '').trim().replace(/^#/, '');
+      if (/^[0-9a-fA-F]{3}$/.test(v)) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+      return /^[0-9a-fA-F]{6}$/.test(v) ? '#' + v.toLowerCase() : null;
+    };
+
+    // The swatch moved.
+    input.addEventListener('input', () => {
+      state.style[key] = input.value;
+      hexBox.value = input.value;
+      note.textContent = '';
+      onChange();
+    });
+
+    // A code was typed.
+    //
+    // Nothing is applied until it is a whole colour. Half of one is not a
+    // colour, and repainting on every keystroke of "#d20709" would flash the
+    // preview through five wrong shades on the way to the right one.
+    hexBox.addEventListener('input', () => {
+      const raw = hexBox.value.trim();
+      if (!raw) {
+        // Emptied means "use the site's", not "use black".
+        delete state.style[key];
+        input.value = PU_DEFAULT_COLOURS[key];
+        note.textContent = '';
+        onChange();
+        return;
+      }
+      const hex = readHex(raw);
+      if (!hex) {
+        // Said out loud, not silently ignored. A code that does nothing and
+        // explains nothing looks like the field is broken.
+        note.textContent = 'Six characters, 0-9 and a-f, like #d20709.';
+        return;
+      }
+      note.textContent = '';
+      state.style[key] = hex;
+      input.value = hex;
+      onChange();
+    });
+
+    // Tidied on the way out, so "d20709" and "#D2F" become "#d20709" and
+    // "#dd22ff" on screen. What is shown is then what is stored.
+    hexBox.addEventListener('blur', () => {
+      const hex = readHex(hexBox.value);
+      if (hex) { hexBox.value = hex; note.textContent = ''; }
+    });
+
     wrap.appendChild(puField(label, input));
+    wrap.appendChild(hexBox);
+    wrap.appendChild(note);
     // Back to the site's own colour, which is not the same as picking one that
-    // happens to look like it — an unset colour follows a rebrand, a set one
-    // does not.
+    // happens to look like it: an unset colour follows a rebrand, a set one
+    // does not. So this clears the value rather than typing the brand code in.
     wrap.appendChild(puBtn('Use the site\u2019s', () => {
       delete state.style[key];
       input.value = PU_DEFAULT_COLOURS[key];
+      hexBox.value = '';
+      note.textContent = '';
       onChange();
     }));
     colours.appendChild(wrap);
