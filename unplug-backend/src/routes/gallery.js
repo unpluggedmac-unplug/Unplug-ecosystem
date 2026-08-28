@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireRole } = require('../middleware/auth');
 const { publishesFree } = require("../utils/publishingRights");
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { recordParticipationAsync } = require('../utils/participation');
@@ -45,6 +45,73 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// GET /gallery/admin/audit — admin. WHERE IS EVERY GALLERY PHOTO, AND WHY IS
+// IT OR IS IT NOT VISIBLE.
+//
+// Read-only, and deliberately so: it changes nothing. It exists because a
+// photo can be paid for, approved, and still appear nowhere, and until now
+// there was no way to see that from the outside — the public endpoint only
+// tells you what IS showing, never what should be and is not.
+//
+// Three things have to line up for a photo to appear in the Community
+// Gallery: owner_type='general', status='approved', and visibility null or
+// 'published'. This reports each one separately so the reason is obvious
+// rather than inferred.
+router.get('/admin/audit', requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT g.id, g.owner_type, g.owner_id, g.status, g.visibility, g.bundle_id,
+              g.caption, g.title, g.supplied_by, g.created_at, g.image_url,
+              b.user_id AS bundle_user_id, b.status AS bundle_status,
+              p.display_name AS listing_name, p.status AS listing_status,
+              (g.owner_type = 'general'
+               AND g.status = 'approved'
+               AND (g.visibility IS NULL OR g.visibility = 'published')) AS shows_in_gallery
+         FROM gallery_images g
+         LEFT JOIN gallery_bundles b ON b.id = g.bundle_id
+         LEFT JOIN profiles p ON g.owner_type = 'profile' AND p.id = g.owner_id
+        ORDER BY g.created_at DESC`
+    );
+
+    const rows = result.rows.map((r) => {
+      // Said in words, because "owner_type = profile" is not a reason anybody
+      // outside this file should have to translate.
+      let why = null;
+      if (r.shows_in_gallery) {
+        why = 'Showing in the Community Gallery.';
+      } else if (r.status !== 'approved') {
+        // Checked BEFORE the destination: a photo can be both unapproved and
+        // filed somewhere odd, and "it has not been approved" is the reason
+        // that is actually blocking it today. Where it will go afterwards is
+        // still worth saying, so it is said in the same sentence.
+        why = `Still ${r.status} — not approved yet.`
+          + (r.owner_type !== 'general'
+              ? ` When it is, it will go on the ${r.owner_type === 'profile' ? 'listing' : r.owner_type}, not the Community Gallery.`
+              : '');
+      } else if (r.owner_type !== 'general') {
+        why = r.owner_type === 'profile'
+          ? (r.listing_status === 'approved'
+              ? `Filed as a photo on the listing "${r.listing_name}" — it shows there, not in the Community Gallery.`
+              : `Filed as a photo on the listing "${r.listing_name || '(unknown)'}", and that listing is ${r.listing_status || 'missing'} — so it appears NOWHERE.`)
+          : `Filed against ${r.owner_type}, so it never appears in the Community Gallery.`;
+      } else {
+        why = `Approved, but hidden by the admin visibility control (${r.visibility}).`;
+      }
+      return { ...r, why };
+    });
+
+    const stranded = rows.filter((r) => !r.shows_in_gallery && r.status === 'approved');
+    res.json({
+      total: rows.length,
+      showing: rows.filter((r) => r.shows_in_gallery).length,
+      approvedButNotShowing: stranded.length,
+      images: rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /gallery/mine — the authenticated member's own submissions, at any
 // status.
 router.get('/mine', requireAuth, async (req, res, next) => {
@@ -79,23 +146,35 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
     const finalOwnerType = ['profile', 'investor', 'general'].includes(ownerType) ? ownerType : 'general';
 
-    // Tier-based free photo allowance — only applies when this bundle is
-    // attached to the member's own Directory profile.
     // Editorial staff and consultants never pay for a gallery bundle.
     let skipPayment = publishesFree(req.user);
-    if (finalOwnerType === 'profile' && ownerId) {
+
+    // THE FREE GALLERY CREDIT IS NOT CONDITIONAL ON WHERE THE PHOTOS GO.
+    //
+    // This whole block used to sit behind `finalOwnerType === 'profile'`. That
+    // was invisible while the member dashboard always sent 'profile' — and the
+    // moment it stopped (because a Community Gallery submission is not a
+    // listing photo) it would have started CHARGING R100 to members who were
+    // holding a free gallery credit. free_gallery_credits is a GALLERY credit:
+    // it is spent on a gallery bundle wherever the photos end up.
+    if (!skipPayment) {
+      // One profile per member — profiles.user_id is unique.
       const profileResult = await pool.query(
-        'SELECT id, type, package_tier, free_gallery_credits FROM profiles WHERE id = $1 AND user_id = $2',
-        [ownerId, req.user.id]
+        'SELECT id, type, package_tier, free_gallery_credits FROM profiles WHERE user_id = $1',
+        [req.user.id]
       );
-      if (profileResult.rows.length > 0) {
-        const profile = profileResult.rows[0];
-        if (profile.type === 'business') {
+      const profile = profileResult.rows[0];
+      if (profile) {
+        // THE BUSINESS TIER ALLOWANCE IS AN ALLOWANCE OF LISTING PHOTOS — its
+        // own error message says "allows N listing photo(s) total". It applies
+        // only when the bundle is genuinely going onto the listing, which a
+        // Community Gallery submission is not.
+        if (finalOwnerType === 'profile' && Number(ownerId) === profile.id && profile.type === 'business') {
           const PHOTO_LIMITS = { basic: 1, pro: 3, premium: 5 };
           const limit = PHOTO_LIMITS[profile.package_tier] || 1;
           const existingCount = await pool.query(
             `SELECT COUNT(*) FROM gallery_images WHERE owner_type = 'profile' AND owner_id = $1 AND status != 'rejected'`,
-            [ownerId]
+            [profile.id]
           );
           const current = parseInt(existingCount.rows[0].count, 10);
           if (current + images.length > limit) {

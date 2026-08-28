@@ -2611,7 +2611,16 @@ async function createSubmission(type) {
     if (images.length === 0) throw new Error('At least one image is required.');
     const data = await api('/gallery', {
       method: 'POST',
-      body: JSON.stringify({ images, ownerType: MY_PROFILE_ID ? 'profile' : undefined, ownerId: MY_PROFILE_ID || undefined }),
+      // A GALLERY SUBMISSION GOES TO THE COMMUNITY GALLERY. Always.
+      //
+      // This used to send ownerType:'profile' whenever the member happened to
+      // have a Directory listing, which quietly filed their photos as listing
+      // photos — and the Community Gallery query excludes those. So a member
+      // paid R100 for "photos submitted to the Community Gallery", an admin
+      // approved something the queue labelled "Gallery image", and it appeared
+      // nowhere. Members WITHOUT a listing were unaffected, which is why it
+      // looked intermittent.
+      body: JSON.stringify({ images }),
     });
     return {
       linkedType: 'gallery_bundle', linkedId: data.bundle.id, label: 'Gallery Bundle',
