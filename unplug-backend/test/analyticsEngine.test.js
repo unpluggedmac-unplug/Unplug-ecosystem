@@ -506,6 +506,27 @@ test('a very long search string is stored, not rejected', async () => {
   assert.equal(Number(row.rows[0].n), 160, 'trimmed to the column rather than dropped');
 });
 
+test('A REPORT ASKED FOR "NOW" INCLUDES WHAT JUST HAPPENED', async () => {
+  // The window used to end at `new Date()`, which is milliseconds, while
+  // Postgres records `occurred_at` in microseconds. An event written at
+  // 28.171889 is 889 microseconds AFTER a `to` of 28.171 — so a report
+  // requested in the same millisecond as a payment left that payment out of
+  // its own window.
+  //
+  // In production the window is days wide and this never showed. In a test the
+  // write and the read are microseconds apart, so it showed as roughly two
+  // runs in five failing, on whichever test happened to lose the race — which
+  // is why it read as an unexplained flake rather than as a bug.
+  //
+  // Asserted on the window itself rather than by racing it again: a test that
+  // reproduces a race only fails some of the time, which is the problem, not
+  // the check.
+  const res = await req('GET', '/analytics-reports/topics', { token: adminToken });
+  assert.equal(res.status, 200);
+  assert.ok(new Date(res.body.window.to) > new Date(),
+    'a default window must not end in the past, or an event recorded this instant falls outside it');
+});
+
 test('REVENUE IS CREDITED TO THE FIRST SUBJECT A CUSTOMER READ', async () => {
   // Splitting revenue across every category someone ever read would report
   // more money than was actually earned. Crediting the last thing they read

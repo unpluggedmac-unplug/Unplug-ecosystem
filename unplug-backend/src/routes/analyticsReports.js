@@ -16,10 +16,23 @@ const router = express.Router();
 
 // A window, always. Defaults to the last 30 days; capped at two years so a
 // mistyped date cannot ask for a full table scan.
+// A DEFAULT `to` MEANS "UP TO NOW, INCLUSIVE" — and has to be given a moment's
+// lead to actually mean it.
+//
+// Postgres timestamps carry microseconds; a JavaScript Date carries only
+// milliseconds. An event written at 28.171889 is 889 microseconds AFTER a `to`
+// of 28.171, so a report requested in the same millisecond as a payment leaves
+// that payment out of its own window. Reporting windows are normally days
+// wide, which is why this stayed hidden: it only shows when the write and the
+// read land microseconds apart, which is exactly what a test does.
+//
+// A second of lead costs nothing — no event is ever recorded in the future —
+// and removes the truncation race outright. An explicitly supplied `to` is
+// left exactly as asked for: somebody who names an end time means it.
 function windowFrom(req) {
-  const to = req.query.to ? new Date(req.query.to) : new Date();
+  const to = req.query.to ? new Date(req.query.to) : new Date(Date.now() + 1000);
   const from = req.query.from ? new Date(req.query.from) : new Date(Date.now() - 30 * 864e5);
-  const safeTo = isNaN(to) ? new Date() : to;
+  const safeTo = isNaN(to) ? new Date(Date.now() + 1000) : to;
   const safeFrom = isNaN(from) ? new Date(Date.now() - 30 * 864e5) : from;
   const earliest = new Date(safeTo.getTime() - 730 * 864e5);
   return { from: safeFrom < earliest ? earliest : safeFrom, to: safeTo };
