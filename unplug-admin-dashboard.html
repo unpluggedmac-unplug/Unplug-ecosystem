@@ -2787,6 +2787,13 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 <div class="undo-bar" id="undoBar" hidden><span id="undoMsg"></span><button id="undoBtn" type="button">Undo</button></div>
 
 <script src="image-upload.js"></script>
+<!--
+  The popup renderer, in preview-only mode: the builder below previews with the
+  SAME code readers get, rather than a second drawing of it that would drift.
+  data-preview-only stops it watching for scroll and firing live popups over
+  the dashboard while somebody is editing one.
+-->
+<script src="unplug-popups.js" data-preview-only></script>
 <script>
 // ---------------------------------------------------------------------------
 // State
@@ -14236,6 +14243,368 @@ async function loadPopups() {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// THE POPUP BUILDER
+// ---------------------------------------------------------------------------
+//
+// A popup used to be one of three fixed shapes. This composes one out of
+// blocks — a picture, some words, a video, a button — in whatever order the
+// admin puts them.
+//
+// Two things are deliberately NOT done here:
+//
+//   1. Nothing is drawn with innerHTML. Every field an admin types goes into
+//      the DOM through textContent, the same rule the public renderer follows,
+//      because a builder that assembled markup would be the hole the renderer
+//      exists to avoid.
+//
+//   2. The preview is not drawn by this file. It posts the draft to the server,
+//      gets back exactly what WOULD be stored, and hands that to the real
+//      renderer. So the preview cannot flatter the result: if the server drops
+//      a block, the admin sees it missing here, now, rather than discovering it
+//      live in front of readers.
+
+let PU_OPTIONS = null;
+
+async function puLoadOptions() {
+  if (PU_OPTIONS) return PU_OPTIONS;
+  try {
+    PU_OPTIONS = await api('/popups/options');
+  } catch (e) {
+    // The builder is useless without knowing what it may build, so say so
+    // rather than offering an empty menu.
+    PU_OPTIONS = null;
+  }
+  return PU_OPTIONS;
+}
+
+// What each block is called and what it asks for. The TYPES come from the
+// server; the wording lives here.
+const PU_BLOCK_LABELS = {
+  heading: 'Heading',
+  text: 'Words',
+  image: 'Picture',
+  button: 'Button',
+  video: 'Video',
+  audio: 'Audio',
+  transcript: 'Written version',
+  divider: 'Line',
+  spacer: 'Gap',
+  email: 'Email sign-up',
+};
+
+function puTextarea(value, rows) {
+  const t = document.createElement('textarea');
+  t.rows = rows || 3;
+  t.value = value == null ? '' : String(value);
+  t.setAttribute('style', 'width:100%; max-width:520px;');
+  return t;
+}
+
+// The fields for one block. Every one writes straight back into the block
+// object, so the draft is always what the admin last typed.
+function puBlockFields(block, onChange) {
+  const wrap = puEl('div', null, 'display:grid; gap:8px;');
+  const add = (labelText, input, hint) => {
+    input.addEventListener('input', onChange);
+    input.addEventListener('change', onChange);
+    wrap.appendChild(puField(labelText, input, hint));
+  };
+
+  if (block.type === 'heading') {
+    const i = puInput(block.text, 'text', 'A few words');
+    i.addEventListener('input', () => { block.text = i.value; });
+    add('Heading', i);
+
+  } else if (block.type === 'text' || block.type === 'transcript') {
+    const t = puTextarea(block.text, block.type === 'transcript' ? 4 : 3);
+    t.addEventListener('input', () => { block.text = t.value; });
+    add(block.type === 'transcript' ? 'What is said' : 'Words', t,
+      block.type === 'transcript'
+        ? 'Shown under a "Read this instead" link. This is what a Deaf reader, or anybody '
+          + 'with the sound off, gets instead of the video or audio.'
+        : null);
+
+  } else if (block.type === 'image') {
+    const u = puInput(block.url, 'text', 'https://…');
+    u.addEventListener('input', () => { block.url = u.value; });
+    add('Picture address', u);
+    const a = puInput(block.alt, 'text', 'What the picture shows');
+    a.addEventListener('input', () => { block.alt = a.value; });
+    add('Description for screen readers', a,
+      'Leave empty only if the picture is decoration and the words already say everything.');
+
+  } else if (block.type === 'button') {
+    const l = puInput(block.label, 'text', 'Find out more');
+    l.addEventListener('input', () => { block.label = l.value; });
+    add('Button says', l);
+    const u = puInput(block.url, 'text', 'https://…  or  /nominate');
+    u.addEventListener('input', () => { block.url = u.value; });
+    add('Button goes to', u);
+
+  } else if (block.type === 'video' || block.type === 'audio') {
+    const u = puInput(block.url, 'text', 'https://www.youtube.com/watch?v=…');
+    u.addEventListener('input', () => { block.url = u.value; });
+    add(block.type === 'video' ? 'Video link' : 'Audio link', u,
+      'Paste a YouTube, Vimeo, SoundCloud or Spotify link. Nothing is uploaded — the file '
+      + 'stays where it is, which is why a video in a popup costs nothing to serve. '
+      + 'Any other link is refused.');
+    const t = puInput(block.title, 'text', 'What it is');
+    t.addEventListener('input', () => { block.title = t.value; });
+    add('Describe it', t, 'Read out by a screen reader in place of the player.');
+
+  } else if (block.type === 'spacer') {
+    const sel = puSelect([['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']], block.size || 'medium');
+    sel.addEventListener('change', () => { block.size = sel.value; onChange(); });
+    wrap.appendChild(puField('How big a gap', sel));
+
+  } else if (block.type === 'email') {
+    const l = puInput(block.label, 'text', 'Subscribe');
+    l.addEventListener('input', () => { block.label = l.value; });
+    add('Button says', l, 'Sign-ups here record consent the same way the newsletter box does.');
+
+  } else if (block.type === 'divider') {
+    wrap.appendChild(puEl('p', 'A line across the popup. Nothing to fill in.',
+      'font-size:12px; color:var(--slate); margin:0;'));
+  }
+  return wrap;
+}
+
+// The whole stack of blocks, with the controls to reorder and remove them.
+function puBlockList(state, onChange) {
+  const section = puEl('div', null, 'margin:18px 0; border-top:1px solid var(--paper-line); padding-top:16px;');
+  section.appendChild(puEl('h3', 'What is in the popup',
+    'font-size:15px; margin:0 0 4px;'));
+  section.appendChild(puEl('p',
+    'Add the pieces in the order you want them. Leave this empty and the popup keeps its '
+    + 'original heading-and-button layout.',
+    'font-size:12.5px; color:var(--slate); margin:0 0 12px;'));
+
+  const list = puEl('div', null, 'display:grid; gap:10px;');
+  section.appendChild(list);
+
+  function redraw() {
+    list.textContent = '';
+    if (!state.blocks.length) {
+      list.appendChild(puEl('p', 'Nothing added yet.',
+        'font-size:13px; color:var(--slate); margin:0; padding:10px 0;'));
+    }
+    state.blocks.forEach((block, i) => {
+      const row = puEl('div', null,
+        'border:1px solid var(--paper-line); border-radius:8px; padding:12px;');
+      const head = puEl('div', null,
+        'display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;');
+      head.appendChild(puEl('strong', PU_BLOCK_LABELS[block.type] || block.type, 'font-size:13px;'));
+
+      const controls = puEl('div', null, 'display:flex; gap:4px;');
+      const move = (from, to) => {
+        if (to < 0 || to >= state.blocks.length) return;
+        const [b] = state.blocks.splice(from, 1);
+        state.blocks.splice(to, 0, b);
+        onChange();
+        redraw();
+      };
+      const up = puBtn('\u2191', () => move(i, i - 1));
+      up.setAttribute('aria-label', 'Move up');
+      up.disabled = i === 0;
+      const down = puBtn('\u2193', () => move(i, i + 1));
+      down.setAttribute('aria-label', 'Move down');
+      down.disabled = i === state.blocks.length - 1;
+      const del = puBtn('Remove', () => {
+        state.blocks.splice(i, 1);
+        onChange();
+        redraw();
+      });
+      controls.appendChild(up);
+      controls.appendChild(down);
+      controls.appendChild(del);
+      head.appendChild(controls);
+      row.appendChild(head);
+      row.appendChild(puBlockFields(block, onChange));
+      list.appendChild(row);
+    });
+  }
+
+  // Adding one.
+  const addRow = puEl('div', null, 'display:flex; gap:8px; align-items:flex-end; margin-top:12px; flex-wrap:wrap;');
+  const types = (PU_OPTIONS && PU_OPTIONS.blockTypes) || Object.keys(PU_BLOCK_LABELS);
+  const picker = puSelect(types.map((t) => [t, PU_BLOCK_LABELS[t] || t]), 'heading');
+  picker.setAttribute('style', 'max-width:220px;');
+  addRow.appendChild(puField('Add a piece', picker));
+  addRow.appendChild(puBtn('Add', () => {
+    const max = (PU_OPTIONS && PU_OPTIONS.maxBlocks) || 20;
+    if (state.blocks.length >= max) {
+      showToast('A popup can hold ' + max + ' pieces. It is a popup, not a page.', true);
+      return;
+    }
+    const block = { type: picker.value };
+    state.blocks.push(block);
+    // Adding a video or audio without a written version is the thing this
+    // magazine of all magazines should not ship, so the written version is
+    // offered in the same breath rather than left to be remembered.
+    if (picker.value === 'video' || picker.value === 'audio') {
+      state.blocks.push({ type: 'transcript', text: '' });
+      showToast('Added a written version underneath it — please fill it in.');
+    }
+    onChange();
+    redraw();
+  }, 'btn btn-solid'));
+  section.appendChild(addRow);
+
+  redraw();
+  return section;
+}
+
+// Font, width and colours.
+function puStyleSection(state, onChange) {
+  const section = puEl('div', null, 'margin:18px 0; border-top:1px solid var(--paper-line); padding-top:16px;');
+  section.appendChild(puEl('h3', 'How it looks', 'font-size:15px; margin:0 0 12px;'));
+
+  const font = puSelect([
+    ['body', 'Body — Inter (the site\u2019s reading font)'],
+    ['display', 'Display — Playfair (headlines)'],
+    ['accent', 'Accent — Fraunces'],
+  ], state.style.font || 'body');
+  font.addEventListener('change', () => { state.style.font = font.value; onChange(); });
+  section.appendChild(puField('Typeface', font,
+    'The three the magazine already uses. Nothing is fetched from anywhere else, so the popup '
+    + 'costs a reader nothing extra to load.'));
+
+  const width = puSelect([['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']],
+    state.style.width || 'medium');
+  width.addEventListener('change', () => { state.style.width = width.value; onChange(); });
+  section.appendChild(puField('Width', width));
+
+  const colours = puEl('div', null,
+    'display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px;');
+  [['background', 'Background'], ['titleColor', 'Heading colour'], ['textColor', 'Text colour'],
+    ['buttonBg', 'Button colour'], ['buttonText', 'Button text']].forEach(([key, label]) => {
+    const wrap = puEl('div');
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = state.style[key] || PU_DEFAULT_COLOURS[key];
+    input.setAttribute('style', 'width:100%; height:38px; padding:2px;');
+    input.addEventListener('input', () => { state.style[key] = input.value; onChange(); });
+    wrap.appendChild(puField(label, input));
+    // Back to the site's own colour, which is not the same as picking one that
+    // happens to look like it — an unset colour follows a rebrand, a set one
+    // does not.
+    wrap.appendChild(puBtn('Use the site\u2019s', () => {
+      delete state.style[key];
+      input.value = PU_DEFAULT_COLOURS[key];
+      onChange();
+    }));
+    colours.appendChild(wrap);
+  });
+  section.appendChild(colours);
+
+  // Filled in from the server's own contrast arithmetic.
+  const contrast = puEl('div', null, 'margin-top:12px;');
+  contrast.id = 'puContrast';
+  section.appendChild(contrast);
+  return section;
+}
+
+const PU_DEFAULT_COLOURS = {
+  background: '#fffdf8', titleColor: '#0f0e0e', textColor: '#454545',
+  buttonBg: '#d20709', buttonText: '#ffffff',
+};
+
+// Where it sits, how it arrives, what makes it appear, when it goes.
+function puBehaviourSection(state, onChange) {
+  const section = puEl('div', null, 'margin:18px 0; border-top:1px solid var(--paper-line); padding-top:16px;');
+  section.appendChild(puEl('h3', 'How it behaves', 'font-size:15px; margin:0 0 12px;'));
+
+  const position = puSelect([
+    ['center', 'Centre of the screen — dims the page behind it'],
+    ['top', 'Across the top'],
+    ['bottom', 'Across the bottom'],
+    ['top-left', 'Top left corner'],
+    ['top-right', 'Top right corner'],
+    ['bottom-left', 'Bottom left corner'],
+    ['bottom-right', 'Bottom right corner'],
+  ], state.position);
+  position.addEventListener('change', () => { state.position = position.value; onChange(); });
+  section.appendChild(puField('Where it sits', position,
+    'Only the centre one dims the page and stops scrolling. A corner card lets somebody carry '
+    + 'on reading, which is usually the better trade for anything that is not urgent.'));
+
+  const animation = puSelect([
+    ['none', 'No movement'], ['fade', 'Fade in'], ['fade-up', 'Fade and rise'],
+    ['slide-up', 'Slide up'], ['slide-down', 'Slide down'],
+    ['slide-left', 'Slide in from the right'], ['slide-right', 'Slide in from the left'],
+    ['zoom', 'Zoom in'],
+  ], state.animation);
+  animation.addEventListener('change', () => { state.animation = animation.value; onChange(); });
+  section.appendChild(puField('How it arrives', animation,
+    'A reader who has asked their device for less movement gets none of this, whichever is chosen.'));
+
+  const trigger = puSelect([
+    ['scroll', 'Once they have scrolled far enough down'],
+    ['delay', 'After they have been on the page a while'],
+    ['exit', 'When they look like they are leaving'],
+  ], state.trigger_type);
+  section.appendChild(puField('What makes it appear', trigger,
+    'Leaving is the gentlest of the three: by then they are going anyway. It needs a mouse, '
+    + 'so it never fires on a phone.'));
+
+  const delaySecs = puInput(state.trigger_seconds || 20, 'number');
+  delaySecs.min = 1; delaySecs.max = 120;
+  delaySecs.setAttribute('style', 'max-width:160px;');
+  const delayField = puField('Seconds to wait', delaySecs);
+  delaySecs.addEventListener('input', () => { state.trigger_seconds = Number(delaySecs.value); onChange(); });
+  section.appendChild(delayField);
+
+  const syncTrigger = () => {
+    state.trigger_type = trigger.value;
+    delayField.style.display = trigger.value === 'delay' ? '' : 'none';
+    onChange();
+  };
+  trigger.addEventListener('change', syncTrigger);
+  delayField.style.display = state.trigger_type === 'delay' ? '' : 'none';
+
+  const autoClose = puInput(state.auto_close_seconds || '', 'number');
+  autoClose.min = 1; autoClose.max = 300;
+  autoClose.setAttribute('style', 'max-width:160px;');
+  autoClose.addEventListener('input', () => {
+    state.auto_close_seconds = autoClose.value === '' ? null : Number(autoClose.value);
+    onChange();
+  });
+  section.appendChild(puField('Close itself after (seconds)', autoClose,
+    'Leave empty and it waits for the reader. The timer stops the moment somebody touches the '
+    + 'popup, so it cannot vanish mid-sentence or while an email is half typed.'));
+
+  // Playback, only worth showing once there is something to play.
+  const media = puEl('div', null, 'margin-top:12px;');
+  const hasMedia = () => state.blocks.some((b) => b.type === 'video' || b.type === 'audio');
+  const mediaRows = [
+    ['autoplay', 'Start playing on its own'],
+    ['loop', 'Play it again when it ends'],
+    ['controls', 'Show the play and volume controls'],
+  ];
+  mediaRows.forEach(([key, label]) => {
+    const row = puEl('label', null, 'display:flex; gap:8px; align-items:center; font-size:13.5px; margin-bottom:6px;');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = key === 'controls' ? state.media.controls !== false : !!state.media[key];
+    box.addEventListener('change', () => { state.media[key] = box.checked; onChange(); });
+    row.appendChild(box);
+    row.appendChild(puEl('span', label));
+    media.appendChild(row);
+  });
+  media.appendChild(puEl('p',
+    'Anything that starts on its own starts SILENT. Browsers block autoplaying sound outright, '
+    + 'so sound begins when the reader presses play \u2014 there is no setting that changes that.',
+    'font-size:12px; color:var(--slate); margin:4px 0 0;'));
+  const syncMedia = () => { media.style.display = hasMedia() ? '' : 'none'; };
+  syncMedia();
+  section.appendChild(media);
+  section._syncMedia = syncMedia;
+
+  return section;
+}
+
 async function puEdit(id) {
   const panel = document.getElementById('puEditor');
   if (!panel) return;
@@ -14244,6 +14613,7 @@ async function puEdit(id) {
   panel.appendChild(puEl('div', 'Loading…', 'padding:16px;'));
 
   try {
+    await puLoadOptions();
     const all = await api('/popups');
     const p = all.find((x) => x.id === id);
     if (!p) throw new Error('That popup is gone.');
@@ -14354,6 +14724,125 @@ async function puEdit(id) {
     body.appendChild(puField('Stop showing (optional)', ends,
       'Worth setting for anything with a deadline. Without it, a competition popup is still '
       + 'counting down to a date that passed months ago.'));
+
+    // ---- the builder ----------------------------------------------------
+    //
+    // `state` is what the admin is looking at; `draft` is what gets sent. They
+    // are kept apart on purpose: the PATCH only carries what was actually
+    // touched, which is what stops opening a popup and closing it again from
+    // rewriting every field with a value nobody chose.
+    const state = {
+      blocks: Array.isArray(p.blocks) ? JSON.parse(JSON.stringify(p.blocks)) : [],
+      style: (p.style && typeof p.style === 'object') ? Object.assign({}, p.style) : {},
+      media: (p.media && typeof p.media === 'object') ? Object.assign({}, p.media) : {},
+      position: p.position || 'center',
+      animation: p.animation || 'fade-up',
+      trigger_type: p.trigger_type || 'scroll',
+      trigger_seconds: p.trigger_seconds || null,
+      auto_close_seconds: p.auto_close_seconds || null,
+    };
+
+    let previewTimer = null;
+    let behaviour = null;
+
+    // Ask the server what it WOULD store, and show that.
+    //
+    // Debounced, because it fires on every keystroke. The delay is short
+    // enough to feel live and long enough that typing a sentence is one
+    // request rather than forty.
+    async function refreshPreview() {
+      // Everything the admin has touched goes on the draft, so Save sends it.
+      draft.blocks = state.blocks;
+      draft.style = state.style;
+      draft.media = state.media;
+      draft.position = state.position;
+      draft.animation = state.animation;
+      draft.triggerType = state.trigger_type;
+      draft.triggerSeconds = state.trigger_seconds;
+      draft.autoCloseSeconds = state.auto_close_seconds;
+      if (behaviour && behaviour._syncMedia) behaviour._syncMedia();
+
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(async () => {
+        const host = document.getElementById('puPreviewHost');
+        const notes = document.getElementById('puPreviewNotes');
+        const contrast = document.getElementById('puContrast');
+        if (!host) return;
+        let result;
+        try {
+          result = await api('/popups/preview', {
+            method: 'POST',
+            body: JSON.stringify({ blocks: state.blocks, style: state.style }),
+          });
+        } catch (e) {
+          if (notes) { notes.textContent = 'Could not build the preview just now.'; }
+          return;
+        }
+
+        // The preview is drawn from the CLEANED blocks, by the real renderer.
+        if (window.UnplugPopups && window.UnplugPopups.preview) {
+          window.UnplugPopups.preview({
+            id: null,
+            blocks: result.blocks,
+            style: result.style,
+            media: state.media,
+            position: state.position,
+            animation: state.animation,
+            title: p.title,
+            body: p.body,
+            image_url: p.image_url,
+          }, host);
+        }
+
+        // A block the server refused is the thing an admin most needs told,
+        // and the thing they are least likely to notice: the editor still
+        // shows what they typed, and only the preview is short.
+        if (notes) {
+          notes.textContent = '';
+          if (result.dropped > 0) {
+            notes.appendChild(puEl('p',
+              result.dropped + (result.dropped === 1 ? ' piece is' : ' pieces are')
+                + ' not shown above, because something in it is missing or not allowed \u2014 '
+                + 'a link that is not YouTube, Vimeo, SoundCloud or Spotify, a button with no '
+                + 'destination, or a heading with no words.',
+              'font-size:12.5px; color:var(--red); margin:8px 0 0;'));
+          }
+        }
+
+        // Contrast, worked out by the same code that will judge it later.
+        if (contrast) {
+          contrast.textContent = '';
+          (result.contrast || []).forEach((c) => {
+            contrast.appendChild(puEl('p', c.message,
+              'font-size:12.5px; margin:2px 0; color:' + (c.passes ? 'var(--slate)' : 'var(--red)')));
+          });
+        }
+      }, 250);
+    }
+
+    body.appendChild(puBlockList(state, refreshPreview));
+    body.appendChild(puStyleSection(state, refreshPreview));
+    behaviour = puBehaviourSection(state, refreshPreview);
+    body.appendChild(behaviour);
+
+    // ---- the preview ------------------------------------------------------
+    const previewWrap = puEl('div', null,
+      'margin:18px 0; border-top:1px solid var(--paper-line); padding-top:16px;');
+    previewWrap.appendChild(puEl('h3', 'What a reader sees', 'font-size:15px; margin:0 0 4px;'));
+    previewWrap.appendChild(puEl('p',
+      'Drawn by the same code the website uses, from what the server would actually store. '
+      + 'If something you added is missing here, it will be missing there too.',
+      'font-size:12.5px; color:var(--slate); margin:0 0 12px;'));
+    const previewHost = puEl('div', null,
+      'background:var(--paper); border-radius:10px; padding:10px; overflow:hidden;');
+    previewHost.id = 'puPreviewHost';
+    previewWrap.appendChild(previewHost);
+    const previewNotes = puEl('div');
+    previewNotes.id = 'puPreviewNotes';
+    previewWrap.appendChild(previewNotes);
+    body.appendChild(previewWrap);
+
+    refreshPreview();
 
     const save = puBtn('Save', async () => {
       if (!Object.keys(draft).length) return showToast('Nothing changed.');
