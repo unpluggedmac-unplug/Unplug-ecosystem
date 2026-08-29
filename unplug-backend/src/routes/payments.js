@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
+const { generateUnique } = require('../utils/reference');
 const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { recordPaymentOnce } = require('../utils/analyticsRecorder');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -107,16 +108,15 @@ const TOP10_ENTRY_FEE = 100.00;
 // GET /payments/terms-version so both sides agree on one value.
 const TERMS_VERSION = '2026.07.29';
 
-// A unique 10-digit numeric order reference (no leading zero), checked against
-// the payments table so it can never collide.
-async function generateReference() {
-  for (let attempt = 0; attempt < 12; attempt++) {
-    const ref = String(Math.floor(1000000000 + Math.random() * 9000000000)); // 10 digits
-    const exists = await pool.query('SELECT 1 FROM payments WHERE gateway_reference = $1', [ref]);
-    if (exists.rowCount === 0) return ref;
-  }
-  throw new Error('Could not generate a unique payment reference — please try again.');
-}
+// A unique 10-digit numeric reference, no leading zero, for the gateway
+// reference field — which takes digits only, so this one cannot carry the
+// UNP- prefix the order reference does.
+//
+// Was Math.random(); now crypto, via the shared generator. Same shape, same
+// length, same column — a predictable payment reference was never a good idea
+// and there is no reason to keep two ways of making one.
+const generateReference = () =>
+  generateUnique({ table: 'payments', column: 'gateway_reference', digits: true });
 
 // Works out the correct amount for a given linked_type/linked_id, from the
 // database rather than the request body.

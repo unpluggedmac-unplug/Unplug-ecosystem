@@ -49,3 +49,35 @@ in the same millisecond as the request — invisible in practice, but wrong.
   drifted. `CLAUDE.md` is being treated as authoritative.
 
 **Not started:** any implementation work. Stopped at the task-01 stop condition.
+
+---
+
+## 2026-08-29 — Task 02, reference format consolidated
+
+**What changed.** New `src/utils/reference.js` is the single generation point. The 32-character
+alphabet had been written out four times and the collision-retry loop five times, across
+`orders.js`, `editionAccess.js`, `competitions.js`, `payments.js` and `admin.js` — the recurring
+bug class, with four copies.
+
+**No format changed.** Order references are still `UNP-` + 10, edition references still 10
+unprefixed, gateway references still 10 digits, voucher codes still `UNP-` + 6, lookup tokens
+still 24. Nothing customers hold is affected. 1,533 passing, unchanged.
+
+**Two generators were using `Math.random()`** — the payment gateway reference and the voucher
+code. Both now use `crypto`, via the shared helper. Same shape, same length; a guessable
+discount code was the one that actually mattered.
+
+**Formats deliberately NOT unified.** They are different things, not five spellings of one:
+`vote_bundles.reference` and `edition_purchases.download_reference` are `VARCHAR(10)`, so a
+`UNP-` prefix does not fit without migrating columns live rows already use; the vote bundle
+reference IS the contestant's public entry code by design (migration 106); and a voucher code
+is not a reference at all. Reasoning recorded at the bottom of `reference.js`.
+
+**Open / flagged, not changed:**
+- Cancellation policy copy (`unplug-magazine.html:3896`) tells customers to quote a "10-digit
+  payment reference number". True of the numeric gateway reference, wrong for a `UNP-`+10 order
+  reference. Customer-facing policy text, so flagged rather than edited.
+- Voucher codes share the `UNP-` prefix with order references. `UNP-K3M9XQ` and
+  `UNP-K3M9XQ2R7T` are hard to tell apart on a bank transfer. Worth revisiting; not touched.
+- Admin display of a reference uses `innerHTML`, but it IS escaped (`escapeHtmlAdmin`). Safe.
+

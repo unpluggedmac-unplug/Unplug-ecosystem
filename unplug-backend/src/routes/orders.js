@@ -14,6 +14,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { attributeConsultant } = require('../utils/consultantAttribution');
 const pool = require('../db');
+const { generateUnique } = require('../utils/reference');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor } = require('../utils/accountCredit');
 const { eftInstructions } = require('../utils/eftDetails');
@@ -33,16 +34,12 @@ const CART_ELIGIBLE_TYPES = [
 ];
 
 const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok', 'sales_consultant', 'other'];
-const ORDER_REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-async function generateOrderReference() {
-  for (let attempt = 0; attempt < 8; attempt++) {
-    let candidate = 'UNP-';
-    for (let i = 0; i < 10; i++) candidate += ORDER_REF_ALPHABET[crypto.randomInt(ORDER_REF_ALPHABET.length)];
-    const existing = await pool.query('SELECT 1 FROM orders WHERE reference = $1', [candidate]);
-    if (existing.rowCount === 0) return candidate;
-  }
-  throw new Error('Could not generate a unique order reference.');
-}
+// The order reference: UNP- and ten characters. Spec §15 wants it unique,
+// searchable and immutable, and it is the string the customer puts on their
+// EFT. Generated in src/utils/reference.js, which is the one place that
+// decides what a reference looks like.
+const generateOrderReference = () =>
+  generateUnique({ table: 'orders', column: 'reference', prefix: 'UNP-' });
 
 // A voucher's service_restriction is a single linkedType (the same shape
 // applyVoucher already checks for a single-item purchase). For a cart,

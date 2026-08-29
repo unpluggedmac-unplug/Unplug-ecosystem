@@ -34,7 +34,10 @@ function voteCountExpr(monthlyParam, periodParam) {
 // utils/editionAccess.js (O/0, I/1 excluded — read off a screen, typed
 // into an EFT), but checked against vote_bundles.reference specifically,
 // so it isn't reused as-is from that file.
-const VOTE_REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// Alphabet and retry loop from src/utils/reference.js — one place decides what
+// a code looks like. The vote bundle's own rule (the reference IS the entry
+// code) stays here, because that is this feature's decision, not a general one.
+const { generateUnique } = require('../utils/reference');
 
 // The Reference Code the buyer puts on their EFT IS the contestant's entry
 // code — one code, under one name, everywhere a customer sees it. See
@@ -46,13 +49,7 @@ const VOTE_REF_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 // with no reference at all cannot be matched to a payment by anyone.
 async function generateVoteBundleReference(entryCode) {
   if (/^[0-9]{10}$/.test(String(entryCode || ''))) return String(entryCode);
-  for (let attempt = 0; attempt < 8; attempt++) {
-    let candidate = '';
-    for (let i = 0; i < 10; i++) candidate += VOTE_REF_ALPHABET[crypto.randomInt(VOTE_REF_ALPHABET.length)];
-    const existing = await pool.query('SELECT 1 FROM vote_bundles WHERE reference = $1', [candidate]);
-    if (existing.rowCount === 0) return candidate;
-  }
-  throw new Error('Could not generate a reference code.');
+  return generateUnique({ table: 'vote_bundles', column: 'reference' });
 }
 
 // The buyer's private handle on their own purchase. Never shown as "your
@@ -61,13 +58,7 @@ async function generateVoteBundleReference(entryCode) {
 // code, and this portal has no login, so something else has to be the thing
 // only the buyer knows.
 async function generateVoteBundleLookupToken() {
-  for (let attempt = 0; attempt < 8; attempt++) {
-    let candidate = '';
-    for (let i = 0; i < 24; i++) candidate += VOTE_REF_ALPHABET[crypto.randomInt(VOTE_REF_ALPHABET.length)];
-    const existing = await pool.query('SELECT 1 FROM vote_bundles WHERE lookup_token = $1', [candidate]);
-    if (existing.rowCount === 0) return candidate;
-  }
-  throw new Error('Could not generate a lookup token.');
+  return generateUnique({ table: 'vote_bundles', column: 'lookup_token', length: 24 });
 }
 
 // Resolves whatever the buyer came back with to exactly one bundle.

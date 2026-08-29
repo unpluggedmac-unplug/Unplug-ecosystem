@@ -7,34 +7,25 @@
 const crypto = require('crypto');
 const pool = require('../db');
 
-// Reference codes get read off a screen, written on a bank transfer, and typed
-// back in. O/0 and I/1 are indistinguishable in many fonts, so they're out —
-// a customer mistyping their own reference is a support problem, and the code
-// is still 10 characters from a 32-symbol alphabet (~2^50 combinations).
-const REFERENCE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const REFERENCE_LENGTH = 10;
+// The alphabet and its reasoning now live in src/utils/reference.js, so the
+// same 32 characters are not written out in five files. Re-exported below
+// because callers already import them from here.
+const {
+  REFERENCE_ALPHABET, REFERENCE_LENGTH, randomCode, generateUnique,
+} = require('./reference');
 
-function randomReference() {
-  let out = '';
-  for (let i = 0; i < REFERENCE_LENGTH; i++) {
-    out += REFERENCE_ALPHABET[crypto.randomInt(REFERENCE_ALPHABET.length)];
-  }
-  return out;
-}
+const randomReference = () => randomCode(REFERENCE_LENGTH);
 
 // A unique reference. The database has a unique index on the column, so this
 // re-rolls on the (vanishingly unlikely) collision rather than assuming
 // randomness is enough — the constraint is the real guarantee, this is just
 // how we avoid handing the customer an error.
+// No UNP- prefix here, deliberately: download_reference is VARCHAR(10), so a
+// prefix does not fit without a migration of a column live rows already use.
 async function generateReference(client = pool) {
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const candidate = randomReference();
-    const existing = await client.query(
-      'SELECT 1 FROM edition_purchases WHERE download_reference = $1', [candidate]
-    );
-    if (existing.rowCount === 0) return candidate;
-  }
-  throw new Error('Could not generate a unique reference code.');
+  return generateUnique({
+    table: 'edition_purchases', column: 'download_reference', client,
+  });
 }
 
 // The download token. 32 random bytes — not derived from the purchase id, the

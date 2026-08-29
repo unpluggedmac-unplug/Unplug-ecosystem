@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { generateUnique } = require('../utils/reference');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { balanceFor, historyFor } = require('../utils/accountCredit');
@@ -335,16 +336,14 @@ router.post('/vouchers', requireRole('admin'), async (req, res, next) => {
     // easy to misread aloud or in print (0/O, 1/I).
     let finalCode = (code || '').toUpperCase().trim();
     if (!finalCode) {
-      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      for (let attempt = 0; attempt < 20 && !finalCode; attempt += 1) {
-        let candidate = 'UNP-';
-        for (let i = 0; i < 6; i += 1) {
-          candidate += alphabet[Math.floor(Math.random() * alphabet.length)];
-        }
-        const clash = await pool.query('SELECT 1 FROM vouchers WHERE code = $1', [candidate]);
-        if (clash.rowCount === 0) finalCode = candidate;
-      }
-      if (!finalCode) {
+      // Was Math.random(); now crypto, via the shared generator. A discount
+      // code is exactly the thing that should not be guessable from a seed.
+      // Same shape as before: UNP- and six characters.
+      try {
+        finalCode = await generateUnique({
+          table: 'vouchers', column: 'code', prefix: 'UNP-', length: 6,
+        });
+      } catch (e) {
         return res.status(500).json({ error: 'Could not generate a unique voucher code. Please try again.' });
       }
     }
