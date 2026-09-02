@@ -126,3 +126,20 @@ Seed figures turned out correct — nobody had edited those tables — but that 
 
 **Open — still blocks all pricing work.** Eight decisions at the end of `docs/pricing-comparison.md`.
 No price or pricing code changed.
+
+## 2026-08-29 — Refunds policy corrected
+
+The cancellation/refunds policy quoted the business listing highlight at R250/R300/R350/R400.
+The site charges R100/R150/R200/R250 and says so on its own rate card, further up the same page.
+Two worked examples carried the same wrong R400.
+
+Examples now use R250. The ladder is removed rather than corrected — the rate card already states
+prices, and a second copy in a legal document is what caused this. s19 now reads like its
+neighbours s17/s18, which state durations and no figures. **Every refund term is untouched.**
+
+Checked first that production has no `refunds.*` CMS override (it has one override site-wide, and
+it is not this), so the file is what readers get. Verified in a browser: old ladder gone, no
+"Highlight for R400" survives, rate card reads R100–R250. Suite 1,533 passing.
+
+**Still open:** the CPA review of the no-refund terms themselves — not written without advice.
+Seven pricing decisions remain in `docs/pricing-comparison.md`.
