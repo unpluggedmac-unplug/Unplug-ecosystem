@@ -238,3 +238,22 @@ cancellation is not a rejection — different meanings for reporting. Worth sepa
 pathway is next touched.
 
 **Next:** B3 `events` (blast radius 334).
+
+## 2026-09-02 — Task 04 Phase B3: events
+
+Migration 158 adds all four Phase-B statuses to `events`. `expired` applies: the feed already drops
+past events via `event_date >= CURRENT_DATE` while status still reads `approved`, so nothing can
+distinguish an upcoming event from one that happened last year.
+
+Rule now asserted, not remembered: a service gets `expired` only where something can end it —
+marketplace (duration + active_to), events (date). Gallery still the sole exception.
+
+**Real bug found, deliberately not fixed:** `events` has no end date, so a multi-day festival is
+removed from the site part-way through (`event_date` is the start). Decision #4 already covers adding
+an end-date field; doing it here would put a new column + a public-feed change inside a
+values-only migration. Recorded in the migration file.
+
+**Verified:** 158 migrations × 3 passes clean, one constraint per table, row accepts new value.
+Suite **1567 → 1569**.
+
+**Next:** B4 `highlights` (blast radius 409) — it has durations, so all four again.
