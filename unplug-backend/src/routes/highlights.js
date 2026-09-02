@@ -195,9 +195,16 @@ router.get('/mine', requireAuth, async (req, res, next) => {
       const start = h.start_date ? new Date(h.start_date) : null;
       const end = h.end_date ? new Date(h.end_date) : null;
       let label;
+      // A status the member can read. EVERY status this table accepts needs a
+      // branch here: the chain ends `else label = 'Active'`, so anything left
+      // unhandled tells the member their highlight is running when it is not.
       if (h.status === 'rejected') label = 'Cancelled';
       else if (h.status === 'awaiting_payment') label = 'Pending payment';
       else if (h.status === 'pending') label = 'Awaiting approval';
+      else if (h.status === 'changes_requested') label = 'Changes needed';
+      else if (h.status === 'resubmitted') label = 'Changes submitted';
+      else if (h.status === 'credit_issued') label = 'Credit issued';
+      else if (h.status === 'expired') label = 'Completed';
       else if (start && start > today) label = 'Scheduled';
       else if (end && end < today) label = 'Completed';
       else label = 'Active';

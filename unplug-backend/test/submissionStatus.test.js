@@ -165,11 +165,32 @@ test('PHASE B3: EVENTS TOOK ALL FOUR, INCLUDING expired', () => {
   });
 });
 
+test('PHASE B4: HIGHLIGHTS TOOK ALL FOUR, INCLUDING expired', () => {
+  // A highlight runs for a term — duration_days plus start_date/end_date, which
+  // the member-facing list already turns into "Completed" by arithmetic.
+  ['changes_requested', 'resubmitted', 'credit_issued', 'expired'].forEach((v) => {
+    assert.ok(S.isLiveFor(v, 'highlights'), `highlights should accept ${v} after Phase B4`);
+  });
+});
+
+test('EVERY HIGHLIGHT STATUS HAS A LABEL A MEMBER CAN READ', () => {
+  // GET /highlights/mine ends its chain with `else label = 'Active'`, so a
+  // status without a branch tells the member their highlight is running when it
+  // is not. Read out of the route rather than duplicated here, so this fails
+  // when a status is added and its label is forgotten.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'highlights.js'), 'utf8');
+  const labelled = [...src.matchAll(/h\.status === '([a-z_]+)'/g)].map((m) => m[1]);
+  const missing = S.liveStatusesFor('highlights')
+    .filter((v) => v !== 'approved' && !labelled.includes(v));
+  assert.deepEqual(missing, [],
+    'these highlight statuses would fall through to "Active": ' + missing.join(', '));
+});
+
 test('only the services that can run out have expired', () => {
   // The distinction the phases keep making, asserted rather than remembered:
   // a service gets `expired` only if something can actually end it.
   const withExpiry = S.SUBMISSION_TABLES.filter((t) => S.isLiveFor('expired', t)).sort();
-  assert.deepEqual(withExpiry, ['events', 'marketplace_listings'],
+  assert.deepEqual(withExpiry, ['events', 'highlights', 'marketplace_listings'],
     'expired should only be live where a term or a date ends the service');
 });
 
