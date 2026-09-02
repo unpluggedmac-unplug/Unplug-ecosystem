@@ -473,3 +473,75 @@ Suite **1606 → 1624**, 0 failing.
 
 **Still open:** the UTC/local date serialisation above; profiles visibility-vs-approval; the other 24
 §10.17 notification events; `rejected` still doing double duty as "refused" and "cancelled".
+
+---
+
+## 2026-09-02 — The DATE timezone shift, fixed at the source
+
+**The bug.** node-postgres parses a `DATE` (type 1082) into a JavaScript Date at **midnight in the
+server's own timezone**, and `JSON.stringify` then writes that Date in UTC. East of Greenwich the two
+disagree about which day it is:
+
+```
+stored in Postgres   2026-10-31
+parsed by pg         2026-10-31 00:00 SAST
+sent as JSON         "2026-10-30T22:00:00.000Z"
+read by the page     "2026-10-30"        <-- the day before
+```
+
+An event on Saturday published as Friday, a listing expiring a day early, a scheduled article
+appearing a day late — with nothing in the logs, because every layer did exactly what it was told.
+
+**Latent, not live.** Render runs in UTC, where local midnight and UTC midnight are the same instant,
+so production was correct — confirmed against the live API before and after. It was already real on
+any developer machine outside UTC, which is how it surfaced.
+
+**The fix — `src/pgTypes.js`, one type parser.** A DATE has no time and no zone, so there is nothing
+to convert it to; Postgres already sends the text we want. `setTypeParser(1082, v => v)` hands that
+through untouched. Required by `src/db.js` and `db/migrate.js` so a request and a migration can never
+disagree about what day it is.
+
+**Deliberately global rather than per-query.** Casting with `to_char` in each SELECT restates the same
+rule in dozens of places, and a rule stated in dozens of places drifts — this project's most repeated
+bug. This covers all ~29 DATE columns and any added later.
+
+**Scope checked before changing anything:** 0 bare `TIMESTAMP` columns (282 are `TIMESTAMPTZ`, which
+genuinely is an instant and is left alone); **0** server-side `Date` method calls on a DATE column;
+21 frontend readers use `String(x).slice(0,10)` (identical either way), 0 use `.split('T')` or
+`.substring`, and the only two `new Date(...)` sites are on `renews_at`, a TIMESTAMPTZ. The wire
+format changes from `"2026-10-31T00:00:00.000Z"` to `"2026-10-31"`; confirmed with the owner that
+nothing outside this repo reads the API.
+
+**Two things this also fixed, both latent:**
+
+1. **`highlights.js`** built `today` as UTC midnight but `start_date`/`end_date` as local-midnight
+   Dates — a half-finished version of the "second clock" fix already documented in that file. Both
+   are now UTC midnight, so the comparison is right in every timezone rather than only in UTC.
+2. **`backupDump.js`** wrote a DATE as `'2026-10-31T00:00:00.000Z'` via `toISOString()`, carrying the
+   shift into the dump. **Restoring a backup on a non-UTC server would have moved every date by a
+   day.** It now writes `'2026-10-31'`.
+
+**A wrong call, corrected.** I read `polls.js`'s `String(row.starts_at) > today` and reported a live
+bug — every scheduled poll closed to voting. **That was wrong.** polls.js already casts every
+`starts_at`/`ends_at` with `to_char` in all six of its queries, so the comparison always received
+text and was always correct. My reproduction tested a hypothetical path, not the real one. Verified
+by removing each protection in turn: with either the casts or the parser present the tests pass, and
+only with **both** removed do four fail. `test/pollSchedulingDates.test.js` is kept because those
+casts read like display formatting but are load-bearing arithmetic, and poll scheduling had no direct
+coverage at all.
+
+**Tests.** `test/dateNoTimezoneShift.test.js` asserts the *shape* — a DATE arrives as its own
+`YYYY-MM-DD` text, never a Date object — so it fails on a UTC CI box too, where asserting an absolute
+date would pass no matter how broken the parsing was. One test re-runs the query in a forced UTC+14
+child process. Teeth checked: 5 of 7 fail with the parser removed, and the two that still pass are
+exactly the two that should be unaffected (NULL handling and TIMESTAMPTZ).
+
+**Verified in a browser against a real backend running in UTC+14**: stored `2026-09-22`/`2026-09-24`
+rendered as `22 SEP · Until 24 SEP`. Before the fix that server would have shown `21 SEP · Until 23
+SEP`. No `Invalid Date`, no `NaN`, no raw ISO on the page.
+
+Suite **1624 → 1638**, 0 failing — including all 1624 pre-existing tests unchanged under a global
+change to every DATE column.
+
+**Still open:** profiles visibility-vs-approval; the other 24 §10.17 notification events; `rejected`
+still doing double duty as "refused" and "cancelled".

@@ -1,3 +1,7 @@
+// Must come before any query: it decides how a DATE column is handed back.
+// See src/pgTypes.js for why.
+require('./pgTypes');
+
 const { Pool } = require('pg');
 
 if (!process.env.DATABASE_URL) {

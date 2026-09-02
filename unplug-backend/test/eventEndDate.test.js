@@ -162,18 +162,13 @@ test('the feed returns the end date so the front end can show a range', async ()
   assert.ok(mine.end_date, 'and carry its end date');
 });
 
-test('the end date is carried exactly like the start date', async () => {
-  // KNOWN, PRE-EXISTING, AND DELIBERATELY NOT ASSERTED HERE: pg turns a DATE
-  // column into a Date at LOCAL midnight and JSON.stringify then writes it in
-  // UTC, so east of Greenwich both dates land on the day BEFORE the one stored.
-  // Render runs in UTC, so live is correct today and this is latent — but it
-  // would bite the moment the server's zone changed. Asserting the absolute
-  // date here would fail on any developer machine east of Greenwich while
-  // passing in production, which is worse than not testing it.
-  //
-  // What IS asserted: end_date is carried the same way event_date is, so the
-  // new column cannot drift into a second, different date bug. The offset is
-  // measured against the start date rather than assumed to be zero.
+test('both dates reach the page as the days they were stored as', async () => {
+  // This used to be able to assert only that end_date travelled the SAME way
+  // event_date did, because both were shifted a day by the timezone conversion
+  // in node-postgres — asserting the real date would have failed on any machine
+  // east of Greenwich while passing on a UTC server. src/pgTypes.js removed the
+  // conversion, so the actual day can now be asserted, which is what matters.
+  // The shift itself is covered in depth by test/dateNoTimezoneShift.test.js.
   const stored = await pool.query(
     `SELECT to_char(event_date, 'YYYY-MM-DD') AS s,
             to_char(end_date, 'YYYY-MM-DD') AS e
@@ -182,20 +177,12 @@ test('the end date is carried exactly like the start date', async () => {
   const res = await api('GET', '/events/upcoming?limit=100');
   const mine = (res.body.events || []).find((e) => e.name === 'Has an end');
 
-  const shiftOf = (wire, want) =>
-    Math.round((Date.parse(String(wire).slice(0, 10)) - Date.parse(want)) / 86400000);
+  assert.equal(mine.event_date, stored.rows[0].s, 'the day it starts');
+  assert.equal(mine.end_date, stored.rows[0].e, 'the day it ends');
 
-  assert.equal(
-    shiftOf(mine.end_date, stored.rows[0].e),
-    shiftOf(mine.event_date, stored.rows[0].s),
-    'both dates must travel identically; a difference means end_date has its own bug'
-  );
-
-  // And the span itself has to survive, whatever the offset is.
-  const wireSpan = Math.round(
-    (Date.parse(String(mine.end_date).slice(0, 10)) -
-     Date.parse(String(mine.event_date).slice(0, 10))) / 86400000);
-  assert.equal(wireSpan, 2, 'a three-day event is still three days long on the wire');
+  const span = Math.round(
+    (Date.parse(mine.end_date) - Date.parse(mine.event_date)) / 86400000);
+  assert.equal(span, 2, 'a three-day event is still three days long on the wire');
 });
 
 // ------------------------------------------------------------ validation

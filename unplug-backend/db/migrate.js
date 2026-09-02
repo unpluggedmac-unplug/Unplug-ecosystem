@@ -7,6 +7,9 @@
 //   ADMIN_PASSWORD (required — migration exits if this is missing)
 
 require('dotenv').config();
+// Same DATE handling as the app, so a migration and a request can never
+// disagree about what day it is. See src/pgTypes.js.
+require('../src/pgTypes');
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
