@@ -61,7 +61,9 @@ function check(name, ok, detail) {
 
   // Required AFTER DATABASE_URL is set: src/db.js builds its pool on require,
   // and a pool built without a connection string hangs rather than fails.
-  const { TYPE_KEYS } = require(path.join(BACKEND, 'src', 'utils', 'mySubmissions'));
+  // SUBMISSION_TYPES, not every type there is: highlights and the directory
+// listing are services, and /my/submissions refuses them on purpose.
+const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmissions'));
   const express = require('express');
   const { attachUser } = require(path.join(BACKEND, 'src', 'middleware', 'auth'));
   const jwt = require('jsonwebtoken');
@@ -133,7 +135,7 @@ function check(name, ok, detail) {
   check('every row has the shape the dashboard draws', wrong.length === 0,
     wrong.map((s) => s.type).join(', '));
 
-  for (const type of (only ? [only] : TYPE_KEYS)) {
+  for (const type of (only ? [only] : SUBMISSION_TYPES)) {
     const one = await get(`/my/submissions?type=${type}`);
     const rows = (one.body && one.body.submissions) || [];
     check(`?type=${type} answers and is filtered`,
@@ -146,6 +148,29 @@ function check(name, ok, detail) {
 
   const noAuth = await fetch(`http://127.0.0.1:${PORT_API}/my/submissions`);
   check('signed out is refused', noAuth.status === 401, `got ${noAuth.status}`);
+
+  // ---- My Services (§5): the same data read by term ----
+  console.log('\nmy services:');
+  const svc = await get('/my/services');
+  check('GET /my/services answers 200', svc.status === 200, `got ${svc.status}`);
+  check('it returns §5\'s six buckets in order',
+    Array.isArray(svc.body && svc.body.groups)
+      && svc.body.groups.map((g) => g.key).join(',')
+        === 'awaiting_payment,requiring_changes,pending,expiring,active,expired',
+    JSON.stringify(svc.body && svc.body.groups && svc.body.groups.map((g) => g.key)));
+  check('it reports the database\'s today', Boolean(svc.body && svc.body.today));
+  check('it says how wide the expiring window is',
+    typeof (svc.body && svc.body.expiringWithinDays) === 'number');
+
+  const svcRows = (svc.body.groups || []).flatMap((g) => g.services || []);
+  check('competitions are not services',
+    svcRows.every((s) => s.type !== 'competition'));
+  check('service rows have the same shape the dashboard draws',
+    svcRows.every((s) => 'statusLabel' in s && 'expiresAt' in s && 'typeLabel' in s));
+
+  const svcNoAuth = await fetch(`http://127.0.0.1:${PORT_API}/my/services`);
+  check('signed out is refused for services', svcNoAuth.status === 401,
+    `got ${svcNoAuth.status}`);
 
   console.log('\npage render:');
   const page = fs.readFileSync(path.join(ROOT, 'unplug-member-dashboard.html'), 'utf8');
@@ -160,6 +185,13 @@ function check(name, ok, detail) {
   }
   check('nothing still points at the retired Content section',
     !page.includes('data-ms-section="content"') && !page.includes('contentPendingArticles'));
+  check('the dashboard has the My Services section',
+    page.includes('data-ms-section="myservices"') && page.includes('>My Services<'));
+  check('My Services has its loader', page.includes('async function loadMyServices'));
+  check('My Services reuses subsRow rather than a second renderer',
+    /function svcRender[\s\S]{0,1200}subsRow\(/.test(page));
+  check('"Browse Services" is distinct from "My Services"',
+    page.includes('Browse Services'));
 
   // Shut down in order. The ROUTE has its own pool (src/db.js), separate from
   // the one this script seeds with; stopping Postgres while it still holds an

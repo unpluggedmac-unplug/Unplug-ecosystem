@@ -179,25 +179,86 @@ const TYPES = {
         ${PAYMENT_JOIN('gallery_bundle')}
        WHERE sub.user_id = $1`,
   },
+
+  // ---- Term-based services. Added for My Services (§5), which needs things
+  // that can be active, expiring or expired. ----
+
+  highlight: {
+    label: 'Highlight',
+    plural: 'Highlights',
+    // A highlight has no owner column: it points at an article or a directory
+    // profile, and the owner is whoever owns THAT. Both routes are needed —
+    // checking only one silently hides half a member's highlights.
+    sql: `
+      SELECT 'highlight' AS type, sub.id,
+             COALESCE(
+               CASE WHEN sub.target_type = 'article' THEN a.title ELSE p.display_name END,
+               'Highlight') AS title,
+             sub.status,
+             sub.created_at AS submitted_at, sub.end_date AS expires_at,
+             pay.amount, pay.payment_status, pay.reference
+        FROM highlights sub
+        LEFT JOIN articles a ON sub.target_type = 'article'   AND a.id = sub.target_id
+        LEFT JOIN profiles p ON sub.target_type = 'directory' AND p.id = sub.target_id
+        ${PAYMENT_JOIN('highlight')}
+       WHERE (sub.target_type = 'article'   AND a.author_user_id = $1)
+          OR (sub.target_type = 'directory' AND p.user_id = $1)`,
+  },
+
+  profile: {
+    label: 'Directory listing',
+    plural: 'Directory listing',
+    // The paid directory package. renews_at is the end of the term, which is
+    // why the spine counts profiles as expiring even though the row itself
+    // never goes away.
+    sql: `
+      SELECT 'profile' AS type, sub.id, sub.display_name AS title, sub.status,
+             sub.created_at AS submitted_at, sub.renews_at::date AS expires_at,
+             pay.amount, pay.payment_status, pay.reference
+        FROM profiles sub
+        ${PAYMENT_JOIN('profile_package')}
+       WHERE sub.user_id = $1`,
+  },
 };
 
 const TYPE_KEYS = Object.keys(TYPES);
+
+// WHICH TYPES EACH MENU ITEM SHOWS.
+//
+// The two §4 menu items mean different things and must keep meaning different
+// things, so each names its own set rather than both defaulting to "all".
+//
+// My Submissions is what you SENT IN — its lifecycle is review. My Services is
+// what you are PAYING FOR — its lifecycle is a term, so it adds the two
+// term-based services and drops competitions, which are neither bought for a
+// period nor renewable: an entry ends when the competition closes, and that is
+// the competition's business, not the member's.
+const SUBMISSION_TYPES = ['article', 'event', 'listing', 'advertising', 'competition', 'gallery'];
+const SERVICE_TYPES = ['article', 'event', 'listing', 'advertising', 'gallery', 'highlight', 'profile'];
 
 function isType(type) {
   return Object.prototype.hasOwnProperty.call(TYPES, type);
 }
 
-// Everything this member has submitted, newest first.
+// What this member has, newest first.
 //
-// `type` narrows it to one menu item; leaving it out is My Submissions. An
-// unrecognised type returns nothing rather than everything — a filter that
-// silently stops filtering is how a member ends up looking at the wrong list.
+// `only` is the set the calling menu item covers (SUBMISSION_TYPES or
+// SERVICE_TYPES) and is REQUIRED to be passed explicitly by callers that care —
+// it defaults to submissions so existing callers keep their behaviour. Adding a
+// type to TYPES must never silently change what an existing section shows.
+//
+// `type` narrows further to one menu item. An unrecognised type returns nothing
+// rather than everything: a filter that silently stops filtering is how a member
+// ends up looking at the wrong list.
 async function listFor(userId, options = {}, client = pool) {
   const id = Number(userId);
   if (!Number.isInteger(id)) return [];
 
-  const wanted = options.type ? [options.type] : TYPE_KEYS;
+  const set = Array.isArray(options.only) ? options.only : SUBMISSION_TYPES;
   if (options.type && !isType(options.type)) return [];
+  if (options.type && set.indexOf(options.type) === -1) return [];
+
+  const wanted = options.type ? [options.type] : set;
 
   const parts = wanted.map((key) => TYPES[key].sql);
   const rows = await client.query(
@@ -221,4 +282,98 @@ async function listFor(userId, options = {}, client = pool) {
   }));
 }
 
-module.exports = { TYPES, TYPE_KEYS, STATUS_LABEL, statusLabel, isType, listFor };
+// ---------------------------------------------------------------------------
+// MY SERVICES (§5): active · pending · expiring · expired · requiring changes
+//                   · awaiting payment
+//
+// §5 names those six buckets and stops there, so this decides only which bucket
+// a service is in — it invents no fields.
+
+// HOW LONG BEFORE THE END A SERVICE COUNTS AS "EXPIRING".
+//
+// The spec asks for an Expiring bucket without saying how wide it is, so this
+// is a judgement, not a requirement: 30 days matches the marketplace listing
+// duration (30 days exactly) and leaves room for an EFT to clear before the
+// service drops, which matters on a site that is paid by EFT. One constant, so
+// changing it is changing one number.
+const EXPIRING_WITHIN_DAYS = 30;
+
+// Buckets in the order a member should read them: what needs them first, then
+// what is running, then what is over.
+const SERVICE_BUCKETS = [
+  'awaiting_payment', 'requiring_changes', 'pending', 'expiring', 'active', 'expired',
+];
+
+const BUCKET_LABEL = {
+  awaiting_payment: 'Awaiting payment',
+  requiring_changes: 'Requiring changes',
+  pending: 'Pending',
+  expiring: 'Expiring soon',
+  active: 'Active',
+  expired: 'Expired',
+};
+
+// Whole days from today until a date, or null when there is no term.
+//
+// Compared as calendar days, not milliseconds: a service ending today has not
+// expired, and treating "now" as a moment would expire it part-way through its
+// last day — the same mistake multi-day events made.
+function daysUntil(value, today) {
+  if (!value) return null;
+  const end = String(value).slice(0, 10);
+  const start = String(today).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(end) || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return null;
+  return Math.round((Date.parse(end + 'T00:00:00Z') - Date.parse(start + 'T00:00:00Z')) / 86400000);
+}
+
+// Which of §5's six buckets this service is in.
+//
+// Status decides first, because a service awaiting payment is not "active" no
+// matter what its dates say. Only an approved service is measured against its
+// term, and one with no term is simply active — an article stays published.
+//
+// `today` is passed in rather than read from the clock so the caller can use the
+// DATABASE's today. Working it out from Node's is a second clock, and the two
+// disagree whenever the server's local date is ahead of UTC — the bug the
+// highlights dashboard already had.
+function bucketFor(service, today) {
+  const status = service.status;
+
+  if (status === 'awaiting_payment') return 'awaiting_payment';
+  if (status === 'changes_requested') return 'requiring_changes';
+  if (status === 'pending' || status === 'resubmitted') return 'pending';
+  if (status === 'expired') return 'expired';
+
+  // Anything that ended badly is over, whatever its dates say.
+  if (status === 'rejected' || status === 'credit_issued' || status === 'draft') return 'expired';
+
+  if (status === 'approved') {
+    const left = daysUntil(service.expiresAt, today);
+    if (left === null) return 'active';          // no term — an article stays published
+    if (left < 0) return 'expired';
+    if (left <= EXPIRING_WITHIN_DAYS) return 'expiring';
+    return 'active';
+  }
+
+  // An unknown status is shown rather than dropped. Losing a member's paid
+  // service because a status was added is worse than an odd-looking bucket.
+  return 'active';
+}
+
+// The member's services, already bucketed. Empty buckets are returned too, so
+// the dashboard can say "nothing expiring" rather than leaving a silent gap.
+function groupServices(services, today) {
+  const groups = SERVICE_BUCKETS.map((key) => ({ key, label: BUCKET_LABEL[key], services: [] }));
+  const byKey = Object.fromEntries(groups.map((g) => [g.key, g]));
+  for (const service of services) {
+    byKey[bucketFor(service, today)].services.push(service);
+  }
+  return groups;
+}
+
+module.exports = {
+  TYPES, TYPE_KEYS, SUBMISSION_TYPES, SERVICE_TYPES,
+  STATUS_LABEL, statusLabel, isType, listFor,
+  EXPIRING_WITHIN_DAYS, SERVICE_BUCKETS, BUCKET_LABEL,
+  daysUntil, bucketFor, groupServices,
+};

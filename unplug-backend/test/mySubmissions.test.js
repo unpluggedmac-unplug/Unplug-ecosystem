@@ -68,7 +68,7 @@ before(async () => {
   }
 
   // Safe now: DATABASE_URL is set, so src/db.js builds a pool that works.
-  ({ TYPE_KEYS, STATUS_LABEL, statusLabel } = require('../src/utils/mySubmissions'));
+  ({ SUBMISSION_TYPES, STATUS_LABEL, statusLabel } = require('../src/utils/mySubmissions'));
 
   const jwt = require('jsonwebtoken');
   const express = require('express');
@@ -139,7 +139,10 @@ after(async () => {
 // in src/db.js and build its pool while DATABASE_URL is still unset; Node caches
 // that dead pool, the route then receives the same one, and every query hangs
 // until the test times out rather than failing with anything readable.
-let TYPE_KEYS;
+// SUBMISSION_TYPES, not every type the shared pattern knows. My Services later
+// added highlights and the directory listing to TYPES; this section must keep
+// showing exactly what it showed before, which is what these assert.
+let SUBMISSION_TYPES;
 let STATUS_LABEL;
 let statusLabel;
 
@@ -155,7 +158,7 @@ test('A MEMBER SEES ONLY THEIR OWN SUBMISSIONS, OF EVERY TYPE', async () => {
   assert.ok(!/ B\b/.test(titles), `member A must not see member B's work: ${titles}`);
 
   const types = new Set(res.body.submissions.map((s) => s.type));
-  assert.deepEqual([...types].sort(), [...TYPE_KEYS].sort(),
+  assert.deepEqual([...types].sort(), [...SUBMISSION_TYPES].sort(),
     'every type should be represented, or a type is silently missing from the menu');
 });
 
@@ -168,7 +171,7 @@ test('...and the same is true from the other side', async () => {
 test('every type is owned separately — checked one type at a time', async () => {
   // The all-types query could pass while one branch leaks, if another branch
   // happened to filter it out. This checks each route through the schema alone.
-  for (const type of TYPE_KEYS) {
+  for (const type of SUBMISSION_TYPES) {
     const res = await api(`/my/submissions?type=${type}`, tokenA);
     assert.equal(res.status, 200, type);
     assert.ok(res.body.submissions.length > 0, `${type} should return A's own row`);
@@ -198,7 +201,7 @@ test('EVERY TYPE RETURNS THE SAME SHAPE', async () => {
     assert.deepEqual(Object.keys(row).sort(), expected, `${row.type} has a different shape`);
     seen.add(row.type);
   }
-  assert.equal(seen.size, TYPE_KEYS.length, 'every type should have been exercised');
+  assert.equal(seen.size, SUBMISSION_TYPES.length, 'every type should have been exercised');
 });
 
 test('every row carries a title a member can actually read', async () => {
@@ -267,7 +270,7 @@ test('an unknown status is shown as itself rather than guessed at', async () => 
 test('the menu is built from the same list the data comes from', async () => {
   const res = await api('/my/submission-types', tokenA);
   assert.equal(res.status, 200);
-  assert.deepEqual(res.body.types.map((t) => t.type).sort(), [...TYPE_KEYS].sort());
+  assert.deepEqual(res.body.types.map((t) => t.type).sort(), [...SUBMISSION_TYPES].sort());
   for (const t of res.body.types) {
     assert.ok(t.label && t.plural, `${t.type} needs both a label and a plural`);
   }

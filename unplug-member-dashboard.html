@@ -351,6 +351,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
            the ones you already have. The data-ms key stays `services`: it pairs
            the button with its section, and only the label was ambiguous. -->
       <button class="ms-navlink" data-ms="services"><span>🧩</span> Browse Services</button>
+      <button class="ms-navlink" data-ms="myservices"><span>&#128188;</span> My Services</button>
       <button class="ms-navlink" data-ms="submissions"><span>&#128203;</span> My Submissions</button>
       <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="article"><span>&#128196;</span> My Articles</button>
       <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="event"><span>&#128197;</span> My Events</button>
@@ -976,6 +977,19 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <!-- MY SUBMISSIONS (spec 4). One section, one renderer. The per-entity
          menu items are this same list with data-ms-type set, so My Articles and
          My Events cannot drift apart in wording or layout. -->
+    <!-- MY SERVICES (spec section 5): active / pending / expiring / expired /
+         requiring changes / awaiting payment. The same rows as My Submissions —
+         subsRow draws both — but read by TERM rather than by review, which is why
+         the buckets come from the server: whether something has expired is a
+         question about the database's today, not the browser's. -->
+    <section class="ms-section section-hidden" data-ms-section="myservices">
+      <div class="card">
+        <h2>My Services</h2>
+        <p class="sub" id="svcSub">What you have with us, and what needs doing.</p>
+        <div id="svcContent"><div class="loading-state">Loading&#8230;</div></div>
+      </div>
+    </section>
+    
     <section class="ms-section section-hidden" data-ms-section="submissions">
       <div class="card">
         <h2 id="subsTitle">My Submissions</h2>
@@ -4200,6 +4214,11 @@ function msSetupNav(){
       loadMySubmissions(link.getAttribute('data-ms-type'));
     });
   });
+  // My Services is the same data read by term. Loaded on click for the same
+  // reason as the line above: the section is already switched, this fills it.
+  document.querySelectorAll('.ms-navlink[data-ms="myservices"]').forEach(function(link){
+    link.addEventListener('click', function(){ loadMyServices(); });
+  });
   const menuBtn=document.getElementById('msMenuBtn');
   if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
   const lo=document.getElementById('msLogout');
@@ -4383,6 +4402,66 @@ async function loadMySubmissions(type){
 // Kept so the existing call sites keep working — this section used to be
 // "Content" and is loaded from several places after a submission is made.
 async function loadMemberContent(){ return loadMySubmissions(MS_SUBS_TYPE); }
+
+// MY SERVICES — spec section 5.
+//
+// The buckets, their order and their wording all come from the server, for the
+// same reason the status wording does: a service is "expiring" relative to the
+// database's today, and working that out in the browser is a second clock that
+// disagrees with the one that stored the dates.
+//
+// Rows are drawn by subsRow, unchanged. That is the point of the shared shape —
+// My Services is a different reading of the same list, not a second list.
+async function loadMyServices(){
+  var host = document.getElementById('svcContent');
+  if (!host) return;
+
+  host.textContent = '';
+  var loading = document.createElement('div');
+  loading.className = 'loading-state';
+  loading.textContent = 'Loading\u2026';
+  host.appendChild(loading);
+
+  try {
+    var data = await api('/my/services');
+    svcRender(data);
+  } catch (err) {
+    host.textContent = '';
+    var oops = document.createElement('div');
+    oops.className = 'empty-state';
+    oops.textContent = 'We could not load this just now. Please try again.';
+    host.appendChild(oops);
+  }
+}
+
+function svcRender(data){
+  var host = document.getElementById('svcContent');
+  if (!host) return;
+  host.textContent = '';
+
+  var groups = (data && data.groups) || [];
+  var total = groups.reduce(function(n, g){ return n + (g.services || []).length; }, 0);
+
+  if (!total){
+    var empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'You do not have any services with us yet.';
+    host.appendChild(empty);
+    return;
+  }
+
+  groups.forEach(function(group){
+    var rows = group.services || [];
+    // An empty bucket is skipped rather than shown as a bare heading — except
+    // that the server sends every bucket, so this is what keeps the page quiet.
+    if (!rows.length) return;
+    var h = document.createElement('h3');
+    h.className = 'subs-group';
+    h.textContent = group.label + ' (' + rows.length + ')';
+    host.appendChild(h);
+    rows.forEach(function(s){ host.appendChild(subsRow(s)); });
+  });
+}
 
 async function loadCredits(){
   const el=document.getElementById('creditsContent'); if (!el) return;

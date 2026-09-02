@@ -597,3 +597,58 @@ fields, so the row shows what the spine actually knows.
 
 **Still open:** the other 11 sections; profiles visibility-vs-approval; the other 24 §10.17 events;
 `rejected` still doing double duty as "refused" and "cancelled".
+
+---
+
+## 2026-09-02 — Task 06: My Services (§5), and the pattern extended to term-based services
+
+**Second of the twelve My Unplug sections.** §5 names six buckets and stops there, so this
+decides only which bucket a service is in and invents no fields: **awaiting payment ·
+requiring changes · pending · expiring · active · expired**, in that reading order — what needs
+you first, then what is running, then what is over.
+
+**Scope, as agreed:** things with a term *plus* submissions, **except competitions**. An entry is
+not bought for a period and cannot be renewed — it ends when the competition closes, which is the
+competition's business, not the member's. Competitions stay in My Submissions.
+
+That meant adding the two term-based types the pattern was missing:
+
+- **highlights** — no owner column at all. A highlight points at an article or a directory profile
+  and the owner is whoever owns *that*, so both routes are joined. Checking only one would have
+  silently hidden half a member's highlights.
+- **profile** (the paid directory listing) — `renews_at` is the end of its term, which is why the
+  spine counts profiles as expiring even though the row never goes away.
+
+**The bit worth remembering.** Adding types to the shared `TYPES` map would have silently changed
+what My Submissions shows. So each menu item now names its own set — `SUBMISSION_TYPES` and
+`SERVICE_TYPES` — and `listFor` takes the set explicitly rather than defaulting to "everything".
+A type outside a menu item's set is refused there rather than quietly served. Four existing tests
+failed on exactly this boundary and were right to: they had encoded the old assumption that
+`TYPE_KEYS` was what My Submissions shows.
+
+**Today comes from the database**, not from Node. Whether a service has expired is a question about
+the same clock that stored its dates; working it out in the browser is a second clock that
+disagrees whenever the server's local date is ahead of UTC — the bug the highlights dashboard
+already had, and the reason the buckets are computed server-side and sent down whole.
+
+**A judgement, not a requirement: `EXPIRING_WITHIN_DAYS = 30`.** The spec asks for an Expiring
+bucket without saying how wide it is. 30 days matches the marketplace listing duration exactly and
+leaves room for an EFT to clear before a service drops, which matters on a site paid by EFT. One
+named constant, so changing it is changing one number. **This was my call — say if it should be
+14 or 7.**
+
+**Frontend:** rows are drawn by `subsRow`, unchanged. My Services is a different *reading* of the
+same list, not a second list — which is what the shared pattern was for. The nav now separates
+**Browse Services** (the catalogue — what you can buy) from **My Services** (what you have).
+
+Suite **1652 → 1671**, 0 failing. Smoke check 31/31.
+
+**Still open, flagged not built:** §10.9 wants expired services to offer one-click **RENEW** with
+the previous details prepopulated — that is §10.9, not §5, so it is not in this section. No way to
+**cancel** a service from this view either (the Payments section still owns cancellation). And
+`rejected` continues to do double duty as "we refused this" and "you cancelled it", so the wording
+"Not approved" is right for the commoner case and wrong for the other.
+
+**Remaining of the twelve:** My Orders, My Credits, My Invoices, My Votes / Competition Activity,
+Account Settings — plus user-facing invoices (§10.5), which needs the `invoices` table decided
+earlier and is the only one carrying a schema change.
