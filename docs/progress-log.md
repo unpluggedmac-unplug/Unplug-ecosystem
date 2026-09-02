@@ -357,3 +357,24 @@ Suite **1585 → 1600**.
 **Open:** profiles/top10/competition_entries still unmigrated, so they fall back to `'rejected'` and
 can't take change requests. Member dashboard has no UI for `/change-requests/mine` yet — the API is
 live but nothing surfaces "ACTION REQUIRED" to members.
+
+## 2026-09-02 — Member-facing UI for change requests
+
+"Action required" card at the top of the member's Profile panel, hidden until there is something in
+it. Shows the fields the admin ticked (**in the admin's labels** — "Cover image", not
+`banner_image_url`, resolved from the queue's DETAILS whitelist) plus their note, with a button that
+calls resubmit and nothing else — each service keeps its own editor.
+
+**Built with createElement/textContent, never innerHTML** — the note is admin-written and stored,
+the shape that caused both prior stored-XSS holes. Verified: a note of
+`<img src=x onerror="window.__PWNED=1">` renders as text, `__PWNED` stays 0, zero injected elements.
+
+**Browser-verified against a real backend:** card appears with correct plural summary, two items
+render (one with fields, one note-only), pressing the button drops that item and the server agrees,
+answering the last hides the card. A failed load shows nothing rather than an empty red panel.
+
+Member-only page, no money/votes/public content → suite + browser check per protocol.
+Suite **1600**, unchanged (frontend only).
+
+**Still open:** notifications (§10.17) don't fire on a change request — the member only sees it if
+they open the dashboard. Profiles/top10/competition_entries still unmigrated.
