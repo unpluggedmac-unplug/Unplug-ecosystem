@@ -204,6 +204,15 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
       && (page.match(/id="creditsContent"/g) || []).length === 1);
   check('My Credits builds nodes rather than HTML strings',
     page.includes('function creditsRender') && !/creditsContent[\s\S]{0,400}innerHTML/.test(page));
+  check('the dashboard has the My Invoices section',
+    page.includes('data-ms-section="myinvoices"') && page.includes('>My Invoices<'));
+  check('My Invoices has its loader', page.includes('async function loadMyInvoices'));
+  check('the PDF is fetched WITH the auth header, not opened as a bare link',
+    page.includes('async function apiBlob')
+      && /apiBlob\('\/my\/invoices\/' \+ iv\.id \+ '\/pdf'\)/.test(page));
+  check('the page does no VAT arithmetic of its own',
+    !/invContent[\s\S]{0,3000}\*\s*0?\.15/.test(page)
+      && !/invRender[\s\S]{0,3000}\/\s*1\.15/.test(page));
 
   // Shut down in order. The ROUTE has its own pool (src/db.js), separate from
   // the one this script seeds with; stopping Postgres while it still holds an

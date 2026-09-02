@@ -12,6 +12,8 @@ const {
   listFor, isType, TYPES, SUBMISSION_TYPES, SERVICE_TYPES,
   groupServices, EXPIRING_WITHIN_DAYS,
 } = require('../utils/mySubmissions');
+const invoices = require('../utils/invoices');
+const { generateDocument } = require('../utils/pdfDocs');
 
 // GET /my/submissions          — everything this member has submitted
 // GET /my/submissions?type=... — one menu item (My Articles, My Events, …)
@@ -58,6 +60,68 @@ router.get('/services', requireAuth, async (req, res, next) => {
       expiringWithinDays: EXPIRING_WITHIN_DAYS,
       groups: groupServices(services, today),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /my/invoices — §10.5. The member's own invoices, newest first.
+router.get('/invoices', requireAuth, async (req, res, next) => {
+  try {
+    res.json({ invoices: await invoices.listFor(req.user.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /my/invoices/:id — one invoice with its lines.
+router.get('/invoices/:id', requireAuth, async (req, res, next) => {
+  try {
+    const invoice = await invoices.getForMember(req.user.id, req.params.id);
+    // 404 rather than 403 for someone else's: whether an invoice number exists
+    // is not something to confirm to a person who does not own it.
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found.' });
+    res.json({ invoice });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /my/invoices/:id/pdf — the document itself.
+//
+// Generated on request and streamed, NOT stored. It is rendered from the
+// invoice row, so it always matches the record; a stored file would be a second
+// copy that could fall out of step with it. It also means this works without
+// file storage configured, which the admin-side generator needs.
+router.get('/invoices/:id/pdf', requireAuth, async (req, res, next) => {
+  try {
+    const invoice = await invoices.getForMember(req.user.id, req.params.id);
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found.' });
+
+    const buffer = await generateDocument({
+      kind: 'invoice',
+      invoiceNumber: invoice.invoice_number,
+      reference: invoice.reference,
+      customerName: req.user.full_name || req.user.email,
+      customerEmail: req.user.email,
+      items: invoice.items,
+      subtotal: invoice.subtotal,
+      voucherDiscount: invoice.voucher_discount,
+      creditUsed: invoice.credit_used,
+      total: invoice.total,
+      method: invoice.method,
+      status: invoice.status,
+      date: new Date(invoice.issued_at).toLocaleDateString('en-ZA'),
+      vatNumber: invoice.vatNumber,
+      vatRate: invoice.vatRate,
+      vatAmount: invoice.vatAmount,
+      netAmount: invoice.netAmount,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `inline; filename="${invoice.invoice_number}.pdf"`);
+    res.send(buffer);
   } catch (err) {
     next(err);
   }

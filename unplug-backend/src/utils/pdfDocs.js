@@ -6,14 +6,25 @@ const PDFDocument = require('pdfkit');
 // title and the one sentence under it change, so this isn't two near-
 // identical templates to keep in step.
 //
-// No VAT line: nothing else in this codebase calculates or charges VAT
-// (checked — the only "VAT" match anywhere in the backend is the substring
-// inside "OZOW_PRIVATE_KEY"), so inventing one here would show a number
-// nobody actually charged.
+// VAT: Unplug's prices are VAT-INCLUSIVE, so where a VAT registration number is
+// configured this shows the VAT already contained in the total — not 15% added
+// on top. A South African tax invoice must carry the vendor's registration
+// number, so the document only calls itself a TAX INVOICE when it has one.
+//
+// With no number configured it renders exactly as before: a plain INVOICE with
+// no VAT line. That is the safe direction to fail — a tax invoice missing its
+// registration number is worse than an invoice that does not claim to be one,
+// and this file will not invent a number it was not given.
+//
+// The arithmetic lives in utils/invoices.js (vatBreakdown); this only prints
+// what it is handed, so a list row and a PDF cannot disagree.
 function generateDocument({
   kind, reference, customerName, customerEmail,
   items, subtotal, voucherDiscount, creditUsed, total,
   method, status, date,
+  // Optional. Present for a member-facing invoice; absent for the admin
+  // queue's documents, which keep their existing look.
+  invoiceNumber, vatNumber, vatRate, vatAmount, netAmount,
 }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -22,13 +33,19 @@ function generateDocument({
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const title = kind === 'receipt' ? 'RECEIPT' : 'INVOICE';
+    // Only a registered vendor may issue a "tax invoice", so the word is earned
+    // by having a registration number rather than assumed.
+    const isTax = Boolean(vatNumber) && Number(vatAmount) > 0;
+    const title = kind === 'receipt'
+      ? (isTax ? 'TAX RECEIPT' : 'RECEIPT')
+      : (isTax ? 'TAX INVOICE' : 'INVOICE');
     const intro = kind === 'receipt'
       ? 'This confirms payment has been received for the following.'
       : 'This is a request for payment for the following.';
 
     doc.fontSize(20).font('Helvetica-Bold').fillColor('#d20709').text('Unplug Magazine');
     doc.fontSize(10).font('Helvetica').fillColor('#454545').text('accounts@unplugnews.com');
+    if (vatNumber) doc.text(`VAT Reg No: ${vatNumber}`);
     doc.moveDown(1.5);
 
     doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f0e0e').text(title);
@@ -36,6 +53,7 @@ function generateDocument({
     doc.moveDown(1);
 
     doc.fontSize(10).fillColor('#0f0e0e');
+    if (invoiceNumber) doc.text(`Invoice number: ${invoiceNumber}`);
     doc.text(`Reference: ${reference}`);
     doc.text(`Date: ${date}`);
     if (customerName) doc.text(`Customer: ${customerName}`);
@@ -69,7 +87,13 @@ function generateDocument({
     row('Subtotal', `R${Number(subtotal).toFixed(2)}`);
     if (Number(voucherDiscount) > 0) row('Voucher', `-R${Number(voucherDiscount).toFixed(2)}`);
     if (Number(creditUsed) > 0) row('Account credit', `-R${Number(creditUsed).toFixed(2)}`);
-    row('Total', `R${Number(total).toFixed(2)}`, true);
+    // The VAT already inside the total, shown between the discounts and the
+    // total so it reads as part OF the amount rather than as an addition to it.
+    if (isTax) {
+      row('Excl. VAT', `R${Number(netAmount).toFixed(2)}`);
+      row(`VAT @ ${Number(vatRate).toFixed(0)}%`, `R${Number(vatAmount).toFixed(2)}`);
+    }
+    row(isTax ? 'Total incl. VAT' : 'Total', `R${Number(total).toFixed(2)}`, true);
 
     doc.y = y + 30;
     doc.fontSize(9).font('Helvetica').fillColor('#79726a')

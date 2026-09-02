@@ -362,6 +362,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="editions"><span>📖</span> My Editions</button>
       <button class="ms-navlink" data-ms="myorders"><span>&#128722;</span> My Orders</button>
       <button class="ms-navlink" data-ms="mycredits"><span>&#127974;</span> My Credits</button>
+      <button class="ms-navlink" data-ms="myinvoices"><span>&#129534;</span> My Invoices</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
       <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
@@ -1020,6 +1021,17 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
          Profile page, where it was a card in a corner, into the menu item the spec
          asks for. The ledger is one table: positive grants, negative spends, and
          the balance is their sum - never a stored number that can drift. -->
+    <!-- MY INVOICES (spec section 10.5). One per confirmed order. The number is
+         issued once and stored, so it is the same today as in an audit; the money
+         is what was charged at the moment it was issued, not a live join. -->
+    <section class="ms-section section-hidden" data-ms-section="myinvoices">
+      <div class="card">
+        <h2>My Invoices</h2>
+        <p class="sub">One for every order you have paid. Open any invoice to download it as a PDF.</p>
+        <div id="invContent"><div class="loading-state">Loading&#8230;</div></div>
+      </div>
+    </section>
+    
     <section class="ms-section section-hidden" data-ms-section="mycredits">
       <div class="card">
         <h2>My Credits</h2>
@@ -1113,6 +1125,18 @@ let API_BASE = localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
 // The upload widget needs the API base and the signed-in session.
 UnplugUpload.init({ getApiBase: () => API_BASE, getToken: () => AUTH_TOKEN });
 let AUTH_TOKEN = null;
+
+async function apiBlob(path, options = {}) {
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers: {
+      ...(AUTH_TOKEN ? { Authorization: 'Bearer ' + AUTH_TOKEN } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.blob();
+}
 
 async function api(path, options = {}) {
   const res = await fetch(API_BASE + path, {
@@ -4246,6 +4270,9 @@ function msSetupNav(){
   document.querySelectorAll('.ms-navlink[data-ms="mycredits"]').forEach(function(link){
     link.addEventListener('click', function(){ loadCredits(); });
   });
+  document.querySelectorAll('.ms-navlink[data-ms="myinvoices"]').forEach(function(link){
+    link.addEventListener('click', function(){ loadMyInvoices(); });
+  });
   const menuBtn=document.getElementById('msMenuBtn');
   if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
   const lo=document.getElementById('msLogout');
@@ -4695,6 +4722,110 @@ function creditsRender(data){
     row.appendChild(main);
     row.appendChild(pill);
     el.appendChild(row);
+  });
+}
+
+// MY INVOICES - spec section 10.5.
+//
+// Everything shown here comes from the invoice row: the number, the money and
+// the VAT split are all worked out server-side. The page does no arithmetic of
+// its own, so a figure on screen and a figure on the PDF cannot disagree.
+async function loadMyInvoices(){
+  var host = document.getElementById('invContent');
+  if (!host) return;
+  host.textContent = '';
+  var loading = document.createElement('div');
+  loading.className = 'loading-state';
+  loading.textContent = 'Loading\u2026';
+  host.appendChild(loading);
+  try {
+    var data = await api('/my/invoices');
+    invRender(data.invoices || []);
+  } catch (err) {
+    host.textContent = '';
+    var oops = document.createElement('div');
+    oops.className = 'empty-state';
+    oops.textContent = 'We could not load your invoices just now. Please try again.';
+    host.appendChild(oops);
+  }
+}
+
+function invRender(list){
+  var host = document.getElementById('invContent');
+  if (!host) return;
+  host.textContent = '';
+
+  if (!list.length){
+    var empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No invoices yet. One is issued for every order you pay.';
+    host.appendChild(empty);
+    return;
+  }
+
+  list.forEach(function(iv){
+    var row = document.createElement('div');
+    row.className = 'subs-row';
+
+    var main = document.createElement('div');
+
+    // The invoice number identifies the DOCUMENT; the reference identifies the
+    // purchase. Section 10.5 lists them separately because they are different things.
+    var title = document.createElement('div');
+    title.className = 'subs-title';
+    title.textContent = iv.invoice_number;
+    main.appendChild(title);
+
+    var meta = document.createElement('div');
+    meta.className = 'subs-meta';
+    meta.textContent = msDate(iv.issued_at) + ' \u00b7 Ref ' + iv.reference
+      + ' \u00b7 ' + String(iv.method || '').toUpperCase();
+    main.appendChild(meta);
+
+    // The VAT split, only when there is one to show.
+    var money = document.createElement('div');
+    money.className = 'subs-meta';
+    if (iv.vatRegistered && iv.vatAmount !== null){
+      money.textContent = 'Excl. VAT R' + Number(iv.netAmount).toFixed(2)
+        + ' \u00b7 VAT @ ' + Number(iv.vatRate).toFixed(0) + '% R' + Number(iv.vatAmount).toFixed(2)
+        + ' \u00b7 Total incl. VAT R' + Number(iv.total).toFixed(2);
+    } else {
+      money.textContent = 'Total R' + Number(iv.total).toFixed(2);
+    }
+    main.appendChild(money);
+
+    var open = document.createElement('button');
+    open.className = 'btn btn-line';
+    open.style.cssText = 'margin-top:8px; font-size:12px; padding:4px 10px;';
+    open.textContent = 'Download PDF';
+    open.addEventListener('click', async function(){
+      open.disabled = true;
+      var was = open.textContent;
+      open.textContent = 'Preparing\u2026';
+      try {
+        // Fetched with the auth header rather than opened as a link: the PDF
+        // is behind requireAuth, and a plain link sends no token.
+        var blob = await apiBlob('/my/invoices/' + iv.id + '/pdf');
+        var url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+      } catch (err) {
+        open.textContent = 'Could not open that invoice';
+        setTimeout(function(){ open.textContent = was; open.disabled = false; }, 2500);
+        return;
+      }
+      open.disabled = false;
+      open.textContent = was;
+    });
+    main.appendChild(open);
+
+    var pill = document.createElement('span');
+    pill.className = 'status-pill approved';
+    pill.textContent = 'Paid';
+
+    row.appendChild(main);
+    row.appendChild(pill);
+    host.appendChild(row);
   });
 }
 

@@ -16,6 +16,7 @@ const { attributeConsultant } = require('../utils/consultantAttribution');
 const pool = require('../db');
 const { generateUnique } = require('../utils/reference');
 const { serviceLabel } = require('../utils/submissionReference');
+const { issueForOrder } = require('../utils/invoices');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor } = require('../utils/accountCredit');
 const { eftInstructions } = require('../utils/eftDetails');
@@ -291,6 +292,11 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     if (Number(order.total) === 0) {
       await pool.query(`UPDATE payments SET status = 'confirmed', confirmed_at = now() WHERE order_id = $1`, [order.id]);
       await pool.query(`UPDATE orders SET status = 'confirmed', confirmed_at = now() WHERE id = $1`, [order.id]);
+      // §10.5: the member gets an invoice. Issued after confirmation, never
+      // before — an invoice for money that has not arrived is a document that
+      // should not exist. Safe to call twice; the UNIQUE on order_id refuses a
+      // second one, so a retry cannot mint a duplicate number.
+      try { await issueForOrder(order.id); } catch (e) { /* an invoice must never block a paid order */ }
       for (const p of paymentRows) {
         try { await applyPaymentEffect({ ...p, status: 'confirmed' }); } catch (e) { /* one item's effect failing must not block the others */ }
       }
@@ -518,6 +524,8 @@ router.patch('/admin/:id/confirm-eft', requireRole('admin'), async (req, res, ne
     const items = await pool.query(`SELECT * FROM payments WHERE order_id = $1`, [req.params.id]);
     await pool.query(`UPDATE payments SET status = 'confirmed', confirmed_at = now() WHERE order_id = $1`, [req.params.id]);
     await pool.query(`UPDATE orders SET status = 'confirmed', confirmed_at = now() WHERE id = $1`, [req.params.id]);
+    // §10.5, same as the paid-by-credit path above.
+    try { await issueForOrder(req.params.id); } catch (e) { /* an invoice must never block a confirmed order */ }
 
     for (const item of items.rows) {
       try { await applyPaymentEffect({ ...item, status: 'confirmed' }); } catch (e) { /* one item's effect failing must not block the others */ }

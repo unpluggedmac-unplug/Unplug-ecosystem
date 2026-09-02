@@ -729,3 +729,67 @@ Suite **1682 → 1694**, 0 failing. Smoke check 37/37.
 
 **Remaining of the twelve:** My Invoices (the one with a schema change), My Votes / Competition
 Activity, Account Settings.
+
+---
+
+## 2026-09-02 — Task 06: My Invoices (§10.5) — schema change, VAT, full protocol
+
+**Fifth of the twelve, and the only one carrying a migration.**
+
+**What was already there:** an admin-triggered PDF generator (`utils/pdfDocs.js`) that uploads to
+Supabase and stores a URL on the payment. It had **no invoice number**, and members could not see it
+at all. That generator is reused rather than duplicated.
+
+**Migration 164** adds `invoices`, a sequence, and `next_invoice_number()` — one SQL function that
+both the backfill and the application call, so a number issued by a migration and one issued by a
+checkout cannot end up in different shapes. **Backfilled every already-confirmed order**, oldest
+first, so members who paid before today have their invoices too.
+
+**The money is copied, not joined.** An invoice records what was charged *at the moment it was
+issued*; a test corrupts the order behind an invoice and asserts the invoice does not follow it.
+That duplication is the accounting behaviour, not an oversight.
+
+**VAT — the plan changed mid-task.** The code carried a documented decision that nothing charges
+VAT. The owner corrected that: **all prices are VAT-inclusive**, and confirmed Unplug is
+VAT-registered. So VAT is the portion *inside* the total, not 15% added on top:
+
+```
+vat = total × 15/115      R400 incl. = R52.17 VAT on R347.83
+NOT total × 0.15          (which would be R60.00 — overstating tax on every invoice)
+```
+
+The net is derived by subtraction so `net + vat` equals the total exactly; a test checks that across
+ten awkward amounts including 0.01 and 12345.67.
+
+**The VAT registration number is a setting, seeded EMPTY.** It is a fact about the business, not
+something source control should invent. An admin sets it via
+`PATCH /admin/settings/vat_registration_number`. Until it is set the document renders as a plain
+INVOICE with no VAT line and does not call itself a tax invoice — the safe direction to fail,
+because a tax invoice missing its registration number is worse than one that does not claim to be
+one. A migration test proves a deploy cannot wipe the number once set.
+
+> **STILL NEEDED FROM THE OWNER: the actual VAT registration number.** Until it is entered, live
+> invoices show no VAT. Everything else works.
+
+**The PDF is streamed, never stored.** Rendered from the invoice row on request, so it always
+matches the record and needs no file storage. Fetched with the auth header — a plain link sends no
+token.
+
+**Verified (full protocol, this touches money):**
+- Suite **1694 → 1718**, and 1718/1718 pass. *(One full-suite run showed 7 failures in
+  `dateNoTimezoneShift`; the cause was `could not create any TCP/IP sockets` — a port bind, not
+  code. Re-ran that file alone: 7/7, zero socket errors.)*
+- Migration 164 run **four times** over: passes 3 and 4 change nothing — same rows, same numbers,
+  no sequence values burned.
+- **Browser, against a real backend in a real dashboard:** two invoices listed, `INV-2026-000001`
+  showing `Excl. VAT R347.83 · VAT @ 15% R52.17 · Total incl. VAT R400.00`, PDF downloading as a
+  real `%PDF` with the number and VAT number on it.
+
+**Flagged, not built:**
+- **Test ports are `base + (process.pid % 300)`**, which on Windows can land in a reserved range and
+  fail an entire file at random. Pre-existing, affects ~109 test files, and it is why a clean run
+  can look broken. Worth a separate task.
+- The admin's stored `invoice_url` PDFs and these generated ones are now two documents for one
+  purchase. The admin flow is untouched, but they should probably converge.
+
+**Remaining of the twelve:** My Votes / Competition Activity, Account Settings.
