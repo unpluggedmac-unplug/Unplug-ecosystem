@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireOwnerOrAdmin, requireRole } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
-const { buildVideoEmbed } = require('../utils/videoEmbed');
+const { buildVideoEmbed, resolveAndBuildVideoEmbed } = require('../utils/videoEmbed');
 const { deriveMetadata, slugify, cleanTopicTerms } = require('../utils/articleMeta');
 const { recordConversionAsync } = require('../utils/analyticsRecorder');
 const { normaliseTags } = require('../utils/tags');
@@ -304,7 +304,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     // turn into a player is refused HERE rather than stored, because a stored
     // dead link becomes an empty box on a published page that nobody notices
     // until a reader says so.
-    const video = buildVideoEmbed(videoUrl);
+    const video = await resolveAndBuildVideoEmbed(videoUrl);
     if (video.error) return res.status(400).json({ error: video.error });
 
     // Derive the metadata from what was actually submitted, sections
@@ -444,7 +444,7 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
     // an empty string removes it, which is the only way to take a video off a
     // story once it is on one.
     if (req.body.videoUrl !== undefined) {
-      const v = buildVideoEmbed(req.body.videoUrl);
+      const v = await resolveAndBuildVideoEmbed(req.body.videoUrl);
       if (v.error) return res.status(400).json({ error: v.error });
       values.push(v.url); setClauses.push(`video_url = $${values.length}`);
       values.push(v.platform); setClauses.push(`video_platform = $${values.length}`);

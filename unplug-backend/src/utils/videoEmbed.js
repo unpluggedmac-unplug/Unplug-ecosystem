@@ -147,4 +147,62 @@ function buildVideoEmbed(rawUrl) {
   return fail('Videos can be added from YouTube, TikTok, Instagram or Google Drive.');
 }
 
-module.exports = { buildVideoEmbed, PLATFORM_LABELS };
+
+// ---- TikTok short links --------------------------------------------------
+// A short TikTok link (vt.tiktok.com / vm.tiktok.com) carries no video id: it
+// only reveals the real address by redirecting. buildVideoEmbed stays pure and
+// synchronous, so this async wrapper does the one thing that needs the network
+// — follow the short link to its canonical /video/<id> address — and then hands
+// that to the same parser. Nothing the person typed is stored; only the
+// resolved id is used, and the link they pasted is kept for the editor. If the
+// redirect fails, times out, or lands somewhere that is not TikTok, the plain
+// synchronous result (its helpful "paste the full link" message) is returned
+// unchanged, so nothing regresses.
+function isShortTikTok(rawUrl) {
+  try {
+    const u = String(rawUrl == null ? '' : rawUrl).trim();
+    const withScheme = /^https?:\/\//i.test(u) ? u : 'https://' + u;
+    const host = new URL(withScheme).hostname.replace(/^www\./i, '').toLowerCase();
+    return host === 'vm.tiktok.com' || host === 'vt.tiktok.com';
+  } catch (e) { return false; }
+}
+
+async function resolveAndBuildVideoEmbed(rawUrl, { fetchImpl, timeoutMs = 5000 } = {}) {
+  const direct = buildVideoEmbed(rawUrl);
+  // Only reach for the network when the parser could not use a TikTok short
+  // link. Everything else is returned exactly as before.
+  if (!direct.error || !isShortTikTok(rawUrl)) return direct;
+
+  const doFetch = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+  if (!doFetch) return direct;
+
+  const original = String(rawUrl).trim();
+  const shortUrl = /^https?:\/\//i.test(original) ? original : 'https://' + original;
+  try {
+    const res = await doFetch(shortUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; UnplugBot/1.0; +https://unplugnews.com)' },
+    });
+    // We only want the final address, never the page body.
+    try { if (res && res.body && res.body.cancel) res.body.cancel(); } catch (e) { /* ignore */ }
+    const finalUrl = res && res.url ? String(res.url) : '';
+    let finalHost = '';
+    try { finalHost = new URL(finalUrl).hostname.replace(/^www\./i, '').toLowerCase(); } catch (e) { /* ignore */ }
+    // The redirect must land on a genuine TikTok video address, or it is not
+    // trusted and we fall back to the plain message.
+    if (finalHost === 'tiktok.com' || finalHost.endsWith('.tiktok.com')) {
+      const resolved = buildVideoEmbed(finalUrl);
+      if (!resolved.error) {
+        // Keep what the person actually pasted so an editor still recognises it.
+        return Object.assign({}, resolved, { url: direct.url || original });
+      }
+    }
+  } catch (e) {
+    // Timeout, network error, or blocked — fall through to the plain message.
+  }
+  return direct;
+}
+
+module.exports = { buildVideoEmbed, resolveAndBuildVideoEmbed, PLATFORM_LABELS };

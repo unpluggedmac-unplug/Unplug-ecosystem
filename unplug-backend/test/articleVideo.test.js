@@ -33,6 +33,7 @@ let server;
 let baseUrl;
 let jwt;
 let buildVideoEmbed;
+let resolveAndBuildVideoEmbed;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-artvideo-'));
 const port = 34400 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 
@@ -98,7 +99,7 @@ before(async () => {
   }
 
   jwt = require('jsonwebtoken');
-  ({ buildVideoEmbed } = require('../src/utils/videoEmbed'));
+  ({ buildVideoEmbed, resolveAndBuildVideoEmbed } = require('../src/utils/videoEmbed'));
 
   const express = require('express');
   const { attachUser } = require('../src/middleware/auth');
@@ -202,13 +203,28 @@ test('a platform we do not support is refused with a message naming the ones we 
   assert.match(bad.body.error, /YouTube.*TikTok.*Instagram.*Google Drive/i);
 });
 
-test('a TikTok short link is refused with instructions rather than stored broken', async () => {
-  // vm.tiktok.com links only resolve by following a redirect, so they cannot
-  // be embedded. Saying what to paste beats saving something that shows an
-  // empty box.
-  const bad = await submit(adminToken, { videoUrl: 'https://vm.tiktok.com/ZMabcdef/' });
-  assert.equal(bad.status, 400);
-  assert.match(bad.body.error, /full link/i);
+test('a TikTok short link now resolves to the full video by following its redirect', async () => {
+  // vm/vt.tiktok.com links carry no id; the resolver follows the redirect to
+  // the canonical /video/<id> address and builds the embed from that. A stub
+  // stands in for the network so the test never depends on TikTok being up.
+  const fakeFetch = async () => ({
+    url: 'https://www.tiktok.com/@someone/video/7412345678901234567',
+    body: { cancel() {} },
+  });
+  const r = await resolveAndBuildVideoEmbed('https://vm.tiktok.com/ZMabcdef/', { fetchImpl: fakeFetch });
+  assert.equal(r.platform, 'tiktok');
+  assert.equal(r.embedUrl, 'https://www.tiktok.com/embed/v2/7412345678901234567');
+  assert.equal(r.error, null);
+  assert.equal(r.url, 'https://vm.tiktok.com/ZMabcdef/', 'the pasted link is kept so an editor recognises it');
+});
+
+test('a TikTok short link that does not resolve still gives the helpful message', async () => {
+  // If the redirect fails, times out, or lands off TikTok, nothing regresses:
+  // the writer still sees the plain instruction to paste the full link.
+  const fakeFetch = async () => { throw new Error('network down'); };
+  const r = await resolveAndBuildVideoEmbed('https://vm.tiktok.com/ZMabcdef/', { fetchImpl: fakeFetch });
+  assert.equal(r.platform, null);
+  assert.match(r.error, /full link/i);
 });
 
 // ---------------------------------------------------------------------------
