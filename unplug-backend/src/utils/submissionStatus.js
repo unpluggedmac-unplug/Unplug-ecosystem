@@ -50,9 +50,10 @@ const GALLERY = ['gallery_bundles', 'gallery_images'];              // B1, migra
 const MARKETPLACE = ['marketplace_listings'];                        // B2, migration 157
 const EVENTS = ['events'];                                           // B3, migration 158
 const HIGHLIGHTS = ['highlights'];                                   // B4, migration 159
+const ARTICLES = ['articles'];                                       // B5, migration 160
 
 // Services that have taken the three review statuses.
-const REVIEWED = [...GALLERY, ...MARKETPLACE, ...EVENTS, ...HIGHLIGHTS];
+const REVIEWED = [...GALLERY, ...MARKETPLACE, ...EVENTS, ...HIGHLIGHTS, ...ARTICLES];
 
 // Services that can actually run out.
 //
@@ -70,7 +71,7 @@ const EXPIRING = [...MARKETPLACE, ...EVENTS, ...HIGHLIGHTS];
 // `live`. Until then this file tells you the truth rather than the intention.
 const STATUSES = {
   draft: {
-    live: ['articles'],
+    live: ARTICLES,
     meaning: 'Started and saved, never submitted. Only articles support this today.',
   },
   awaiting_payment: {

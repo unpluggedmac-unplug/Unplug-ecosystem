@@ -186,6 +186,17 @@ test('EVERY HIGHLIGHT STATUS HAS A LABEL A MEMBER CAN READ', () => {
     'these highlight statuses would fall through to "Active": ' + missing.join(', '));
 });
 
+test('PHASE B5: ARTICLES TOOK THREE, AND STILL CANNOT EXPIRE', () => {
+  // The largest service on the board, and the last of Phase B. It takes the
+  // three review statuses but not `expired`: an article has no duration and no
+  // end date. scheduled_for holds one back UNTIL a date and then it stays.
+  ['changes_requested', 'resubmitted', 'credit_issued'].forEach((v) => {
+    assert.ok(S.isLiveFor(v, 'articles'), `articles should accept ${v} after Phase B5`);
+  });
+  assert.equal(S.isLiveFor('expired', 'articles'), false,
+    'an article is published and stays published');
+});
+
 test('only the services that can run out have expired', () => {
   // The distinction the phases keep making, asserted rather than remembered:
   // a service gets `expired` only if something can actually end it.
