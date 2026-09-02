@@ -188,3 +188,30 @@ to the constraint but not mapped fails the build.
 **Suite 1533 → 1556.** No table touched, no behaviour changed.
 
 **Next:** Phase B1 `gallery_bundles` (blast radius 26) — the first additive migration. Awaiting go-ahead.
+
+## 2026-09-02 — Task 04 Phase B1: gallery service
+
+Migration 156 adds `changes_requested`, `resubmitted`, `credit_issued` to `gallery_bundles` and
+`gallery_images`. Nothing sets them (task 05 does); an unwritable value is inert.
+
+**Three of four, not four.** `expired` deliberately omitted — a gallery submission is a one-off
+purchase of photos that stay published, so it has no term to run out. Adding it would create an
+unreachable state, which is what the plan argued against. It goes with highlights / ad banners /
+marketplace / directory packages instead. Module now records this.
+
+**Verified:** all 156 migrations run **three times** clean; exactly one status constraint per table
+afterwards; a row really accepts the new value. Full suite **1557 → 1565**.
+
+**Test change worth knowing:** the "eight tables share one vocabulary" assertion was replaced.
+Phase B migrates one service at a time, so tables legitimately differ mid-phase. The real invariant
+is that every table keeps all four base values (losing one fails the constraint on next deploy),
+plus any extra must be one we deliberately added. Four new DB-backed tests, incl. **exactly one
+status constraint per table** (a DROP under the wrong name leaves two, both enforced) and **every
+status fits VARCHAR(20)** — found by writing a 23-char invalid status and getting "value too long"
+instead of a constraint error.
+
+**Note:** `icons/icon-192.png` vanished from the working tree again — third time files have
+disappeared from this temp checkout. Restored from HEAD. The stable-checkout item is still open.
+
+**Next:** B2 `marketplace_listings` (blast radius 182) — and it DOES expire (30 days), so it takes
+all four statuses.
