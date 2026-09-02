@@ -211,11 +211,16 @@ test('IT ONLY WRITES credit_issued WHERE THE TABLE ACCEPTS IT', async () => {
   // Phase B migrated five services. The others still reject the value at the
   // CHECK, so the route asks the vocabulary rather than assuming. If this were
   // wrong the endpoint would throw a constraint violation instead of crediting.
-  const migrated = ['articles', 'gallery_images', 'events', 'marketplace_listings', 'highlights'];
-  migrated.forEach((t) => assert.ok(SUB.isLiveFor('credit_issued', t), `${t} should accept it`));
-  ['profiles', 'top10_entries', 'competition_entries']
-    .forEach((t) => assert.equal(SUB.isLiveFor('credit_issued', t), false,
-      `${t} has not been migrated, so the route must fall back to 'rejected'`));
+  // Migration 162 finished the job: every submission table now accepts it, so
+  // the fallback no longer fires anywhere. The branch stays because it is what
+  // made shipping one service at a time safe, and it is what will make the next
+  // new service safe before its migration lands.
+  SUB.SUBMISSION_TABLES.forEach((t) => assert.ok(SUB.isLiveFor('credit_issued', t),
+    `${t} should accept credit_issued now that Phase B is complete`));
+
+  // And the guard still answers correctly for something outside the vocabulary.
+  assert.equal(SUB.isLiveFor('credit_issued', 'share_cards'), false,
+    'a table outside the submission vocabulary must still fall back');
 });
 
 test('the decline is admin-only', async () => {

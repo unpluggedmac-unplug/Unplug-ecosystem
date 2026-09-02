@@ -201,7 +201,7 @@ test('only the services that can run out have expired', () => {
   // The distinction the phases keep making, asserted rather than remembered:
   // a service gets `expired` only if something can actually end it.
   const withExpiry = S.SUBMISSION_TABLES.filter((t) => S.isLiveFor('expired', t)).sort();
-  assert.deepEqual(withExpiry, ['events', 'highlights', 'marketplace_listings'],
+  assert.deepEqual(withExpiry, ['events', 'highlights', 'marketplace_listings', 'profiles'],
     'expired should only be live where a term or a date ends the service');
 });
 

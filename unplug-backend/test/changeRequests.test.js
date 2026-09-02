@@ -274,3 +274,114 @@ test('the admin who asked is on the record', async () => {
     `SELECT requested_by FROM change_requests WHERE submission_id = $1 ORDER BY id DESC LIMIT 1`, [id]);
   assert.equal(r.rows[0].requested_by, 840001);
 });
+
+// ---------------------------------------------------------------------------
+// The member is TOLD (spec §10.17).
+// ---------------------------------------------------------------------------
+//
+// The pathway shipped working and invisible: an admin asked for changes, the
+// database knew, and the member found out only if they happened to open their
+// dashboard. A request nobody is told about is a submission that sits still
+// while each side waits for the other.
+
+test('ASKING FOR CHANGES NOTIFIES THE MEMBER', async () => {
+  const id = await makeArticle();
+  await api('POST', `/admin/approval-queue/article/${id}/request-changes`,
+    { fields: ['banner_image_url'], note: 'Too dark.' }, adminToken);
+
+  // The notification is sent after the commit and NOT awaited, so it lands a
+  // moment later — and other tests in this file are also sending them.
+  //
+  // Polling for "the newest notification" would therefore sometimes pick up
+  // another test's, which is exactly what happened: this passed alone and
+  // failed in the full suite. So it polls for THIS request's notification by
+  // its content instead of assuming the latest one is mine.
+  let mine = null;
+  for (let i = 0; i < 60 && !mine; i++) {
+    const rows = await pool.query(
+      `SELECT * FROM notifications
+        WHERE user_id = 840002 AND type = 'changes_requested' AND body LIKE '%Too dark%'
+        ORDER BY id DESC LIMIT 1`
+    );
+    mine = rows.rows[0] || null;
+    if (!mine) await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.ok(mine, 'the member should have been told');
+  assert.match(mine.title, /Action required/);
+  assert.match(mine.body, /Cover image/,
+    'and told in the admin\'s words, not the column name');
+});
+
+test('a member who has turned status updates off is not notified', async () => {
+  // notification_preferences already governs this. A change request is a status
+  // change, so it is subject to the same switch rather than a new one.
+  await pool.query(
+    `INSERT INTO notification_preferences (user_id, notify_status_change)
+     VALUES (840003, FALSE)
+     ON CONFLICT (user_id) DO UPDATE SET notify_status_change = FALSE`
+  );
+  const id = await makeArticle(840003);
+  await api('POST', `/admin/approval-queue/article/${id}/request-changes`,
+    { note: 'x' }, adminToken);
+
+  await new Promise((r) => setTimeout(r, 400));
+  const rows = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM notifications
+      WHERE user_id = 840003 AND type = 'changes_requested'`
+  );
+  assert.equal(rows.rows[0].n, 0, 'an opted-out member is left alone');
+});
+
+test('NOTIFYING IS NOT PART OF THE TRANSACTION', async () => {
+  // The change request must stand even if telling the member fails. Asserted on
+  // the shape rather than by breaking the mailer: the notify call sits after
+  // COMMIT and is not awaited, so nothing it does can roll the request back.
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'adminApprovalQueue.js'), 'utf8'
+  );
+  const commitAt = src.indexOf("await client.query('COMMIT')");
+  const notifyAt = src.indexOf('notifyMemberAsync({');
+  assert.ok(commitAt > 0 && notifyAt > commitAt,
+    'the member is notified only after the change request is committed');
+  assert.equal(/await\s+notifyMemberAsync/.test(src), false,
+    'and the request does not wait for the notification to be delivered');
+});
+
+test('the last three services can now be asked for changes or credited', async () => {
+  // Migration 162 finished the submission vocabulary.
+  const S = require('../src/utils/submissionStatus');
+  ['profiles', 'competition_entries', 'top10_entries'].forEach((t) => {
+    ['changes_requested', 'resubmitted', 'credit_issued'].forEach((v) => {
+      assert.ok(S.isLiveFor(v, t), `${t} should accept ${v}`);
+    });
+  });
+  // Every submission table now shares the review vocabulary.
+  const missing = S.SUBMISSION_TABLES.filter((t) => !S.isLiveFor('changes_requested', t));
+  assert.deepEqual(missing, []);
+});
+
+test('a competition entry still cannot expire, but a profile can', async () => {
+  // A profile carries renews_at: a paid listing runs for a term. An entry ends
+  // when the competition closes, which is the competition's state, not the
+  // entry's — so giving it `expired` would be a status nothing could set.
+  const S = require('../src/utils/submissionStatus');
+  assert.ok(S.isLiveFor('expired', 'profiles'));
+  assert.equal(S.isLiveFor('expired', 'competition_entries'), false);
+  assert.equal(S.isLiveFor('expired', 'top10_entries'), false);
+});
+
+test('A DIRECTORY PROFILE CAN NOW BE HANDED BACK', async () => {
+  // profiles was the one returnable service still missing its migration, so
+  // asking for changes on a listing used to be refused outright.
+  const p = await pool.query(
+    `INSERT INTO profiles (user_id, type, category_id, package_tier, slug, display_name, status)
+     VALUES (840002, 'business', NULL, 'basic', 'crq-listing', 'CRQ Listing', 'pending')
+     RETURNING id`
+  );
+  const res = await api('POST', `/admin/approval-queue/directory_profile/${p.rows[0].id}/request-changes`,
+    { fields: ['bio'], note: 'Please expand the bio.' }, adminToken);
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+
+  const row = await pool.query('SELECT status FROM profiles WHERE id = $1', [p.rows[0].id]);
+  assert.equal(row.rows[0].status, 'changes_requested');
+});

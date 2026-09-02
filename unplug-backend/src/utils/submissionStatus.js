@@ -51,9 +51,10 @@ const MARKETPLACE = ['marketplace_listings'];                        // B2, migr
 const EVENTS = ['events'];                                           // B3, migration 158
 const HIGHLIGHTS = ['highlights'];                                   // B4, migration 159
 const ARTICLES = ['articles'];                                       // B5, migration 160
+const REMAINING = ['profiles', 'competition_entries', 'top10_entries']; // B6, migration 162
 
 // Services that have taken the three review statuses.
-const REVIEWED = [...GALLERY, ...MARKETPLACE, ...EVENTS, ...HIGHLIGHTS, ...ARTICLES];
+const REVIEWED = [...GALLERY, ...MARKETPLACE, ...EVENTS, ...HIGHLIGHTS, ...ARTICLES, ...REMAINING];
 
 // Services that can actually run out.
 //
@@ -61,7 +62,7 @@ const REVIEWED = [...GALLERY, ...MARKETPLACE, ...EVENTS, ...HIGHLIGHTS, ...ARTIC
 // a date it happens on, and the public feed already drops it afterwards. A
 // gallery submission has neither — the photos stay published — which is why it
 // is the one service without `expired`.
-const EXPIRING = [...MARKETPLACE, ...EVENTS, ...HIGHLIGHTS];
+const EXPIRING = [...MARKETPLACE, ...EVENTS, ...HIGHLIGHTS, 'profiles'];
 
 // Each status, what it means, and WHERE IT IS CURRENTLY ALLOWED.
 //

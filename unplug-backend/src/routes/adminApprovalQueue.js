@@ -28,6 +28,7 @@ const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const { isLiveFor } = require('../utils/submissionStatus');
 const CR = require('../utils/changeRequests');
+const { notifyMemberAsync } = require('../utils/memberNotify');
 
 const router = express.Router();
 
@@ -940,6 +941,47 @@ router.post('/:type/:id/request-changes', requireRole('admin'), async (req, res,
     await logActivity(req.user.id, 'changes_requested',
       `Asked for changes on ${TYPES[type] ? TYPES[type].label : type} #${id}`
       + (fields.length ? ` (${fields.join(', ')})` : ''));
+
+    // TELL THE MEMBER. After the commit, and not awaited.
+    //
+    // Until this, the pathway worked and was invisible: an admin asked for
+    // changes, the database knew, and the member found out only if they
+    // happened to open their dashboard. A request nobody is told about is a
+    // submission that sits still while each side waits for the other.
+    //
+    // Deliberately outside the transaction. A notification is a side effect of
+    // something that already happened; if the mail provider is down the change
+    // request must still stand, or an admin would be certain they had asked and
+    // the member would never have been asked at all.
+    const fieldList = fields.length
+      ? fields.map((c) => {
+        const spec = d.fields.find((x) => x.col === c);
+        return spec ? spec.label : c;
+      }).join(', ')
+      : null;
+
+    notifyMemberAsync({
+      userId: owner,
+      type: 'changes_requested',
+      isStatusChange: true,
+      title: 'Action required on your submission',
+      body: fieldList
+        ? `Please change: ${fieldList}.` + (note ? ` ${note}` : '')
+        : (note || 'A reviewer has asked for changes.'),
+      linkUrl: '/unplug-member-dashboard.html',
+      email: {
+        subject: 'Your Unplug submission needs a change',
+        text: [
+          'Someone has reviewed your submission and asked for a change before it can be published.',
+          '',
+          fieldList ? `What to change: ${fieldList}` : null,
+          note ? `Note from the reviewer: ${note}` : null,
+          '',
+          'Open My Account to make the change and send it back:',
+          'https://www.unplugnews.com/unplug-member-dashboard.html',
+        ].filter((x) => x !== null).join('\n'),
+      },
+    });
 
     res.status(201).json({
       changeRequest: {
