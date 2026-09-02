@@ -81,3 +81,29 @@ is not a reference at all. Reasoning recorded at the bottom of `reference.js`.
   `UNP-K3M9XQ2R7T` are hard to tell apart on a bank transfer. Worth revisiting; not touched.
 - Admin display of a reference uses `innerHTML`, but it IS escaped (`escapeHtmlAdmin`). Safe.
 
+
+---
+
+## 2026-08-29 — Task 03, pricing comparison
+
+**What changed.** Nothing in the code. `docs/pricing-comparison.md` added — 16 spec prices
+against what the site actually charges.
+
+**Result: 3 match, 10 differ, 3 specified but not built, 5 charged live but absent from the spec.**
+
+**The big ones.** Bulk vote tiers are the largest gap: only 10 votes / R10 matches, and the live
+tiers have different VOTE COUNTS as well as prices, so they do not line up row by row. The live
+ladder also stops at 300 votes where the spec goes to 1,000, and its per-vote price is not
+monotonic — 50 votes twice (R40) buys more than 70 votes once (R50). Featured listing: the spec
+has one price ladder, the site has two (article and directory), and all eight live prices differ.
+Event promotion (§5.6, three packages) does not exist anywhere in the codebase — confirmed by
+search, not assumed.
+
+**Also flagged, not touched:** the highlight and banner prices exist in THREE places —
+`service_packages`, `FALLBACK_PRICES` in `servicePackages.js`, and `HIGHLIGHT_PRICES`/
+`AD_BANNER_PRICES` in `payments.js`. Recurring bug class, carrying money: change a price in the
+admin screen and both hardcoded copies go stale, including the fallback that exists to be used
+when the table lookup fails.
+
+**Open — blocks any pricing work.** Seven decisions listed at the end of the comparison. No price
+or pricing code may change until they are answered.
