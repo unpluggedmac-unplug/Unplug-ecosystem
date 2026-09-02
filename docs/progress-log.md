@@ -378,3 +378,35 @@ Suite **1600**, unchanged (frontend only).
 
 **Still open:** notifications (§10.17) don't fire on a change request — the member only sees it if
 they open the dashboard. Profiles/top10/competition_entries still unmigrated.
+
+## 2026-09-02 — Notifications + the last three services (Phase B complete)
+
+**Notifications (§10.17).** Asking for changes now writes an in-app notification AND sends an email,
+naming fields in the admin's labels. New `src/utils/memberNotify.js` — the notifications table, email
+transport and `notification_preferences` already existed but were wired together per call site; this
+is those three steps written once. §10.17 lists 25 events; this is the first, and the rest shouldn't
+each reinvent it.
+
+**Never throws, never in the transaction.** Runs after COMMIT, not awaited, swallows its own errors —
+if the mail provider is down the change request must still stand. A test asserts that *ordering*.
+Opt-outs respected; a missing/unreadable preferences row defaults to ON (an unwanted email is a
+smaller harm than a member never finding out).
+
+**Migration 162** — profiles, competition_entries, top10_entries. **All 9 submission tables now share
+the review vocabulary.** profiles is the one that matters: a returnable submission, so a Directory
+listing can be handed back for a better bio instead of refused. profiles takes `expired` (`renews_at`
+= a term); the two entry tables don't (an entry ends when the *competition* closes — that's the
+competition's state). Rule unbent six times running.
+
+**Does NOT decide the profiles visibility question** — `status` still means approval; whether a second
+visibility field is needed stays open with the Directory Listing work.
+
+**Three tests fixed**, two stale after 162 and **one a real flake of mine**: the notification test
+polled for the *newest* notification and asserted it was its own. Notifying is fire-and-forget and
+other tests send them too, so another's could land first — passed alone, failed in the suite. Now
+polls by content. Same async-write shape this codebase has been bitten by before.
+
+Migration 162 × 3 passes clean. Suite **1600 → 1606**.
+
+**Still open:** profiles visibility-vs-approval; the other 24 §10.17 events; `rejected` still doing
+double duty as "refused" and "cancelled"; multi-day events vanishing part-way through.
