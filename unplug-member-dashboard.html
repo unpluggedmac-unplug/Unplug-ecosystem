@@ -97,6 +97,16 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .error-banner.show{ display:block; }
 
 .tier-badge{ display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; background:var(--maroon); color:#fff; padding:5px 12px; }
+/* My Submissions: one row shape for every service. */
+.ms-subnav{ padding-left:30px; font-size:13px; }
+.subs-group{ font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);
+  margin:18px 0 8px; padding-bottom:5px; border-bottom:1px solid var(--paper-line); }
+.subs-group:first-child{ margin-top:4px; }
+.subs-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px;
+  padding:11px 0; border-bottom:1px solid var(--paper-line); }
+.subs-row:last-child{ border-bottom:none; }
+.subs-title{ font-weight:600; font-size:14.5px; }
+.subs-meta{ font-size:12.5px; color:var(--slate); margin-top:3px; }
 .status-pill{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:3px 9px; border-radius:20px; display:inline-block; }
 .status-pill.awaiting_payment{ background:rgba(210,7,9,0.1); color:var(--red); }
 .status-pill.pending{ background:rgba(210,7,9,0.1); color:var(--red); }
@@ -337,7 +347,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="leaderboard"><span>🏆</span> Leaderboard</button>
       <button class="ms-navlink" data-ms="myanalytics"><span>📊</span> My Analytics</button>
       <button class="ms-navlink" data-ms="services"><span>🧩</span> Services</button>
-      <button class="ms-navlink" data-ms="content"><span>📄</span> Content</button>
+      <button class="ms-navlink" data-ms="submissions"><span>&#128203;</span> My Submissions</button>
+      <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="article"><span>&#128196;</span> My Articles</button>
+      <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="event"><span>&#128197;</span> My Events</button>
+      <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="listing"><span>&#127991;</span> My Listings</button>
+      <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="advertising"><span>&#128226;</span> My Advertising</button>
+      <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="competition"><span>&#127942;</span> My Competitions</button>
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
       <button class="ms-navlink" data-ms="editions"><span>📖</span> My Editions</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
@@ -954,11 +969,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     </section>
 
-    <section class="ms-section section-hidden" data-ms-section="content">
-    <div class="card"><h2>Pending Articles</h2><p class="sub">Submitted — awaiting review or payment.</p><div id="contentPendingArticles"><div class="loading-state">Loading…</div></div></div>
-    <div class="card"><h2>Approved Articles</h2><p class="sub">Live on the site.</p><div id="contentApprovedArticles"><div class="loading-state">Loading…</div></div></div>
-    <div class="card"><h2>Approved Services</h2><p class="sub">Your approved gallery photos, events and competition entries.</p><div id="contentApprovedServices"><div class="loading-state">Loading…</div></div></div>
-    <div class="card"><h2>Declined Services</h2><p class="sub">Anything that wasn't approved.</p><div id="contentDeclinedServices"><div class="loading-state">Loading…</div></div></div>
+    <!-- MY SUBMISSIONS (spec 4). One section, one renderer. The per-entity
+         menu items are this same list with data-ms-type set, so My Articles and
+         My Events cannot drift apart in wording or layout. -->
+    <section class="ms-section section-hidden" data-ms-section="submissions">
+      <div class="card">
+        <h2 id="subsTitle">My Submissions</h2>
+        <p class="sub" id="subsSub">Everything you have sent us, newest first.</p>
+        <div id="subsContent"><div class="loading-state">Loading&#8230;</div></div>
+      </div>
     </section>
 
     <section class="ms-section section-hidden" data-ms-section="reading">
@@ -4170,6 +4189,13 @@ function msSetupNav(){
       window.scrollTo({top:0,behavior:'smooth'});
     });
   });
+  // The six My Unplug menu items that are one list with a filter. The line
+  // above already switched to the section; this decides what it shows.
+  document.querySelectorAll('.ms-navlink[data-ms="submissions"]').forEach(function(link){
+    link.addEventListener('click', function(){
+      loadMySubmissions(link.getAttribute('data-ms-type'));
+    });
+  });
   const menuBtn=document.getElementById('msMenuBtn');
   if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
   const lo=document.getElementById('msLogout');
@@ -4217,39 +4243,142 @@ function msTable(rows, cols){
   const body=rows.map(function(r){ return '<tr>'+cols.map(function(c){ return '<td>'+c.f(r)+'</td>'; }).join('')+'</tr>'; }).join('');
   return '<table>'+head+body+'</table>';
 }
-async function loadMemberContent(){
-  const res=await Promise.allSettled([api('/articles/mine'),api('/gallery/mine'),api('/entries/mine')]);
-  const articles=res[0].status==='fulfilled'?(res[0].value.articles||[]):[];
-  const images=res[1].status==='fulfilled'?(res[1].value.images||[]):[];
-  const entries=res[2].status==='fulfilled'?(res[2].value.entries||[]):[];
-  const pending=articles.filter(function(a){ return ['draft','pending','awaiting_payment'].indexOf(a.status)!==-1; });
-  const approved=articles.filter(function(a){ return a.status==='approved'; });
-  const rejectedArts=articles.filter(function(a){ return a.status==='rejected'; });
-  const services=[].concat(
-    images.map(function(i){ return {kind:'Gallery photo',label:i.caption||'Photo',status:i.status,date:i.created_at}; }),
-    entries.map(function(e){ return {kind:'Competition',label:e.competition_name,status:e.status,date:e.created_at}; })
-  );
-  const approvedSvc=services.filter(function(s){ return s.status==='approved'; });
-  const declinedSvc=services.filter(function(s){ return s.status==='rejected'; }).concat(
-    rejectedArts.map(function(a){ return {kind:'Article',label:a.title,status:a.status,date:a.created_at}; })
-  );
-  const artCols=[
-    {h:'Title',f:function(a){ return escapeHtmlM(a.title); }},
-    {h:'Category',f:function(a){ return escapeHtmlM(a.category||'—'); }},
-    {h:'Status',f:function(a){ return '<span class="status-pill '+a.status+'">'+a.status+'</span>'; }},
-    {h:'Submitted',f:function(a){ return msDate(a.created_at); }}
-  ];
-  const svcCols=[
-    {h:'Type',f:function(s){ return escapeHtmlM(s.kind); }},
-    {h:'Item',f:function(s){ return escapeHtmlM(s.label); }},
-    {h:'Status',f:function(s){ return '<span class="status-pill '+s.status+'">'+s.status+'</span>'; }},
-    {h:'Date',f:function(s){ return msDate(s.date); }}
-  ];
-  document.getElementById('contentPendingArticles').innerHTML=msTable(pending,artCols);
-  document.getElementById('contentApprovedArticles').innerHTML=msTable(approved,artCols);
-  document.getElementById('contentApprovedServices').innerHTML=msTable(approvedSvc,svcCols);
-  document.getElementById('contentDeclinedServices').innerHTML=msTable(declinedSvc,svcCols);
+// MY SUBMISSIONS — the one renderer behind six menu items (spec 4).
+//
+// My Articles / Events / Listings / Advertising / Competitions are this same
+// list with a type filter, so they cannot drift apart. The backend returns one
+// shape for every service (see utils/mySubmissions.js); this only draws it.
+//
+// Built with createElement + textContent throughout, per SECURITY.md: both of
+// this codebase's stored-XSS holes came from innerHTML with a ${} in it, and a
+// member's own article title is still untrusted text.
+var MS_SUBS_TYPE = null;   // null = everything
+
+// Statuses that need the member to DO something come first. Within a group the
+// backend's newest-first order is kept.
+var SUBS_GROUPS = [
+  { key: 'action',   title: 'Needs your attention',
+    statuses: ['changes_requested', 'awaiting_payment'] },
+  { key: 'waiting',  title: 'With us',
+    statuses: ['pending', 'resubmitted'] },
+  { key: 'live',     title: 'Approved',
+    statuses: ['approved'] },
+  { key: 'finished', title: 'Finished and not approved',
+    statuses: ['expired', 'rejected', 'credit_issued', 'draft'] }
+];
+
+function subsRow(s){
+  var row = document.createElement('div');
+  row.className = 'subs-row';
+
+  var main = document.createElement('div');
+  var title = document.createElement('div');
+  title.className = 'subs-title';
+  title.textContent = s.title || '(untitled)';
+  main.appendChild(title);
+
+  // Type, date, reference and money on one quiet line. Reference is what the
+  // member quotes on an EFT, so it is shown whenever there is one.
+  var bits = [s.typeLabel, msDate(s.submittedAt)];
+  if (s.reference) bits.push('Ref ' + s.reference);
+  if (s.amount !== null && s.amount !== undefined) bits.push('R' + s.amount);
+  if (s.expiresAt) bits.push('until ' + msDate(s.expiresAt));
+  var meta = document.createElement('div');
+  meta.className = 'subs-meta';
+  meta.textContent = bits.join(' \u00b7 ');
+  main.appendChild(meta);
+
+  var pill = document.createElement('span');
+  // The class comes from a fixed vocabulary, the WORDS come from the server so
+  // every section says the same thing about the same status.
+  pill.className = 'status-pill ' + String(s.status || '').replace(/[^a-z_]/g, '');
+  pill.textContent = s.statusLabel || s.status || '';
+
+  row.appendChild(main);
+  row.appendChild(pill);
+  return row;
 }
+
+function subsRender(list){
+  var host = document.getElementById('subsContent');
+  if (!host) return;
+  host.textContent = '';
+
+  if (!list.length){
+    var empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = MS_SUBS_TYPE
+      ? 'Nothing here yet.'
+      : 'You have not submitted anything yet.';
+    host.appendChild(empty);
+    return;
+  }
+
+  var drawn = 0;
+  SUBS_GROUPS.forEach(function(group){
+    var rows = list.filter(function(s){ return group.statuses.indexOf(s.status) !== -1; });
+    if (!rows.length) return;
+    var h = document.createElement('h3');
+    h.className = 'subs-group';
+    h.textContent = group.title;
+    host.appendChild(h);
+    rows.forEach(function(s){ host.appendChild(subsRow(s)); drawn++; });
+  });
+
+  // A status nobody grouped still has to appear. Losing a member's submission
+  // because a new status was added is worse than an odd-looking heading.
+  var leftovers = list.filter(function(s){
+    return !SUBS_GROUPS.some(function(g){ return g.statuses.indexOf(s.status) !== -1; });
+  });
+  if (leftovers.length){
+    var h2 = document.createElement('h3');
+    h2.className = 'subs-group';
+    h2.textContent = 'Other';
+    host.appendChild(h2);
+    leftovers.forEach(function(s){ host.appendChild(subsRow(s)); });
+  }
+}
+
+async function loadMySubmissions(type){
+  MS_SUBS_TYPE = type || null;
+  var host = document.getElementById('subsContent');
+  if (!host) return;
+
+  var titleEl = document.getElementById('subsTitle');
+  var subEl = document.getElementById('subsSub');
+  var labels = {
+    article: ['My Articles', 'Articles you have submitted.'],
+    event: ['My Events', 'Events you have submitted.'],
+    listing: ['My Listings', 'Your marketplace listings.'],
+    advertising: ['My Advertising', 'Adverts you have booked.'],
+    competition: ['My Competitions', 'Competitions you have entered.']
+  };
+  var pair = labels[MS_SUBS_TYPE] || ['My Submissions', 'Everything you have sent us, newest first.'];
+  if (titleEl) titleEl.textContent = pair[0];
+  if (subEl) subEl.textContent = pair[1];
+
+  host.textContent = '';
+  var loading = document.createElement('div');
+  loading.className = 'loading-state';
+  loading.textContent = 'Loading\u2026';
+  host.appendChild(loading);
+
+  try {
+    var qs = MS_SUBS_TYPE ? ('?type=' + encodeURIComponent(MS_SUBS_TYPE)) : '';
+    var data = await api('/my/submissions' + qs);
+    subsRender(data.submissions || []);
+  } catch (err) {
+    host.textContent = '';
+    var oops = document.createElement('div');
+    oops.className = 'empty-state';
+    oops.textContent = 'We could not load this just now. Please try again.';
+    host.appendChild(oops);
+  }
+}
+
+// Kept so the existing call sites keep working — this section used to be
+// "Content" and is loaded from several places after a submission is made.
+async function loadMemberContent(){ return loadMySubmissions(MS_SUBS_TYPE); }
 
 async function loadCredits(){
   const el=document.getElementById('creditsContent'); if (!el) return;

@@ -545,3 +545,55 @@ change to every DATE column.
 
 **Still open:** profiles visibility-vs-approval; the other 24 §10.17 notification events; `rejected`
 still doing double duty as "refused" and "cancelled".
+
+---
+
+## 2026-09-02 — Task 06, the shared My Unplug pattern + My Submissions (1 of 12)
+
+**The task's premise was out of date.** It says five of 17 menu items exist; the dashboard already
+had **12 sections**, and the backend had `/orders/mine`, `/payments/credit`, `/articles/mine`,
+`/gallery/mine`, `/highlights/mine`, `/ad-banners/mine` and `/competitions/entries/mine`. Genuinely
+missing on the backend: **events-mine, listings-mine, and invoices entirely** (no table, no endpoint).
+
+**Three decisions taken with the owner before building:** convert `Content` → My Submissions with the
+per-entity items as filtered views over one template (not a second system beside it); the twelfth
+item is **My Votes / Competition Activity**; invoices get a **real table** when built, since §10.5
+needs a stable number.
+
+**The pattern — `src/utils/mySubmissions.js`.** One descriptor per §4 menu item, each returning the
+same shape: `{ type, typeLabel, id, title, status, statusLabel, submittedAt, expiresAt, amount,
+paymentStatus, reference }`. My Articles / Events / Listings / Advertising / Competitions are that
+list with `?type=` — one renderer, one status vocabulary, six entry points. SQL is written out per
+type rather than generated, following the reasoning already settled in `changeRequests.js`'s
+`OWNER_SQL`: each route to an owner is genuinely different (author_user_id, organizer_user_id,
+through advertisers, through the member's profile) and five explicit queries are easier to check than
+one clever one.
+
+**Status wording now has a single home.** `STATUS_LABEL` is the only place a member-facing status
+word is decided, and a load-time check fails startup if it names a status the vocabulary doesn't
+have. The highlights label chain previously ended a `credit_issued` submission with "Active"; a test
+asserts no status is left to a fall-through.
+
+**Retired `Content`, extended rather than duplicated.** It only ever showed articles, gallery and
+competition entries — **events, listings and advertising were invisible to members entirely.** The
+new section covers all six, grouped needs-attention → with-us → approved → finished, so the
+status-first grouping members had is kept. `loadMemberContent()` survives as a shim so its six call
+sites still work. Rendered with `createElement`/`textContent` per SECURITY.md.
+
+**One self-inflicted bug worth recording:** requiring `utils/mySubmissions` at a test file's top
+level pulls in `src/db.js` and builds its pool while `DATABASE_URL` is still unset. Node caches that
+dead pool, the route then gets the same one, and **every query hangs until the test times out**
+rather than failing readably. Require it inside `before()`. The smoke script hit the mirror image of
+this on teardown.
+
+`scripts/smoke-my-submissions.js` takes a type, so the remaining eleven sections reuse it rather than
+each growing a check of its own. 20/20 checks pass.
+
+Suite **1638 → 1652**, 0 failing.
+
+**Flagged, not built** (scope additions are the owner's call): no way to cancel or withdraw a
+submission from this view; no detail view behind a row — §4 names the menu items but specifies no
+fields, so the row shows what the spine actually knows.
+
+**Still open:** the other 11 sections; profiles visibility-vs-approval; the other 24 §10.17 events;
+`rejected` still doing double duty as "refused" and "cancelled".

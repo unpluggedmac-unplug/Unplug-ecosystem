@@ -218,6 +218,10 @@ app.use('/profile-analytics', profileAnalyticsRoutes);
 app.use('/badges', badgeRoutes);
 app.use('/orders', orderRoutes);
 app.use('/my-unplug', myUnplugRoutes);
+// The My Unplug menu (spec §4). One shape for every "something I submitted",
+// so My Articles / Events / Listings / Advertising / Competitions are the same
+// list with a filter rather than five separate pages. See utils/mySubmissions.js.
+app.use('/my', require('./routes/mySubmissions'));
 
 // SEO: sitemaps, robots.txt, redirect lookup and the 404 log.
 //
