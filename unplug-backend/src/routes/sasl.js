@@ -1,7 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
-const { buildVideoEmbed } = require('../utils/videoEmbed');
+const { resolveAndBuildVideoEmbed } = require('../utils/videoEmbed');
 const { logActivity } = require('./activityLog');
 
 const router = express.Router();
@@ -14,15 +14,16 @@ const router = express.Router();
 // attached to an article or to a standing page.
 //
 // Videos come from the platforms the rest of the site already supports —
-// YouTube, TikTok, Instagram, Google Drive — through the same buildVideoEmbed
+// YouTube, TikTok, Instagram, Google Drive — through the same video parser
 // used by articles and projects. That keeps hosting free and means one set of
 // rules about what a video link may be, rather than a second set here that
-// drifts.
+// drifts. Short vt/vm.tiktok.com links resolve here exactly as they do on an
+// article, which is the whole point of there being one parser and not three.
 // ---------------------------------------------------------------------------
 
 const TARGET_TYPES = ['article', 'page'];
 
-function parseBody(body) {
+async function parseBody(body) {
   const targetType = TARGET_TYPES.includes(body.targetType) ? body.targetType : null;
   if (!targetType) return { error: 'targetType must be "article" or "page".' };
 
@@ -37,7 +38,7 @@ function parseBody(body) {
     return { error: 'For a page, targetId must be the page name, like "deafcommunity".' };
   }
 
-  const video = buildVideoEmbed(body.videoUrl);
+  const video = await resolveAndBuildVideoEmbed(body.videoUrl);
   if (video.error) return { error: video.error };
   if (!video.url) return { error: 'A link to the signed video is required.' };
 
@@ -149,7 +150,7 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
 // the old one first is a step that exists only to serve the schema.
 router.post('/admin', requireRole('admin'), async (req, res, next) => {
   try {
-    const parsed = parseBody(req.body || {});
+    const parsed = await parseBody(req.body || {});
     if (parsed.error) return res.status(400).json({ error: parsed.error });
 
     const result = await pool.query(

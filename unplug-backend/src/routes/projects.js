@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
-const { buildVideoEmbed: sharedVideoEmbed } = require('../utils/videoEmbed');
+const { resolveAndBuildVideoEmbed: sharedVideoEmbed } = require('../utils/videoEmbed');
 
 const router = express.Router();
 
@@ -24,10 +24,14 @@ function wordCount(text) {
 // argument, which is now only used to check the pasted link is the platform
 // the admin said it was. Choosing "YouTube" and pasting a TikTok link is a
 // mistake worth naming rather than quietly accepting.
-function buildVideoEmbed(platform, url) {
+//
+// Async because a short vt/vm.tiktok.com link only reveals its video id by
+// redirecting. The platform check below runs on the RESOLVED link, so picking
+// "TikTok" and pasting a short link now matches instead of being refused.
+async function buildVideoEmbed(platform, url) {
   const u = String(url || '').trim();
   if (!platform || !u) return { platform: null, url: null, embedUrl: null };
-  const parsed = sharedVideoEmbed(u);
+  const parsed = await sharedVideoEmbed(u);
   if (parsed.error) return { error: parsed.error };
   if (platform !== 'none' && parsed.platform !== platform) {
     return { error: `That looks like a ${parsed.platform} link, but ${platform} was selected.` };
@@ -275,7 +279,7 @@ router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
       if (!platform || platform === 'none') {
         push('video_platform', null); push('video_url', null); push('video_embed_url', null);
       } else {
-        const v = buildVideoEmbed(platform, b.videoUrl);
+        const v = await buildVideoEmbed(platform, b.videoUrl);
         if (v.error) return res.status(400).json({ error: v.error });
         push('video_platform', v.platform); push('video_url', v.url); push('video_embed_url', v.embedUrl);
       }
