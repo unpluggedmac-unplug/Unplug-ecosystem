@@ -257,3 +257,23 @@ values-only migration. Recorded in the migration file.
 Suite **1567 → 1569**.
 
 **Next:** B4 `highlights` (blast radius 409) — it has durations, so all four again.
+
+## 2026-09-02 — Task 04 Phase B4: highlights
+
+Migration 159 adds all four Phase-B statuses to `highlights` (durations 7/14/21/28 + start/end dates,
+so `expired` applies).
+
+**Route changed in the same commit, deliberately.** `GET /highlights/mine` ended its label chain with
+`else label = 'Active'` — any new status would have told the member their highlight was running. A
+rejected-and-credited highlight would read "Active". Added labels: Changes needed / Changes
+submitted / Credit issued / Completed. New test reads the branches out of the route so a future
+status without a label fails the build.
+
+**Verified:** 159 migrations × 3 passes clean, one constraint per table, row accepts new value.
+Suite **1569 → 1571**.
+
+**Noted, not changed:** `rejected` is doing two jobs — `cancellations.js` writes it when a member
+cancels, and this route displays it as "Cancelled". So a refused submission is shown as cancelled,
+and a cancellation looks like a refusal. Needs the cancellation pathway separated (task 05 territory).
+
+**Next:** B5 `articles` (blast radius 1338, the largest). Then profiles, which you deferred.
