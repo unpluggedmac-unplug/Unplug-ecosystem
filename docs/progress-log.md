@@ -143,3 +143,23 @@ it is not this), so the file is what readers get. Verified in a browser: old lad
 
 **Still open:** the CPA review of the no-refund terms themselves — not written without advice.
 Seven pricing decisions remain in `docs/pricing-comparison.md`.
+
+## 2026-08-29 — Task 04, breakdown proposed (no code)
+
+`docs/spine-plan.md` added. Task 04 gates code behind sign-off, so this is plan only.
+
+**My first sketch was wrong.** I had read each table's CREATE TABLE; 36 later migrations already
+extend those constraints. Effective vocabulary today is `awaiting_payment/pending/approved/rejected`
+on **eight tables identically** (articles adds `draft`). The submission model is already one shared
+vocabulary nobody wrote down — this task is far smaller than "unify eight systems".
+
+**Key danger, from migration 008:** changing a CHECK is DROP+ADD, and the ADD re-validates the whole
+table on every deploy. A list omitting a value some row holds fails as an *outage*, not at write
+time. So: strictly additive, never rename a status.
+
+**Blast radius measured** (routes+tests+frontend): gallery_bundles 26, top10_entries 33,
+competition_entries 110, marketplace 182, events 334, highlights 409, profiles 1211, articles 1338.
+`top10_entries` has **zero tests** — held back to Phase C despite being small.
+
+**Open — blocks all code:** four decisions at the end of the plan (which §16 values to add;
+resolver vs reference columns; profiles in or out; casing). Recommendations given for each.
