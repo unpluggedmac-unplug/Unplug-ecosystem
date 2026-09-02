@@ -325,3 +325,35 @@ credit_issued are still excluded so admins aren't asked to re-decide settled wor
 
 Admin-only, so tests + smoke check per protocol. Frontend doesn't filter the queue, so the dashboard
 keeps whatever the query returns. Suite **1572 → 1577**.
+
+## 2026-09-02 — Task 05 complete: changes-requested and credit-on-rejection
+
+**05a — credit on rejection (§10.7).** The pathway mostly existed; it set `'rejected'`, the same as a
+plain refusal, so nothing could tell an editorial decision from one that moved money. Now
+`credit_issued` — asked for via `isLiveFor()`, falling back to `'rejected'` on services not yet
+migrated (writing it there would violate their CHECK). Reference recorded in the note and reachable
+via `payment_id`; **not** copied into a column. First real consumer of the Phase A module.
+
+**05b — request changes (§10.14).** New: `POST /admin/approval-queue/:type/:id/request-changes`,
+`GET /change-requests/mine`, `POST /change-requests/:id/resubmit`. Migration 161 adds
+`change_requests` (one table, not 36 columns across 9 submissions); partial unique index enforces
+one *open* request per submission while keeping history.
+
+Fields reuse the queue's own editable whitelist, so requestable ≡ editable and nothing names a
+column. Member sees the admin's labels ("Cover image"), not column names.
+
+**Ownership isn't uniform** — direct (articles/events/profiles/investors), via advertisers
+(marketplace), or **absent** (gallery images belong to a bundle; share cards have no account). Those
+are refused *with the reason*, recorded in `src/utils/changeRequests.js`.
+
+**Three existing tests changed deliberately**, incl. inverting Phase A's "NOTHING IMPORTS THIS YET"
+guard — it existed to force exactly this acknowledgement.
+
+**Verified in-browser** against a real backend: full round trip closes (requested → member sees
+labels → resubmitted → back in admin queue → off member's list), both endpoints reject
+unauthenticated, gallery refused with its reason. Migration 161 × 3 passes clean.
+Suite **1585 → 1600**.
+
+**Open:** profiles/top10/competition_entries still unmigrated, so they fall back to `'rejected'` and
+can't take change requests. Member dashboard has no UI for `/change-requests/mine` yet — the API is
+live but nothing surfaces "ACTION REQUIRED" to members.
