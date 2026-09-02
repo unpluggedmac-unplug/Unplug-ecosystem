@@ -692,3 +692,40 @@ duplicated.
 
 **Remaining of the twelve:** My Credits, My Invoices, My Votes / Competition Activity, Account
 Settings.
+
+---
+
+## 2026-09-02 — Task 06: My Credits (§4; rules in §10.6 and §10.7)
+
+**Fourth of the twelve.** "Account Credits" already existed — as a card in a corner of the
+**Profile** page, not the menu item §4 asks for. **Moved, not duplicated**, the same call made for
+Content → My Submissions.
+
+**§10.7's "original reference" now reaches the member.** The ledger stored `payment_id`, which
+means nothing to the person reading it. `historyFor` joins payment → order so each line carries the
+**reference the member was shown at checkout and put on their EFT**, plus what the credit was for
+(reusing `serviceLabel` from My Orders, so the same purchase is named the same way on an order and
+on a credit).
+
+**Wording in one place.** `REASON_LABEL` in `accountCredit.js` turns `declined_submission` into "Credit
+for a submission we could not approve". The dashboard previously showed the raw enum with
+underscores swapped for spaces — a column name wearing a hat. A test reads the **database CHECK
+constraint** and asserts our wording covers exactly the reasons the ledger allows, so a new reason
+cannot ship unworded.
+
+**Deliberately not shown: which admin issued the credit.** §10.7 requires it *recorded*, and it is
+(`created_by`, asserted by a test). Showing a member which member of staff declined their submission
+is a different decision and not one the spec asks for.
+
+**The renderer now builds nodes.** It was `innerHTML` with a concatenated string; a credit note is
+typed by an admin and a reference comes from a payment gateway, so neither belongs there.
+
+**First coverage the credit ledger has ever had** (12 tests). The one that matters: the balance is
+`SUM(ledger)` and the history must add up to the balance shown above it — if those two disagree the
+site is lying to a member about money it owes them. Negative lines are shown as spends rather than
+hidden, or credit appears to vanish between visits.
+
+Suite **1682 → 1694**, 0 failing. Smoke check 37/37.
+
+**Remaining of the twelve:** My Invoices (the one with a schema change), My Votes / Competition
+Activity, Account Settings.

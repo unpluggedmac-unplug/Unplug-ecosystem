@@ -361,6 +361,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
       <button class="ms-navlink" data-ms="editions"><span>📖</span> My Editions</button>
       <button class="ms-navlink" data-ms="myorders"><span>&#128722;</span> My Orders</button>
+      <button class="ms-navlink" data-ms="mycredits"><span>&#127974;</span> My Credits</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
       <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
@@ -385,11 +386,6 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <div class="card">
       <div class="error-banner" id="profileError"></div>
       <div id="profileContent"><div class="loading-state">Loading your profile…</div></div>
-    </div>
-    <div class="card">
-      <h2>Account Credits</h2>
-      <p class="sub">Credit from declined or cancelled paid services — applied automatically at your next checkout.</p>
-      <div id="creditsContent"><div class="loading-state">Loading…</div></div>
     </div>
     <div class="card">
       <h2>Change Password</h2>
@@ -1020,6 +1016,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
          it was for, and what was actually charged. Section 10.4 lists subtotal,
          credit and total as separate lines because they are separate facts, so
          they are shown as stored and never recomputed here. -->
+    <!-- MY CREDITS (spec section 4; the rules are 10.6 and 10.7). Moved out of the
+         Profile page, where it was a card in a corner, into the menu item the spec
+         asks for. The ledger is one table: positive grants, negative spends, and
+         the balance is their sum - never a stored number that can drift. -->
+    <section class="ms-section section-hidden" data-ms-section="mycredits">
+      <div class="card">
+        <h2>My Credits</h2>
+        <p class="sub">Credit from declined or cancelled paid services. It is applied automatically at your next checkout, and it does not expire.</p>
+        <div id="creditsContent"><div class="loading-state">Loading&#8230;</div></div>
+      </div>
+    </section>
+    
     <section class="ms-section section-hidden" data-ms-section="myorders">
       <div class="card">
         <h2>My Orders</h2>
@@ -4235,6 +4243,9 @@ function msSetupNav(){
   document.querySelectorAll('.ms-navlink[data-ms="myorders"]').forEach(function(link){
     link.addEventListener('click', function(){ loadMyOrders(); });
   });
+  document.querySelectorAll('.ms-navlink[data-ms="mycredits"]').forEach(function(link){
+    link.addEventListener('click', function(){ loadCredits(); });
+  });
   const menuBtn=document.getElementById('msMenuBtn');
   if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
   const lo=document.getElementById('msLogout');
@@ -4603,19 +4614,88 @@ function ordRender(orders){
   });
 }
 
+// MY CREDITS - spec section 4; the rules are 10.6 (credit exists, does not
+// expire) and 10.7 (a declined paid submission is credited, recorded against
+// its original reference).
+//
+// Built with createElement and textContent rather than an HTML string. A note
+// on a credit line is typed by an admin, and a reference comes from a payment
+// gateway; neither belongs in innerHTML.
 async function loadCredits(){
-  const el=document.getElementById('creditsContent'); if (!el) return;
+  var el = document.getElementById('creditsContent');
+  if (!el) return;
   try {
-    const data=await api('/payments/credit');
-    const bal=Number(data.balance||0);
-    let html='<p style="font-size:22px; font-weight:700; font-family:\'Playfair Display\',serif;">R'+bal.toFixed(2)+' <span style="font-size:12px; color:var(--slate); font-weight:400;">available credit</span></p>';
-    const hist=data.history||[];
-    if (hist.length){
-      html+='<table style="margin-top:10px;"><tr><th>Date</th><th>Reason</th><th>Amount</th></tr>'+
-        hist.map(function(h){ return '<tr><td>'+msDate(h.created_at)+'</td><td>'+escapeHtmlM((h.reason||'').replace(/_/g,' '))+'</td><td>R'+Number(h.amount).toFixed(2)+'</td></tr>'; }).join('')+'</table>';
-    }
-    el.innerHTML=html;
-  } catch (err){ el.innerHTML='<div class="empty-state">No credits yet.</div>'; }
+    var data = await api('/payments/credit');
+    creditsRender(data);
+  } catch (err) {
+    el.textContent = '';
+    var oops = document.createElement('div');
+    oops.className = 'empty-state';
+    oops.textContent = 'We could not load your credit just now. Please try again.';
+    el.appendChild(oops);
+  }
+}
+
+function creditsRender(data){
+  var el = document.getElementById('creditsContent');
+  if (!el) return;
+  el.textContent = '';
+
+  var bal = Number((data && data.balance) || 0);
+  var head = document.createElement('p');
+  head.style.fontSize = '22px';
+  head.style.fontWeight = '700';
+  head.textContent = 'R' + bal.toFixed(2) + ' ';
+  var small = document.createElement('span');
+  small.style.cssText = 'font-size:12px; color:var(--slate); font-weight:400;';
+  small.textContent = 'available credit';
+  head.appendChild(small);
+  el.appendChild(head);
+
+  var hist = (data && data.history) || [];
+  if (!hist.length){
+    var none = document.createElement('div');
+    none.className = 'empty-state';
+    none.textContent = 'No credit yet. If we ever cannot approve something you paid for, the credit appears here.';
+    el.appendChild(none);
+    return;
+  }
+
+  hist.forEach(function(h){
+    var row = document.createElement('div');
+    row.className = 'subs-row';
+
+    var main = document.createElement('div');
+
+    var title = document.createElement('div');
+    title.className = 'subs-title';
+    // The wording comes from the server so the ledger reads the same way
+    // everywhere; the raw enum is never shown.
+    title.textContent = h.reasonLabel || h.reason;
+    main.appendChild(title);
+
+    // Section 10.7: a credit is recorded against its ORIGINAL REFERENCE. That
+    // is the part a member recognises - it is what they put on their EFT.
+    var bits = [msDate(h.created_at)];
+    if (h.serviceName) bits.push(h.serviceName);
+    if (h.reference) bits.push('Ref ' + h.reference);
+    if (h.note) bits.push(h.note);
+    var meta = document.createElement('div');
+    meta.className = 'subs-meta';
+    meta.textContent = bits.join(' \u00b7 ');
+    main.appendChild(meta);
+
+    // Positive grants credit, negative spends it. Signed on purpose: a member
+    // should be able to see where it went, not only what arrived.
+    var amt = Number(h.amount || 0);
+    var pill = document.createElement('span');
+    pill.className = 'status-pill ' + (amt < 0 ? 'expired' : 'approved');
+    pill.textContent = (amt < 0 ? '-R' : '+R') + Math.abs(amt).toFixed(2);
+
+    row.appendChild(main);
+    row.appendChild(pill);
+    el.appendChild(row);
+  });
 }
 
 async function changePassword(){

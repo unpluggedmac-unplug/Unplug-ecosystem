@@ -37,16 +37,65 @@ async function balanceFor(userId, client = pool) {
   return Number(result.rows[0].balance);
 }
 
+// Why a line is on the ledger, in words a member can read.
+//
+// `reason` is a database enum — 'declined_submission' — and the dashboard used
+// to show it with the underscores swapped for spaces, which is a column name
+// wearing a hat. These are the sentences instead. Every value the CHECK allows
+// must appear here; enforced below.
+const REASON_LABEL = {
+  declined_submission: 'Credit for a submission we could not approve',
+  cancelled_service: 'Credit for a service you cancelled',
+  admin_adjustment: 'Adjustment by Unplug',
+  spent_at_checkout: 'Used at checkout',
+};
+
+const REASONS = ['declined_submission', 'cancelled_service', 'admin_adjustment', 'spent_at_checkout'];
+for (const reason of REASONS) {
+  if (!Object.prototype.hasOwnProperty.call(REASON_LABEL, reason)) {
+    throw new Error(`accountCredit: reason '${reason}' has no member-facing wording`);
+  }
+}
+
+function reasonLabel(reason) {
+  const key = String(reason || '');
+  return Object.prototype.hasOwnProperty.call(REASON_LABEL, key) ? REASON_LABEL[key] : key;
+}
+
+// The ledger, newest first.
+//
+// §10.7 says a credit must be recorded against the ORIGINAL REFERENCE and the
+// original payment, so both are joined here rather than left as a bare
+// payment_id. The reference is the only part of that a member recognises: it is
+// what they were shown at checkout and what they put on their EFT.
+//
+// The order's reference wins over the payment's gateway reference for the same
+// reason it does everywhere else — it is the one the customer was given.
+//
+// `created_by` (which admin) is deliberately NOT returned. §10.7 requires it to
+// be RECORDED, and it is, on the row; showing a member which member of staff
+// declined their submission is a different decision and not one this asks for.
 async function historyFor(userId, client = pool) {
   const result = await client.query(
-    `SELECT id, amount, reason, note, payment_id, created_at
-       FROM account_credits
-      WHERE user_id = $1
-      ORDER BY created_at DESC
+    `SELECT c.id, c.amount, c.reason, c.note, c.payment_id, c.created_at,
+            COALESCE(o.reference, p.gateway_reference) AS reference,
+            p.linked_type
+       FROM account_credits c
+       LEFT JOIN payments p ON p.id = c.payment_id
+       LEFT JOIN orders o   ON o.id = p.order_id
+      WHERE c.user_id = $1
+      ORDER BY c.created_at DESC
       LIMIT 100`,
     [userId]
   );
-  return result.rows;
+  // Required lazily: submissionReference requires db, and requiring it at the
+  // top of this file would build that pool before DATABASE_URL is read.
+  const { serviceLabel } = require('./submissionReference');
+  return result.rows.map((row) => ({
+    ...row,
+    reasonLabel: reasonLabel(row.reason),
+    serviceName: row.linked_type ? serviceLabel(row.linked_type) : null,
+  }));
 }
 
 // Find the confirmed payment behind a submission, if there is one.
@@ -94,6 +143,9 @@ async function spendCredit(client, userId, amountDue, note) {
 
 module.exports = {
   RESOURCE_PAYMENT_TYPES,
+  REASON_LABEL,
+  REASONS,
+  reasonLabel,
   balanceFor,
   historyFor,
   findPaidPayment,

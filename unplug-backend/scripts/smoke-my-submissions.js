@@ -197,6 +197,13 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
   check('My Orders has its loader', page.includes('async function loadMyOrders'));
   check('My Orders shows the stored totals, not recomputed ones',
     page.includes('function ordMoney') && page.includes('order.credit_used'));
+  check('the dashboard has the My Credits section',
+    page.includes('data-ms-section="mycredits"') && page.includes('>My Credits<'));
+  check('My Credits was MOVED out of Profile, not duplicated',
+    !page.includes('<h2>Account Credits</h2>')
+      && (page.match(/id="creditsContent"/g) || []).length === 1);
+  check('My Credits builds nodes rather than HTML strings',
+    page.includes('function creditsRender') && !/creditsContent[\s\S]{0,400}innerHTML/.test(page));
 
   // Shut down in order. The ROUTE has its own pool (src/db.js), separate from
   // the one this script seeds with; stopping Postgres while it still holds an
