@@ -277,3 +277,26 @@ cancels, and this route displays it as "Cancelled". So a refused submission is s
 and a cancellation looks like a refusal. Needs the cancellation pathway separated (task 05 territory).
 
 **Next:** B5 `articles` (blast radius 1338, the largest). Then profiles, which you deferred.
+
+## 2026-09-02 — Task 04 Phase B5: articles (Phase B complete)
+
+Migration 160 adds three statuses to `articles` — the largest service (1338 refs). **No `expired`:**
+an article has no duration or end date; `scheduled_for` holds it back UNTIL a date, then it stays.
+Five services in, the rule never needed bending — `expired` only where something can end the service.
+
+`articles.js` returns the raw status (no label chain), so no route change needed. Checked, not assumed.
+
+**Verified:** 160 migrations × 3 passes clean, one constraint per table, row accepts new value.
+Suite **1571 → 1572**.
+
+### ⚠ BLOCKS TASK 05 — approval queue misses `resubmitted`
+
+`adminApprovalQueue.js` selects work with `WHERE status IN ('pending','awaiting_payment')` across
+**eight services**. `resubmitted` is not in that list. The moment task 05 turns request-changes on, a
+member answering a change request moves to `resubmitted` and **their submission vanishes from the
+admin queue** — nobody sees it, the member waits forever. Nothing sets it today so nothing is broken
+now. Flagged not fixed: it spans every service, and scope additions are yours to approve.
+
+### Phase B status
+Done: gallery (B1), marketplace (B2), events (B3), highlights (B4), articles (B5).
+Deferred by your sign-off: **profiles**. Phase C (payments/orders, competitions, votes) not started.
