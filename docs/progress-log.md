@@ -793,3 +793,44 @@ token.
   purchase. The admin flow is untouched, but they should probably converge.
 
 **Remaining of the twelve:** My Votes / Competition Activity, Account Settings.
+
+---
+
+## 2026-09-02 — Task 06: My Votes / Competition Activity (§4; rules in Module 9)
+
+**Sixth of the twelve.** The interesting constraint here turned out to be a privacy one.
+
+**§9.1 says online voting "requires NO account".** So a vote carries *either* a `voter_user_id` or
+a `session_id`, and the anonymous ones belong to a browser, not a person. This shows a member only
+what they did **while signed in**, and says so on the page. It does not try to infer that a session
+was probably them — telling someone "you voted for X" when they did not is worse than showing them
+less. The same applies to bulk vote purchases (§9.5), which can also be bought without an account.
+
+**Two things a member would otherwise count by hand:** total votes cast, and total spent on
+packages. `totalVotes` sums **votes, not rows** — a bundle row of 50 is fifty votes, and counting
+rows would tell someone who bought the Ultimate package that they had cast one. Only *confirmed*
+bundles count toward what was spent; an unpaid one is not money anybody has spent.
+
+**A real bug the tests caught.** `vote_bundles.status` allows **four** values live —
+`awaiting_payment, confirmed, rejected, reversed` — not the two in its original CREATE TABLE;
+`rejected` and `reversed` arrived in migration 095. My first wording map had only two, so a member
+whose bundle had been reversed would have been shown the word "reversed" straight out of the
+database. The test that compares the wording map against the live CHECK constraint is what found
+it — the same guard that has now paid off twice (credits, and here).
+
+`reversed` gets its own word rather than being lumped in with a refusal: those votes counted, and
+then stopped counting, which is a different thing to a purchase that was never accepted.
+
+**Two mistakes of mine, both in the tests rather than the code**, recorded because they will recur:
+- `idx_votes_once_user` allows one vote per member per entry, so the bulk-vote fixture needed its
+  own entry.
+- `SELECT id FROM competitions LIMIT 1` picked up **"The Arena"**, which a migration seeds. A test
+  that wants its own competition has to name it.
+
+Suite **1718 → 1731**, 0 failing. Smoke check 42/42.
+
+**Flagged, not built:** §9.2's rule is a maximum of 5 online votes per calendar day spread across
+at least two contestants. Showing a member how many they have left today would be genuinely useful,
+but §4 asks for an activity list and that is a different feature — scope addition, your call.
+
+**Remaining of the twelve:** Account Settings.

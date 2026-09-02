@@ -363,6 +363,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="myorders"><span>&#128722;</span> My Orders</button>
       <button class="ms-navlink" data-ms="mycredits"><span>&#127974;</span> My Credits</button>
       <button class="ms-navlink" data-ms="myinvoices"><span>&#129534;</span> My Invoices</button>
+      <button class="ms-navlink" data-ms="myvotes"><span>&#128499;</span> My Votes</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
       <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
@@ -1024,6 +1025,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <!-- MY INVOICES (spec section 10.5). One per confirmed order. The number is
          issued once and stored, so it is the same today as in an audit; the money
          is what was charged at the moment it was issued, not a live join. -->
+    <!-- MY VOTES / COMPETITION ACTIVITY (spec section 4; rules in Module 9).
+         Only what is genuinely this member's: section 9.1 makes online voting
+         account-free, so anonymous votes stay anonymous rather than being guessed
+         at from a browser session. -->
+    <section class="ms-section section-hidden" data-ms-section="myvotes">
+      <div class="card">
+        <h2>My Votes</h2>
+        <p class="sub">Votes you cast while signed in, and any vote packages you bought. Votes cast without signing in are anonymous, so they cannot be listed here.</p>
+        <div id="votesContent"><div class="loading-state">Loading&#8230;</div></div>
+      </div>
+    </section>
+    
     <section class="ms-section section-hidden" data-ms-section="myinvoices">
       <div class="card">
         <h2>My Invoices</h2>
@@ -4273,6 +4286,9 @@ function msSetupNav(){
   document.querySelectorAll('.ms-navlink[data-ms="myinvoices"]').forEach(function(link){
     link.addEventListener('click', function(){ loadMyInvoices(); });
   });
+  document.querySelectorAll('.ms-navlink[data-ms="myvotes"]').forEach(function(link){
+    link.addEventListener('click', function(){ loadMyVotes(); });
+  });
   const menuBtn=document.getElementById('msMenuBtn');
   if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
   const lo=document.getElementById('msLogout');
@@ -4827,6 +4843,121 @@ function invRender(list){
     row.appendChild(pill);
     host.appendChild(row);
   });
+}
+
+// MY VOTES / COMPETITION ACTIVITY - spec section 4.
+//
+// The counts come from the server, which sums VOTES rather than rows: a bundle
+// row of 50 is fifty votes, and counting rows would tell someone who bought the
+// Ultimate package that they had cast one.
+async function loadMyVotes(){
+  var host = document.getElementById('votesContent');
+  if (!host) return;
+  host.textContent = '';
+  var loading = document.createElement('div');
+  loading.className = 'loading-state';
+  loading.textContent = 'Loading\u2026';
+  host.appendChild(loading);
+  try {
+    var data = await api('/my/votes');
+    votesRender(data);
+  } catch (err) {
+    host.textContent = '';
+    var oops = document.createElement('div');
+    oops.className = 'empty-state';
+    oops.textContent = 'We could not load your voting activity just now. Please try again.';
+    host.appendChild(oops);
+  }
+}
+
+function votesRender(data){
+  var host = document.getElementById('votesContent');
+  if (!host) return;
+  host.textContent = '';
+
+  var votes = (data && data.votes) || [];
+  var bundles = (data && data.bundles) || [];
+
+  if (!votes.length && !bundles.length){
+    var empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'You have not voted while signed in yet.';
+    host.appendChild(empty);
+    return;
+  }
+
+  // The two numbers a member would otherwise work out by hand.
+  var summary = document.createElement('p');
+  summary.style.fontSize = '15px';
+  summary.textContent = Number(data.totalVotes || 0) + ' vote'
+    + (Number(data.totalVotes) === 1 ? '' : 's') + ' cast';
+  if (Number(data.totalSpent) > 0){
+    summary.textContent += ' \u00b7 R' + Number(data.totalSpent).toFixed(2) + ' spent on vote packages';
+  }
+  host.appendChild(summary);
+
+  if (bundles.length){
+    var bh = document.createElement('h3');
+    bh.className = 'subs-group';
+    bh.textContent = 'Vote packages';
+    host.appendChild(bh);
+    bundles.forEach(function(b){
+      var row = document.createElement('div');
+      row.className = 'subs-row';
+      var main = document.createElement('div');
+
+      var t = document.createElement('div');
+      t.className = 'subs-title';
+      t.textContent = b.votes + ' votes for ' + b.contestant;
+      main.appendChild(t);
+
+      var bits = [b.competition, msDate(b.boughtAt)];
+      if (b.reference) bits.push('Ref ' + b.reference);
+      bits.push('R' + Number(b.price).toFixed(2));
+      var m = document.createElement('div');
+      m.className = 'subs-meta';
+      m.textContent = bits.join(' \u00b7 ');
+      main.appendChild(m);
+
+      var pill = document.createElement('span');
+      pill.className = 'status-pill ' + String(b.status || '').replace(/[^a-z_]/g, '');
+      pill.textContent = b.statusLabel;
+
+      row.appendChild(main);
+      row.appendChild(pill);
+      host.appendChild(row);
+    });
+  }
+
+  if (votes.length){
+    var vh = document.createElement('h3');
+    vh.className = 'subs-group';
+    vh.textContent = 'Votes you cast';
+    host.appendChild(vh);
+    votes.forEach(function(v){
+      var row = document.createElement('div');
+      row.className = 'subs-row';
+      var main = document.createElement('div');
+
+      var t = document.createElement('div');
+      t.className = 'subs-title';
+      t.textContent = v.contestant;
+      main.appendChild(t);
+
+      var m = document.createElement('div');
+      m.className = 'subs-meta';
+      m.textContent = [v.competition, msDate(v.castAt)].join(' \u00b7 ');
+      main.appendChild(m);
+
+      var pill = document.createElement('span');
+      pill.className = 'status-pill approved';
+      pill.textContent = v.votes + (v.votes === 1 ? ' vote' : ' votes');
+
+      row.appendChild(main);
+      row.appendChild(pill);
+      host.appendChild(row);
+    });
+  }
 }
 
 async function changePassword(){

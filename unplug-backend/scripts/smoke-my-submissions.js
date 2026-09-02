@@ -172,6 +172,19 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
   check('signed out is refused for services', svcNoAuth.status === 401,
     `got ${svcNoAuth.status}`);
 
+  // ---- My Votes (§4 / Module 9) ----
+  console.log('\nmy votes:');
+  const votes = await get('/my/votes');
+  check('GET /my/votes answers 200', votes.status === 200, `got ${votes.status}`);
+  check('it separates votes cast from packages bought',
+    Array.isArray(votes.body && votes.body.votes)
+      && Array.isArray(votes.body && votes.body.bundles));
+  check('it reports totals', typeof (votes.body && votes.body.totalVotes) === 'number'
+    && typeof (votes.body && votes.body.totalSpent) === 'number');
+  const votesNoAuth = await fetch(`http://127.0.0.1:${PORT_API}/my/votes`);
+  check('signed out is refused for votes', votesNoAuth.status === 401,
+    `got ${votesNoAuth.status}`);
+
   console.log('\npage render:');
   const page = fs.readFileSync(path.join(ROOT, 'unplug-member-dashboard.html'), 'utf8');
   check('the dashboard has the My Submissions section',
@@ -210,6 +223,11 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
   check('the PDF is fetched WITH the auth header, not opened as a bare link',
     page.includes('async function apiBlob')
       && /apiBlob\('\/my\/invoices\/' \+ iv\.id \+ '\/pdf'\)/.test(page));
+  check('the dashboard has the My Votes section',
+    page.includes('data-ms-section="myvotes"') && page.includes('>My Votes<'));
+  check('My Votes has its loader', page.includes('async function loadMyVotes'));
+  check('My Votes says why anonymous votes are not listed',
+    /anonymous, so they cannot be listed here/.test(page));
   check('the page does no VAT arithmetic of its own',
     !/invContent[\s\S]{0,3000}\*\s*0?\.15/.test(page)
       && !/invRender[\s\S]{0,3000}\/\s*1\.15/.test(page));

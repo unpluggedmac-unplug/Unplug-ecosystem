@@ -13,6 +13,7 @@ const {
   groupServices, EXPIRING_WITHIN_DAYS,
 } = require('../utils/mySubmissions');
 const invoices = require('../utils/invoices');
+const myVotes = require('../utils/myVotes');
 const { generateDocument } = require('../utils/pdfDocs');
 
 // GET /my/submissions          — everything this member has submitted
@@ -122,6 +123,18 @@ router.get('/invoices/:id/pdf', requireAuth, async (req, res, next) => {
     res.setHeader('Content-Disposition',
       `inline; filename="${invoice.invoice_number}.pdf"`);
     res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /my/votes — §4's "My Votes / Competition Activity".
+//
+// Only what is genuinely this member's: §9.1 makes online voting account-free,
+// so anonymous votes stay anonymous rather than being guessed at from a session.
+router.get('/votes', requireAuth, async (req, res, next) => {
+  try {
+    res.json(await myVotes.activityFor(req.user.id));
   } catch (err) {
     next(err);
   }
