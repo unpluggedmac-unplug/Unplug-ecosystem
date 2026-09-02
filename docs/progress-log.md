@@ -107,3 +107,22 @@ when the table lookup fails.
 
 **Open — blocks any pricing work.** Seven decisions listed at the end of the comparison. No price
 or pricing code may change until they are answered.
+
+## 2026-08-29 — Task 03 REDONE
+
+The first version compared the spec against migration seed files and called it "live", and
+never looked at the frontend at all. Redone against the production API and the live page.
+
+**Found by doing it properly:** the live site contradicts itself. The directory highlight is
+R100/R150/R200/R250 on the rate card (what is actually charged) and R250/R300/R350/R400 in the
+refunds and cancellation policy — on the same page. **That is where §4.4's figures came from**,
+so the spec is not evidence of an intended price; it copied the site's own error. Customer-facing
+policy quoting prices nobody pays; first decision on the list.
+
+Also: the banner price sentence appears 10× in unplug-magazine.html, tier prices are hardcoded in
+two more HTML files, and the demo file advertises "R250 a month" where everything else is once-off.
+
+Seed figures turned out correct — nobody had edited those tables — but that was luck, not method.
+
+**Open — still blocks all pricing work.** Eight decisions at the end of `docs/pricing-comparison.md`.
+No price or pricing code changed.
