@@ -145,13 +145,37 @@ test('a gallery submission cannot expire, and is not pretending it can', () => {
 
 // --------------------------------------------------------------- Phase B
 
-test('THE FOUR PHASE-B STATUSES ARE DECLARED BUT NOT YET LIVE', () => {
+test('PHASE B2: MARKETPLACE LISTINGS TOOK ALL FOUR, INCLUDING expired', () => {
+  // A marketplace listing runs for a term — duration_days plus an active_to
+  // date the public feed already checks — so `expired` is a state it can
+  // genuinely reach. The gallery has no term, which is why it took three.
+  ['changes_requested', 'resubmitted', 'credit_issued', 'expired'].forEach((v) => {
+    assert.ok(S.isLiveFor(v, 'marketplace_listings'),
+      `marketplace_listings should accept ${v} after Phase B2`);
+  });
+  assert.equal(S.isLiveFor('expired', 'gallery_bundles'), false,
+    'the gallery still has no term to run out');
+});
+
+test('every status is live on at least one service, or is honestly empty', () => {
+  // Guards the thing the plan set out to avoid: a value declared everywhere
+  // that nothing can ever set. Once a status is live somewhere it must stay
+  // reachable; while it is live nowhere, notYetLive must say so.
+  S.ALL.forEach((v) => {
+    const live = S.STATUSES[v].live;
+    if (live.length === 0) {
+      assert.ok(S.notYetLive().includes(v), `${v} is live nowhere but not reported as pending`);
+    }
+  });
+});
+
+test('the Phase-B statuses are declared, and only the unreached ones are pending', () => {
   // Honesty check. These are named so the lifecycle is complete, but writing
   // one today would violate a CHECK and throw. The module must say so rather
   // than implying they work.
-  // Only `expired` is still unreachable everywhere; Phase B1 landed the other
-  // three on the gallery service.
-  assert.deepEqual(S.notYetLive().sort(), ['expired']);
+  // Phase B2 gave marketplace all four, so nothing is stranded any more: every
+  // declared status is now reachable on at least one service.
+  assert.deepEqual(S.notYetLive().sort(), []);
 
   S.notYetLive().forEach((s) => {
     S.SUBMISSION_TABLES.forEach((t) => {

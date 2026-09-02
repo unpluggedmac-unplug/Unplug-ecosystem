@@ -42,8 +42,19 @@ const SUBMISSION_TABLES = [
   'competition_entries',
 ];
 
-// The gallery service — both its tables — migrated in Phase B1 (migration 156).
-const GALLERY = ['gallery_bundles', 'gallery_images'];
+// Services migrated so far, in Phase B order.
+//
+// GALLERY is both of the gallery's tables: a bundle and its photos are one
+// submission, so they move together.
+const GALLERY = ['gallery_bundles', 'gallery_images'];              // B1, migration 156
+const MARKETPLACE = ['marketplace_listings'];                        // B2, migration 157
+
+// Services that have taken the three review statuses.
+const REVIEWED = [...GALLERY, ...MARKETPLACE];
+
+// Services that can actually run out. A marketplace listing has duration_days
+// and an active_to date; a gallery submission does not.
+const EXPIRING = [...MARKETPLACE];
 
 // Each status, what it means, and WHERE IT IS CURRENTLY ALLOWED.
 //
@@ -79,22 +90,22 @@ const STATUSES = {
   // service it can actually reach: a value nothing can ever set is a branch
   // every filter and report carries for nothing.
   changes_requested: {
-    live: GALLERY,
+    live: REVIEWED,
     phase: 'B',
     meaning: 'Admin wants specific fields changed before deciding (spec §10.14).',
   },
   resubmitted: {
-    live: GALLERY,
+    live: REVIEWED,
     phase: 'B',
     meaning: 'The member has answered a changes_requested and it is back in the queue.',
   },
   credit_issued: {
-    live: GALLERY,
+    live: REVIEWED,
     phase: 'B',
     meaning: 'Rejected after payment, and Unplug Credit was issued for it (spec §10.7).',
   },
   expired: {
-    live: [],
+    live: EXPIRING,
     phase: 'B',
     // NOT EVERY SERVICE CAN EXPIRE. This belongs to the ones that run for a
     // term — highlights, ad banners, marketplace listings, directory packages.
