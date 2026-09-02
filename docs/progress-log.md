@@ -163,3 +163,28 @@ competition_entries 110, marketplace 182, events 334, highlights 409, profiles 1
 
 **Open — blocks all code:** four decisions at the end of the plan (which §16 values to add;
 resolver vs reference columns; profiles in or out; casing). Recommendations given for each.
+
+## 2026-09-02 — Task 04 Phase A complete (A1 + A2)
+
+Signed off on my recommendations: add 4 statuses, resolver not columns, profiles out of Phase B,
+lowercase stays.
+
+**A1 `src/utils/submissionStatus.js`** — the submission vocabulary in one place. Nine tables already
+share `awaiting_payment/pending/approved/rejected` (articles adds `draft`); nobody had written it
+down, and it is NOT discoverable from CREATE TABLE because 36 later migrations extend the
+constraints. The four Phase-B values are declared with `live: []` — writing one today would violate
+a CHECK. **Nothing imports it, and a test asserts that.**
+
+The key test replays all 155 migrations and asserts module↔database agreement in both directions.
+Verified it has teeth: faking a live status failed with the table named; dropping a real one failed
+the other way. Both restored.
+
+**A2 `src/utils/submissionReference.js`** — the join §10.1 wants. A payment points at a submission;
+nothing pointed back. Now both directions, handling cart (`UNP-…`) and single (`gateway_reference`)
+shapes, one order holding several services, profiles reachable by two payment types, and retries
+(latest wins). A test reads `payments_linked_type_check` from the live schema so a new service added
+to the constraint but not mapped fails the build.
+
+**Suite 1533 → 1556.** No table touched, no behaviour changed.
+
+**Next:** Phase B1 `gallery_bundles` (blast radius 26) — the first additive migration. Awaiting go-ahead.
