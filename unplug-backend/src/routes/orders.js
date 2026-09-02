@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const { attributeConsultant } = require('../utils/consultantAttribution');
 const pool = require('../db');
 const { generateUnique } = require('../utils/reference');
+const { serviceLabel } = require('../utils/submissionReference');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor } = require('../utils/accountCredit');
 const { eftInstructions } = require('../utils/eftDetails');
@@ -435,7 +436,11 @@ router.post('/:id/stop-reminders', requireAuth, async (req, res, next) => {
 router.get('/mine', requireAuth, async (req, res, next) => {
   try {
     const orders = await pool.query(
-      `SELECT o.*, COUNT(p.id)::int AS item_count
+      // The linked_types are aggregated so the list can say what each order was
+      // FOR without a second request per row. ARRAY_REMOVE drops the NULL that
+      // the LEFT JOIN produces for an order with no payments yet.
+      `SELECT o.*, COUNT(p.id)::int AS item_count,
+              ARRAY_REMOVE(ARRAY_AGG(DISTINCT p.linked_type), NULL) AS linked_types
          FROM orders o LEFT JOIN payments p ON p.order_id = o.id
         WHERE o.user_id = $1
         GROUP BY o.id
@@ -443,7 +448,12 @@ router.get('/mine', requireAuth, async (req, res, next) => {
         LIMIT 100`,
       [req.user.id]
     );
-    res.json({ orders: orders.rows });
+    res.json({
+      orders: orders.rows.map((o) => ({
+        ...o,
+        serviceNames: (o.linked_types || []).map(serviceLabel),
+      })),
+    });
   } catch (err) {
     next(err);
   }
@@ -461,7 +471,14 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       `SELECT id, linked_type, linked_id, amount, order_total, status, gateway_reference FROM payments WHERE order_id = $1 ORDER BY id ASC`,
       [req.params.id]
     );
-    res.json({ order: order.rows[0], items: items.rows });
+    // serviceName is what the member is shown. linked_type stays on the row for
+    // anything that needs the key; the NAME is worked out here rather than in
+    // the browser so an order, an invoice and a receipt cannot end up calling
+    // the same purchase three different things.
+    res.json({
+      order: order.rows[0],
+      items: items.rows.map((i) => ({ ...i, serviceName: serviceLabel(i.linked_type) })),
+    });
   } catch (err) {
     next(err);
   }

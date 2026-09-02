@@ -652,3 +652,43 @@ the previous details prepopulated — that is §10.9, not §5, so it is not in t
 **Remaining of the twelve:** My Orders, My Credits, My Invoices, My Votes / Competition Activity,
 Account Settings — plus user-facing invoices (§10.5), which needs the `invoices` table decided
 earlier and is the only one carrying a schema change.
+
+---
+
+## 2026-09-02 — Task 06: My Orders (§4 / §10.4)
+
+**Third of the twelve.** Both endpoints already existed and were correctly scoped — `/orders/mine`
+and `/orders/:id` with an owner-or-admin check. What was missing was that an order line said
+`ad_banner`: a receipt written for the database rather than for the person who paid.
+
+**One place for service names.** `SERVICE_LABEL` now sits in `utils/submissionReference.js`, which
+already owns `linked_type` knowledge, covering all 13 payable types. The module **throws at load**
+if a `linked_type` in `SUBMISSION_TABLE` has no wording, so adding a payable service without naming
+it is a startup failure rather than a raw database key turning up on somebody's order. An unknown
+type is shown as itself rather than hidden — a line a member paid for must always appear, even if
+it is named badly.
+
+`/orders/mine` now aggregates the linked types per order so the list can say what each order was
+*for* without a request per row; `/orders/:id` adds `serviceName` per line. The name is worked out
+server-side so an order, an invoice and a receipt cannot call the same purchase three different
+things — which matters because My Invoices is next and will read the same data.
+
+**Money is shown as stored, never recomputed in the browser.** §10.4 lists subtotal, voucher,
+credit and total as separate lines because they are separate facts. A test asserts they still add
+up (subtotal − voucher − credit = total), not as a rule the code enforces but so a member is never
+left doing arithmetic that does not work.
+
+**Two schema facts worth recording**, both found by tests failing:
+- `payments.gateway_reference` is NOT NULL and UNIQUE.
+- **`payments.status` is `pending | confirmed | failed`** — a different vocabulary from the
+  submission one. The order pill is worded from it separately for that reason, rather than reusing
+  the shared status wording.
+
+Suite **1671 → 1682**, 0 failing. Smoke check 34/34.
+
+**Still open:** no way to pay an unpaid order from this view, and no proof-of-payment upload
+(`orders.pop_url` exists and the Payments section owns that flow). Left alone rather than
+duplicated.
+
+**Remaining of the twelve:** My Credits, My Invoices, My Votes / Competition Activity, Account
+Settings.

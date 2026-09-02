@@ -49,6 +49,45 @@ const SUBMISSION_TABLE = {
   form_payment: 'form_submissions',
 };
 
+// What each linked_type is CALLED, for a member reading their own order.
+//
+// linked_type is an internal key: 'article_publish', 'ad_banner'. An order line
+// reading "ad_banner · R450" is a receipt written for the database rather than
+// for the person who paid. These are the words to put in front of them instead.
+//
+// Every key in SUBMISSION_TABLE must appear here — checked at load, so adding a
+// payable service without naming it is a startup failure rather than a raw
+// database key turning up on somebody's invoice.
+const SERVICE_LABEL = {
+  article_publish: 'Article',
+  event_listing: 'Event listing',
+  profile_package: 'Directory listing',
+  profile_upgrade: 'Directory listing upgrade',
+  gallery_bundle: 'Gallery submission',
+  marketplace_listing: 'Marketplace listing',
+  highlight: 'Highlight',
+  top10_entry: 'Top 10 entry',
+  competition_entry: 'Competition entry',
+  ad_banner: 'Advert',
+  vote_bundle: 'Votes',
+  edition_download: 'Edition download',
+  form_payment: 'Form payment',
+};
+
+for (const type of Object.keys(SUBMISSION_TABLE)) {
+  if (!Object.prototype.hasOwnProperty.call(SERVICE_LABEL, type)) {
+    throw new Error(`submissionReference: linked_type '${type}' has no member-facing name`);
+  }
+}
+
+// The name to show for a line on an order. An unknown type is shown as itself
+// rather than hidden: a line a member paid for must always appear, even if it
+// is named badly.
+function serviceLabel(linkedType) {
+  const key = String(linkedType || '');
+  return Object.prototype.hasOwnProperty.call(SERVICE_LABEL, key) ? SERVICE_LABEL[key] : key;
+}
+
 // The reverse: table -> the linked_types that point at it.
 //
 // profiles is reachable by two (a package purchase and an upgrade), which is
@@ -137,5 +176,6 @@ async function submissionsForReference(reference, client = pool) {
 }
 
 module.exports = {
-  SUBMISSION_TABLE, LINKED_TYPES_FOR, referenceFor, submissionsForReference,
+  SUBMISSION_TABLE, LINKED_TYPES_FOR, SERVICE_LABEL, serviceLabel,
+  referenceFor, submissionsForReference,
 };

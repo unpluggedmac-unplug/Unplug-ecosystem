@@ -360,6 +360,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="competition"><span>&#127942;</span> My Competitions</button>
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
       <button class="ms-navlink" data-ms="editions"><span>📖</span> My Editions</button>
+      <button class="ms-navlink" data-ms="myorders"><span>&#128722;</span> My Orders</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
       <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
@@ -1015,6 +1016,18 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
     </section>
 
+    <!-- MY ORDERS (spec section 4). An order is one checkout: its reference, what
+         it was for, and what was actually charged. Section 10.4 lists subtotal,
+         credit and total as separate lines because they are separate facts, so
+         they are shown as stored and never recomputed here. -->
+    <section class="ms-section section-hidden" data-ms-section="myorders">
+      <div class="card">
+        <h2>My Orders</h2>
+        <p class="sub">Every checkout you have made. The reference is what to quote on an EFT.</p>
+        <div id="ordContent"><div class="loading-state">Loading&#8230;</div></div>
+      </div>
+    </section>
+    
     <section class="ms-section section-hidden" data-ms-section="payments">
     <div class="card">
       <h2>Cancel a service</h2>
@@ -4219,6 +4232,9 @@ function msSetupNav(){
   document.querySelectorAll('.ms-navlink[data-ms="myservices"]').forEach(function(link){
     link.addEventListener('click', function(){ loadMyServices(); });
   });
+  document.querySelectorAll('.ms-navlink[data-ms="myorders"]').forEach(function(link){
+    link.addEventListener('click', function(){ loadMyOrders(); });
+  });
   const menuBtn=document.getElementById('msMenuBtn');
   if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
   const lo=document.getElementById('msLogout');
@@ -4460,6 +4476,130 @@ function svcRender(data){
     h.textContent = group.label + ' (' + rows.length + ')';
     host.appendChild(h);
     rows.forEach(function(s){ host.appendChild(subsRow(s)); });
+  });
+}
+
+// MY ORDERS - spec section 4.
+//
+// An order is one checkout. The list says what each was for; opening one shows
+// the lines. The NAMES come from the server (utils/submissionReference.js), so
+// an order, an invoice and a receipt cannot call the same purchase three
+// different things.
+var ORD_OPEN = {};   // order id -> its fetched lines, so reopening costs nothing
+
+async function loadMyOrders(){
+  var host = document.getElementById('ordContent');
+  if (!host) return;
+  host.textContent = '';
+  var loading = document.createElement('div');
+  loading.className = 'loading-state';
+  loading.textContent = 'Loading\u2026';
+  host.appendChild(loading);
+  try {
+    var data = await api('/orders/mine');
+    ordRender(data.orders || []);
+  } catch (err) {
+    host.textContent = '';
+    var oops = document.createElement('div');
+    oops.className = 'empty-state';
+    oops.textContent = 'We could not load your orders just now. Please try again.';
+    host.appendChild(oops);
+  }
+}
+
+// What was actually charged, as stored. Money is never recomputed here.
+function ordMoney(order){
+  var bits = [];
+  bits.push('Subtotal R' + Number(order.subtotal || 0).toFixed(2));
+  if (Number(order.voucher_discount) > 0){
+    bits.push('Voucher ' + (order.voucher_code || '') + ' -R' + Number(order.voucher_discount).toFixed(2));
+  }
+  if (Number(order.credit_used) > 0){
+    bits.push('Unplug Credit -R' + Number(order.credit_used).toFixed(2));
+  }
+  bits.push('Total R' + Number(order.total || 0).toFixed(2));
+  return bits.join(' \u00b7 ');
+}
+
+function ordRender(orders){
+  var host = document.getElementById('ordContent');
+  if (!host) return;
+  host.textContent = '';
+
+  if (!orders.length){
+    var empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'You have not placed any orders yet.';
+    host.appendChild(empty);
+    return;
+  }
+
+  orders.forEach(function(o){
+    var row = document.createElement('div');
+    row.className = 'subs-row';
+
+    var main = document.createElement('div');
+
+    var title = document.createElement('div');
+    title.className = 'subs-title';
+    // The reference is the thing a member needs most: it is what they put on
+    // the EFT and what we match the payment against.
+    title.textContent = o.reference || ('Order #' + o.id);
+    main.appendChild(title);
+
+    var what = document.createElement('div');
+    what.className = 'subs-meta';
+    var names = (o.serviceNames || []);
+    what.textContent = (names.length ? names.join(', ') : 'Nothing on this order yet')
+      + ' \u00b7 ' + msDate(o.created_at);
+    main.appendChild(what);
+
+    var money = document.createElement('div');
+    money.className = 'subs-meta';
+    money.textContent = ordMoney(o);
+    main.appendChild(money);
+
+    // The lines, on request. One fetch per order, kept after the first.
+    if (o.item_count > 0){
+      var toggle = document.createElement('button');
+      toggle.className = 'btn btn-line';
+      toggle.style.cssText = 'margin-top:8px; font-size:12px; padding:4px 10px;';
+      toggle.textContent = 'Show what is on this order';
+      var lines = document.createElement('div');
+      lines.hidden = true;
+      toggle.addEventListener('click', async function(){
+        lines.hidden = !lines.hidden;
+        toggle.textContent = lines.hidden ? 'Show what is on this order' : 'Hide';
+        if (lines.hidden || ORD_OPEN[o.id]) return;
+        try {
+          var detail = await api('/orders/' + o.id);
+          ORD_OPEN[o.id] = true;
+          lines.textContent = '';
+          (detail.items || []).forEach(function(it){
+            var li = document.createElement('div');
+            li.className = 'subs-meta';
+            li.textContent = (it.serviceName || it.linked_type) + ' \u00b7 R'
+              + Number(it.amount || 0).toFixed(2);
+            lines.appendChild(li);
+          });
+        } catch (err) {
+          lines.textContent = 'We could not load these lines just now.';
+        }
+      });
+      main.appendChild(toggle);
+      main.appendChild(lines);
+    }
+
+    var pill = document.createElement('span');
+    pill.className = 'status-pill ' + String(o.status || '').replace(/[^a-z_]/g, '');
+    // Order statuses are their own vocabulary (pending/confirmed/failed), not
+    // the submission one, so they are worded here rather than shared.
+    pill.textContent = o.status === 'confirmed' ? 'Paid'
+      : (o.status === 'failed' ? 'Failed' : 'Awaiting payment');
+
+    row.appendChild(main);
+    row.appendChild(pill);
+    host.appendChild(row);
   });
 }
 

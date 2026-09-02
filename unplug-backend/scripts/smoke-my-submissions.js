@@ -192,6 +192,11 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
     /function svcRender[\s\S]{0,1200}subsRow\(/.test(page));
   check('"Browse Services" is distinct from "My Services"',
     page.includes('Browse Services'));
+  check('the dashboard has the My Orders section',
+    page.includes('data-ms-section="myorders"') && page.includes('>My Orders<'));
+  check('My Orders has its loader', page.includes('async function loadMyOrders'));
+  check('My Orders shows the stored totals, not recomputed ones',
+    page.includes('function ordMoney') && page.includes('order.credit_used'));
 
   // Shut down in order. The ROUTE has its own pool (src/db.js), separate from
   // the one this script seeds with; stopping Postgres while it still holds an
