@@ -26,6 +26,8 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
+const { isLiveFor } = require('../utils/submissionStatus');
+const CR = require('../utils/changeRequests');
 
 const router = express.Router();
 
@@ -842,6 +844,118 @@ router.patch('/:type/:id', requireRole('admin'), async (req, res, next) => {
     res.json({ item: result.rows[0], changed });
   } catch (err) {
     next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ASKING FOR CHANGES INSTEAD OF DECIDING (spec 10.14)
+// ---------------------------------------------------------------------------
+//
+// An admin reviewing a submission had two answers: approve, or reject. There
+// was no way to say "the cover image is wrong, the rest is fine", so a fixable
+// submission had to be refused outright and the member had to start again
+// without being told what was wrong.
+//
+// This is the third answer. The admin ticks the fields that need changing, the
+// submission goes to `changes_requested`, and the member gets it back with
+// exactly that list.
+//
+// THE FIELDS ARE THE SAME WHITELIST AN ADMIN CAN EDIT. Reused from DETAILS
+// rather than copied, so what can be REQUESTED and what can be EDITED cannot
+// drift apart, and nothing in a request ever names a column.
+//
+// Not every kind of submission can be handed back — a gallery image belongs to
+// a bundle and a share card is submitted without an account, so there is nobody
+// to hand it to. Those are refused with the reason rather than silently
+// missing; see src/utils/changeRequests.js.
+router.post('/:type/:id/request-changes', requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const type = String(req.params.type);
+    const d = DETAILS[type];
+    if (!d) return res.status(404).json({ error: 'Unknown submission type.' });
+
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid id is required.' });
+
+    if (!CR.canRequestChanges(type)) {
+      return res.status(400).json({
+        error: `This kind of submission cannot be sent back: ${CR.NOT_RETURNABLE[type] || 'it has no owner to return it to'}.`,
+      });
+    }
+    if (!isLiveFor('changes_requested', d.table)) {
+      // The status has to exist on the table before anything can be moved into
+      // it. Services are migrated one at a time, so this is a real state.
+      return res.status(400).json({
+        error: 'This service has not been set up for change requests yet.',
+      });
+    }
+
+    const fields = CR.cleanFields(req.body && req.body.fields, editableCols(type));
+    const note = String((req.body && req.body.note) || '').trim();
+    if (!CR.isSayingSomething(fields, note)) {
+      return res.status(400).json({
+        error: 'Say what needs changing: tick at least one field, or write a note.',
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const owner = await CR.ownerOf(type, id, client);
+    if (!owner) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'That submission no longer exists.' });
+    }
+
+    // One open request at a time. A second would mean the member seeing two
+    // different lists of what to fix, and nobody able to say which was answered.
+    const open = await client.query(
+      `SELECT id FROM change_requests
+        WHERE submission_type = $1 AND submission_id = $2 AND answered_at IS NULL`,
+      [type, id]
+    );
+    if (open.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'This submission is already waiting on the member for changes.',
+      });
+    }
+
+    const updated = await client.query(
+      `UPDATE ${d.table} SET status = 'changes_requested' WHERE id = $1 RETURNING id`, [id]
+    );
+    if (!updated.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'That submission no longer exists.' });
+    }
+
+    const cr = await client.query(
+      `INSERT INTO change_requests (submission_type, submission_id, fields, note, requested_by)
+       VALUES ($1, $2, $3::jsonb, $4, $5) RETURNING id, requested_at`,
+      [type, id, JSON.stringify(fields), note || null, req.user.id]
+    );
+
+    await client.query('COMMIT');
+
+    await logActivity(req.user.id, 'changes_requested',
+      `Asked for changes on ${TYPES[type] ? TYPES[type].label : type} #${id}`
+      + (fields.length ? ` (${fields.join(', ')})` : ''));
+
+    res.status(201).json({
+      changeRequest: {
+        id: cr.rows[0].id,
+        type,
+        submissionId: id,
+        fields,
+        note: note || null,
+        requestedAt: cr.rows[0].requested_at,
+      },
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
   }
 });
 

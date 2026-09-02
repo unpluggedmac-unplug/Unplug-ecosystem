@@ -194,6 +194,7 @@ app.use('/public-settings', publicSettingsRoutes);
 app.use('/admin/activity-log', activityLogRoutes);
 app.use('/admin/payment-queue', adminPaymentQueueRoutes);
 app.use('/admin/approval-queue', require('./routes/adminApprovalQueue'));
+app.use('/change-requests', require('./routes/changeRequests'));
 app.use('/admin/covers', require('./routes/adminCovers'));
 app.use('/image-specs', require('./routes/imageSpecs'));
 app.use('/admin/links', require('./routes/adminProfileLinks'));
