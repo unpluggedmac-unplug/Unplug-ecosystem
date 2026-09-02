@@ -64,7 +64,7 @@ const RESOURCES = {
   events: {
     table: 'events',
     label: 'name',
-    editable: ['name', 'event_date', 'venue', 'description'],
+    editable: ['name', 'event_date', 'end_date', 'venue', 'description'],
   },
   investors: {
     table: 'investors',

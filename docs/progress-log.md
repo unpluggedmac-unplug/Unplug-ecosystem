@@ -410,3 +410,66 @@ Migration 162 × 3 passes clean. Suite **1600 → 1606**.
 
 **Still open:** profiles visibility-vs-approval; the other 24 §10.17 events; `rejected` still doing
 double duty as "refused" and "cancelled"; multi-day events vanishing part-way through.
+
+---
+
+## 2026-09-02 — Multi-day events no longer vanish part-way through themselves
+
+**The bug.** `events` carried `event_date`, `start_time` and `end_time` but **no end date**, and the
+public feed asked `status = 'approved' AND event_date >= CURRENT_DATE`. A festival running Friday to
+Sunday has one `event_date` — Friday — so **it left the site on Saturday morning, while it was still
+running and still selling tickets**. `start_time`/`end_time` are times of day, not dates, so they
+never helped.
+
+**Migration 163** adds `end_date DATE`, NULL meaning "one day". `event_date` keeps meaning *when this
+starts* everywhere it is read — widening it would have silently changed the homepage ordering and the
+meaning of every existing row. NULL on every existing row means **nothing needed backfilling and
+nothing changes for a single-day event**, which is what makes it safe against live data.
+
+The feed now filters `COALESCE(end_date, event_date) >= CURRENT_DATE`, with a matching index.
+`events_end_date_check` is dropped and re-added each deploy (ADD CONSTRAINT has no IF NOT EXISTS) and
+so re-validates the whole table every time — it passes because it is satisfied by NULL, and a
+violating row can never get in. Verified over **three full migration passes with a real multi-day row
+present**, not just an empty table.
+
+**Two defects found in my own change before it shipped:**
+
+1. The admin form sent `endDate: ... || undefined`. `JSON.stringify` drops undefined keys and the
+   PATCH skips what it is not sent, so **Undo would have appeared to work and silently left the end
+   date on**. Now `null`, matching the adjacent time fields. Test: `UNDO CAN TAKE THE END DATE BACK
+   OFF AGAIN`.
+2. The PATCH had **no end-before-start guard at all** — an admin editing would have got a raw 500
+   from the constraint. Rather than re-implement the rule (a PATCH can set the end date without
+   sending the start date, so it depends on the stored row), the constraint stays the single
+   authority and its violation is translated into a sentence.
+
+**A latent date bug found and deliberately NOT fixed.** `pg` turns a DATE into a Date at *local*
+midnight and `JSON.stringify` then writes it in UTC, so east of Greenwich both dates serialise as the
+**day before** the one stored. Reproduced on this machine (SAST). **Live is unaffected — Render runs
+in UTC**, confirmed against the production API, which returns `2026-10-31T00:00:00.000Z`. Every
+frontend reader uses `String(...).slice(0,10)`, which is zone-safe, so it is contained. Asserting the
+absolute date would fail on any developer machine east of Greenwich while passing in production;
+instead the test asserts `end_date` travels **identically to `event_date`**, so the new column cannot
+grow a second, different date bug. **Flagged, not fixed — it would change the wire format of
+`event_date` and touch the public page.**
+
+**The public page**, not just the backend: the card now says *"Until 2 Sep"* (the badge shows the
+first day, which alone reads as a one-day event), and **Add to Calendar spans the whole run** —
+verified as `20260831/20260903`, Google's exclusive end, covering all three days.
+
+`editions.js` also filters on `event_date >= CURRENT_DATE`, but that is `edition_calendar` — separate
+table, single-day markers by design. Correctly untouched.
+
+**Verified in a browser against a real backend** (real Postgres, real migrations, the real Express
+app, the page served over http so its localhost API base is honoured), seeded with a festival that
+started yesterday and ends tomorrow alongside a past and a future single-day event. Rendered card
+text read from the live DOM: `31 AUG | Deaf Arts Festival (3 days) | Until 2 SEP · Cape Town City
+Hall · R50`. The past single-day event and the finished festival were both correctly absent.
+
+**Tests have teeth** — reinstating the old condition fails exactly the two multi-day tests while the
+single-day test still passes, proving they are not coupled.
+
+Suite **1606 → 1624**, 0 failing.
+
+**Still open:** the UTC/local date serialisation above; profiles visibility-vs-approval; the other 24
+§10.17 notification events; `rejected` still doing double duty as "refused" and "cancelled".

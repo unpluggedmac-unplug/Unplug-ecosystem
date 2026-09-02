@@ -681,6 +681,7 @@ const DETAILS = {
     table: 'events',
     fields: [f('name', 'Event name'), f('description', 'Description', 'textarea'),
              f('venue', 'Venue'), f('event_date', 'Date', 'date'),
+             f('end_date', 'Last day (multi-day events)', 'date'),
              f('entrance_fee', 'Entrance fee'), f('contact_details', 'Contact'),
              f('event_link', 'Link', 'url'), f('image_url', 'Image', 'url')],
     preview: () => '?p=home',

@@ -12,12 +12,22 @@ const router = express.Router();
 router.get('/upcoming', async (req, res, next) => {
   try {
     const { page, limit, offset } = getPagination(req);
-    const condition = `status = 'approved' AND event_date >= CURRENT_DATE`;
+    // AN EVENT IS OVER WHEN ITS LAST DAY HAS PASSED, not its first.
+    //
+    // This asked event_date >= CURRENT_DATE, so a festival running Friday to
+    // Sunday left the site on Saturday morning, while it was still running and
+    // still selling tickets. start_time and end_time did not help: they are
+    // times of day, not dates.
+    //
+    // end_date is NULL for a single-day event, which is every event that existed
+    // before it was added, so COALESCE gives exactly the old behaviour for those
+    // and the right behaviour for the rest.
+    const condition = `status = 'approved' AND COALESCE(end_date, event_date) >= CURRENT_DATE`;
 
     const countResult = await pool.query(`SELECT COUNT(*) FROM events WHERE ${condition}`);
 
     const result = await pool.query(
-      `SELECT id, name, event_date, venue, description, image_url, entrance_fee,
+      `SELECT id, name, event_date, end_date, venue, description, image_url, entrance_fee,
               contact_details, event_link,
               to_char(start_time, 'HH24:MI') AS start_time,
               to_char(end_time, 'HH24:MI') AS end_time
@@ -39,10 +49,15 @@ router.get('/upcoming', async (req, res, next) => {
 // POST /events — member submits (enters as 'pending').
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { name, eventDate, venue, description, displayStartDate,
+    const { name, eventDate, endDate, venue, description, displayStartDate,
             imageUrl, entranceFee, contactDetails, eventLink, startTime, endTime } = req.body;
     if (!name || !eventDate) {
       return res.status(400).json({ error: 'name and eventDate are required.' });
+    }
+    // Refused here as well as by the CHECK, so an organiser gets a sentence
+    // rather than a constraint violation.
+    if (endDate && String(endDate) < String(eventDate)) {
+      return res.status(400).json({ error: 'The end date cannot be before the start date.' });
     }
 
     const profileResult = await pool.query(
@@ -52,11 +67,11 @@ router.post('/', requireAuth, async (req, res, next) => {
     const hasCredit = profileResult.rows.length > 0 && profileResult.rows[0].free_event_credits > 0;
 
     const result = await pool.query(
-      `INSERT INTO events (organizer_user_id, name, event_date, venue, description, display_start_date,
+      `INSERT INTO events (organizer_user_id, name, event_date, end_date, venue, description, display_start_date,
                            image_url, entrance_fee, contact_details, event_link, start_time, end_time, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
-      [req.user.id, name, eventDate, venue || null, description || null, displayStartDate || null,
+      [req.user.id, name, eventDate, endDate || null, venue || null, description || null, displayStartDate || null,
        imageUrl || null, entranceFee || null, contactDetails || null, eventLink || null,
        startTime || null, endTime || null, statusForNewSubmission(req.user, hasCredit)]
     );
@@ -101,7 +116,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, event_date, venue, description, image_url, entrance_fee,
+      `SELECT id, name, event_date, end_date, venue, description, image_url, entrance_fee,
               contact_details, event_link, display_start_date, status,
               to_char(start_time, 'HH24:MI') AS start_time,
               to_char(end_time, 'HH24:MI') AS end_time
@@ -124,7 +139,7 @@ router.patch('/:id', requireRole('admin'), async (req, res, next) => {
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid event id is required.' });
 
     const map = {
-      name: 'name', eventDate: 'event_date', venue: 'venue', description: 'description',
+      name: 'name', eventDate: 'event_date', endDate: 'end_date', venue: 'venue', description: 'description',
       displayStartDate: 'display_start_date', imageUrl: 'image_url', entranceFee: 'entrance_fee',
       contactDetails: 'contact_details', eventLink: 'event_link',
       startTime: 'start_time', endTime: 'end_time',
@@ -152,6 +167,14 @@ router.patch('/:id', requireRole('admin'), async (req, res, next) => {
     if (result.rowCount === 0) return res.status(404).json({ error: 'Event not found.' });
     res.json({ event: result.rows[0] });
   } catch (err) {
+    // A PATCH can set the end date without sending the start date, so whether
+    // the two agree depends on the row already in the table. Rather than re-read
+    // it and re-implement the rule here — where it could drift from the CHECK —
+    // the constraint stays the single authority and its violation is turned
+    // into the sentence an admin should see.
+    if (err.code === '23514' && err.constraint === 'events_end_date_check') {
+      return res.status(400).json({ error: 'The end date cannot be before the start date.' });
+    }
     next(err);
   }
 });

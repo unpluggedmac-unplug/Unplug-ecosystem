@@ -569,6 +569,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="form-row">
             <div><label for="calevName">Event name</label><input id="calevName" placeholder="e.g. Deaf Awareness Expo"></div>
             <div><label for="calevDate">Date</label><input id="calevDate" type="date"></div>
+            <div><label for="calevEndDate">Last day <span style="font-weight:400; color:var(--slate);">&mdash; multi-day events only</span></label><input id="calevEndDate" type="date"></div>
           </div>
           <div class="form-row">
             <div><label for="calevStart">Start time (optional)</label><input id="calevStart" type="time"></div>
@@ -7624,6 +7625,9 @@ function calevReadForm() {
   return {
     name: document.getElementById('calevName').value.trim(),
     eventDate: document.getElementById('calevDate').value,
+    // null, not undefined: JSON.stringify drops undefined keys and the PATCH
+    // skips what it isn't sent, so Undo could never take an end date back off.
+    endDate: document.getElementById('calevEndDate').value || null,
     startTime: document.getElementById('calevStart').value || null,
     endTime: document.getElementById('calevEnd').value || null,
     venue: document.getElementById('calevVenue').value.trim(),
@@ -7639,7 +7643,7 @@ function calevReadForm() {
 function calevResetForm() {
   CALEV_EDITING_ID = null;
   CALEV_ORIGINAL = null;
-  ['calevName', 'calevDate', 'calevStart', 'calevEnd', 'calevVenue', 'calevFee', 'calevContact', 'calevLink', 'calevDesc', 'calevDisplayStart'].forEach((id) => { document.getElementById(id).value = ''; });
+  ['calevName', 'calevDate', 'calevEndDate', 'calevStart', 'calevEnd', 'calevVenue', 'calevFee', 'calevContact', 'calevLink', 'calevDesc', 'calevDisplayStart'].forEach((id) => { document.getElementById(id).value = ''; });
   document.getElementById('calevImgUpload').innerHTML = UnplugUpload.fieldHtml('calevImage', '', '', imgSpecFull('event_image'));
   document.getElementById('calevFormTitle').textContent = 'Add an event';
   document.getElementById('calevSaveBtn').textContent = 'Add event';
@@ -7683,6 +7687,7 @@ function calevLoadForEdit(ev) {
   CALEV_EDITING_ID = ev.id;
   document.getElementById('calevName').value = ev.name || '';
   document.getElementById('calevDate').value = String(ev.event_date).slice(0, 10);
+  document.getElementById('calevEndDate').value = ev.end_date ? String(ev.end_date).slice(0, 10) : '';
   document.getElementById('calevStart').value = ev.start_time || '';
   document.getElementById('calevEnd').value = ev.end_time || '';
   document.getElementById('calevVenue').value = ev.venue || '';

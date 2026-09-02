@@ -10982,11 +10982,11 @@ function calAddLinks(ev) {
   let startUtc, endUtc;
   if (ev.start_time) {
     startUtc = calUtcStamp(calParseStamp(calStamp(ev.event_date, ev.start_time)));
-    endUtc = calUtcStamp(calParseStamp(calStamp(ev.event_date, ev.end_time || ev.start_time)));
+    endUtc = calUtcStamp(calParseStamp(calStamp(ev.end_date || ev.event_date, ev.end_time || ev.start_time)));
   } else {
     // all-day: use the date only (Google wants start/next-day)
     const d = String(ev.event_date).slice(0, 10).replace(/-/g, '');
-    const next = new Date(String(ev.event_date).slice(0,10) + 'T00:00:00Z'); next.setUTCDate(next.getUTCDate()+1);
+    const next = new Date(String(ev.end_date || ev.event_date).slice(0,10) + 'T00:00:00Z'); next.setUTCDate(next.getUTCDate()+1);
     startUtc = d; endUtc = calUtcStamp(next).slice(0, 8);
   }
   const gcal = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
@@ -11010,7 +11010,17 @@ function calCardHtml(ev) {
   const day = dateStr.slice(8, 10);
   const mon = CAL_MONTHS[parseInt(dateStr.slice(5, 7), 10) - 1] || '';
   const timeTxt = ev.start_time ? (ev.start_time + (ev.end_time ? '–' + ev.end_time : '')) : '';
-  const metaBits = [ev.venue, timeTxt, ev.entrance_fee].filter(Boolean).map(escapeHtml).join(' · ');
+  // A multi-day event has to say so, or the badge (which shows the first day)
+  // reads as the whole of it.
+  let runsTxt = '';
+  if (ev.end_date) {
+    const endStr = String(ev.end_date).slice(0, 10);
+    if (endStr > dateStr) {
+      runsTxt = 'Until ' + parseInt(endStr.slice(8, 10), 10) + ' '
+              + (CAL_MONTHS[parseInt(endStr.slice(5, 7), 10) - 1] || '');
+    }
+  }
+  const metaBits = [runsTxt, ev.venue, timeTxt, ev.entrance_fee].filter(Boolean).map(escapeHtml).join(' · ');
   const img = ev.image_url ? `<div class="cal-thumb"><img src="${escapeHtml(ev.image_url)}" alt="${escapeHtml(ev.name)}" loading="lazy" decoding="async"></div>` : '';
   return `<div class="cal-card" data-id="${ev.id}">
     ${img}

@@ -738,6 +738,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field-row">
           <div class="field"><label for="evt-name">Event Name</label><input id="evt-name"></div>
           <div class="field"><label for="evt-date">Event Date</label><input id="evt-date" type="date"></div>
+          <div class="field"><label for="evt-end-date">Last day <span style="font-weight:400; opacity:0.7;">&mdash; only if it runs for more than one day</span></label><input id="evt-end-date" type="date"></div>
         </div>
         <div class="field-row">
           <div class="field"><label for="evt-start-time">Start Time</label><input id="evt-start-time" type="time"></div>
@@ -2788,7 +2789,7 @@ async function createSubmission(type) {
     const data = await api('/events', {
       method: 'POST',
       body: JSON.stringify({
-        name, eventDate,
+        name, eventDate, endDate: document.getElementById('evt-end-date').value || undefined,
         venue: document.getElementById('evt-venue').value.trim() || undefined,
         description: document.getElementById('evt-desc').value.trim() || undefined,
         displayStartDate: document.getElementById('evt-display-start').value || undefined,
