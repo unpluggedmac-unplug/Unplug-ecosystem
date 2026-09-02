@@ -300,3 +300,28 @@ now. Flagged not fixed: it spans every service, and scope additions are yours to
 ### Phase B status
 Done: gallery (B1), marketplace (B2), events (B3), highlights (B4), articles (B5).
 Deferred by your sign-off: **profiles**. Phase C (payments/orders, competitions, votes) not started.
+
+## 2026-09-02 — Approval queue: resubmitted work no longer lost
+
+`adminApprovalQueue.js` selected only `pending` + `awaiting_payment`. `resubmitted` was in **none**
+of its sources — so once task 05 ships, a member answering a change request would have vanished from
+the admin screen entirely.
+
+**Ten sources, not eight.** Eight use `status IN (...)`; the two highlight sources use
+`h.status = 'pending'` — equality, easy to miss by eye. My first pass found eight; the test found the
+other two. All ten now include `resubmitted`.
+
+**Left alone deliberately:** `orders`, `payments`, `vote_bundles` (payment vocabularies) and
+`share_cards`, `shoutout_nominations`, `profile_claims` (separate review flows outside the spine).
+The coverage test asks `SUBMISSION_TABLES` rather than hardcoding that judgement, so it can't drift.
+
+**Tests (4):** a real resubmitted article AND marketplace listing appear in the queue; every spine
+service's filter includes it; the queue *reaches* every spine service that can hold it
+(`gallery_bundles` the one expected absence — reviewed via its images); and approved/rejected/
+credit_issued are still excluded so admins aren't asked to re-decide settled work.
+
+**Fact worth recording:** marketplace `duration_days = 30` exactly (migration 010 narrowed it from
+7/14/21/28 — the CREATE TABLE still shows the old list).
+
+Admin-only, so tests + smoke check per protocol. Frontend doesn't filter the queue, so the dashboard
+keeps whatever the query returns. Suite **1572 → 1577**.
