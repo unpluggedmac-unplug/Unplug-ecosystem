@@ -42,6 +42,9 @@ const SUBMISSION_TABLES = [
   'competition_entries',
 ];
 
+// The gallery service — both its tables — migrated in Phase B1 (migration 156).
+const GALLERY = ['gallery_bundles', 'gallery_images'];
+
 // Each status, what it means, and WHERE IT IS CURRENTLY ALLOWED.
 //
 // `live` is the honest part. A value with `live: []` is declared here but is
@@ -70,25 +73,34 @@ const STATUSES = {
     meaning: 'Admin said no. If it was paid for, credit follows — see credit_issued.',
   },
 
-  // ---- Phase B adds these. Declared now so the lifecycle is complete. ----
+  // ---- Phase B is adding these, one service at a time. ----
+  //
+  // `live` grows as each service's migration lands. A status is only added to a
+  // service it can actually reach: a value nothing can ever set is a branch
+  // every filter and report carries for nothing.
   changes_requested: {
-    live: [],
+    live: GALLERY,
     phase: 'B',
     meaning: 'Admin wants specific fields changed before deciding (spec §10.14).',
   },
   resubmitted: {
-    live: [],
+    live: GALLERY,
     phase: 'B',
     meaning: 'The member has answered a changes_requested and it is back in the queue.',
   },
   credit_issued: {
-    live: [],
+    live: GALLERY,
     phase: 'B',
     meaning: 'Rejected after payment, and Unplug Credit was issued for it (spec §10.7).',
   },
   expired: {
     live: [],
     phase: 'B',
+    // NOT EVERY SERVICE CAN EXPIRE. This belongs to the ones that run for a
+    // term — highlights, ad banners, marketplace listings, directory packages.
+    // A gallery submission is a one-off purchase of photos that stay published;
+    // it has no term to run out, so `expired` is deliberately not added there.
+    onlyFor: 'services that run for a fixed period',
     meaning: 'Ran its term and is no longer showing. The row stays for history and renewal.',
   },
 };

@@ -87,24 +87,60 @@ test('THE MODULE AND THE MIGRATIONS AGREE, IN BOTH DIRECTIONS', () => {
   assert.deepEqual(problems, [], 'module and migrations disagree:\n  ' + problems.join('\n  '));
 });
 
-test('the eight non-article tables share exactly one vocabulary', () => {
-  // This is the finding the whole task rests on: the submission model is not
-  // fragmented, it is already uniform. If that stops being true, the plan in
-  // docs/spine-plan.md needs revisiting, so it is asserted rather than assumed.
-  const others = S.SUBMISSION_TABLES.filter((t) => t !== 'articles');
-  const shape = JSON.stringify(S.liveStatusesFor(others[0]).sort());
-  others.forEach((t) => {
-    assert.equal(JSON.stringify(S.liveStatusesFor(t).sort()), shape,
-      `${t} has drifted from the shared submission vocabulary`);
+const BASE = ['approved', 'awaiting_payment', 'pending', 'rejected'];
+
+test('EVERY SUBMISSION TABLE STILL CARRIES THE BASE VOCABULARY', () => {
+  // The finding the task rests on: the submission model was already uniform.
+  //
+  // Phase B migrates services one at a time, so the tables legitimately differ
+  // WHILE it runs — the gallery has three extra statuses, the rest do not yet.
+  // What must never change is that all four original values are present
+  // everywhere, because every existing row holds one of them and removing one
+  // would fail the constraint on the next deploy.
+  S.SUBMISSION_TABLES.forEach((t) => {
+    const live = S.liveStatusesFor(t);
+    BASE.forEach((v) => {
+      assert.ok(live.includes(v), `${t} has lost the base status "${v}"`);
+    });
   });
-  assert.deepEqual(JSON.parse(shape),
-    ['approved', 'awaiting_payment', 'pending', 'rejected']);
 });
 
-test('articles is the shared vocabulary plus draft, and nothing else', () => {
-  const articles = S.liveStatusesFor('articles').sort();
-  assert.deepEqual(articles,
-    ['approved', 'awaiting_payment', 'draft', 'pending', 'rejected']);
+test('any status beyond the base is one we deliberately added', () => {
+  // Catches a value creeping into a constraint without a decision behind it.
+  const allowedExtras = ['draft', ...S.ALL.filter((s) => S.STATUSES[s].phase === 'B')];
+  const unexpected = [];
+  S.SUBMISSION_TABLES.forEach((t) => {
+    S.liveStatusesFor(t).forEach((v) => {
+      if (!BASE.includes(v) && !allowedExtras.includes(v)) unexpected.push(`${t}: ${v}`);
+    });
+  });
+  assert.deepEqual(unexpected, []);
+});
+
+test('articles still carries draft, and only it does', () => {
+  assert.ok(S.liveStatusesFor('articles').includes('draft'));
+  S.SUBMISSION_TABLES.filter((t) => t !== 'articles').forEach((t) => {
+    assert.equal(S.liveStatusesFor(t).includes('draft'), false,
+      `${t} should not have draft — only articles support saving unsent work`);
+  });
+});
+
+test('PHASE B1: THE GALLERY SERVICE HAS ITS NEW STATUSES', () => {
+  // Both of the gallery's tables move together — a bundle and its images are
+  // one submission, and letting them diverge would mean a bundle could be in a
+  // state its own photos could not.
+  ['gallery_bundles', 'gallery_images'].forEach((t) => {
+    ['changes_requested', 'resubmitted', 'credit_issued'].forEach((v) => {
+      assert.ok(S.isLiveFor(v, t), `${t} should accept ${v} after Phase B1`);
+    });
+  });
+});
+
+test('a gallery submission cannot expire, and is not pretending it can', () => {
+  // A one-off purchase of photos that stay published has no term to run out.
+  // Adding `expired` there would be a state nothing can reach.
+  assert.equal(S.isLiveFor('expired', 'gallery_bundles'), false);
+  assert.equal(S.STATUSES.expired.onlyFor, 'services that run for a fixed period');
 });
 
 // --------------------------------------------------------------- Phase B
@@ -113,8 +149,9 @@ test('THE FOUR PHASE-B STATUSES ARE DECLARED BUT NOT YET LIVE', () => {
   // Honesty check. These are named so the lifecycle is complete, but writing
   // one today would violate a CHECK and throw. The module must say so rather
   // than implying they work.
-  assert.deepEqual(S.notYetLive().sort(),
-    ['changes_requested', 'credit_issued', 'expired', 'resubmitted']);
+  // Only `expired` is still unreachable everywhere; Phase B1 landed the other
+  // three on the gallery service.
+  assert.deepEqual(S.notYetLive().sort(), ['expired']);
 
   S.notYetLive().forEach((s) => {
     S.SUBMISSION_TABLES.forEach((t) => {

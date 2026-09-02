@@ -199,3 +199,119 @@ test('profiles are reachable by BOTH of their payment types', () => {
   assert.equal(R.SUBMISSION_TABLE.profile_upgrade, 'profile_upgrades',
     'an upgrade is its own row, not the profile');
 });
+
+// ---------------------------------------------------------------------------
+// The status constraints, checked against a REAL database.
+// ---------------------------------------------------------------------------
+//
+// submissionStatus.test.js reads the migration FILES. That proves the module
+// matches what the migrations say, but not what a database ends up with — and
+// there is one failure it cannot see.
+//
+// Changing a CHECK means DROP CONSTRAINT IF EXISTS <name> then ADD. If the
+// original constraint was ever created under a DIFFERENT name, the DROP is a
+// silent no-op, the ADD succeeds, and the table ends up with TWO status checks.
+// Both are enforced, so the old one keeps rejecting every new value — and the
+// migration that "added" them appears to have worked. Migration 016 exists
+// because a missing value in a constraint broke gallery submissions for
+// months without anyone noticing.
+//
+// These tests run after every migration has actually executed, so they see
+// what Postgres really has.
+
+const SUB = require('../src/utils/submissionStatus');
+
+async function statusChecksFor(table) {
+  const r = await pool.query(
+    `SELECT c.conname, pg_get_constraintdef(c.oid) AS def
+       FROM pg_constraint c
+       JOIN pg_class t ON t.oid = c.conrelid
+      WHERE t.relname = $1 AND c.contype = 'c'
+        AND pg_get_constraintdef(c.oid) ILIKE '%status%'`,
+    [table]
+  );
+  return r.rows;
+}
+
+test('EXACTLY ONE STATUS CONSTRAINT PER TABLE, NOT TWO', async () => {
+  // Two would mean the older one is still quietly rejecting the new values.
+  const doubled = [];
+  for (const table of SUB.SUBMISSION_TABLES) {
+    const checks = await statusChecksFor(table);
+    if (checks.length > 1) {
+      doubled.push(`${table}: ${checks.map((c) => c.conname).join(' + ')}`);
+    }
+  }
+  assert.deepEqual(doubled, [],
+    'tables carrying more than one status CHECK — the older one still applies:\n  '
+    + doubled.join('\n  '));
+});
+
+test('THE DATABASE ACCEPTS EXACTLY WHAT THE MODULE CLAIMS', async () => {
+  // The same both-directions check as submissionStatus.test.js, but against a
+  // real schema rather than the migration text.
+  const problems = [];
+  for (const table of SUB.SUBMISSION_TABLES) {
+    const checks = await statusChecksFor(table);
+    assert.equal(checks.length, 1, `${table} should have one status CHECK`);
+    const actual = [...checks[0].def.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort();
+    const declared = SUB.liveStatusesFor(table).sort();
+    if (JSON.stringify(actual) !== JSON.stringify(declared)) {
+      problems.push(`${table}: database [${actual}] vs module [${declared}]`);
+    }
+  }
+  assert.deepEqual(problems, [], problems.join('\n  '));
+});
+
+test('PHASE B1: a gallery row can really be set to the new statuses', async () => {
+  // The point of the migration. Asserted by writing the values, because a
+  // constraint that looks right and rejects the value is the failure mode.
+  const b = await pool.query(
+    `INSERT INTO gallery_bundles (user_id, image_count, status)
+     VALUES (720001, 3, 'pending') RETURNING id`
+  );
+  const id = b.rows[0].id;
+  for (const s of ['changes_requested', 'resubmitted', 'credit_issued']) {
+    await pool.query('UPDATE gallery_bundles SET status = $1 WHERE id = $2', [s, id]);
+    const got = await pool.query('SELECT status FROM gallery_bundles WHERE id = $1', [id]);
+    assert.equal(got.rows[0].status, s, `gallery_bundles rejected ${s}`);
+  }
+});
+
+test('a status nobody agreed to is still refused', async () => {
+  // The constraint has to keep doing its job, or adding values is meaningless.
+  //
+  // The invalid value is kept SHORT on purpose: status is VARCHAR(20), so a
+  // longer string is rejected for its length before the CHECK is ever reached,
+  // and the test would pass without proving anything about the constraint.
+  const b = await pool.query(
+    `INSERT INTO gallery_bundles (user_id, image_count, status)
+     VALUES (720001, 1, 'pending') RETURNING id`
+  );
+  await assert.rejects(
+    () => pool.query('UPDATE gallery_bundles SET status = $1 WHERE id = $2',
+      ['nonsense', b.rows[0].id]),
+    /violates check constraint/
+  );
+});
+
+test('EVERY STATUS FITS THE COLUMN IT HAS TO LIVE IN', async () => {
+  // status is VARCHAR(20). A longer name is refused for its length, which reads
+  // as a mysterious "value too long" rather than anything about statuses — as
+  // this test file found out the hard way.
+  //
+  // Worth guarding now: Phase B still has services to migrate, and the spec's
+  // own vocabulary contains names close to the limit. Checked against the real
+  // column width rather than a remembered 20.
+  const col = await pool.query(
+    `SELECT character_maximum_length AS n
+       FROM information_schema.columns
+      WHERE table_name = 'gallery_bundles' AND column_name = 'status'`
+  );
+  const max = Number(col.rows[0].n);
+  assert.ok(max > 0, 'status should be a bounded varchar');
+
+  const tooLong = SUB.ALL.filter((s) => s.length > max);
+  assert.deepEqual(tooLong, [],
+    `these statuses do not fit in varchar(${max}): ${tooLong.join(', ')}`);
+});
