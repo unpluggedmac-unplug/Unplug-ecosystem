@@ -281,10 +281,20 @@ test('an unknown status is answered, not thrown at', () => {
   assert.equal(S.isLiveFor('nonsense', 'articles'), false);
 });
 
-test('NOTHING IMPORTS THIS YET', () => {
-  // Phase A writes the vocabulary down; Phase B starts using it. If something
-  // has begun importing it, the phases have blurred and this test should be
-  // deleted deliberately rather than quietly.
+test('THE VOCABULARY IS NOW ACTUALLY USED', () => {
+  // This started life as "NOTHING IMPORTS THIS YET", guarding Phase A: the
+  // module was written to record what was already true, and importing it early
+  // would have blurred writing-it-down with using-it. That test said it should
+  // be replaced deliberately rather than quietly when the time came.
+  //
+  // The time came with the credit-on-rejection pathway. Declining a paid
+  // submission now asks isLiveFor('credit_issued', table) instead of assuming,
+  // because the status exists only on the services whose migration has landed
+  // and writing it elsewhere would violate a CHECK.
+  //
+  // So the guard is inverted rather than deleted: the module must now HAVE a
+  // consumer. A vocabulary nothing reads is documentation, and documentation
+  // drifts from the database it describes.
   const srcDir = path.join(__dirname, '..', 'src');
   const importers = [];
   (function walk(dir) {
@@ -295,6 +305,7 @@ test('NOTHING IMPORTS THIS YET', () => {
       if (fs.readFileSync(p, 'utf8').includes('submissionStatus')) importers.push(e.name);
     });
   }(srcDir));
-  assert.deepEqual(importers, [],
-    'Phase A is meant to change no behaviour; these files already use it: ' + importers.join(', '));
+
+  assert.ok(importers.includes('adminContent.js'),
+    'the credit-on-rejection path should ask the vocabulary which status it may write');
 });

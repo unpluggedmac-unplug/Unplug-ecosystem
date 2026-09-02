@@ -427,7 +427,10 @@ test('DECLINING WITH CREDIT REJECTS AND CREDITS TOGETHER', async () => {
   assert.equal(declined.body.newBalance, 95);
 
   const row = await pool.query('SELECT status FROM articles WHERE id = $1', [article.id]);
-  assert.equal(row.rows[0].status, 'rejected', 'the submission is rejected');
+  // Was 'rejected'. A decline that CREDITS the member is now recorded as
+  // credit_issued, because 'rejected' could not tell an editorial refusal apart
+  // from one that handed money back — see spec 10.7.
+  assert.equal(row.rows[0].status, 'credit_issued', 'the submission is declined AND credited');
   assert.equal(await creditBalance(userId), 95, 'and the money is back on their account');
 });
 
@@ -510,7 +513,9 @@ test('the credit records which payment it came from', async () => {
   const credit = await pool.query('SELECT * FROM account_credits WHERE payment_id = $1', [payment.id]);
   assert.equal(credit.rowCount, 1);
   assert.equal(credit.rows[0].reason, 'declined_submission');
-  assert.equal(credit.rows[0].note, 'Off topic');
+  // The admin's note now carries the payment reference after it, so a bank
+  // statement can be reconciled without following payment_id.
+  assert.match(credit.rows[0].note, /Off topic/);
   assert.equal(credit.rows[0].created_by, adminId, 'the admin who declined it is on the record');
 
   const flagged = await pool.query('SELECT credited_at FROM payments WHERE id = $1', [payment.id]);

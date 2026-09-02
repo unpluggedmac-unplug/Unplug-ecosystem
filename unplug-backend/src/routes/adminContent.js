@@ -16,6 +16,8 @@ const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { findPaidPayment, balanceFor, RESOURCE_PAYMENT_TYPES } = require('../utils/accountCredit');
+const { isLiveFor } = require('../utils/submissionStatus');
+const { referenceFor } = require('../utils/submissionReference');
 
 const router = express.Router();
 
@@ -357,6 +359,26 @@ router.post('/:resource/:id/decline-with-credit', requireRole('admin'), async (r
       });
     }
 
+    // WHAT THE CREDIT IS RECORDED AGAINST (spec 10.7).
+    //
+    // The section asks for the original reference, the original payment, the
+    // rejection reason, the amount, the date and the admin. Five of those are
+    // already columns on account_credits: payment_id, note, amount,
+    // created_at, created_by.
+    //
+    // The reference is deliberately NOT a sixth column. It lives on the
+    // payment, or on the cart order that payment belongs to, and copying it
+    // here would be a second copy of the one identifier that must never be
+    // ambiguous. It stays reachable through payment_id, and is written into
+    // the note as well so an admin reconciling a bank statement can read it
+    // without following the link.
+    const ref = await referenceFor(payment.linked_type, id, client);
+    const givenNote = (req.body.note || '').trim();
+    const creditNote = [
+      givenNote || `Declined ${req.params.resource} #${id}`,
+      ref ? `(reference ${ref.reference})` : null,
+    ].filter(Boolean).join(' ');
+
     // The unique index on payment_id is the real protection against a double
     // credit; this insert is what trips it if two requests race.
     await client.query(
@@ -365,7 +387,7 @@ router.post('/:resource/:id/decline-with-credit', requireRole('admin'), async (r
       [
         payment.user_id,
         payment.amount,
-        (req.body.note || '').trim() || `Declined ${req.params.resource} #${id}`,
+        creditNote,
         payment.id,
         req.user.id,
       ]
@@ -373,9 +395,22 @@ router.post('/:resource/:id/decline-with-credit', requireRole('admin'), async (r
 
     await client.query('UPDATE payments SET credited_at = now() WHERE id = $1', [payment.id]);
 
+    // A DECLINED-AND-CREDITED SUBMISSION IS NOT SIMPLY 'REJECTED'.
+    //
+    // Both were written as 'rejected', so nothing could tell a submission
+    // that was refused from one that was refused AND paid back. That is the
+    // difference between an editorial decision and a money one, and a report
+    // that cannot separate them cannot say what has been credited.
+    //
+    // credit_issued exists only on the services whose migration has landed;
+    // writing it elsewhere would violate that table's CHECK. So the
+    // vocabulary is asked rather than assumed. Services still waiting for
+    // their migration keep the old behaviour and pick this up when they are
+    // migrated, with no further change needed here.
+    const declinedStatus = isLiveFor('credit_issued', spec.table) ? 'credit_issued' : 'rejected';
     const updated = await client.query(
-      `UPDATE ${spec.table} SET status = 'rejected' WHERE id = $1 RETURNING id`,
-      [id]
+      `UPDATE ${spec.table} SET status = $1 WHERE id = $2 RETURNING id`,
+      [declinedStatus, id]
     );
     if (updated.rowCount === 0) {
       await client.query('ROLLBACK');
