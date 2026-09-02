@@ -215,3 +215,26 @@ disappeared from this temp checkout. Restored from HEAD. The stable-checkout ite
 
 **Next:** B2 `marketplace_listings` (blast radius 182) — and it DOES expire (30 days), so it takes
 all four statuses.
+
+## 2026-09-02 — Task 04 Phase B2: marketplace listings
+
+Migration 157 adds all **four** Phase-B statuses to `marketplace_listings`. Unlike the gallery it
+runs for a term (`duration_days` 7/14/21/28 + `active_from`/`active_to`), so `expired` is reachable.
+
+Expiry today is **implicit** — past `active_to` a listing stops appearing while its status still says
+`approved`, so no report can tell a running listing from one that ended months ago. `expired` names
+that state. **Nothing transitions to it yet** — that needs a decision on whether the date or the
+status is authoritative once both exist.
+
+Module now records `EXPIRING` vs `REVIEWED` so the next service doesn't rediscover the distinction.
+New test: every declared status must be live somewhere or honestly reported pending — after B2
+`notYetLive()` is empty, nothing stranded.
+
+**Verified:** 157 migrations × 3 passes clean, one constraint per table, row accepts new value.
+Suite **1565 → 1567**.
+
+**Noted, not changed:** `cancellations.js` stops a listing by setting status `'rejected'`. A
+cancellation is not a rejection — different meanings for reporting. Worth separating when that
+pathway is next touched.
+
+**Next:** B3 `events` (blast radius 334).
