@@ -87,6 +87,12 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
 .btn-line:hover{ background:var(--ink); color:#fff; }
 
+.action-card{ background:rgba(210,7,9,0.06); border:1px solid var(--red); border-left:4px solid var(--red); padding:22px 24px; margin-bottom:22px; }
+.action-card h2{ color:var(--maroon); margin:0 0 4px; }
+.action-item{ background:var(--cream); border:1px solid var(--paper-line); padding:16px 18px; margin-top:14px; }
+.action-fields{ margin:10px 0 0; padding-left:20px; }
+.action-fields li{ margin-bottom:4px; }
+.action-note{ background:var(--paper); padding:10px 12px; margin:10px 0 0; font-size:14px; white-space:pre-wrap; }
 .error-banner{ background:rgba(210,7,9,0.08); border:1px solid var(--red); color:var(--maroon); padding:10px 12px; font-size:12.5px; margin-bottom:14px; display:none; }
 .error-banner.show{ display:block; }
 
@@ -346,6 +352,15 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <section class="ms-section" data-ms-section="profile">
 
     <!-- MY PROFILE -->
+        <!-- ACTION REQUIRED — a change request waiting on this member.
+             Hidden until there is something to show, and placed first because
+             a member who has been asked to fix something needs to see it
+             before anything else on the page. -->
+        <div class="action-card section-hidden" id="msActionRequired">
+          <h2>Action required</h2>
+          <p class="sub" id="msActionSummary"></p>
+          <div id="msActionList"></div>
+        </div>
     <div class="card">
       <div class="error-banner" id="profileError"></div>
       <div id="profileContent"><div class="loading-state">Loading your profile…</div></div>
@@ -1464,6 +1479,107 @@ if (exportBtn) exportBtn.addEventListener('click', async () => {
 // goSiteBtn is a plain link to the magazine — the session token stays in
 // localStorage for the origin, so the member stays signed in over there.
 
+// ---------------------------------------------------------------------------
+// ACTION REQUIRED — what an admin has asked this member to change (spec 10.14)
+// ---------------------------------------------------------------------------
+//
+// An admin reviewing a submission can now ask for specific fields to be
+// changed rather than refusing it outright. Until this, the API knew that and
+// the member did not: their article simply sat in a status they never saw, and
+// nobody told them anything was expected of them.
+//
+// BUILT WITH createElement AND textContent, never innerHTML. The note and the
+// field labels are written by an admin and stored, which is exactly the shape
+// of value that produced both stored-XSS holes in this codebase. Nothing here
+// interpolates a stored string into markup.
+
+function msActionEl(tag, text, cls) {
+  const el = document.createElement(tag);
+  if (text !== undefined && text !== null) el.textContent = text;
+  if (cls) el.className = cls;
+  return el;
+}
+
+async function loadActionRequired() {
+  const card = document.getElementById('msActionRequired');
+  const list = document.getElementById('msActionList');
+  const summary = document.getElementById('msActionSummary');
+  if (!card || !list) return;
+
+  let data;
+  try {
+    data = await api('/change-requests/mine');
+  } catch (e) {
+    // Nothing is shown if this cannot be read. A member seeing an empty red
+    // panel would be worse than seeing none: it says something is wrong and
+    // does not say what.
+    card.classList.add('section-hidden');
+    return;
+  }
+
+  const items = (data && data.changeRequests) || [];
+  if (!items.length) {
+    card.classList.add('section-hidden');
+    list.textContent = '';
+    return;
+  }
+
+  summary.textContent = items.length === 1
+    ? 'One of your submissions needs a change before it can be published.'
+    : `${items.length} of your submissions need changes before they can be published.`;
+
+  list.textContent = '';
+  items.forEach((item) => {
+    const row = msActionEl('div', null, 'action-item');
+
+    const kind = (item.type || 'submission').replace(/_/g, ' ');
+    row.appendChild(msActionEl('strong', `Your ${kind}`));
+
+    if (item.fields && item.fields.length) {
+      row.appendChild(msActionEl('p', 'Please change:', 'sub'));
+      const ul = msActionEl('ul', null, 'action-fields');
+      item.fields.forEach((f) => ul.appendChild(msActionEl('li', f.label || f.col)));
+      row.appendChild(ul);
+    } else {
+      row.appendChild(msActionEl('p', 'The reviewer has left a note below.', 'sub'));
+    }
+
+    if (item.note) row.appendChild(msActionEl('div', item.note, 'action-note'));
+
+    // Edit where they always did, then say they are done. The button does not
+    // edit anything itself — each service has its own editor with its own
+    // rules, and a second way to write an article body would be a second set of
+    // rules to keep in step.
+    const done = msActionEl('button', 'I have made these changes', 'btn btn-solid');
+    done.style.width = 'auto';
+    done.style.marginTop = '12px';
+    const msg = msActionEl('p', '', 'sub');
+    msg.style.marginTop = '8px';
+
+    done.addEventListener('click', async () => {
+      done.disabled = true;
+      msg.textContent = 'Sending…';
+      try {
+        const r = await api(`/change-requests/${item.id}/resubmit`, { method: 'POST' });
+        msg.textContent = (r && r.message) || 'Sent back for review.';
+        // Repaint: this one should drop off the list, and the card hides itself
+        // when the last is answered.
+        loadActionRequired();
+        loadMemberContent();
+      } catch (err) {
+        done.disabled = false;
+        msg.textContent = err.message || 'Could not send that back just now.';
+      }
+    });
+
+    row.appendChild(done);
+    row.appendChild(msg);
+    list.appendChild(row);
+  });
+
+  card.classList.remove('section-hidden');
+}
+
 function enterMemberDashboard(user){
   CURRENT_USER = user || CURRENT_USER;
   showCard(null);
@@ -1480,6 +1596,7 @@ function enterMemberDashboard(user){
   msRenderServices();
   loadProfile();
   loadMemberContent();
+  loadActionRequired();
   loadReadingList();
   loadMyEditions();
   loadMyPayments();
