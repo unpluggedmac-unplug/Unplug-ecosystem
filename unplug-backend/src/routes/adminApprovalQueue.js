@@ -130,6 +130,27 @@ function approvability(r, source) {
 // Each source returns the same column names so the merge below stays dumb.
 // Anything a source genuinely doesn't have is selected as NULL rather than
 // omitted, so a missing column is never mistaken for a coding slip.
+// WHAT COUNTS AS "WAITING".
+//
+// The Approval Queue shows what is waiting on an admin. Three statuses mean
+// that, not two:
+//
+//   pending           submitted and never looked at
+//   awaiting_payment  submitted, not paid, so nothing is reviewed yet
+//   resubmitted       the member answered a change request and it is back
+//
+// `resubmitted` was missing. Nothing sets it yet — the request-changes pathway
+// is task 05 — but the moment that ships, a member who answers a change
+// request would have moved their submission into a status this queue does not
+// select, and it would have vanished. Nobody would see it, and the member
+// would wait for a decision that was never coming.
+//
+// Added everywhere a submission is reviewed, including the two highlight
+// sources, which filter with equality rather than IN and were easy to miss.
+// For services whose migration has not landed yet the extra value simply
+// matches nothing, so the queue is correct as each one arrives rather than
+// needing another pass.
+
 const SOURCES = [
   {
     type: 'article',
@@ -144,7 +165,7 @@ const SOURCES = [
             JOIN users u ON u.id = a.author_user_id
             LEFT JOIN categories c ON c.id = a.category_id
             ${payLateral(['article_publish'], 'a.id')}
-           WHERE a.status IN ('pending', 'awaiting_payment')`,
+           WHERE a.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/articles/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/articles/${r.id}/reject` },
@@ -181,7 +202,7 @@ const SOURCES = [
             FROM profiles p
             JOIN users u ON u.id = p.user_id
             ${payLateral(['profile_package', 'profile_upgrade'], 'p.id')}
-           WHERE p.status IN ('pending', 'awaiting_payment')`,
+           WHERE p.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/profiles/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/profiles/${r.id}/reject` },
@@ -198,7 +219,7 @@ const SOURCES = [
                  pay.pop_url, pay.invoice_url
             FROM gallery_images g
             ${payLateral(['gallery_bundle'], 'g.id')}
-           WHERE g.status IN ('pending', 'awaiting_payment')`,
+           WHERE g.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/gallery/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/gallery/${r.id}/reject` },
@@ -215,7 +236,7 @@ const SOURCES = [
             FROM events e
             JOIN users u ON u.id = e.organizer_user_id
             ${payLateral(['event_listing'], 'e.id')}
-           WHERE e.status IN ('pending', 'awaiting_payment')`,
+           WHERE e.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/events/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/events/${r.id}/reject` },
@@ -237,7 +258,7 @@ const SOURCES = [
             LEFT JOIN profiles pr ON pr.id = ce.profile_id
             LEFT JOIN competitions c ON c.id = ce.competition_id
             ${payLateral(['competition_entry'], 'ce.id')}
-           WHERE ce.status IN ('pending', 'awaiting_payment')`,
+           WHERE ce.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/entries/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/entries/${r.id}/reject` },
@@ -255,7 +276,7 @@ const SOURCES = [
             JOIN profiles pr ON pr.id = te.profile_id
             LEFT JOIN users u ON u.id = pr.user_id
             ${payLateral(['top10_entry'], 'te.id')}
-           WHERE te.status IN ('pending', 'awaiting_payment')`,
+           WHERE te.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/top10-entries/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/top10-entries/${r.id}/reject` },
@@ -293,7 +314,7 @@ const SOURCES = [
                  NULL AS pop_url, NULL AS invoice_url
             FROM investors i
             JOIN users u ON u.id = i.user_id
-           WHERE i.status IN ('pending', 'awaiting_payment')`,
+           WHERE i.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/investors/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/investors/${r.id}/reject` },
@@ -310,7 +331,7 @@ const SOURCES = [
             FROM marketplace_listings l
             JOIN advertisers a ON a.id = l.advertiser_id
             ${payLateral(['marketplace_listing'], 'l.id')}
-           WHERE l.status IN ('pending', 'awaiting_payment')`,
+           WHERE l.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/marketplace/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/marketplace/${r.id}/reject` },
@@ -332,7 +353,7 @@ const SOURCES = [
             FROM highlights h
             LEFT JOIN articles ar ON ar.id = h.target_id
             ${payLateral(['highlight'], 'h.id')}
-           WHERE h.status = 'pending' AND h.target_type = 'article'`,
+           WHERE h.status IN ('pending', 'resubmitted') AND h.target_type = 'article'`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/highlights/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/highlights/${r.id}/reject` },
@@ -350,7 +371,7 @@ const SOURCES = [
             FROM highlights h
             LEFT JOIN profiles pr ON pr.id = h.target_id
             ${payLateral(['highlight'], 'h.id')}
-           WHERE h.status = 'pending' AND h.target_type = 'directory'`,
+           WHERE h.status IN ('pending', 'resubmitted') AND h.target_type = 'directory'`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/highlights/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/highlights/${r.id}/reject` },

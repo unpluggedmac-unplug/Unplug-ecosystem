@@ -375,3 +375,126 @@ test('the queue is admin-only', async () => {
   assert.equal((await req('GET', '/admin/approval-queue')).status, 401);
   assert.equal((await req('GET', '/admin/approval-queue', { token: memberToken })).status, 403);
 });
+
+// ---------------------------------------------------------------------------
+// Resubmitted work must not fall out of the queue.
+// ---------------------------------------------------------------------------
+//
+// The queue selected `pending` and `awaiting_payment` only. `resubmitted` — the
+// status a submission takes when a member has answered a change request — was
+// missing from every source.
+//
+// Nothing sets it yet, so nothing was broken. But the moment the
+// request-changes pathway ships, a member answering a change request would have
+// moved their submission into a status the queue does not select: it would have
+// disappeared, nobody would have seen it, and the member would have waited for
+// a decision that was never coming.
+//
+// These check the behaviour, not the SQL text, so they keep working if the
+// queries are rewritten.
+
+const fsQ = require('fs');
+const pathQ = require('path');
+
+test('A RESUBMITTED ARTICLE IS STILL IN THE ADMIN QUEUE', async () => {
+  const author = await makeUser();
+  const a = await pool.query(
+    `INSERT INTO articles (author_user_id, title, body, status)
+     VALUES ($1, 'Answered the change request', 'Body text for the article.', 'resubmitted')
+     RETURNING id`,
+    [author]
+  );
+  const res = await req('GET', '/admin/approval-queue', { token: adminToken });
+  assert.equal(res.status, 200);
+
+  const items = res.body.items || [];
+  const mine = items.find((i) => i.type === 'article' && Number(i.id) === a.rows[0].id);
+  assert.ok(mine, 'a resubmitted article must appear as work waiting on an admin');
+});
+
+test('a resubmitted marketplace listing is still in the queue', async () => {
+  // A second service, because the fix had to reach every source rather than
+  // the one that happened to be tested.
+  const owner = await makeUser();
+  const adv = await pool.query(
+    `INSERT INTO advertisers (user_id, business_name) VALUES ($1, 'Test Advertiser') RETURNING id`,
+    [owner]
+  );
+  const l = await pool.query(
+    `INSERT INTO marketplace_listings (advertiser_id, poster_image_url, headline, duration_days, status)
+     VALUES ($1, 'https://unplugnews.com/p.jpg', 'Answered', 30, 'resubmitted') RETURNING id`,
+    [adv.rows[0].id]
+  );
+  const res = await req('GET', '/admin/approval-queue', { token: adminToken });
+  const mine = (res.body.items || []).find(
+    (i) => i.type === 'marketplace' && Number(i.id) === l.rows[0].id
+  );
+  assert.ok(mine, 'a resubmitted listing must appear in the queue');
+});
+
+test('EVERY SPINE SERVICE IN THE QUEUE SELECTS resubmitted', () => {
+  // Which sources must carry it is decided by the spine, not by eye: a table
+  // needs `resubmitted` in its filter exactly when `resubmitted` is a status it
+  // can hold. So the list comes from submissionStatus.SUBMISSION_TABLES rather
+  // than being typed out here and left to drift.
+  //
+  // The queue also serves flows that are NOT part of the spine — orders,
+  // payments and vote_bundles use payment vocabularies (pending/confirmed/
+  // failed), and share_cards, shoutout_nominations and profile_claims are
+  // separate review flows with their own statuses. `resubmitted` has no meaning
+  // in any of them, so requiring it there would be wrong rather than thorough.
+  //
+  // Read out of the route so a new spine source added without it fails here,
+  // rather than silently swallowing a member's answered change request.
+  const SUB = require('../src/utils/submissionStatus');
+  const src = fsQ.readFileSync(
+    pathQ.join(__dirname, '..', 'src', 'routes', 'adminApprovalQueue.js'), 'utf8'
+  );
+  const lines = src.split('\n');
+  const missing = [];
+
+  lines.forEach((line, i) => {
+    if (!/\bstatus\s*(IN\s*\(|=\s*')/.test(line)) return;
+    if (!/WHERE|AND/.test(line)) return;
+
+    let table = '?';
+    for (let j = i; j >= Math.max(0, i - 14); j--) {
+      const m = lines[j].match(/FROM (\w+)/);
+      if (m) { table = m[1]; break; }
+    }
+    if (!SUB.SUBMISSION_TABLES.includes(table)) return;      // not a spine service
+    if (!line.includes('resubmitted')) missing.push(`${table} (line ${i + 1})`);
+  });
+
+  assert.deepEqual(missing, [],
+    'these spine services would lose resubmitted work: ' + missing.join(', '));
+});
+
+test('the queue reaches every spine service that can be resubmitted', () => {
+  // The other half: a service whose migration gave it `resubmitted` but which
+  // the queue never selects at all would lose the work just as completely, and
+  // the test above cannot see that because there is no line to inspect.
+  const SUB = require('../src/utils/submissionStatus');
+  const src = fsQ.readFileSync(
+    pathQ.join(__dirname, '..', 'src', 'routes', 'adminApprovalQueue.js'), 'utf8'
+  );
+  const canResubmit = SUB.SUBMISSION_TABLES.filter((t) => SUB.isLiveFor('resubmitted', t));
+  const unreachable = canResubmit.filter((t) => !new RegExp(`FROM ${t}\\b`).test(src));
+
+  // gallery_bundles is reviewed through its images rather than as a row of its
+  // own, which is why the queue selects gallery_images.
+  assert.deepEqual(unreachable, ['gallery_bundles'],
+    'spine services that accept resubmitted but never appear in the queue: ' + unreachable.join(', '));
+});
+
+test('adding resubmitted did not pull in anything already decided', () => {
+  // The queue is "what is waiting". An approved or rejected item appearing here
+  // would be the opposite failure — an admin re-deciding settled work.
+  const src = fsQ.readFileSync(
+    pathQ.join(__dirname, '..', 'src', 'routes', 'adminApprovalQueue.js'), 'utf8'
+  );
+  ['\'approved\'', '\'rejected\'', '\'credit_issued\''].forEach((v) => {
+    const inFilter = new RegExp(`status IN \\([^)]*${v}`).test(src);
+    assert.equal(inFilter, false, `${v} must not be selected as work waiting`);
+  });
+});
