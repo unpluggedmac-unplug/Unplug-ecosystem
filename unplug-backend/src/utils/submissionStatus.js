@@ -48,13 +48,18 @@ const SUBMISSION_TABLES = [
 // submission, so they move together.
 const GALLERY = ['gallery_bundles', 'gallery_images'];              // B1, migration 156
 const MARKETPLACE = ['marketplace_listings'];                        // B2, migration 157
+const EVENTS = ['events'];                                           // B3, migration 158
 
 // Services that have taken the three review statuses.
-const REVIEWED = [...GALLERY, ...MARKETPLACE];
+const REVIEWED = [...GALLERY, ...MARKETPLACE, ...EVENTS];
 
-// Services that can actually run out. A marketplace listing has duration_days
-// and an active_to date; a gallery submission does not.
-const EXPIRING = [...MARKETPLACE];
+// Services that can actually run out.
+//
+// A marketplace listing has duration_days and an active_to date; an event has
+// a date it happens on, and the public feed already drops it afterwards. A
+// gallery submission has neither — the photos stay published — which is why it
+// is the one service without `expired`.
+const EXPIRING = [...MARKETPLACE, ...EVENTS];
 
 // Each status, what it means, and WHERE IT IS CURRENTLY ALLOWED.
 //

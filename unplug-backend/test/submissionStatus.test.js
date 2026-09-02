@@ -157,6 +157,22 @@ test('PHASE B2: MARKETPLACE LISTINGS TOOK ALL FOUR, INCLUDING expired', () => {
     'the gallery still has no term to run out');
 });
 
+test('PHASE B3: EVENTS TOOK ALL FOUR, INCLUDING expired', () => {
+  // An event finishes. The public feed already drops it once event_date has
+  // passed, so `expired` is a state it genuinely reaches.
+  ['changes_requested', 'resubmitted', 'credit_issued', 'expired'].forEach((v) => {
+    assert.ok(S.isLiveFor(v, 'events'), `events should accept ${v} after Phase B3`);
+  });
+});
+
+test('only the services that can run out have expired', () => {
+  // The distinction the phases keep making, asserted rather than remembered:
+  // a service gets `expired` only if something can actually end it.
+  const withExpiry = S.SUBMISSION_TABLES.filter((t) => S.isLiveFor('expired', t)).sort();
+  assert.deepEqual(withExpiry, ['events', 'marketplace_listings'],
+    'expired should only be live where a term or a date ends the service');
+});
+
 test('every status is live on at least one service, or is honestly empty', () => {
   // Guards the thing the plan set out to avoid: a value declared everywhere
   // that nothing can ever set. Once a status is live somewhere it must stay
