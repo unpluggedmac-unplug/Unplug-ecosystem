@@ -2531,6 +2531,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </div>
     </div>
     <p style="font-size:12.5px; color:var(--slate); margin-top:14px; max-width:70ch;">Want to move up a tier later? Upgrades are a flat <strong>R250 admin fee</strong> — no need to pay the price difference. Downgrading to a lower package isn't available once you're listed.</p>
+
+    <!-- DIR-003: what actually happens after "Choose", verified against the
+         real code — POST /profiles creates the profile at
+         status='awaiting_payment'; a confirmed payment moves it to
+         'pending'; PATCH /admin/profiles/:id/approve is what makes it
+         'approved' and therefore visible on GET /directory. Five real steps,
+         not the six the original spec draft described — there is no
+         separate Preview screen between completing the profile and paying. -->
+    <div style="margin-top:24px; padding:16px 18px; background:var(--paper); border:1px solid var(--paper-line); border-radius:8px; max-width:70ch;">
+      <h4 style="margin:0 0 8px; font-size:14px;">How it works</h4>
+      <ol style="margin:0; padding-left:20px; font-size:13px; color:var(--slate); line-height:1.9;">
+        <li><strong>Choose a package</strong> and fill in your profile.</li>
+        <li><strong>Pay by EFT</strong> — you'll get a reference to use for the transfer.</li>
+        <li><strong>We review it</strong> once your payment reflects.</li>
+        <li><strong>You're live</strong> in the Directory once approved.</li>
+      </ol>
+    </div>
   </section>
 
   <section class="wrap" style="padding-top:32px; padding-bottom:0;">

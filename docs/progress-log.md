@@ -1397,3 +1397,23 @@ tier/type combinations currently have an example, then the local page's actual l
 against that exact data (mocked fetch) — the two with an example render a working link, the four
 without stay hidden, and switching to Business correctly re-queries and hides all three. Full suite:
 1864 passing, 0 failing (up from 1859).
+
+## 2026-09-03 — Website remediation punch-list, DIR-003: explain the Directory activation workflow
+
+No explanation of what happens after "Choose a package" existed anywhere on the Directory page — a
+genuine gap, confirmed by grep before writing anything. Traced the real status lifecycle in the code
+first, since the original spec's own six-step diagram (§2.4) turned out not to match reality:
+`POST /profiles` creates the profile at `status='awaiting_payment'`; a confirmed EFT payment moves it
+to `'pending'` (`payments.js`'s `profile_package` effect — not straight to `'approved'`); a separate
+admin action, `PATCH /admin/profiles/:id/approve`, is what actually publishes it. The spec's diagram
+also includes a Preview screen between completing the profile and paying — checkout has no such
+screen, and the copy was written to describe what's actually built, not reproduce an unbuilt step.
+
+Added a compact four-step "How it works" block under the package cards: Choose a package and fill in
+your profile → Pay by EFT (with a reference) → We review it → You're live once approved.
+
+New test, `directoryActivationWorkflow.test.js` (3 tests) — checks the copy exists, and, more usefully,
+checks the underlying facts it depends on are still true (the `awaiting_payment` → `pending` transition
+in `payments.js`, a distinct admin approval route in `admin.js`) so a future change to the real workflow
+fails this test rather than leaving the page quietly wrong. Also confirms the page doesn't claim a
+Preview step. Full suite: 1867 passing, 0 failing (up from 1864).
