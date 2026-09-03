@@ -1202,3 +1202,9 @@ banner pricing (member dashboard duration select, the ten-times-repeated homepag
 admin pricing panel) reads live from this table, so nothing else needed a code change — updated the
 sentence's no-JS fallback text to match, for the same reason it was made a fallback in the first
 place. Full suite: 1825 passing, 0 failing.
+
+## 2026-09-03 — QA punch list, task 5/6: Arena launch copy
+
+`"Target launch: August Month"` on the Investors page was hand-typed placeholder text, not pulled
+from any data source. The Arena's competition closing date is set to 31 October 2026 (migration 066);
+site owner confirmed the launch copy as October 2026 rather than a date after the close.
