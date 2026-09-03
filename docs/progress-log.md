@@ -834,3 +834,46 @@ at least two contestants. Showing a member how many they have left today would b
 but §4 asks for an activity list and that is a different feature — scope addition, your call.
 
 **Remaining of the twelve:** Account Settings.
+
+---
+
+## 2026-09-03 — Task 06: Account Settings (§4) — the last of the twelve
+
+**This one does not fit the shared pattern, and is built differently on purpose.** Every other My
+Unplug section renders a *list of things you submitted* through one renderer. Account Settings is a
+set of controls that **change state** — forms and switches, not rows — so it has its own section and
+does not reuse `subsRow`. Flagged before building, as the task asked.
+
+**What it consolidates:** the password card, **moved** out of Profile (changing your password is an
+account setting, not a profile field — the same call made for Account Credits). It links to **Your
+Data** rather than duplicating export or deletion.
+
+**Two gaps closed, both approved first — capabilities that existed but no member could reach:**
+
+1. **Notification preferences.** The table has existed since the notifications work, and
+   `memberNotify.js` has been **reading** it to decide whether to email somebody — but nothing ever
+   wrote to it and no screen ever showed it. **A member could be emailed with no way to stop it.**
+   `GET`/`PATCH /my/notification-preferences` are the missing half. A test compares this screen's
+   defaults directly against `memberNotify.preferencesFor`, because if the two disagree a member is
+   told one thing and sent another; another follows a switch through to the function that actually
+   decides whether to send, since a preference that saves but does not take effect is worse than no
+   preference at all.
+
+2. **Two-factor sign-in.** Five working endpoints, complete and careful — and **no member UI at
+   all**. The only mention of it anywhere in the frontend was a sentence in the privacy blurb. Now
+   reachable: set up, confirm, recovery codes shown once, turn off. The secret is shown as text as
+   well as being enrollable, because a camera that will not read a QR code should not mean somebody
+   cannot enrol.
+
+**Each switch saves on its own** — a settings screen with a Save button people forget to press is a
+screen that does not work — and a failed save puts the switch back rather than leaving it showing a
+change that never happened.
+
+Suite **1731 → 1744**, 0 failing. Smoke check **51/51**.
+
+**Still open, unchanged:** account deletion remains an email request, deliberately (an account can
+own paid listings, published articles and payment records). Changing the account *email address*
+has no endpoint anywhere — flagged, not built.
+
+**All twelve sections are now built.** A combined pass across the whole My Unplug area follows
+before this task is called complete.

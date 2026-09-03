@@ -14,6 +14,7 @@ const {
 } = require('../utils/mySubmissions');
 const invoices = require('../utils/invoices');
 const myVotes = require('../utils/myVotes');
+const notifPrefs = require('../utils/notificationPreferences');
 const { generateDocument } = require('../utils/pdfDocs');
 
 // GET /my/submissions          — everything this member has submitted
@@ -135,6 +136,34 @@ router.get('/invoices/:id/pdf', requireAuth, async (req, res, next) => {
 router.get('/votes', requireAuth, async (req, res, next) => {
   try {
     res.json(await myVotes.activityFor(req.user.id));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Account Settings (§4) — notification preferences.
+//
+// The table has been read since the notifications work shipped, deciding
+// whether to email somebody. Nothing ever wrote to it, so a member could be
+// emailed with no way to stop it. These two are that missing half.
+//
+// The FIELDS are sent with the values so the screen does not keep its own copy
+// of what each switch means.
+router.get('/notification-preferences', requireAuth, async (req, res, next) => {
+  try {
+    res.json({
+      preferences: await notifPrefs.getFor(req.user.id),
+      fields: notifPrefs.FIELDS.map((f) => ({ key: f.key, label: f.label, help: f.help })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/notification-preferences', requireAuth, async (req, res, next) => {
+  try {
+    const preferences = await notifPrefs.updateFor(req.user.id, req.body || {});
+    res.json({ preferences });
   } catch (err) {
     next(err);
   }

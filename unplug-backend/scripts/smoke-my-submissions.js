@@ -185,6 +185,34 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
   check('signed out is refused for votes', votesNoAuth.status === 401,
     `got ${votesNoAuth.status}`);
 
+  // ---- Account Settings (§4) ----
+  console.log('\naccount settings:');
+  const prefsGet = await get('/my/notification-preferences');
+  check('GET /my/notification-preferences answers 200', prefsGet.status === 200,
+    `got ${prefsGet.status}`);
+  check('everything defaults to on for a member who never set it',
+    prefsGet.body && prefsGet.body.preferences
+      && Object.values(prefsGet.body.preferences).every((v) => v === true),
+    JSON.stringify(prefsGet.body && prefsGet.body.preferences));
+  check('the switches describe themselves',
+    Array.isArray(prefsGet.body.fields) && prefsGet.body.fields.every((f) => f.key && f.label));
+
+  const patched = await fetch(`http://127.0.0.1:${PORT_API}/my/notification-preferences`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ email: false }),
+  });
+  const patchedBody = await patched.json().catch(() => null);
+  check('a switch can actually be turned off',
+    patched.status === 200 && patchedBody.preferences.email === false,
+    `status ${patched.status}`);
+  check('turning one off leaves the others alone',
+    patchedBody.preferences.web === true && patchedBody.preferences.statusChange === true);
+
+  const prefsNoAuth = await fetch(`http://127.0.0.1:${PORT_API}/my/notification-preferences`);
+  check('signed out is refused for preferences', prefsNoAuth.status === 401,
+    `got ${prefsNoAuth.status}`);
+
   console.log('\npage render:');
   const page = fs.readFileSync(path.join(ROOT, 'unplug-member-dashboard.html'), 'utf8');
   check('the dashboard has the My Submissions section',
@@ -228,6 +256,15 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
   check('My Votes has its loader', page.includes('async function loadMyVotes'));
   check('My Votes says why anonymous votes are not listed',
     /anonymous, so they cannot be listed here/.test(page));
+  check('the dashboard has the Account Settings section',
+    page.includes('data-ms-section="account"') && page.includes('>Account Settings<'));
+  check('the password card was MOVED into it, not duplicated',
+    (page.match(/id="cpwBtn"/g) || []).length === 1
+      && page.indexOf('id="cpwBtn"') > page.indexOf('data-ms-section="account"'));
+  check('notification switches are offered', page.includes('function notifPrefsRender'));
+  check('two-factor is finally reachable by a member',
+    page.includes('async function loadTwoFactor')
+      && page.includes('/security/two-factor/begin'));
   check('the page does no VAT arithmetic of its own',
     !/invContent[\s\S]{0,3000}\*\s*0?\.15/.test(page)
       && !/invRender[\s\S]{0,3000}\/\s*1\.15/.test(page));

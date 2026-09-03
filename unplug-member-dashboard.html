@@ -364,6 +364,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="mycredits"><span>&#127974;</span> My Credits</button>
       <button class="ms-navlink" data-ms="myinvoices"><span>&#129534;</span> My Invoices</button>
       <button class="ms-navlink" data-ms="myvotes"><span>&#128499;</span> My Votes</button>
+      <button class="ms-navlink" data-ms="account"><span>&#9881;</span> Account Settings</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
       <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
@@ -388,17 +389,6 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <div class="card">
       <div class="error-banner" id="profileError"></div>
       <div id="profileContent"><div class="loading-state">Loading your profile…</div></div>
-    </div>
-    <div class="card">
-      <h2>Change Password</h2>
-      <div class="error-banner" id="cpwError"></div>
-      <div class="field"><label>Current password</label>
-        <div class="pw-wrap"><input id="cpwCurrent" type="password" autocomplete="current-password"><button type="button" class="pw-toggle" data-pw="cpwCurrent" aria-label="Show password">👁</button></div>
-      </div>
-      <div class="field"><label>New password (8+ characters)</label>
-        <div class="pw-wrap"><input id="cpwNew" type="password" autocomplete="new-password"><button type="button" class="pw-toggle" data-pw="cpwNew" aria-label="Show password">👁</button></div>
-      </div>
-      <button class="btn btn-solid" id="cpwBtn">Update Password</button>
     </div>
     </section>
 
@@ -1029,6 +1019,52 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
          Only what is genuinely this member's: section 9.1 makes online voting
          account-free, so anonymous votes stay anonymous rather than being guessed
          at from a browser session. -->
+    <!-- ACCOUNT SETTINGS (spec section 4).
+         This one does NOT fit the shared My Unplug pattern, and is built
+         differently on purpose: every other section renders a LIST of things you
+         submitted through one renderer, while this is a set of controls that
+         CHANGE state. Forms and switches, not rows.
+    
+         It gathers what was already scattered (the password card, lifted out of
+         Profile) and closes two gaps: notification preferences, whose table was
+         being read to decide whether to email somebody but could never be set,
+         and two-factor, which had a complete backend and no way in at all. -->
+    <section class="ms-section section-hidden" data-ms-section="account">
+      <div class="card">
+        <h2>Account Settings</h2>
+        <p class="sub">Your password, what we send you, and how you sign in.</p>
+      </div>
+    
+        <div class="card">
+          <h2>Change Password</h2>
+          <div class="error-banner" id="cpwError"></div>
+          <div class="field"><label>Current password</label>
+            <div class="pw-wrap"><input id="cpwCurrent" type="password" autocomplete="current-password"><button type="button" class="pw-toggle" data-pw="cpwCurrent" aria-label="Show password">👁</button></div>
+          </div>
+          <div class="field"><label>New password (8+ characters)</label>
+            <div class="pw-wrap"><input id="cpwNew" type="password" autocomplete="new-password"><button type="button" class="pw-toggle" data-pw="cpwNew" aria-label="Show password">👁</button></div>
+          </div>
+          <button class="btn btn-solid" id="cpwBtn">Update Password</button>
+        </div>
+    
+      <div class="card">
+        <h2>What we send you</h2>
+        <p class="sub">Turning email off does not stop essential messages about payment or your account.</p>
+        <div id="notifPrefsContent"><div class="loading-state">Loading&#8230;</div></div>
+      </div>
+    
+      <div class="card">
+        <h2>Two-step sign-in</h2>
+        <p class="sub">An app on your phone generates a code each time you sign in, so a stolen password is not enough on its own.</p>
+        <div id="twoFactorContent"><div class="loading-state">Loading&#8230;</div></div>
+      </div>
+    
+      <div class="card">
+        <h2>Your data</h2>
+        <p class="sub">Downloading a copy of everything we hold, and removing your account, are under <strong>Your Data</strong> in the menu.</p>
+      </div>
+    </section>
+    
     <section class="ms-section section-hidden" data-ms-section="myvotes">
       <div class="card">
         <h2>My Votes</h2>
@@ -4289,6 +4325,9 @@ function msSetupNav(){
   document.querySelectorAll('.ms-navlink[data-ms="myvotes"]').forEach(function(link){
     link.addEventListener('click', function(){ loadMyVotes(); });
   });
+  document.querySelectorAll('.ms-navlink[data-ms="account"]').forEach(function(link){
+    link.addEventListener('click', function(){ loadNotifPrefs(); loadTwoFactor(); });
+  });
   const menuBtn=document.getElementById('msMenuBtn');
   if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
   const lo=document.getElementById('msLogout');
@@ -4958,6 +4997,243 @@ function votesRender(data){
       host.appendChild(row);
     });
   }
+}
+
+// ACCOUNT SETTINGS - spec section 4.
+//
+// Built differently from every other My Unplug section on purpose: these are
+// controls that change state, not a list to render.
+
+// --- what we send you ---
+//
+// The switches and their wording come from the server, so this page keeps no
+// copy of what each one means. Each change saves on its own: a settings screen
+// with a Save button people forget to press is a screen that does not work.
+async function loadNotifPrefs(){
+  var host = document.getElementById('notifPrefsContent');
+  if (!host) return;
+  try {
+    var data = await api('/my/notification-preferences');
+    notifPrefsRender(data);
+  } catch (err) {
+    host.textContent = '';
+    var oops = document.createElement('div');
+    oops.className = 'empty-state';
+    oops.textContent = 'We could not load these just now. Please try again.';
+    host.appendChild(oops);
+  }
+}
+
+function notifPrefsRender(data){
+  var host = document.getElementById('notifPrefsContent');
+  if (!host) return;
+  host.textContent = '';
+  var prefs = (data && data.preferences) || {};
+  ((data && data.fields) || []).forEach(function(field){
+    var row = document.createElement('div');
+    row.className = 'field';
+    row.style.cssText = 'display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--paper-line);';
+
+    var box = document.createElement('input');
+    box.type = 'checkbox';
+    box.id = 'notifpref-' + field.key;
+    box.checked = prefs[field.key] !== false;
+    box.style.cssText = 'width:18px; height:18px; margin-top:2px; flex:0 0 auto;';
+
+    var text = document.createElement('label');
+    text.htmlFor = box.id;
+    text.style.cssText = 'cursor:pointer; flex:1;';
+    var strong = document.createElement('strong');
+    strong.textContent = field.label;
+    text.appendChild(strong);
+    if (field.help){
+      var help = document.createElement('div');
+      help.className = 'sub';
+      help.style.cssText = 'margin:2px 0 0;';
+      help.textContent = field.help;
+      text.appendChild(help);
+    }
+
+    var saved = document.createElement('span');
+    saved.className = 'sub';
+    saved.style.cssText = 'margin:0; min-width:54px; text-align:right;';
+
+    box.addEventListener('change', async function(){
+      var body = {};
+      body[field.key] = box.checked;
+      box.disabled = true;
+      saved.textContent = 'Saving\u2026';
+      try {
+        await api('/my/notification-preferences', { method: 'PATCH', body: JSON.stringify(body) });
+        saved.textContent = 'Saved';
+        setTimeout(function(){ saved.textContent = ''; }, 1800);
+      } catch (err) {
+        // Put the switch back rather than leaving it showing a change that
+        // was never saved.
+        box.checked = !box.checked;
+        saved.textContent = 'Not saved';
+      }
+      box.disabled = false;
+    });
+
+    row.appendChild(box);
+    row.appendChild(text);
+    row.appendChild(saved);
+    host.appendChild(row);
+  });
+}
+
+// --- two-step sign-in ---
+//
+// The backend for this has been complete since the security work; there was
+// simply no way for a member to reach it.
+async function loadTwoFactor(){
+  var host = document.getElementById('twoFactorContent');
+  if (!host) return;
+  try {
+    var state = await api('/security/two-factor');
+    twoFactorRender(state);
+  } catch (err) {
+    host.textContent = '';
+    var oops = document.createElement('div');
+    oops.className = 'empty-state';
+    oops.textContent = 'We could not check this just now. Please try again.';
+    host.appendChild(oops);
+  }
+}
+
+function twoFactorRender(state){
+  var host = document.getElementById('twoFactorContent');
+  if (!host) return;
+  host.textContent = '';
+
+  var status = document.createElement('p');
+  status.style.cssText = 'margin:0 0 10px;';
+  var pill = document.createElement('span');
+  pill.className = 'status-pill ' + (state.enabled ? 'approved' : 'expired');
+  pill.textContent = state.enabled ? 'On' : 'Off';
+  status.appendChild(pill);
+  host.appendChild(status);
+
+  if (state.enabled){
+    var left = document.createElement('p');
+    left.className = 'sub';
+    left.textContent = state.recoveryCodesLeft + ' recovery code'
+      + (state.recoveryCodesLeft === 1 ? '' : 's') + ' left.';
+    host.appendChild(left);
+
+    var off = document.createElement('button');
+    off.className = 'btn btn-line';
+    off.style.cssText = 'width:auto; padding:8px 16px;';
+    off.textContent = 'Turn off';
+    off.addEventListener('click', async function(){
+      // A current code is required by the server, so a stolen session cannot
+      // simply remove the protection.
+      var code = prompt('Enter a code from your authenticator app to turn this off:');
+      if (!code) return;
+      try {
+        await api('/security/two-factor/disable', { method: 'POST', body: JSON.stringify({ code: code }) });
+        loadTwoFactor();
+      } catch (err) {
+        twoFactorNote(host, 'That code was not accepted.');
+      }
+    });
+    host.appendChild(off);
+    return;
+  }
+
+  var on = document.createElement('button');
+  on.className = 'btn btn-solid';
+  on.style.cssText = 'width:auto; padding:8px 16px;';
+  on.textContent = 'Set up two-step sign-in';
+  on.addEventListener('click', async function(){
+    on.disabled = true;
+    try {
+      var begun = await api('/security/two-factor/begin', { method: 'POST' });
+      twoFactorEnrol(host, begun);
+    } catch (err) {
+      twoFactorNote(host, 'We could not start that just now.');
+      on.disabled = false;
+    }
+  });
+  host.appendChild(on);
+}
+
+// The setup step. The secret is shown as text as well, because a camera that
+// will not read a QR code should not mean a member cannot enrol at all.
+function twoFactorEnrol(host, begun){
+  host.textContent = '';
+
+  var p = document.createElement('p');
+  p.className = 'sub';
+  p.textContent = 'Add this to your authenticator app, then enter the six-digit code it shows.';
+  host.appendChild(p);
+
+  var secret = document.createElement('p');
+  secret.style.cssText = 'font-family:monospace; font-size:15px; word-break:break-all; background:var(--paper); padding:8px 10px;';
+  secret.textContent = begun.secret;
+  host.appendChild(secret);
+
+  var wrap = document.createElement('div');
+  wrap.className = 'field';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'numeric';
+  input.autocomplete = 'one-time-code';
+  input.placeholder = '6-digit code';
+  wrap.appendChild(input);
+  host.appendChild(wrap);
+
+  var confirm = document.createElement('button');
+  confirm.className = 'btn btn-solid';
+  confirm.style.cssText = 'width:auto; padding:8px 16px;';
+  confirm.textContent = 'Turn it on';
+  confirm.addEventListener('click', async function(){
+    confirm.disabled = true;
+    try {
+      var done = await api('/security/two-factor/confirm', { method: 'POST', body: JSON.stringify({ code: input.value.trim() }) });
+      twoFactorShowCodes(host, done);
+    } catch (err) {
+      twoFactorNote(host, 'That code was not accepted. Try the next one your app shows.');
+      confirm.disabled = false;
+    }
+  });
+  host.appendChild(confirm);
+}
+
+// Recovery codes are returned ONCE. They are written into the page as text so
+// a member can copy them before leaving.
+function twoFactorShowCodes(host, done){
+  host.textContent = '';
+  var h = document.createElement('p');
+  h.style.cssText = 'font-weight:700; margin:0 0 6px;';
+  h.textContent = 'Two-step sign-in is on. Save these recovery codes now.';
+  host.appendChild(h);
+
+  var note = document.createElement('p');
+  note.className = 'sub';
+  note.textContent = done.note || 'Each one works once, and they are not shown again.';
+  host.appendChild(note);
+
+  var list = document.createElement('p');
+  list.style.cssText = 'font-family:monospace; font-size:15px; line-height:1.9; background:var(--paper); padding:10px 12px;';
+  list.textContent = (done.recoveryCodes || []).join('   ');
+  host.appendChild(list);
+
+  var ok = document.createElement('button');
+  ok.className = 'btn btn-line';
+  ok.style.cssText = 'width:auto; padding:8px 16px;';
+  ok.textContent = 'I have saved them';
+  ok.addEventListener('click', function(){ loadTwoFactor(); });
+  host.appendChild(ok);
+}
+
+function twoFactorNote(host, message){
+  var n = document.createElement('p');
+  n.className = 'sub';
+  n.style.cssText = 'color:var(--maroon);';
+  n.textContent = message;
+  host.appendChild(n);
 }
 
 async function changePassword(){
