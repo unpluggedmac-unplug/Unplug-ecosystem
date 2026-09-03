@@ -1186,3 +1186,19 @@ very first request after idle can be slow enough to fail. Added one retry after 
 both attempts fail — hide the stat row (`.inv-stats`) entirely instead of leaving `—` showing, per the
 punch list's own fallback option. Verified both paths on the live origin by stubbing the API call:
 fail-then-succeed renders the real numbers (row stays visible), fail-then-fail hides the row.
+
+## 2026-09-03 — QA punch list, task 4/6: Advertising Banner gets a 21-day tier
+
+Banner had 3 duration tiers (7/14/28); Directory Highlight and Article Highlight both already have
+4 (7/14/21/28) — Banner was the outlier, not the pattern. Site owner chose to add the missing tier
+rather than explain the gap away. Migration 168 seeds a 21-day `service_packages` row at R785
+(interpolated from the existing per-day rate curve between the 14-day and 28-day rows — no spec
+figure exists for this duration, so nothing frozen in `docs/pricing-comparison.md` is touched, and no
+existing price changed). `ON CONFLICT DO NOTHING` as always; a companion `UPDATE ... WHERE
+display_order = 3` re-sequences the 28-day row's display order only if still at its seeded value, so
+an admin who already reordered these is left alone. Confirmed idempotent (ran three times in a
+standalone check) and that an admin's own price edit survives a re-run. Every screen that shows
+banner pricing (member dashboard duration select, the ten-times-repeated homepage sentence, the
+admin pricing panel) reads live from this table, so nothing else needed a code change — updated the
+sentence's no-JS fallback text to match, for the same reason it was made a fallback in the first
+place. Full suite: 1825 passing, 0 failing.
