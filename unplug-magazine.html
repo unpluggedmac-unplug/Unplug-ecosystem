@@ -4478,6 +4478,15 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// UX-001: an error state that only says "couldn't load" leaves a reader with
+// no way forward except reloading the whole page. retryCall is the exact
+// call (e.g. "loadInvestors()" or "loadEditions(true)") the component uses
+// to fetch itself the first time, re-run verbatim on click.
+function errorStateHtml(message, retryCall) {
+  return `<div class="dir-empty-state">${escapeHtml(message)}<br>
+    <button class="btn btn-line" onclick="${retryCall}" style="display:inline-block; width:auto; margin-top:10px; padding:6px 18px;">Retry</button></div>`;
+}
+
 // escapeHtml is NOT safe inside a quoted attribute: textContent -> innerHTML
 // escapes &, < and > but leaves quotes alone, so a value containing one would
 // close the attribute early. Anything going into src="..." or data-...="..."
@@ -6614,7 +6623,7 @@ async function loadArticleDetail(id) {
     // mistake in here looks exactly like the API being down — and "couldn't
     // load this story" sends anyone debugging it to the wrong place entirely.
     console.error('[article] failed to render article ' + id + ':', err);
-    el.innerHTML = '<div class="dir-empty-state">Couldn\'t load this story right now.</div>';
+    el.innerHTML = errorStateHtml("Couldn't load this story right now.", 'loadArticleDetail(window.__currentArticleId)');
   }
 }
 // Delegated on the whole document so it works for every story-card grid — the
@@ -7314,7 +7323,7 @@ async function loadFeaturedSlider() {
     wrap.innerHTML = articles.map((a, n) => featuredSlideHtml(a, n, articles.length)).join('');
     wireFeaturedSlider(articles.length);
   } catch (err) {
-    wrap.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
+    wrap.innerHTML = errorStateHtml("Couldn't load right now.", 'loadFeaturedSlider()');
     if (controls) controls.hidden = true;
   }
 }
@@ -7415,7 +7424,7 @@ async function loadNewStories() {
       : '<div class="dir-empty-state">No stories yet — check back soon.</div>';
     renderInteractionBarsBatch('article', data.articles.map((a) => ({ id: a.id, containerId: `ns-int-${a.id}` })));
   } catch (err) {
-    el.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
+    el.innerHTML = errorStateHtml("Couldn't load right now.", 'loadNewStories()');
   }
 }
 
@@ -7461,7 +7470,7 @@ async function loadHighlightedProfiles() {
       ? ordered.map(homeDirCardHtml).join('')
       : '<div class="dir-empty-state">No highlighted profiles right now.</div>';
   } catch (err) {
-    el.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
+    el.innerHTML = errorStateHtml("Couldn't load right now.", 'loadHighlightedProfiles()');
   }
 }
 
@@ -7621,7 +7630,7 @@ async function loadInvestors() {
       .map((d) => investorCardHtml(d.investor, d.socials, d.gallery))
       .join('');
   } catch (err) {
-    el.innerHTML = '<div class="dir-empty-state">Couldn\'t load investors right now.</div>';
+    el.innerHTML = errorStateHtml("Couldn't load investors right now.", 'loadInvestors()');
   }
 }
 
@@ -7664,7 +7673,7 @@ async function loadMarketplace() {
       : '<div class="dir-empty-state">No businesses on the marketplace right now.</div>';
     renderInteractionBarsBatch('marketplace_listing', data.listings.map((l) => ({ id: l.id, containerId: `market-int-${l.id}` })));
   } catch (err) {
-    el.innerHTML = '<div class="dir-empty-state">Couldn\'t load the marketplace right now.</div>';
+    el.innerHTML = errorStateHtml("Couldn't load the marketplace right now.", 'loadMarketplace()');
   }
 }
 
@@ -8025,7 +8034,7 @@ async function loadEditions(reset) {
       ]);
     }
   } catch (err) {
-    document.getElementById('latestEdition').innerHTML = '<div class="dir-empty-state">Couldn\'t load editions right now.</div>';
+    document.getElementById('latestEdition').innerHTML = errorStateHtml("Couldn't load editions right now.", 'loadEditions(true)');
   }
 }
 
@@ -8194,7 +8203,7 @@ async function loadHomeTop10Mini() {
       </a>`;
     }).join('');
   } catch (err) {
-    el.innerHTML = '<div class="dir-empty-state">Couldn\'t load right now.</div>';
+    el.innerHTML = errorStateHtml("Couldn't load right now.", 'loadHomeTop10Mini()');
   }
 }
 loadHomeTop10Mini();
@@ -8285,7 +8294,7 @@ async function loadArena() {
       ]);
     }
   } catch (err) {
-    heroEl.innerHTML = '<div class="dir-empty-state">Couldn\'t load The Arena right now.</div>';
+    heroEl.innerHTML = errorStateHtml("Couldn't load The Arena right now.", 'loadArena()');
   }
 }
 
@@ -10018,7 +10027,7 @@ async function loadMembers(reset) {
     loadMoreBtn.style.display = members.length === MEMBERS_PAGE_SIZE ? '' : 'none';
     wireMemberFollowButtons();
   } catch (err) {
-    if (reset) grid.innerHTML = '<div class="dir-empty-state">Could not load members right now.</div>';
+    if (reset) grid.innerHTML = errorStateHtml('Could not load members right now.', 'loadMembers(true)');
   } finally {
     loadingEl.style.display = 'none';
   }
@@ -10639,7 +10648,7 @@ async function runSitePageSearch() {
     data = await api('/search?' + params.toString());
   } catch (err) {
     summaryEl.textContent = '';
-    resultsEl.innerHTML = '<div class="dir-empty-state">Search is unavailable right now.</div>';
+    resultsEl.innerHTML = errorStateHtml('Search is unavailable right now.', 'runSitePageSearch()');
     return;
   }
 
@@ -11450,7 +11459,7 @@ async function loadCalendarEvents() {
       card.addEventListener('click', () => openEventModal(ev));
     });
   } catch (err) {
-    grid.innerHTML = '<div class="dir-empty-state">Couldn\'t load events right now.</div>';
+    grid.innerHTML = errorStateHtml("Couldn't load events right now.", 'loadCalendarEvents()');
   }
 }
 

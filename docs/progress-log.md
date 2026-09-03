@@ -1589,3 +1589,37 @@ buttons carry the exact HTML expected (icon + label, correct `target`/`rel` for 
 links), and `document.elementFromPoint()` at the button's own coordinates confirms it's genuinely the
 topmost visible element there, not obscured by anything. Full suite: 1898 passing, 0 failing (up from
 1888).
+
+## 2026-09-04 — Website remediation punch-list, UX-001: every error state gets a Retry
+
+The doc asks for three explicit states per dynamic component — loading, empty, error (message +
+Retry). Loading and empty were already handled correctly everywhere checked this cycle (jobs, investors,
+marketplace, per DEAF-001/MARKET-001 verification). Retry was not: grepped the whole file for it and
+found zero matches anywhere on the public site — every one of the ~15 "couldn't load" messages was a
+dead end, with reloading the whole page as the only way forward.
+
+Added one shared `errorStateHtml(message, retryCall)` helper rather than hand-writing a button at each
+site — `retryCall` is the *exact* call the component already uses to fetch itself the first time
+(e.g. `'loadEditions(true)'`, `'loadMembers(true)'`), re-run verbatim on click, so Retry can never drift
+from what a real load actually does. Wired into the 12 components with a genuine list/detail fetch and a
+`.dir-empty-state`-style catch block: article detail, the homepage featured slider, New Stories,
+highlighted profiles, Investors, Marketplace, Editions, the homepage Top 10 mini-list, The Arena, the
+Members directory, site search, and Calendar events. Three parameterised loaders needed a specific retry
+argument rather than a bare call: article detail retries via the `window.__currentArticleId` global
+already set before its own fetch; Editions and the Members directory retry with `reset=true`, which each
+already re-reads its own live filters/pagination state from the DOM, so a retry is a full, correct
+re-fetch rather than a raw repeat of whatever failed.
+
+Left out on purpose: the map's own failure note (`unplug-magazine.html:5528`, a different UI, not this
+pattern), a contributor byline page's not-found-style error (retrying a "this contributor doesn't exist"
+response wouldn't help), and a secondary quick-search-overlay hint — all outside the "list/detail grid
+that failed to fetch" shape this task is about.
+
+New test, `errorStateRetry.test.js` (13 tests): the helper wires the retry call to the button's
+`onclick` and always labels it "Retry"; each of the 12 components' error state carries its own correct
+retry call, checked by name so a future refactor that quietly drops one fails this test instead of
+shipping a silent regression. Verified live in-browser: navigated to the Investors page, let the fetch
+fail naturally (CORS from the local static-server origin), confirmed the exact expected error+Retry
+markup rendered, then mocked a successful response and clicked the real Retry button — it re-ran
+`loadInvestors()` and rendered the correct empty state, proving the recovery path works end to end, not
+just that the button exists. Full suite: 1911 passing, 0 failing (up from 1898).
