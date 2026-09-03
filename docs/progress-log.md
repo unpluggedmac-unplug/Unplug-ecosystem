@@ -877,3 +877,61 @@ has no endpoint anywhere — flagged, not built.
 
 **All twelve sections are now built.** A combined pass across the whole My Unplug area follows
 before this task is called complete.
+
+---
+
+## 2026-09-03 — Task 06: combined pass across My Unplug, and the task's close
+
+All twelve sections built, so this is the combined pass the stop condition asks for. It is a new
+script, `scripts/audit-my-unplug.js`, which asks a different question from the per-section smoke
+check: **does the area hold together?**
+
+- every §4 menu item is present, once
+- every nav button points at a section that exists, and every section is reachable from the menu
+- **every section that loads data is wired to a click** — a section wired to nothing shows
+  "Loading…" for ever, which is precisely the bug found by hand during the invoices browser check,
+  so it is now checked mechanically instead of noticed by luck
+- nothing that was MOVED (the password card, the credits card, the retired Content section) was left
+  in two places
+- the shared pattern is still shared: My Services and My Submissions both draw rows with `subsRow`,
+  or the "one renderer" claim has quietly stopped being true
+
+**It found two things on its first run, and one of them was its own bug:**
+
+1. **"My Profile" was missing.** The nav said "Profile" while §4 says "My Profile", and every other
+   item is "My X". Renamed to match the spec's own wording.
+2. **A duplicate `services` section — which did not exist.** The regex matched the attribute
+   anywhere, so it counted a `querySelector` string in the page's own JavaScript as a section
+   declaration. The audit was wrong, not the page. Narrowed to `<section>` elements only.
+
+**Teeth checked**, since it passed immediately after being changed: unwiring My Invoices from its
+menu item makes it fail with "the section would sit on 'Loading…' for ever", and putting the credits
+card back in two places makes it fail too.
+
+Suite **1744**, 0 failing. Smoke **51/51**. Audit **PASS**.
+
+### Task 06 is complete — all twelve sections
+
+| Section | Note |
+|---|---|
+| My Submissions | the shared pattern; converted from "Content" |
+| My Articles / Events / Listings / Advertising / Competitions | the same list, filtered |
+| My Services | §5's six buckets, read by term |
+| My Orders | §10.4 money as stored, service names in one place |
+| My Credits | §10.7's original reference reaches the member |
+| My Invoices | §10.5; migration 164, stable numbers, VAT-inclusive |
+| My Votes | §9.1's anonymity respected |
+| Account Settings | does not fit the pattern, built differently on purpose |
+
+**Left for you, in the order I would do them:**
+
+1. **The VAT registration number.** Live invoices show no VAT until it is set. One PATCH to
+   `/admin/settings/vat_registration_number`.
+2. **Test ports** are `base + (pid % 300)`, which on Windows can land in a reserved range and fail an
+   entire test file at random. It cost one run during this task. ~109 files affected.
+3. **Two documents for one purchase** — the admin's stored invoice PDFs and the new generated ones.
+   The admin flow is untouched; they should converge.
+4. `rejected` still does double duty as "we refused this" and "you cancelled it".
+5. Smaller: no way to cancel a submission or pay an unpaid order from these views; no endpoint to
+   change an account email address; §9.2's daily vote allowance is not surfaced; §10.9's one-click
+   RENEW for expired services is not built.
