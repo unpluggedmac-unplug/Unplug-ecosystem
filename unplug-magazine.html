@@ -2511,6 +2511,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <div class="tier-price"><span class="pkg-price" data-tier="basic">R150</span> <span>once-off</span></div>
         <p class="pkg-desc" data-tier="basic">Entry-level listing — name, category, short bio, and one contact method.</p>
         <button class="btn btn-line tier-btn" onclick="choosePackage('basic')">Choose Basic</button>
+        <p class="tier-example section-hidden" data-tier="basic" style="font-size:12px; margin-top:8px;"></p>
       </div>
       <div class="tier-card tier-featured">
         <div class="tier-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="36" height="36"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
@@ -2518,6 +2519,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <div class="tier-price"><span class="pkg-price" data-tier="pro">R280</span> <span>once-off</span></div>
         <p class="pkg-desc" data-tier="pro">Full biography, achievements, career highlights, quote, and social handles.</p>
         <button class="btn btn-solid tier-btn" onclick="choosePackage('pro')">Choose Pro</button>
+        <p class="tier-example section-hidden" data-tier="pro" style="font-size:12px; margin-top:8px;"></p>
       </div>
       <div class="tier-card">
         <div class="tier-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="36" height="36"><path d="M2 20h20M4 20V8l5 5 3-6 3 6 5-5v12"/><circle cx="12" cy="4" r="2" fill="var(--red)" stroke="none"/></svg></div>
@@ -2525,6 +2527,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <div class="tier-price"><span class="pkg-price" data-tier="premium">R400</span> <span>once-off</span></div>
         <p class="pkg-desc" data-tier="premium">Everything in Pro, plus a full project gallery and linked videos.</p>
         <button class="btn btn-line tier-btn" onclick="choosePackage('premium')">Choose Premium</button>
+        <p class="tier-example section-hidden" data-tier="premium" style="font-size:12px; margin-top:8px;"></p>
       </div>
     </div>
     <p style="font-size:12.5px; color:var(--slate); margin-top:14px; max-width:70ch;">Want to move up a tier later? Upgrades are a flat <strong>R250 admin fee</strong> — no need to pay the price difference. Downgrading to a lower package isn't available once you're listed.</p>
@@ -4214,11 +4217,41 @@ document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
   document.querySelectorAll('.pkg-desc').forEach((el) => {
     el.textContent = PKG_DESCS[PKG_TYPE][el.dataset.tier];
   });
+  loadTierExamples();
 });
 
 function choosePackage(tier) {
   window.location.href = 'unplug-checkout.html?ptype=' + PKG_TYPE + '&tier=' + tier;
 }
+
+// DIR-001: "show exactly what customers receive" — a real, live profile of
+// each tier, not a mockup. Reuses the existing GET /directory filters
+// (package + type), so this needed no backend change. Re-run whenever the
+// Individual/Business toggle switches, since "a live example" means one of
+// the type actually being priced.
+//
+// A tier with no approved profile yet — plausible for a brand-new site, or
+// Premium before anyone has bought it — hides its own line rather than
+// showing a dead link. Nothing here renders a card that goes nowhere.
+let TIER_EXAMPLES_LOADED_FOR = null;
+async function loadTierExamples() {
+  if (TIER_EXAMPLES_LOADED_FOR === PKG_TYPE) return; // already have this type's examples
+  TIER_EXAMPLES_LOADED_FOR = PKG_TYPE;
+  await Promise.all(['basic', 'pro', 'premium'].map(async (tier) => {
+    const el = document.querySelector(`.tier-example[data-tier="${tier}"]`);
+    if (!el) return;
+    try {
+      const data = await api('/directory?' + new URLSearchParams({ type: PKG_TYPE, package: tier, limit: 1 }));
+      const example = (data.profiles || [])[0];
+      if (!example) { el.classList.add('section-hidden'); el.innerHTML = ''; return; }
+      el.innerHTML = `<a href="?p=profile&slug=${encodeURIComponent(example.slug)}" target="_blank" rel="noopener">See a live example →</a>`;
+      el.classList.remove('section-hidden');
+    } catch (err) {
+      el.classList.add('section-hidden'); el.innerHTML = '';
+    }
+  }));
+}
+loadTierExamples();
 
 // ---------------------------------------------------------------------------
 // Birthday surprise — when the Birthdays section scrolls into view, balloons/

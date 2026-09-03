@@ -1378,3 +1378,22 @@ same behaviour confirmed for passports specifically, not assumed from the jobs c
 re-run twice without error. Verified live in-browser (mocked API): the modal opens, fields populate
 correctly per kind, and button state (Renew/Save/Withdraw) responds correctly to status. Full suite:
 1859 passing, 0 failing (up from 1846).
+
+## 2026-09-03 — Website remediation punch-list, DIR-001: live example under each package tier
+
+"Show exactly what customers receive" — a real, live Directory profile of each tier, not a mockup.
+Needed no backend change: `GET /directory` already supports `?type=&package=` filtering, so this is
+purely the frontend calling a filter that already existed. Checked real production data first —
+`individual/pro` and `individual/premium` each have a live example (`leon-matthee`, `ag-scott`);
+`individual/basic` and every `business/*` combination currently have none.
+
+A tier with no example yet hides its own line rather than linking to nothing — matches the site's
+existing rule that nothing renders a card that goes nowhere. Re-fetches when the Individual/Business
+toggle switches, since "a live example" means one of the type actually being priced, not whichever was
+loaded first. Opens in a new tab so looking at an example doesn't lose the in-progress package choice.
+
+New test, `directoryTierExamples.test.js` (5 tests). Verified live: real API data confirmed which
+tier/type combinations currently have an example, then the local page's actual logic was exercised
+against that exact data (mocked fetch) — the two with an example render a working link, the four
+without stay hidden, and switching to Business correctly re-queries and hides all three. Full suite:
+1864 passing, 0 failing (up from 1859).
