@@ -85,16 +85,23 @@ const PACKAGE_PRICES = {
 
 // Highlights & Promotions pricing — optional homepage boost, unchanged
 // from the original locked pricing.
-const HIGHLIGHT_PRICES = {
-  article: { 7: 150.00, 14: 250.00, 21: 300.00, 28: 450.00 },
-  directory: { 7: 100.00, 14: 150.00, 21: 200.00, 28: 250.00 },
-};
+// HIGHLIGHT_PRICES and AD_BANNER_PRICES used to be declared here. They were
+// DEAD — every quote and charge in this file already goes through priceFor(),
+// which reads service_packages — but they still read as authoritative, and a
+// price that appears in a second place is a price that will one day disagree
+// with the first. docs/pricing-comparison.md lists this as one of the three
+// copies of the highlight and banner ladders.
+//
+// Two of those three are now gone. What remains is service_packages (the source
+// of truth) and FALLBACK_PRICES in utils/servicePackages.js, which is a
+// deliberate last-known-good for when the table cannot be read. A test now
+// asserts the fallback still matches the seeded table, so it cannot go stale
+// unnoticed.
 
 // Marketplace: flat R500 for a fixed 30-day duration (replaces the old
 // tiered 7/14/21/28-day Business Banner pricing).
 const MARKETPLACE_LISTING_PRICE = 500.00;
 // Self-serve advertising banners, priced by campaign length.
-const AD_BANNER_PRICES = { 7: 300.00, 14: 550.00, 28: 1000.00 };
 const MARKETPLACE_LISTING_DAYS = 30;
 
 // New fees added in this pricing round.

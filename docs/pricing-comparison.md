@@ -152,11 +152,22 @@ contradicted.
 
 Beyond the policy-page contradiction above:
 
-1. **Highlight and banner prices exist in three places** — the `service_packages` table,
-   `FALLBACK_PRICES` in `servicePackages.js`, and `HIGHLIGHT_PRICES` / `AD_BANNER_PRICES` in
-   `payments.js`. Identical today. Change a price in the admin screen and both hardcoded
-   copies go stale — including the fallback, which exists to be used at exactly the moment
-   the table lookup fails, and would then charge the old amount.
+1. ~~**Highlight and banner prices exist in three places**~~ — **RESOLVED 2026-09-03, without
+   changing any price.** `HIGHLIGHT_PRICES` and `AD_BANNER_PRICES` in `payments.js` turned out
+   to be **dead code**: every quote and charge already went through `priceFor()`, which reads
+   `service_packages`. They were deleted. Production was checked first and matched the fallback
+   exactly on all 11 rows, so nothing moved.
+
+   Two copies remain and the second is deliberate: `FALLBACK_PRICES` is a last-known-good for
+   when the table cannot be read. A constant cannot follow an admin's edit at runtime, but it
+   CAN be held to the seeded table — `test/pricingSingleSource.test.js` fails if a migration
+   changes a price and the fallback is not changed with it, which is the drift that would
+   otherwise reach production silently.
+
+   **Still worth deciding:** the fallback charges a possibly-stale price at exactly the moment
+   the table is unreadable — but if the database cannot be read, the payment row cannot be
+   written either, so its practical value is questionable. Refusing the charge instead may be
+   safer than guessing at it. That is a money-behaviour call, not a refactor.
 2. **The banner sentence, ten times** in `unplug-magazine.html`.
 3. **Package tier prices** are hardcoded in `unplug-checkout.html` and `unplug-magazine.html`
    as well as in `PACKAGE_PRICES`.
@@ -180,4 +191,9 @@ Nothing in this document may be changed until these are answered.
 5. **Event promotion** — build the three packages, or drop them from the spec?
 6. **Directory middle tier** — "Standard" per the spec, or `pro` as built?
 7. **The five live-only services** — confirm their prices, or add them to the spec.
-8. **The duplicated prices** — consolidate, and in which task.
+8. **The duplicated prices** — ~~consolidate, and in which task~~. **Item 1 above is done** (the
+   dead copies in `payments.js`, deleted with no price change). Items 2, 3 and 4 remain: the
+   banner sentence repeated ten times in `unplug-magazine.html`, the package tier prices
+   hardcoded in `unplug-checkout.html` and `unplug-magazine.html` as well as `PACKAGE_PRICES`,
+   and `unplug-components-demo.html` saying "Packages start at R250 a month" where everything
+   else is once-off. Those are frontend copy and need the tier decisions (6) settled first.

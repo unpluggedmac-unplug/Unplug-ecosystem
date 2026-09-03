@@ -1078,3 +1078,42 @@ Suite **1777**, audit PASS, smoke PASS.
 
 **Still open:** the VAT registration number (owner adding later); a single pricing source; profile
 renewal, which goes through a package with a tier and a price.
+
+---
+
+## 2026-09-03 — One price, in one place (pricing decision 8, item 1)
+
+`docs/pricing-comparison.md` said the highlight and banner ladders lived in **three** places and
+called it "the recurring bug class from CLAUDE.md, carrying money".
+
+**Two of the three were dead code.** `HIGHLIGHT_PRICES` and `AD_BANNER_PRICES` in `payments.js` were
+declared but never read — every quote and charge already went through `priceFor()`, which reads
+`service_packages`. They still *looked* authoritative, which is how a second copy eventually
+disagrees with the first. Deleted.
+
+**No price changed, and I checked before touching anything:** production's `service_packages` matched
+the fallback exactly on all 11 rows. The document's own rule — "nothing in this document may be
+changed until these are answered" — is respected: the seven genuine pricing decisions are untouched,
+because resolving them is a business call, not a refactor.
+
+**The remaining duplication is deliberate.** `FALLBACK_PRICES` is a last-known-good for when the
+table cannot be read. A constant cannot follow an admin's edit at runtime, but it can be held to the
+seeded table, so `test/pricingSingleSource.test.js` fails if a migration changes a price without
+changing the fallback. Teeth checked: dropping the fallback's 7-day banner to R275 fails with
+*"the table says 300, the fallback says 275 — one of them is wrong, and the fallback is what gets
+charged when the table cannot be read"*.
+
+**A test of mine that was wrong, and how.** I first added a scan for literal rand amounts in
+`payments.js`. It failed — on the directory tier ladder and the event listing fee, which legitimately
+live there. A test that cries wolf gets deleted by the next person, so it now checks for the *shape*
+of what was removed (a duration-keyed price map) rather than any amount.
+
+**Flagged, not decided:** the fallback charges a possibly-stale price at exactly the moment the table
+is unreadable — but if the database cannot be read, the payment row cannot be written either, so its
+practical value is doubtful. Refusing the charge may be safer than guessing. That is a
+money-behaviour decision, not a refactor.
+
+**Still open in decision 8:** the banner sentence repeated ten times in `unplug-magazine.html`, the
+package tier prices hardcoded in checkout and magazine as well as `PACKAGE_PRICES`, and
+`unplug-components-demo.html` advertising "R250 a month" where everything else is once-off. All
+frontend copy, and they need the tier decision settled first.
