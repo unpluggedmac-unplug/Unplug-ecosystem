@@ -167,6 +167,12 @@ body{ min-height:100vh; }
       <div id="orderDetailsDesc" style="font-size:13.5px; color:var(--slate); margin-top:4px; line-height:1.5;"></div>
       <div id="orderDetailsPrice" style="font-family:'Playfair Display',serif; color:var(--red); font-size:20px; font-weight:700; margin-top:8px;"></div>
     </div>
+    <!-- PAY-003: a Directory package is the one checkout mode with a real
+         review/approval step after payment (see DIR-003's "How it works" on
+         the Directory page itself) — an edition download or a vote bundle
+         needs no such note, since paying settles those immediately. Shown
+         here so it isn't only found by reading the Directory page first. -->
+    <p class="sub" id="paymentNextSteps" style="display:none;">What happens after you pay: we confirm your EFT, then your profile is reviewed, then it goes live on the Directory. You'll see the reference and current status on the next screen and in your dashboard's Payment History.</p>
     <p class="sub" id="paymentSummary" style="display:none;"></p>
     <div class="error-banner" id="paymentError"></div>
 
@@ -284,6 +290,10 @@ const VOTE_BUNDLE_MODE = CHECKOUT_PARAMS.get('type') === 'vote_bundle';
 // page must never silently start selling a Directory listing.
 const DIRECTORY_MODE = CHECKOUT_PARAMS.get('type') === 'directory_package'
   || CHECKOUT_PARAMS.has('ptype') || CHECKOUT_PARAMS.has('tier');
+// PAY-003: only a Directory package has a review/approval step after
+// payment — an edition download or a vote bundle settles the moment
+// payment is confirmed, so this note would be misleading there.
+if (DIRECTORY_MODE) document.getElementById('paymentNextSteps').style.display = 'block';
 
 // Package preselection from the public site's Directory page,
 // e.g. unplug-checkout.html?ptype=business&tier=pro

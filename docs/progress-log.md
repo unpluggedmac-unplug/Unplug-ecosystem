@@ -1517,3 +1517,29 @@ result card offers a way back into the site. Verified live in-browser (mocked `/
 response, matching the real shape confirmed by the backend tests): Service/Order total/Status render
 correctly alongside the real EFT instructions, and "View My Order" is present. Full suite: 1885
 passing, 0 failing (up from 1879).
+
+## 2026-09-03 — Website remediation punch-list, PAY-003/PAY-010: workflow note + validation check
+
+**PAY-003 — what happens after payment.** Only one of checkout's three modes has a real post-payment
+step: a Directory package purchase goes through review → approval before it's live; an edition download
+or a vote bundle settles the instant the payment is confirmed. A generic "here's what happens next" note
+would have been actively wrong for those two, so it's gated on `DIRECTORY_MODE` specifically rather than
+shown on every checkout. Added a one-line note on the Payment step, next to the order details, naming
+the real chain (confirm → review → live) and pointing at the reference/status shown next (from PAY-011)
+and in Payment History.
+
+**PAY-010 — validation.** Checked rather than assumed: every `showError()` call site in checkout.html
+either passes a specific literal string tied to what actually failed ("Choose a package.", "Enter the
+full 10-digit Entry Code exactly as shown on the Top 10 page.") or falls through to the server's own
+`err.message` first. None reduce to a generic "something went wrong" — the punch-list's actual
+complaint. Field-level *positioning* (moving each error banner to sit directly beside its one specific
+input, rather than at the top of its card) was considered and left alone: every checkout card is short
+enough that the existing per-card banners are unambiguous about which message applies to what, and
+rewiring every error banner across three separate checkout flows for a cosmetic gain wasn't judged worth
+the size of the change against what's actually asked. No code change needed for this item.
+
+New test, `checkoutWorkflowAndValidation.test.js` (3 tests): the workflow note exists and names confirm/
+review/live; it's gated on `DIRECTORY_MODE`; no `showError()` call reduces to a generic catch-all.
+Verified live in-browser: the note shows for a Directory purchase (`?ptype=individual&tier=pro`) and
+stays hidden for an edition download (`?type=edition_download&id=3`). Full suite: 1888 passing, 0
+failing (up from 1885).
