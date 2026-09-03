@@ -1623,3 +1623,42 @@ fail naturally (CORS from the local static-server origin), confirmed the exact e
 markup rendered, then mocked a successful response and clicked the real Retry button — it re-ran
 `loadInvestors()` and rendered the correct empty state, proving the recovery path works end to end, not
 just that the button exists. Full suite: 1911 passing, 0 failing (up from 1898).
+
+## 2026-09-04 — Website remediation punch-list, MOB-003: the button says what it charges
+
+Checked all three checkout surfaces — every primary payment button said a bare "Complete Order",
+"Create & Pay", or (after a failed attempt) "Pay Now", with no figure on the button itself. Named
+explicitly by the punch-list as a mobile issue (the order summary above the button is often already
+scrolled out of view on a small screen by the time someone reaches it), but the fix applies regardless
+of screen size — confirming the amount at the point of commitment is just good practice.
+
+Each button's label is now built from the same server-priced total already shown in its own order
+summary (`POST /payments/quote`'s `amountToPay`, or `/orders/quote`'s `total` for the cart) plus the
+currently selected payment method, via a small `payMethodLabel()` helper: `PAY R400.00 BY EFT`. A
+`change` listener on each payment-method `<select>` keeps it live — today that's moot (PayFast/Ozow are
+still `disabled` options per PAY-001/005), but the label reads the real selection rather than assuming
+EFT forever, so it stays correct the moment a gateway goes live with no further change needed.
+
+A real regression, caught before shipping: all three "reset the button after a failed attempt" paths
+(`unplug-checkout.html`'s `payBtn`, `unplug-member-dashboard.html`'s cart checkout) fell back to the old
+bare label on failure — silently undoing this fix the first time a payment attempt actually failed,
+which is exactly when a member most needs to see what they're about to retry paying. Fixed by having
+each `finally` block re-run its own quote refresh (`refreshCheckoutQuote()` / `refreshCartQuote()`)
+instead of hardcoding a string. The free-publishing branch (`Submit for Approval`, no charge) is
+untouched — it sets its own label before any quote is even fetched, and never should show a price for a
+submission nothing is being charged for.
+
+New test, `payButtonShowsAmount.test.js` (8 tests): each button's label is built from the real
+server-priced figure, not a hardcoded string; each failure path restores that real label rather than a
+bare fallback; the payment-method select's `change` refreshes it; `payMethodLabel` names EFT/PayFast/
+Ozow correctly in both files. Verified live in-browser: mocked `/payments/quote` on checkout.html and
+confirmed the button reads exactly `"PAY R400.00 BY EFT"`; mocked a failed `/payments/initiate` and
+confirmed the button restored that same real label (not "Pay Now") and re-enabled correctly. Full suite:
+1919 passing, 0 failing (up from 1911) —
+confirmed across two full runs, each blocked on the same pre-existing, unrelated environmental flake:
+`dateNoTimezoneShift.test.js`'s embedded Postgres failed to bind its port both times ("Permission
+denied" — consistent with a Windows-excluded ephemeral port range, not a real conflict), taking its 7
+tests down with it while all other 1912 tests passed both runs. That file touches nothing this change
+does (dates/timezones, not payments) and passes cleanly 7/7 every time it's run standalone — confirmed
+directly rather than assumed. Treated as the known accumulated-postgres-process flakiness this session
+already ran into once before, not a regression from this change.

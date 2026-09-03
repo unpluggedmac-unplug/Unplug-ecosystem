@@ -747,6 +747,13 @@ let APPLIED_VOUCHER = '';   // only set once the server accepts a code
 let LAST_QUOTE = null;
 function CR(n) { return 'R' + Number(n || 0).toFixed(2); }
 
+// MOB-003: a bare "Complete Order" tells a member nothing about what
+// they're about to commit to — on a small screen especially, the amount and
+// method belong on the button itself, not just in the summary above it.
+function payMethodLabel(method) {
+  return method === 'payfast' ? 'PAYFAST' : method === 'ozow' ? 'OZOW' : 'EFT';
+}
+
 async function initCheckoutGate(total){
   const acc = document.getElementById('termsAcceptChk');
   acc.checked = false; acc.disabled = true;
@@ -802,7 +809,9 @@ async function refreshCheckoutQuote(){
 
     const btn = document.getElementById('payBtn');
     btn.disabled = !document.getElementById('termsAcceptChk').checked;
-    btn.textContent = q.settledWithoutPayment ? 'Complete Order (Paid by Credit)' : 'Complete Order';
+    btn.textContent = q.settledWithoutPayment
+      ? 'Complete Order (Paid by Credit)'
+      : `PAY ${CR(q.amountToPay)} BY ${payMethodLabel(document.getElementById('paymentMethod').value)}`;
   } catch (e) {
     document.getElementById('sumTotal').textContent = '—';
     document.getElementById('sumPay').textContent = '—';
@@ -834,6 +843,9 @@ document.getElementById('termsAcceptChk').addEventListener('change', () => {
   document.getElementById('payBtn').disabled = !document.getElementById('termsAcceptChk').checked;
 });
 document.getElementById('useCreditChk').addEventListener('change', refreshCheckoutQuote);
+// The button's own label names the method (see payMethodLabel above) — keep
+// it in sync the moment a gateway becomes selectable, not just at pay-time.
+document.getElementById('paymentMethod').addEventListener('change', refreshCheckoutQuote);
 
 document.getElementById('payBtn').addEventListener('click', async () => {
   hideError('paymentError');
@@ -914,7 +926,11 @@ document.getElementById('payBtn').addEventListener('click', async () => {
   } catch (err) {
     showError('paymentError', err.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Pay Now';
+    // Restores the real "PAY R… BY …" label (and correct disabled state —
+    // refreshCheckoutQuote sets that from the terms checkbox itself) rather
+    // than a bare "Pay Now" that would undo MOB-003 the moment a payment
+    // attempt failed and the member needed to try again.
+    await refreshCheckoutQuote();
   }
 });
 </script>

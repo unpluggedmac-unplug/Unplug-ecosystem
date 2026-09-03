@@ -2662,6 +2662,14 @@ document.getElementById('ab-duration') && document.getElementById('ab-duration')
 // A function declaration (not a const arrow) so it hoists — helpers defined
 // further down this block are used by functions declared above it.
 function R(n) { return 'R' + Number(n || 0).toFixed(2); }
+
+// MOB-003: the button itself should say what it's about to charge, not just
+// the order summary above it — especially valuable on a small screen where
+// that summary may already be scrolled out of view by the time a member
+// reaches the button.
+function payMethodLabel(method) {
+  return method === 'payfast' ? 'PAYFAST' : method === 'ozow' ? 'OZOW' : 'EFT';
+}
 let SUBMIT_APPLIED_VOUCHER = '';   // only set once the server accepts a code
 let SUBMIT_LAST_QUOTE = null;
 
@@ -2705,6 +2713,12 @@ async function refreshSubmitQuote() {
     } else cRow.classList.add('section-hidden');
 
     document.getElementById('submitQuotePay').textContent = R(q.amountToPay);
+    const payBtn = document.getElementById('submitAndPayBtn');
+    if (payBtn) {
+      payBtn.textContent = q.settledWithoutPayment
+        ? 'Create & Pay (Covered by Credit)'
+        : `PAY ${R(q.amountToPay)} BY ${payMethodLabel(document.getElementById('submitPaymentMethod').value)}`;
+    }
     noteEl.textContent = q.settledWithoutPayment
       ? 'Covered in full — nothing left to pay. You still need to accept the terms below to complete the order.'
       : (q.creditBalance > 0 ? `You have ${R(q.creditBalance)} credit available${q.creditApplied > 0 ? `; ${R(q.creditRemainingAfter)} would remain after this order.` : '.'}` : '');
@@ -2738,6 +2752,9 @@ document.getElementById('submitApplyVoucher') && document.getElementById('submit
   }
 });
 document.getElementById('submitUseCredit') && document.getElementById('submitUseCredit').addEventListener('change', refreshSubmitQuote);
+// The button's own label names the method — keep it in sync the moment a
+// gateway becomes selectable, not just at pay-time.
+document.getElementById('submitPaymentMethod') && document.getElementById('submitPaymentMethod').addEventListener('change', refreshSubmitQuote);
 
 function showSubmitError(message) {
   const el = document.getElementById('submitError');
@@ -3775,7 +3792,9 @@ async function refreshCartQuote() {
       document.getElementById('cartSumCredit').textContent = '-R' + Number(CART_QUOTE.creditApplied).toFixed(2);
     } else creditRow.classList.add('section-hidden');
     document.getElementById('cartSumPay').textContent = 'R' + Number(CART_QUOTE.total).toFixed(2);
-    document.getElementById('cartPayBtn').textContent = CART_QUOTE.total === 0 ? 'Complete Order (Paid by Credit)' : 'Complete Order';
+    document.getElementById('cartPayBtn').textContent = CART_QUOTE.total === 0
+      ? 'Complete Order (Paid by Credit)'
+      : `PAY R${Number(CART_QUOTE.total).toFixed(2)} BY ${payMethodLabel(document.getElementById('cartPaymentMethod').value)}`;
   } catch (e) {
     showCartCheckoutError(e.message || 'Could not price this order.');
   }
@@ -3796,6 +3815,7 @@ document.getElementById('cartApplyVoucherBtn').addEventListener('click', async (
   }
 });
 document.getElementById('cartUseCredit').addEventListener('change', refreshCartQuote);
+document.getElementById('cartPaymentMethod') && document.getElementById('cartPaymentMethod').addEventListener('change', refreshCartQuote);
 
 document.querySelectorAll('.cartViewTerms').forEach((a) => a.addEventListener('click', () => {
   document.getElementById('cartTermsChk').disabled = false;
@@ -3865,7 +3885,10 @@ document.getElementById('cartPayBtn').addEventListener('click', async () => {
     showCartCheckoutError(err.message || 'Could not place this order.');
   } finally {
     btn.disabled = false;
-    if (btn.textContent === 'Processing…') btn.textContent = 'Complete Order';
+    // Restores the real "PAY R… BY …" label rather than a bare "Complete
+    // Order" that would undo MOB-003 the moment a cart payment attempt
+    // failed and the member needed to try again.
+    if (btn.textContent === 'Processing…') await refreshCartQuote();
   }
 });
 
