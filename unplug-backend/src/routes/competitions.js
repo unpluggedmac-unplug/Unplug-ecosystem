@@ -38,6 +38,7 @@ function voteCountExpr(monthlyParam, periodParam) {
 // a code looks like. The vote bundle's own rule (the reference IS the entry
 // code) stays here, because that is this feature's decision, not a general one.
 const { generateUnique } = require('../utils/reference');
+const contestantDashboard = require('../utils/contestantDashboard');
 
 // The Reference Code the buyer puts on their EFT IS the contestant's entry
 // code — one code, under one name, everywhere a customer sees it. See
@@ -675,18 +676,17 @@ router.delete('/entries/:id', requireRole('admin'), async (req, res, next) => {
 // at any status, with their current vote count.
 router.get('/entries/mine', requireAuth, async (req, res, next) => {
   try {
-    const result = await pool.query(
-      `SELECT ce.id, ce.status, ce.entry_fee, ce.created_at, c.name AS competition_name, c.slug AS competition_slug,
-              COALESCE(SUM(v.bundle_size), 0) AS vote_count
-       FROM competition_entries ce
-       JOIN competitions c ON c.id = ce.competition_id
-       LEFT JOIN votes v ON v.entry_id = ce.id
-       WHERE ce.profile_id IN (SELECT id FROM profiles WHERE user_id = $1)
-       GROUP BY ce.id, c.name, c.slug
-       ORDER BY ce.created_at DESC`,
-      [req.user.id]
-    );
-    res.json({ entries: result.rows });
+    // section 8.5: a contestant must see their code, the EXACT verified vote
+    // count, the online/bulk split, their ranking, and the competition's
+    // closing date and status. This used to return a bare total and not even
+    // the code.
+    //
+    // vote_count is kept alongside the new fields so anything already reading
+    // this endpoint keeps working.
+    const entries = await contestantDashboard.entriesFor(req.user.id);
+    res.json({
+      entries: entries.map(function (e) { return Object.assign({}, e, { vote_count: e.verifiedVotes }); }),
+    });
   } catch (err) {
     next(err);
   }
@@ -702,31 +702,86 @@ router.get('/entries/mine', requireAuth, async (req, res, next) => {
 // rather than a hardcoded number, since no business decision on price was
 // made during planning.
 router.post('/entries/:id/vote', async (req, res, next) => {
+  const client = await pool.connect();
   try {
     const { sessionId } = req.body;
     if (!req.user && !sessionId) {
+      client.release();
       return res.status(400).json({ error: 'sessionId is required for guest votes.' });
     }
 
-    // The competition's own rule decides whether this vote is day-scoped.
-    // Read from the entry rather than assumed, so the Arena keeps one vote
-    // per person while the Top 10 allows one a day (098_daily_voting.sql).
-    const entryCheck = await pool.query(
-      `SELECT ce.id, c.daily_voting
+    await client.query('BEGIN');
+
+    // The competition's own rules decide how this vote is treated. Read from
+    // the entry rather than assumed, so the Arena keeps one vote per person
+    // while the Top 10 allows one a day (098_daily_voting.sql).
+    const entryCheck = await client.query(
+      `SELECT ce.id, c.id AS competition_id, c.daily_voting, c.daily_vote_limit
          FROM competition_entries ce
          JOIN competitions c ON c.id = ce.competition_id
         WHERE ce.id = $1 AND ce.status = 'approved'`,
       [req.params.id]
     );
     if (entryCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      client.release();
       return res.status(404).json({ error: 'Entry not found or not open for voting.' });
     }
-    const dailyVoting = entryCheck.rows[0].daily_voting === true;
+    const entry = entryCheck.rows[0];
+    const dailyLimit = entry.daily_vote_limit === null ? null : Number(entry.daily_vote_limit);
+
+    // A daily CAP only means something if votes are scoped to a day, so setting
+    // the limit implies day-scoping. Deriving it rather than requiring two
+    // switches to be set together is what stops the rule being half-configured
+    // — a cap with no vote_day would count nothing and silently never apply.
+    const dailyVoting = entry.daily_voting === true || dailyLimit !== null;
+
+    // §9.2: at most `daily_vote_limit` free votes per voter per SA day, across
+    // the WHOLE competition. NULL means no cap, which is the pre-§9.2
+    // behaviour and what every competition ships with.
+    //
+    // The other half of §9.2 — five votes "spread across at least two
+    // contestants", never five to one — is already enforced by the unique index
+    // on (entry_id, voter, vote_day) from 098: a voter cannot cast a second
+    // free vote for the SAME entry on the same day at all. So the cap is the
+    // only new rule, and together they are §9.2.
+    if (dailyLimit !== null) {
+      // Counting and then inserting is a race: two requests can both count
+      // four and both insert, giving six. An advisory lock held for this
+      // transaction serialises the same voter's attempts at the same
+      // competition on the same day, which is exactly the abuse §9.4 asks us
+      // to prevent. It locks nobody else.
+      const voterKey = req.user ? `u:${req.user.id}` : `s:${sessionId}`;
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',
+        [`vote:${voterKey}:${entry.competition_id}`]);
+
+      const used = await client.query(
+        `SELECT COALESCE(SUM(v.bundle_size), 0)::int AS n
+           FROM votes v
+           JOIN competition_entries ce ON ce.id = v.entry_id
+          WHERE ce.competition_id = $1
+            AND v.vote_bundle_id IS NULL
+            AND v.vote_day = (now() AT TIME ZONE 'Africa/Johannesburg')::date
+            AND ${req.user ? 'v.voter_user_id = $2' : 'v.session_id = $2'}`,
+        [entry.competition_id, req.user ? req.user.id : sessionId]
+      );
+      const already = Number(used.rows[0].n);
+      if (already >= dailyLimit) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(429).json({
+          error: `You have used all ${dailyLimit} of your votes for today. You can vote again tomorrow.`,
+          dailyLimit,
+          votesUsedToday: already,
+          votesLeftToday: 0,
+        });
+      }
+    }
 
     // NULL vote_day = "once ever"; a date = "once on that date". The date is
     // South African rather than the server's UTC, so the day rolls over at
     // local midnight instead of 02:00 SAST.
-    const result = await pool.query(
+    const result = await client.query(
       `INSERT INTO votes (entry_id, voter_user_id, session_id, bundle_size, vote_day)
        VALUES ($1, $2, $3, 1,
                CASE WHEN $4::boolean
@@ -736,6 +791,9 @@ router.post('/entries/:id/vote', async (req, res, next) => {
       [req.params.id, req.user ? req.user.id : null, req.user ? null : sessionId, dailyVoting]
     );
 
+    await client.query('COMMIT');
+    client.release();
+
     // Signed-in voters only. An anonymous vote has no member to credit, and
     // this must never be a way to earn points without an account.
     if (req.user) {
@@ -744,8 +802,18 @@ router.post('/entries/:id/vote', async (req, res, next) => {
       });
     }
 
-    res.status(201).json({ vote: result.rows[0], dailyVoting });
+    const body = { vote: result.rows[0], dailyVoting };
+    if (dailyLimit !== null) {
+      body.dailyLimit = dailyLimit;
+      // Told after every vote, so a voter knows where they stand rather than
+      // discovering the cap only by hitting it.
+      body.votesLeftToday = Math.max(dailyLimit - (await votesUsedToday(
+        req.user ? req.user.id : null, req.user ? null : sessionId, entry.competition_id)), 0);
+    }
+    res.status(201).json(body);
   } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (e) { /* the transaction is already gone */ }
+    client.release();
     if (err.code === '23505') { // unique_violation
       // Two different rules, so two different messages — "you have already
       // voted" would read as final on a competition the voter can in fact
@@ -761,6 +829,23 @@ router.post('/entries/:id/vote', async (req, res, next) => {
     next(err);
   }
 });
+
+// How many free votes this voter has cast in this competition today. Used to
+// tell a voter what they have left; the enforcing count is done inside the
+// vote transaction, under a lock, and is not this.
+async function votesUsedToday(userId, sessionId, competitionId) {
+  const r = await pool.query(
+    `SELECT COALESCE(SUM(v.bundle_size), 0)::int AS n
+       FROM votes v
+       JOIN competition_entries ce ON ce.id = v.entry_id
+      WHERE ce.competition_id = $1
+        AND v.vote_bundle_id IS NULL
+        AND v.vote_day = (now() AT TIME ZONE 'Africa/Johannesburg')::date
+        AND ${userId ? 'v.voter_user_id = $2' : 'v.session_id = $2'}`,
+    [competitionId, userId || sessionId]
+  );
+  return Number(r.rows[0].n);
+}
 
 // Shared shape for the two entry-lookup routes below, so the checkout page
 // gets identical fields whether it resolved the entry by numeric id (a click

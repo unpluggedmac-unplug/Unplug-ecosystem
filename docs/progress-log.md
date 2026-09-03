@@ -935,3 +935,48 @@ Suite **1744**, 0 failing. Smoke **51/51**. Audit **PASS**.
 5. Smaller: no way to cancel a submission or pay an unpaid order from these views; no endpoint to
    change an account email address; §9.2's daily vote allowance is not surfaced; §10.9's one-click
    RENEW for expired services is not built.
+
+---
+
+## 2026-09-03 — Task 07: contestant codes and the §9.2 voting rule (BUILT, NOT FLIPPED)
+
+**The task's premise was out of date on item 1.** The 10-digit contestant code was described as
+"currently doesn't exist at all". It does, and it is careful work: migration **070** added the
+column, a `^[0-9]{10}$` CHECK, a partial unique index, and a **trigger** that issues the code the
+moment an entry becomes `approved` — deliberately a trigger, because three separate code paths can
+approve an entry and a fourth would forget. Migration **106** already makes it the bulk-vote EFT
+reference. It is displayed publicly. **§8.3 and §8.4 need nothing.**
+
+What *was* missing is **§8.5, the contestant's own view** — `/entries/mine` returned a bare total
+and not even the code. Now it returns the code, the **exact verified vote count**, the online /
+bought / adjusted split, ranking within the whole competition, closing date and status, with a panel
+under My Competitions. Every row in `votes` is already verified (a paid bundle inserts its row on
+CONFIRMATION, never at purchase), so "exact" is honest rather than optimistic. An admin adjustment
+is reported separately rather than folded into "online", which would tell a contestant the public
+voted for them when it did not.
+
+**§9.2 is built and is OFF.** Migration **165** adds `competitions.daily_vote_limit`, NULL
+everywhere, and NULL is exactly today's behaviour — **nothing about any running competition changes
+when this deploys.** Per-competition rather than global, matching what 098 did and for the reason it
+gave: flipping a rule underneath a running competition changes its result.
+
+Setting the limit implies day-scoping, so the rule cannot be half-configured into a cap that counts
+nothing. The other half of §9.2 — five votes "spread across at least two contestants" — is already
+enforced by 098's unique index on `(entry_id, voter, vote_day)`; the cap was the only missing piece.
+
+**A correction I made to my own test.** I first wrote the concurrency test claiming it proved the
+advisory lock was load-bearing. **It passes with the lock removed** — eight HTTP requests do not
+reliably hit a window a few milliseconds wide. It is now labelled an outcome check, and the lock is
+tested directly instead: a second transaction on the same key blocks until the first commits, and a
+different voter never blocks.
+
+Suite **1744 → 1761**, 0 failing. Verified in a browser against a real backend: five votes accepted
+with a countdown, the sixth refused with `429`, the uncapped competition unaffected, and the §8.5
+panel showing code `9890741601`, 253 verified votes (3 online / 250 bought), position 2 of 2.
+
+**STOPPED HERE, as the task requires — no competition has been flipped.** Cutover options are in the
+report to the owner; the rule goes live only on their explicit go-ahead.
+
+**Also flagged:** CLAUDE.md decision 1 (bulk-vote reference = code + suffix) is **stale** — migration
+106 deliberately reversed it and added `lookup_token`, because a publicly-printed code cannot be a
+credential. The file should be updated so the next reader does not "restore" the suffix.

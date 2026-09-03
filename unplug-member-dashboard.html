@@ -983,6 +983,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="card">
         <h2 id="subsTitle">My Submissions</h2>
         <p class="sub" id="subsSub">Everything you have sent us, newest first.</p>
+        <!-- Spec 8.5: the contestant's own view of an entry - their code, exact
+             verified votes, the online/bulk split, ranking and closing date. Only
+             drawn under My Competitions, where it is what the member came to see. -->
+        <div id="contestantPanel"></div>
         <div id="subsContent"><div class="loading-state">Loading&#8230;</div></div>
       </div>
     </section>
@@ -4499,6 +4503,9 @@ async function loadMySubmissions(type){
     var qs = MS_SUBS_TYPE ? ('?type=' + encodeURIComponent(MS_SUBS_TYPE)) : '';
     var data = await api('/my/submissions' + qs);
     subsRender(data.submissions || []);
+    // Section 8.5 belongs to competitions only; every other filter clears it.
+    if (MS_SUBS_TYPE === 'competition') { loadContestantPanel(); }
+    else { var cp = document.getElementById('contestantPanel'); if (cp) cp.textContent = ''; }
   } catch (err) {
     host.textContent = '';
     var oops = document.createElement('div');
@@ -4511,6 +4518,97 @@ async function loadMySubmissions(type){
 // Kept so the existing call sites keep working — this section used to be
 // "Content" and is loaded from several places after a submission is made.
 async function loadMemberContent(){ return loadMySubmissions(MS_SUBS_TYPE); }
+
+// SPEC 8.5 - the contestant dashboard.
+//
+// "The contestant must see the: EXACT NUMBER OF VERIFIED VOTES" is the spec's
+// own emphasis, so the total is the headline and the split sits under it.
+// Every figure comes from the server; this page does no counting.
+async function loadContestantPanel(){
+  var host = document.getElementById('contestantPanel');
+  if (!host) return;
+  host.textContent = '';
+  try {
+    var data = await api('/entries/mine');
+    contestantPanelRender(data.entries || []);
+  } catch (err) {
+    // Silent: the submissions list below is still useful on its own.
+    host.textContent = '';
+  }
+}
+
+function contestantPanelRender(entries){
+  var host = document.getElementById('contestantPanel');
+  if (!host) return;
+  host.textContent = '';
+  if (!entries.length) return;
+
+  entries.forEach(function(e){
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.style.cssText = 'margin-bottom:14px;';
+
+    var h = document.createElement('h3');
+    h.style.cssText = 'margin:0 0 2px; font-size:16px;';
+    h.textContent = e.competition;
+    card.appendChild(h);
+
+    // The code, or an honest explanation of why there is not one yet.
+    var code = document.createElement('p');
+    code.className = 'sub';
+    code.style.cssText = 'margin:0 0 10px;';
+    if (e.entryCode){
+      code.textContent = 'Your voting code: ';
+      var strong = document.createElement('strong');
+      strong.style.cssText = 'font-family:monospace; font-size:15px; letter-spacing:0.08em; color:var(--ink);';
+      strong.textContent = e.entryCode;
+      code.appendChild(strong);
+      var note = document.createElement('span');
+      note.textContent = ' - supporters use this when buying votes for you.';
+      code.appendChild(note);
+    } else {
+      code.textContent = 'Your voting code is issued once your entry is approved.';
+    }
+    card.appendChild(code);
+
+    // The headline figure.
+    var total = document.createElement('p');
+    total.style.cssText = 'margin:0; font-size:26px; font-weight:700;';
+    total.textContent = Number(e.verifiedVotes).toLocaleString('en-ZA');
+    var totalLabel = document.createElement('span');
+    totalLabel.style.cssText = 'font-size:12px; font-weight:400; color:var(--slate); margin-left:8px;';
+    totalLabel.textContent = 'verified votes';
+    total.appendChild(totalLabel);
+    card.appendChild(total);
+
+    // The split, so the number above can be checked rather than trusted.
+    var bits = [];
+    bits.push(Number(e.onlineVotes).toLocaleString('en-ZA') + ' online');
+    bits.push(Number(e.bulkVotes).toLocaleString('en-ZA') + ' bought');
+    if (Number(e.adjustmentVotes) > 0){
+      bits.push(Number(e.adjustmentVotes).toLocaleString('en-ZA') + ' adjusted by Unplug');
+    }
+    var split = document.createElement('p');
+    split.className = 'sub';
+    split.style.cssText = 'margin:2px 0 10px;';
+    split.textContent = bits.join(' \u00b7 ');
+    card.appendChild(split);
+
+    var meta = document.createElement('p');
+    meta.className = 'sub';
+    meta.style.cssText = 'margin:0;';
+    var m = [];
+    if (e.ranking){
+      m.push('Position ' + e.ranking + ' of ' + e.contestants);
+    }
+    if (e.closesAt){ m.push('Closes ' + msDate(e.closesAt)); }
+    if (e.competitionStatus){ m.push('Competition ' + e.competitionStatus); }
+    meta.textContent = m.join(' \u00b7 ');
+    card.appendChild(meta);
+
+    host.appendChild(card);
+  });
+}
 
 // MY SERVICES — spec section 5.
 //
