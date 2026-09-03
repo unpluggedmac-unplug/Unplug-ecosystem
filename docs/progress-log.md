@@ -1325,3 +1325,56 @@ backend enforcement), PAY-002 (order summary + voucher preview), PAY-004 (cancel
 PAY-006 (reference display), PAY-007 (already-paid recovery), PAY-008 (credit display), PAY-009
 (duplicate-order guard) — all verified against the actual code or fixed, not assumed from the
 hand-over document.
+
+## 2026-09-03 — Website remediation punch-list, DEAF-001/PASSPORT-002/DEAF-003/DEAF-004: Deaf
+## Community empty states verified, and self-service manage links built
+
+**DEAF-001 (jobs empty state) — already correctly built, verified only.** `loadDeafJobs()` already had
+all three states UX-001 asks for: "Loading vacancies…", "No live vacancies right now — check back
+soon." on an empty result, and "Couldn't load vacancies right now." on a fetch failure. No change
+needed.
+
+**DEAF-002/DEAF-004 — already correct.** The deaf-friendly-employer confirmation renders in bold on
+every job card; the Passport form already tells a submitter, right next to the email field, that it's
+"for verification only — never shown."
+
+**PASSPORT-002/DEAF-003 — a genuine gap, not just under-surfaced.** Neither `deaf_jobs` nor
+`deaf_passports` has a `user_id` — submitting has never required an account, deliberately, for an
+accessibility-focused feature — so there was no owner-facing route at all: only public GET/POST and
+admin moderation. A submitter had no way to see, edit, renew or remove their own listing. Site owner
+chose: build it, using an emailed link rather than a login, keeping the account-free submission model
+exactly as it is.
+
+Migration 170 adds `manage_token` to both tables (nullable, minted lazily in application code —
+`gen_random_bytes` needs the `pgcrypto` extension, which nothing in this project has ever enabled, so
+this avoids a new SQL-side dependency for a value plain Node `crypto` already generates correctly
+elsewhere) and a fourth status, `'withdrawn'`, owner-only and never set by moderation. "Deactivate" and
+"delete" from the punch list are treated as one action — immediate, permanent removal from the live
+board — rather than a separate dormant state, since nothing asked for a way to bring one back.
+
+Six new routes per table (`manage-link`, `GET/PATCH/DELETE manage/:token`, `POST manage/:token/renew`),
+sharing one set of route factories parameterised by table — jobs and passports get identical behaviour
+from one implementation, not two. `manage-link` always answers the same way whether or not anything
+matched, so the response can't be used to learn whether a given address has a listing; several
+listings for one email produce one email with several links, not several. Editing resets status to
+`'pending'` — a self-edit goes back through review before it's live again, the same as a new
+submission; nothing else in this codebase lets an owner edit already-approved content, so this is a
+new precedent, chosen as the safer default given the site's moderation posture everywhere else. Only
+the allow-listed fields per table are reachable from a PATCH body — id/status/token can't be set from
+the request.
+
+Frontend: a "Manage your listing" link on both the Jobs and Passport panels opens an email-request
+modal; a manage modal (fields mirroring the submission forms, Save/Renew/Remove) opens automatically
+when arriving via `?p=deafcommunity&manage=job|passport&token=...`, which is what the emailed link
+points at. Renew is hidden unless the listing is actually live; Save and Remove are disabled once
+withdrawn.
+
+New test, `deafCommunitySelfService.test.js` (13 tests): the anti-enumeration response, a real link
+that actually works end to end, one email for several listings, lazy minting reused across requests,
+editing resets to pending, the field allow-list holds (status/id/token unreachable from the body),
+renewing only while live, withdrawing removes it from both the public board and future manage-link
+emails, withdrawing twice is refused the second time, a bogus token is refused on every route, and the
+same behaviour confirmed for passports specifically, not assumed from the jobs coverage. Migration 170
+re-run twice without error. Verified live in-browser (mocked API): the modal opens, fields populate
+correctly per kind, and button state (Renew/Save/Withdraw) responds correctly to status. Full suite:
+1859 passing, 0 failing (up from 1846).

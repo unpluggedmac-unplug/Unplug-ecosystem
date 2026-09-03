@@ -3704,7 +3704,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div><span class="eyebrow">Deaf-friendly work</span><h2>Jobs Board</h2></div>
       <button class="btn btn-solid" id="dcPostJobBtn" style="font-size:12px;">Post a vacancy →</button>
     </div>
-    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:16px;">Vacancies from deaf-friendly employers. Every listing is live for 14 days. Apply straight to the business by email.</p>
+    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:4px;">Vacancies from deaf-friendly employers. Every listing is live for 14 days. Apply straight to the business by email.</p>
+    <p style="font-size:12.5px; margin-bottom:16px;"><a href="#" class="dc-manage-link" data-dc-kind="job">Already posted a vacancy? Manage it →</a></p>
 
     <div class="dc-filter-bar" id="dcJobFilters"></div>
     <div class="dc-jobs-list" id="dcJobsList"><p class="dc-empty">Loading vacancies…</p></div>
@@ -3716,7 +3717,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div><span class="eyebrow">Instead of a CV</span><h2>Opportunity Passports</h2></div>
       <button class="btn btn-solid" id="dcCreatePassportBtn" style="font-size:12px;">Create your passport →</button>
     </div>
-    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:16px;">A living digital card of your skills, certifications, communication preferences and availability. No contact details are ever shared here — interested employers reach out through Unplug. Each passport shows for 14 days. Visitors can leave a comment of support.</p>
+    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:4px;">A living digital card of your skills, certifications, communication preferences and availability. No contact details are ever shared here — interested employers reach out through Unplug. Each passport shows for 14 days. Visitors can leave a comment of support.</p>
+    <p style="font-size:12.5px; margin-bottom:16px;"><a href="#" class="dc-manage-link" data-dc-kind="passport">Already created a passport? Manage it →</a></p>
     <div class="dc-passport-list" id="dcPassportList"><p class="dc-empty">Loading passports…</p></div>
   </section>
 </main>
@@ -3764,6 +3766,58 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <input type="text" name="website" id="hpPassport" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
     <button class="btn btn-solid" id="dcPassSubmit" style="width:100%; margin-top:6px;">Submit passport</button>
     <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="?p=terms" target="_blank" rel="noopener">Terms of Use</a>.</p>
+  </div>
+</div>
+
+<!-- REQUEST A MANAGE LINK — no account, no password: an emailed link is what
+     proves a listing is yours, same idea as the edition-download claim flow. -->
+<div class="shoutout-modal-overlay" id="dcRequestLinkModal" aria-hidden="true">
+  <div class="shoutout-modal" role="dialog" aria-modal="true" style="max-width:440px;">
+    <button class="shoutout-modal-close" id="dcRequestLinkClose" aria-label="Close">&times;</button>
+    <span class="eyebrow" style="color:var(--red);">Deaf Community</span>
+    <h3 style="font-family:'Playfair Display',serif; font-size:21px; margin:8px 0 12px;" id="dcRequestLinkTitle">Manage your listing</h3>
+    <div class="shoutout-form-msg" id="dcRequestLinkMsg"></div>
+    <p style="font-size:12.5px; color:var(--slate); margin-bottom:10px;">Enter the email address you submitted with. If we have a listing for it, we'll send a link to view, edit, renew or remove it — no account needed.</p>
+    <div class="field"><label>Email</label><input id="dcRequestLinkEmail" type="email"></div>
+    <button class="btn btn-solid" id="dcRequestLinkSubmit" style="width:100%; margin-top:6px;">Send me the link</button>
+  </div>
+</div>
+
+<!-- MANAGE A LISTING — reached from the emailed link (?p=deafcommunity&
+     manage=job|passport&token=...). Fields mirror the submission forms
+     above; Renew only appears while the listing is actually live, since
+     there is nothing to extend before that. -->
+<div class="shoutout-modal-overlay" id="dcManageModal" aria-hidden="true">
+  <div class="shoutout-modal" role="dialog" aria-modal="true" style="max-width:520px;">
+    <button class="shoutout-modal-close" id="dcManageClose" aria-label="Close">&times;</button>
+    <span class="eyebrow" style="color:var(--red);">Deaf Community</span>
+    <h3 style="font-family:'Playfair Display',serif; font-size:21px; margin:8px 0 6px;" id="dcManageTitle">Manage your listing</h3>
+    <p style="font-size:12.5px; color:var(--slate); margin-bottom:10px;" id="dcManageStatus"></p>
+    <div class="shoutout-form-msg" id="dcManageMsg"></div>
+
+    <div id="dcManageJobFields" class="section-hidden">
+      <div class="field-row"><div class="field"><label>Business name</label><input id="dcMgBusiness" maxlength="200"></div>
+        <div class="field"><label>Job title</label><input id="dcMgTitle" maxlength="200"></div></div>
+      <div class="field"><label>Description (max 100 words)</label><textarea id="dcMgDesc" rows="4"></textarea></div>
+      <div class="field-row"><div class="field"><label>Apply-to email</label><input id="dcMgApplyEmail" type="email"></div>
+        <div class="field"><label>Salary range</label><input id="dcMgSalary"></div></div>
+    </div>
+
+    <div id="dcManagePassportFields" class="section-hidden">
+      <div class="field"><label>Name &amp; surname</label><input id="dcMgName" maxlength="200"></div>
+      <div class="field"><label>Profile image URL</label><input id="dcMgImage"></div>
+      <div class="field"><label>Skills</label><textarea id="dcMgSkills" rows="2"></textarea></div>
+      <div class="field"><label>Certifications</label><textarea id="dcMgCerts" rows="2"></textarea></div>
+      <div class="field-row"><div class="field"><label>Communication preferences</label><input id="dcMgComm"></div>
+        <div class="field"><label>Availability</label><input id="dcMgAvail"></div></div>
+    </div>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+      <button class="btn btn-solid" id="dcManageSave" style="width:auto;">Save changes</button>
+      <button class="btn btn-line" id="dcManageRenew" style="width:auto;">Renew for 14 more days</button>
+      <button class="btn btn-line" id="dcManageWithdraw" style="width:auto; color:var(--red);">Remove from the board</button>
+    </div>
+    <p style="font-size:11.5px; color:var(--slate); margin-top:8px;">Saving a change sends it back for review, the same as a new submission, before it's live again.</p>
   </div>
 </div>
 
@@ -9963,6 +10017,7 @@ function initDeafCommunity() {
 
   setupDcJobModal();
   setupDcPassportModal();
+  setupDcManage();
 }
 
 function renderSaslLessons() {
@@ -10193,6 +10248,204 @@ function setupDcPassportModal() {
       btn.disabled = false; btn.textContent = 'Submit passport';
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// SELF-SERVICE: request a manage link by email, then view/edit/renew/remove
+// the listing it points at. No account — the emailed link IS the proof of
+// ownership, same idea as the edition-download claim flow. 'job' and
+// 'passport' share one flow, keyed by DC_MANAGE_KIND, since the two modals
+// differ only in which fields they show.
+// ---------------------------------------------------------------------------
+let DC_MANAGE_KIND = 'job';   // which kind the currently-open modal is for
+const DC_MANAGE_API = { job: '/deaf-community/jobs', passport: '/deaf-community/passports' };
+const DC_MANAGE_LABEL = { job: 'vacancy', passport: 'Opportunity Passport' };
+
+function setupDcManage() {
+  // "Manage a listing" links open the email-request modal for the right kind.
+  document.querySelectorAll('.dc-manage-link').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      openDcRequestLinkModal(a.dataset.dcKind);
+    });
+  });
+
+  const reqModal = document.getElementById('dcRequestLinkModal');
+  document.getElementById('dcRequestLinkClose').addEventListener('click', () => reqModal.classList.remove('open'));
+  reqModal.addEventListener('click', (e) => { if (e.target === reqModal) reqModal.classList.remove('open'); });
+  document.getElementById('dcRequestLinkSubmit').addEventListener('click', submitDcRequestLink);
+
+  const mgModal = document.getElementById('dcManageModal');
+  document.getElementById('dcManageClose').addEventListener('click', () => mgModal.classList.remove('open'));
+  mgModal.addEventListener('click', (e) => { if (e.target === mgModal) mgModal.classList.remove('open'); });
+  document.getElementById('dcManageSave').addEventListener('click', saveDcManaged);
+  document.getElementById('dcManageRenew').addEventListener('click', renewDcManaged);
+  document.getElementById('dcManageWithdraw').addEventListener('click', withdrawDcManaged);
+
+  // Arrived here from the emailed link — open straight to the listing rather
+  // than making them ask for the link a second time.
+  const params = new URLSearchParams(location.search);
+  const manageKind = params.get('manage');
+  const token = params.get('token');
+  if ((manageKind === 'job' || manageKind === 'passport') && token) {
+    loadDcManaged(manageKind, token);
+  }
+}
+
+function openDcRequestLinkModal(kind) {
+  DC_MANAGE_KIND = kind;
+  document.getElementById('dcRequestLinkTitle').textContent = `Manage your ${DC_MANAGE_LABEL[kind]}`;
+  document.getElementById('dcRequestLinkMsg').className = 'shoutout-form-msg';
+  document.getElementById('dcRequestLinkEmail').value = '';
+  document.getElementById('dcRequestLinkModal').classList.add('open');
+}
+
+async function submitDcRequestLink() {
+  const email = document.getElementById('dcRequestLinkEmail').value.trim();
+  const msg = document.getElementById('dcRequestLinkMsg');
+  if (!email) { msg.className = 'shoutout-form-msg show error'; msg.textContent = 'Enter an email address.'; return; }
+  const btn = document.getElementById('dcRequestLinkSubmit');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  try {
+    const data = await api(`${DC_MANAGE_API[DC_MANAGE_KIND]}/manage-link`, { method: 'POST', body: JSON.stringify({ email }) });
+    msg.className = 'shoutout-form-msg show success';
+    msg.textContent = data.message;
+  } catch (err) {
+    msg.className = 'shoutout-form-msg show error'; msg.textContent = err.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send me the link';
+  }
+}
+
+let DC_MANAGE_TOKEN = null;
+
+async function loadDcManaged(kind, token) {
+  const modal = document.getElementById('dcManageModal');
+  const msgEl = document.getElementById('dcManageMsg');
+  DC_MANAGE_KIND = kind;
+  DC_MANAGE_TOKEN = token;
+  document.getElementById('dcRequestLinkModal').classList.remove('open');
+  msgEl.className = 'shoutout-form-msg';
+  modal.classList.add('open');
+
+  document.getElementById('dcManageJobFields').classList.toggle('section-hidden', kind !== 'job');
+  document.getElementById('dcManagePassportFields').classList.toggle('section-hidden', kind !== 'passport');
+  document.getElementById('dcManageTitle').textContent = `Manage your ${DC_MANAGE_LABEL[kind]}`;
+
+  try {
+    const data = await api(`${DC_MANAGE_API[kind]}/manage/${token}`);
+    const row = kind === 'job' ? data.job : data.passport;
+    renderDcManageStatus(row);
+    if (kind === 'job') {
+      document.getElementById('dcMgBusiness').value = row.business_name || '';
+      document.getElementById('dcMgTitle').value = row.title || '';
+      document.getElementById('dcMgDesc').value = row.description || '';
+      document.getElementById('dcMgApplyEmail').value = row.apply_email || '';
+      document.getElementById('dcMgSalary').value = row.salary_range || '';
+    } else {
+      document.getElementById('dcMgName').value = row.name || '';
+      document.getElementById('dcMgImage').value = row.profile_image_url || '';
+      document.getElementById('dcMgSkills').value = row.skills || '';
+      document.getElementById('dcMgCerts').value = row.certifications || '';
+      document.getElementById('dcMgComm').value = row.communication_preferences || '';
+      document.getElementById('dcMgAvail').value = row.availability || '';
+    }
+  } catch (err) {
+    msgEl.className = 'shoutout-form-msg show error';
+    msgEl.textContent = err.message;
+    document.getElementById('dcManageSave').disabled = true;
+    document.getElementById('dcManageRenew').disabled = true;
+    document.getElementById('dcManageWithdraw').disabled = true;
+  }
+}
+
+const DC_STATUS_LABEL = {
+  pending: 'Awaiting review — not live yet.',
+  approved: 'Live now.',
+  rejected: 'Not approved for publication.',
+  withdrawn: 'Removed from the board.',
+};
+function renderDcManageStatus(row) {
+  const statusText = DC_STATUS_LABEL[row.status] || row.status;
+  const expiry = row.status === 'approved' && row.expires_at
+    ? ` Expires ${new Date(row.expires_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}.`
+    : '';
+  document.getElementById('dcManageStatus').textContent = statusText + expiry;
+  // Renewing only makes sense for something currently live — the button says
+  // so rather than being clickable and failing.
+  document.getElementById('dcManageRenew').style.display = row.status === 'approved' ? '' : 'none';
+  const gone = row.status === 'withdrawn';
+  document.getElementById('dcManageSave').disabled = gone;
+  document.getElementById('dcManageWithdraw').disabled = gone;
+}
+
+async function saveDcManaged() {
+  const msgEl = document.getElementById('dcManageMsg');
+  const btn = document.getElementById('dcManageSave');
+  const payload = DC_MANAGE_KIND === 'job'
+    ? {
+        businessName: document.getElementById('dcMgBusiness').value.trim(),
+        title: document.getElementById('dcMgTitle').value.trim(),
+        description: document.getElementById('dcMgDesc').value.trim(),
+        applyEmail: document.getElementById('dcMgApplyEmail').value.trim(),
+        salaryRange: document.getElementById('dcMgSalary').value.trim() || null,
+      }
+    : {
+        name: document.getElementById('dcMgName').value.trim(),
+        profileImageUrl: document.getElementById('dcMgImage').value.trim() || null,
+        skills: document.getElementById('dcMgSkills').value.trim() || null,
+        certifications: document.getElementById('dcMgCerts').value.trim() || null,
+        communicationPreferences: document.getElementById('dcMgComm').value.trim() || null,
+        availability: document.getElementById('dcMgAvail').value.trim() || null,
+      };
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const data = await api(`${DC_MANAGE_API[DC_MANAGE_KIND]}/manage/${DC_MANAGE_TOKEN}`, {
+      method: 'PATCH', body: JSON.stringify(payload),
+    });
+    msgEl.className = 'shoutout-form-msg show success';
+    msgEl.textContent = data.message;
+    renderDcManageStatus({ status: 'pending' });
+  } catch (err) {
+    msgEl.className = 'shoutout-form-msg show error'; msgEl.textContent = err.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save changes';
+  }
+}
+
+async function renewDcManaged() {
+  const msgEl = document.getElementById('dcManageMsg');
+  const btn = document.getElementById('dcManageRenew');
+  btn.disabled = true; btn.textContent = 'Renewing...';
+  try {
+    const data = await api(`${DC_MANAGE_API[DC_MANAGE_KIND]}/manage/${DC_MANAGE_TOKEN}/renew`, { method: 'POST' });
+    msgEl.className = 'shoutout-form-msg show success';
+    msgEl.textContent = data.message;
+    renderDcManageStatus({ status: 'approved', expires_at: data.expiresAt });
+  } catch (err) {
+    msgEl.className = 'shoutout-form-msg show error'; msgEl.textContent = err.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Renew for 14 more days';
+  }
+}
+
+async function withdrawDcManaged() {
+  if (!confirm(`Remove this ${DC_MANAGE_LABEL[DC_MANAGE_KIND]} from the board? This cannot be undone.`)) return;
+  const msgEl = document.getElementById('dcManageMsg');
+  const btn = document.getElementById('dcManageWithdraw');
+  btn.disabled = true; btn.textContent = 'Removing...';
+  try {
+    const data = await api(`${DC_MANAGE_API[DC_MANAGE_KIND]}/manage/${DC_MANAGE_TOKEN}`, { method: 'DELETE' });
+    msgEl.className = 'shoutout-form-msg show success';
+    msgEl.textContent = data.message;
+    renderDcManageStatus({ status: 'withdrawn' });
+    if (DC_MANAGE_KIND === 'job') loadDeafJobs(); else loadDeafPassports();
+  } catch (err) {
+    msgEl.className = 'shoutout-form-msg show error'; msgEl.textContent = err.message;
+    btn.disabled = false;
+  } finally {
+    btn.textContent = 'Remove from the board';
+  }
 }
 
 // ---------------------------------------------------------------------------
