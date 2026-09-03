@@ -1296,3 +1296,32 @@ testing gateway-enablement and shouldn't be coupled to it. Full suite: 1841 pass
 from 1837).
 
 Still open: `unplug-checkout.html`'s voucher field has no live preview before payment.
+
+## 2026-09-03 — Website remediation punch-list, PAY-002: live voucher preview in checkout
+
+The last open item from Section 6.6. `unplug-checkout.html` priced the order with pure client-side
+arithmetic (order total minus credit) and never asked the server about the voucher at all until the
+moment of payment — a member typed a code, paid, and only found out what it did (or didn't do)
+afterwards. Submit & Pay already did this properly via `POST /payments/quote`, an Apply button and a
+live discount row; checkout was the outlier.
+
+Rebuilt to match: `recalcCheckout()` (pure arithmetic) is gone, replaced by `refreshCheckoutQuote()`,
+which calls `/payments/quote` with the linked purchase, the applied voucher and the credit choice, and
+renders Order total / Voucher applied / Credit applied / Total to pay straight from the response — the
+same shape Submit & Pay already uses. Added a Voucher row and Apply button to the markup. Paying now
+sends the APPLIED, server-validated voucher code, not whatever text currently sits in the input — so
+typing a new code without clicking Apply can't silently charge a discount the summary never showed.
+Verified live (mocked the API response, real DOM): correct endpoint, correct request shape, the
+voucher/credit/total rows all rendered correctly from the response.
+
+New test, `checkoutVoucherPreview.test.js` (5 tests): the Apply button and discount row exist, the
+summary is built from `/payments/quote` rather than client arithmetic (and the old function is
+actually gone, not left dead alongside the new one), Apply triggers a real re-quote, paying uses the
+applied voucher rather than re-reading the raw input, and the credit checkbox also re-quotes. Full
+suite: 1846 passing, 0 failing (up from 1841).
+
+**Section 6.6 (checkout) is now fully worked through**: PAY-001/005 (frontend consistency, then
+backend enforcement), PAY-002 (order summary + voucher preview), PAY-004 (cancellation summary),
+PAY-006 (reference display), PAY-007 (already-paid recovery), PAY-008 (credit display), PAY-009
+(duplicate-order guard) — all verified against the actual code or fixed, not assumed from the
+hand-over document.
