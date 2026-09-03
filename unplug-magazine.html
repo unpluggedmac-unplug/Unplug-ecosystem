@@ -4047,19 +4047,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <p style="font-size:13px; max-width:32ch; line-height:1.6;">Real people. Real impact. Real stories worth unplugging for.</p>
       </div>
       <div><h4>Explore</h4><ul>
-        <li><a href="#" data-page="news">Latest News</a></li>
-        <li><a href="#" data-page="directory">Directory</a></li>
-        <li><a href="#" data-page="gallery">Gallery</a></li>
-        <li><a href="#" data-page="editions">Editions</a></li>
-        <li><a href="#" data-page="top10">Top 10</a></li>
+        <li><a href="?p=news" data-page="news">Latest News</a></li>
+        <li><a href="?p=directory" data-page="directory">Directory</a></li>
+        <li><a href="?p=gallery" data-page="gallery">Gallery</a></li>
+        <li><a href="?p=editions" data-page="editions">Editions</a></li>
+        <li><a href="?p=top10" data-page="top10">Top 10</a></li>
       </ul></div>
       <div><h4>Magazine</h4><ul>
-        <li><a href="#" data-page="competitions">Competitions</a></li>
-        <li><a href="#" data-page="investors">Investors</a></li>
-        <li><a href="#" data-page="brandplacement">Marketplace</a></li>
-        <li><a href="#" data-page="about">About Us</a></li>
-        <li><a href="#" data-page="contact">Contact</a></li>
-        <li><a href="#">Submit a Story</a></li>
+        <li><a href="?p=competitions" data-page="competitions">Competitions</a></li>
+        <li><a href="?p=investors" data-page="investors">Investors</a></li>
+        <li><a href="?p=brandplacement" data-page="brandplacement">Marketplace</a></li>
+        <li><a href="?p=about" data-page="about">About Us</a></li>
+        <li><a href="?p=contact" data-page="contact">Contact</a></li>
+        <li><a href="#" id="footerSubmitCta">Submit a Story</a></li>
       </ul></div>
       <div><h4>Follow</h4>
         <div class="footer-social">
@@ -4073,7 +4073,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
     <div class="footer-bottom">
       <span>© 2026 Unplug Magazine. All rights reserved.</span>
-      <span><a href="#" data-page="privacy" style="color:inherit;">Privacy Policy</a> · <a href="#" data-page="terms" style="color:inherit;">Terms of Use</a> · <a href="#" data-page="refunds" style="color:inherit;">Terms &amp; Policies</a></span>
+      <span><a href="?p=privacy" data-page="privacy" style="color:inherit;">Privacy Policy</a> · <a href="?p=terms" data-page="terms" style="color:inherit;">Terms of Use</a> · <a href="?p=refunds" data-page="refunds" style="color:inherit;">Terms &amp; Policies</a></span>
     </div>
   </div>
 </footer>
@@ -9762,6 +9762,14 @@ document.getElementById('navToggle').addEventListener('click', () => {
   document.getElementById('mainNav').classList.toggle('open');
 });
 document.getElementById('submitCta').addEventListener('click', (e) => {
+  e.preventDefault();
+  goToMemberDashboard();
+});
+// The footer's own "Submit a Story" — same destination as the header CTA
+// above. Not a [data-page] because there is no in-page section for it; it
+// was previously a plain href="#" with no listener at all, so it did
+// nothing when clicked.
+document.getElementById('footerSubmitCta').addEventListener('click', (e) => {
   e.preventDefault();
   goToMemberDashboard();
 });
