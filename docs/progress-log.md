@@ -1238,3 +1238,42 @@ this session touched anything: the Directory Highlight refunds-policy page previ
 ladder R150 higher than what the system actually charges at every tier (`docs/pricing-comparison.md`,
 compiled 29 August) — checked live on 2026-09-03 and the policy page now reads the correct R100-R250
 ladder, so nothing needed doing.
+
+## 2026-09-03 — Website remediation punch-list, PAY-009: duplicate-order guard
+
+A hand-over document ("Unplug-Website-Punchlist-for-Claude-Code") claimed the site runs on Netlify +
+Railway with no local dev environment — none of which matches this codebase (confirmed live:
+`server: cloudflare` on the main site, the API domain is literally `*.onrender.com`, and the CSP's own
+`connect-src` whitelists only that domain). Treated as unreliable for anything I couldn't verify
+independently, rather than acted on as given. Its RLS/anon-key security claim (N-1) also doesn't apply
+as described: the frontend has zero Supabase client SDK and zero anon key anywhere — every real
+read/write goes through the Render backend's own auth, and the only browser-facing Supabase touch is
+public storage URLs, which RLS on Postgres tables doesn't gate at all.
+
+What did check out, verified against the actual code: `POST /payments/initiate` had no protection
+against being called twice for the same purchase, for any `linkedType` except `ad_banner` (which
+checks its own `moderation_status` field, not a general mechanism) — a double-click, a Back-button
+resubmit, or two open tabs could create two real payment rows for one directory package, highlight,
+competition entry, event listing, or anything else.
+
+Fixed with one general guard rather than a bespoke check per linked type: before creating a payment,
+look for an existing `pending` or `confirmed` row for this `(user_id, linked_type, linked_id)`. A
+`confirmed` one is refused outright ("already been paid for"). A `pending` one is handed back
+as-is — same reference, same EFT/redirect details — with no voucher or credit re-applied, since that
+already happened (or didn't) the first time. A `failed` payment doesn't block a fresh attempt.
+Response-building for the EFT/gateway-stub payload was pulled into one `initiateResponseFor()`
+helper, used by both the normal success path and the duplicate-return path, rather than writing it
+twice.
+
+New test, `paymentsDuplicateGuard.test.js` (7 tests): same reference on resubmit, only one row ever
+created, a third/tenth resubmit is still idempotent, confirmed purchases are refused, failed ones
+aren't blocked, two genuinely different purchases are never confused for duplicates, the guard is
+scoped per-user, and PayFast/Ozow resubmits are caught too (not just EFT). Verified the frontend's
+`api()` helper treats any 2xx as success (the duplicate-return path answers 200, not the original
+201), so this is transparent to every existing caller with no frontend change needed. Full suite:
+1837 passing, 0 failing (up from 1830).
+
+Also confirmed, not yet fixed: the same route accepts `method: 'payfast'`/`'ozow'` and returns a stub
+redirect to a fake domain — the frontend disables that option everywhere, but the backend doesn't
+enforce it. And `unplug-checkout.html`'s voucher field has no live preview before payment, unlike
+Submit & Pay's. Both flagged for a follow-up task.

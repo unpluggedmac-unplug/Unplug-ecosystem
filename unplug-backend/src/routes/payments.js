@@ -125,6 +125,23 @@ const TERMS_VERSION = '2026.07.29';
 const generateReference = () =>
   generateUnique({ table: 'payments', column: 'gateway_reference', digits: true });
 
+// What POST /initiate returns once a payment row exists — the EFT bank
+// details, or the (stubbed) gateway redirect. Shared by the normal creation
+// path and the duplicate-order guard below, which returns this same shape
+// for an already-existing pending payment instead of building a second one.
+function initiateResponseFor(payment) {
+  if (payment.method === 'eft') {
+    return { instructions: eftInstructions(payment.gateway_reference) };
+  }
+  // PayFast/Ozow: in production this returns a real hosted-checkout URL built
+  // from the gateway's SDK/API using the merchant credentials and this
+  // reference. Stubbed here since that requires live credentials.
+  return {
+    redirectUrl: `https://sandbox.${payment.method}.example.com/checkout?ref=${payment.gateway_reference}&amount=${payment.amount}`,
+    note: `Stub URL — replace with a real ${payment.method === 'payfast' ? 'PayFast' : 'Ozow'} checkout link once merchant credentials are available.`,
+  };
+}
+
 // Works out the correct amount for a given linked_type/linked_id, from the
 // database rather than the request body.
 async function resolveAmount(linkedType, linkedId) {
@@ -889,6 +906,38 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       if (own.rows[0].moderation_status !== 'pending_payment') return res.status(400).json({ error: 'This banner has already been paid for.' });
     }
 
+    // DUPLICATE-ORDER GUARD. A double-click, a resubmit after Back, or two
+    // open tabs must not create a second payment row for the same purchase.
+    // One check here covers every linkedType, rather than reimplementing an
+    // "already paid for" test per type the way the ad_banner check above
+    // does on its own status field — that one stays, since it also confirms
+    // ownership of the banner; this one is the general case for everything
+    // else. Scoped to this user: a linked resource belongs to one buyer, so
+    // nobody else's attempt is affected.
+    const existing = await pool.query(
+      `SELECT * FROM payments
+        WHERE user_id = $1 AND linked_type = $2 AND linked_id = $3
+          AND status IN ('pending', 'confirmed')
+        ORDER BY created_at DESC LIMIT 1`,
+      [req.user.id, linkedType, linkedId]
+    );
+    if (existing.rows.length > 0) {
+      const prior = existing.rows[0];
+      if (prior.status === 'confirmed') {
+        return res.status(400).json({ error: 'This has already been paid for.' });
+      }
+      // Still pending: hand back the SAME order rather than starting a
+      // second one. No voucher or credit is re-applied here — that already
+      // happened, or didn't, when this payment was first created; redoing it
+      // now would risk a second redemption or a second deduction.
+      return res.status(200).json({
+        payment: prior,
+        creditUsed: Number(prior.credit_used) || 0,
+        alreadyPending: true,
+        ...initiateResponseFor(prior),
+      });
+    }
+
     const amount = await resolveAmount(linkedType, linkedId);
 
     let finalAmount = amount;
@@ -980,24 +1029,13 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       });
     }
 
-    if (method === 'eft') {
-      return res.status(201).json({
-        payment,
-        creditUsed,
-        instructions: eftInstructions(reference),
-      });
-    }
-
-    // PayFast/Ozow: in production this returns a real hosted-checkout URL
-    // built from the gateway's SDK/API using the merchant credentials and
-    // this reference. Stubbed here since that requires live credentials.
+    // payment.amount (not the original price) is what's actually still owed
+    // after voucher and credit — initiateResponseFor uses it as-stored, so an
+    // EFT/gateway response always reflects what was actually charged.
     res.status(201).json({
       payment,
       creditUsed,
-      // payment.amount, not the original price — the gateway must charge what
-      // is actually still owed after voucher and credit, not the list price.
-      redirectUrl: `https://sandbox.${method}.example.com/checkout?ref=${reference}&amount=${payment.amount}`,
-      note: `Stub URL — replace with a real ${method === 'payfast' ? 'PayFast' : 'Ozow'} checkout link once merchant credentials are available.`,
+      ...initiateResponseFor(payment),
     });
   } catch (err) {
     if (err.message.includes('not found') || err.message.includes('not implemented')) {
