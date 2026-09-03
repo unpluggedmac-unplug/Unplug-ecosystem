@@ -1277,3 +1277,22 @@ Also confirmed, not yet fixed: the same route accepts `method: 'payfast'`/`'ozow
 redirect to a fake domain — the frontend disables that option everywhere, but the backend doesn't
 enforce it. And `unplug-checkout.html`'s voucher field has no live preview before payment, unlike
 Submit & Pay's. Both flagged for a follow-up task.
+
+## 2026-09-03 — Website remediation punch-list, PAY-001/PAY-005: backend now enforces EFT-only
+
+The first of the two follow-ups above. Fixed by gating `method` in `POST /payments/initiate` on the
+same env vars the PayFast/Ozow webhook signature verifiers already require for a real merchant
+account (`PAYFAST_PASSPHRASE`, `OZOW_PRIVATE_KEY`) — not a separate flag that could drift out of sync
+with whether credentials actually exist. Requesting either method today is refused with the same
+"coming soon" wording the UI already shows; EFT is unaffected. The moment real credentials are
+configured, that method starts working with no further code change.
+
+New test, `paymentGatewayNotLive.test.js` (4 tests): PayFast refused with no stub redirect and no
+payment row created, same for Ozow, EFT unaffected, and — proving the self-enabling design actually
+works rather than just asserting it — a test that sets `PAYFAST_PASSPHRASE` mid-run and confirms the
+very next request succeeds. The existing duplicate-guard test's own PayFast case (testing that the
+duplicate guard applies to gateway methods too) now sets the env var in its fixture, since it isn't
+testing gateway-enablement and shouldn't be coupled to it. Full suite: 1841 passing, 0 failing (up
+from 1837).
+
+Still open: `unplug-checkout.html`'s voucher field has no live preview before payment.

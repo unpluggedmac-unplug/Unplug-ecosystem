@@ -80,6 +80,11 @@ before(async () => {
 
   process.env.DATABASE_URL = `postgres://postgres:postgres@localhost:${port}/unplug_test`;
   process.env.JWT_SECRET = 'test-secret-for-paydupe';
+  // This file's own PayFast test is about the duplicate-order guard applying
+  // to gateway methods too, not about gatewayIsLive() itself (that has its
+  // own dedicated test file) — so PayFast is set "live" here to keep that
+  // test isolated to what it actually checks.
+  process.env.PAYFAST_PASSPHRASE = 'test-passphrase';
 
   const { Pool } = require('pg');
   pool = new Pool({ connectionString: process.env.DATABASE_URL });

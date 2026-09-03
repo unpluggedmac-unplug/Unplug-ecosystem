@@ -78,6 +78,23 @@ function verifyOzowHash(body) {
   return computedHash === receivedHash;
 }
 
+// Website remediation punch-list, PAY-001/PAY-005: the frontend disables
+// PayFast and Ozow as "coming soon" everywhere, but until now this route
+// still accepted them and handed back a stub redirect to a fake domain —
+// reachable by devtools (removing a `disabled` attribute) or a direct API
+// call, bypassing the frontend entirely.
+//
+// Gated on the same env vars the webhook verifiers above already require for
+// a real merchant account (PAYFAST_PASSPHRASE, OZOW_PRIVATE_KEY) — not a
+// separate flag to keep in sync. The moment real credentials are configured,
+// this starts accepting that method with no further code change; until then,
+// requesting it is refused with the same "coming soon" message the UI shows.
+function gatewayIsLive(method) {
+  if (method === 'payfast') return Boolean(process.env.PAYFAST_PASSPHRASE);
+  if (method === 'ozow') return Boolean(process.env.OZOW_PRIVATE_KEY);
+  return true; // eft needs no merchant account
+}
+
 const PACKAGE_PRICES = {
   individual: { basic: 150.00, pro: 280.00, premium: 400.00 },
   business:   { basic: 500.00, pro: 700.00, premium: 1000.00 },
@@ -877,6 +894,9 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     const { linkedType, linkedId, method, referralSource, salesConsultantId, voucherCode, useCredit, termsAccepted } = req.body;
     if (!['payfast', 'ozow', 'eft'].includes(method)) {
       return res.status(400).json({ error: 'method must be one of: payfast, ozow, eft' });
+    }
+    if (!gatewayIsLive(method)) {
+      return res.status(400).json({ error: `${method === 'payfast' ? 'PayFast' : 'Ozow'} is coming soon and cannot be used yet — pay via EFT for now.` });
     }
     // MANDATORY Terms & Conditions gate — enforced server-side, per order. Every
     // new paid order must actively accept the current Ts&Cs; there is no bypass
