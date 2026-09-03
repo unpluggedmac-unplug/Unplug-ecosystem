@@ -1543,3 +1543,49 @@ review/live; it's gated on `DIRECTORY_MODE`; no `showError()` call reduces to a 
 Verified live in-browser: the note shows for a Directory purchase (`?ptype=individual&tier=pro`) and
 stays hidden for an edition download (`?type=edition_download&id=3`). Full suite: 1888 passing, 0
 failing (up from 1885).
+
+## 2026-09-03 — Floating Buttons: admin-managed CTA stack on every public page
+
+New feature, requested directly (not from the punch-list document). Checked the codebase first for
+anything close before building: Popups (`popups`/`popup_events`) already lets admin add a label+link
+button with page targeting, but it's built specifically to *interrupt* — a scroll-triggered modal a
+reader dismisses and that then stays away for a set number of days. What was asked for is the opposite
+kind of thing: a small button that's always reachable, the way a WhatsApp chat bubble or a "back to top"
+control is, never dismissed, never capped. Confirmed no existing mechanism does that, so this is a
+genuinely new feature.
+
+Scope, from the two clarifying questions asked before writing any code: a fixed floating stack (not an
+inline content block or a nav-bar item), and each button is a simple global on/off — no per-page
+targeting, matching the popups system's simplest mode. The member-dashboard pathway asked for alongside
+this was found already built (`renderAccountNav()` — a "👤 Dashboard" link in the main nav and the mobile
+hamburger menu, on every page, whenever a member is signed in) and needed no change.
+
+New table `site_buttons` (migration 171): `label`, `url`, `icon` (optional emoji), `display_order`,
+`active` — off by default, same "not live until somebody switches it on" rule Popups follow. New route
+file `siteButtons.js`: `GET /site-buttons` (public, active buttons only, in display order, 1-minute
+cache — same shape as Popups' public feed) and admin CRUD (`GET .../admin/all`, `POST`, `PATCH`,
+`DELETE`), mounted in `app.js`.
+
+New standalone script `unplug-site-buttons.js` (mirrors `unplug-popups.js`'s pattern: one file, no
+dependencies, own API-base resolution, fails silently to nothing if the endpoint is unreachable) renders
+the active buttons as a bottom-right floating stack on `unplug-magazine.html`. z-index 900: above
+ordinary content, but below every full-screen overlay on the site (welcome gate 1000, consent bar 1100,
+search overlay 99997+) — a floating button must never sit on top of a modal that's supposed to have the
+visitor's full attention, so it's designed to be correctly hidden behind one rather than special-cased
+per overlay. An external link opens in a new tab; an internal one navigates normally, so a corner button
+never unexpectedly pulls a reader off an article they were reading.
+
+Admin dashboard: new "Floating Buttons" section under Website Settings, alongside Page Content and
+Marketplace Placements. Each row stays directly editable (label/link/icon/order inputs with a Save
+button) rather than needing a separate edit mode for a four-field record, plus per-row Turn on/off and
+Delete.
+
+New test, `siteButtons.test.js` (10 tests, real HTTP + real Postgres): admin-only create/edit/delete;
+a new button is off by default; label and link are both required and can't be edited down to blank; the
+public feed returns only active buttons in display order and carries no admin-only fields
+(`created_by`, `active` itself); turning a button off removes it from the public feed immediately;
+deleting removes it from both the admin list and the public feed. Verified live in-browser: rendered
+buttons carry the exact HTML expected (icon + label, correct `target`/`rel` for external vs internal
+links), and `document.elementFromPoint()` at the button's own coordinates confirms it's genuinely the
+topmost visible element there, not obscured by anything. Full suite: 1898 passing, 0 failing (up from
+1888).

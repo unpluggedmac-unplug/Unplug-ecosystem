@@ -367,6 +367,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="redirects">Redirects &amp; 404s</a>
         <a data-section="pagecms">Page Content</a>
         <a data-section="placements">Marketplace Placements</a>
+        <a data-section="sitebuttons">Floating Buttons</a>
       </div>
     </div>
 
@@ -1529,7 +1530,24 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="vouchersBody" style="padding:0;"></div>
       </div>
     </div>
-    
+
+    <!-- FLOATING BUTTONS -->
+    <div class="admin-section" id="section-sitebuttons">
+      <div class="main-head"><div><h1>Floating Buttons</h1>
+        <p>Small always-visible buttons (icon + label + link) shown in a corner of every public page — separate from Popups, which interrupt on a scroll trigger and go away. Off by default; switch one on when it's ready.</p></div></div>
+      <div class="panel" style="padding:20px;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:20px;">
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Icon <span style="color:var(--slate);">(optional emoji)</span></label><input id="sbIconInput" placeholder="e.g. 💬" style="padding:8px; width:70px;" maxlength="20"></div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Label</label><input id="sbLabelInput" placeholder="e.g. Chat with us" style="padding:8px;" maxlength="60"></div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Link</label><input id="sbUrlInput" placeholder="https:// or a page on this site" style="padding:8px; width:260px;"></div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Order <span style="color:var(--slate);">(lower shows first)</span></label><input id="sbOrderInput" type="number" value="0" style="padding:8px; width:80px;"></div>
+          <button class="approve" id="createSiteButtonBtn" style="padding:9px 16px;">Add Button</button>
+        </div>
+        <div id="siteButtonFormError" style="color:var(--red); margin-bottom:12px; display:none;"></div>
+        <div class="panel-body" id="siteButtonsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
     <!-- SALES & CRM -->
     <div class="admin-section" id="section-crm">
       <div class="main-head"><div><h1>Sales &amp; CRM</h1>
@@ -3687,6 +3705,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'pagevisibility') loadPageVisibility();
     if (section === 'forms') loadForms();
     if (section === 'vouchers') loadVouchers();
+    if (section === 'sitebuttons') loadSiteButtons();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
     if (section === 'unplugmissions') loadUnplugMissions();
@@ -11188,6 +11207,135 @@ document.getElementById('createVoucherBtn').addEventListener('click', async () =
     document.getElementById('voucherDiscountValue').value = '';
     document.getElementById('voucherExpiresAt').value = '';
     loadVouchers();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Floating Buttons — a small, always-visible stack of CTA buttons shown on
+// every public page. Each row stays editable in place: an admin fixing a
+// typo in a link shouldn't need a separate "edit mode" for a three-field
+// record. Save only sends the fields that changed.
+// ---------------------------------------------------------------------------
+async function loadSiteButtons() {
+  const body = document.getElementById('siteButtonsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const buttons = await api('/site-buttons/admin/all');
+    if (!buttons.length) {
+      body.innerHTML = '<div class="empty-state">No floating buttons yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Icon</th><th>Label</th><th>Link</th><th>Order</th><th>Status</th><th></th></tr>';
+    buttons.forEach((b) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input class="sb-icon" value="${escapeAttrAdmin(b.icon || '')}" style="width:50px; padding:6px;" maxlength="20"></td>
+        <td><input class="sb-label" value="${escapeAttrAdmin(b.label)}" style="width:140px; padding:6px;" maxlength="60"></td>
+        <td><input class="sb-url" value="${escapeAttrAdmin(b.url)}" style="width:220px; padding:6px;"></td>
+        <td><input class="sb-order" type="number" value="${b.display_order}" style="width:60px; padding:6px;"></td>
+        <td>${b.active ? '<span style="color:green; font-weight:700;">Active</span>' : '<span style="color:var(--slate);">Off</span>'}</td>
+        <td style="white-space:nowrap;"></td>`;
+      const actionsTd = tr.querySelector('td:last-child');
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'approve';
+      saveBtn.textContent = 'Save';
+      saveBtn.style.marginRight = '6px';
+      saveBtn.addEventListener('click', () => saveSiteButton(b.id, tr));
+      actionsTd.appendChild(saveBtn);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = b.active ? 'reject' : 'approve';
+      toggleBtn.textContent = b.active ? 'Turn off' : 'Turn on';
+      toggleBtn.style.marginRight = '6px';
+      toggleBtn.addEventListener('click', () => toggleSiteButton(b.id, !b.active));
+      actionsTd.appendChild(toggleBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'reject';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', () => deleteSiteButton(b.id, b.label));
+      actionsTd.appendChild(delBtn);
+
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+async function saveSiteButton(id, row) {
+  const label = row.querySelector('.sb-label').value.trim();
+  const url = row.querySelector('.sb-url').value.trim();
+  if (!label || !url) { showToast('Label and link are both required.', true); return; }
+  try {
+    await api(`/site-buttons/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        label, url,
+        icon: row.querySelector('.sb-icon').value.trim() || null,
+        displayOrder: Number(row.querySelector('.sb-order').value) || 0,
+      }),
+    });
+    showToast('Button saved.');
+    loadSiteButtons();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function toggleSiteButton(id, active) {
+  try {
+    await api(`/site-buttons/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) });
+    showToast(active ? 'Button switched on — now visible on the live site.' : 'Button turned off.');
+    loadSiteButtons();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function deleteSiteButton(id, label) {
+  if (!confirm(`Delete the floating button "${label}"? This can't be undone.`)) return;
+  try {
+    await api(`/site-buttons/${id}`, { method: 'DELETE' });
+    showToast('Button deleted.');
+    loadSiteButtons();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+document.getElementById('createSiteButtonBtn').addEventListener('click', async () => {
+  const errorEl = document.getElementById('siteButtonFormError');
+  errorEl.style.display = 'none';
+  const label = document.getElementById('sbLabelInput').value.trim();
+  const url = document.getElementById('sbUrlInput').value.trim();
+  const icon = document.getElementById('sbIconInput').value.trim();
+  const displayOrder = Number(document.getElementById('sbOrderInput').value) || 0;
+
+  if (!label || !url) {
+    errorEl.textContent = 'Label and link are both required.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    await api('/site-buttons', {
+      method: 'POST',
+      body: JSON.stringify({ label, url, icon: icon || null, displayOrder }),
+    });
+    showToast('Button added — off by default, switch it on when ready.');
+    document.getElementById('sbIconInput').value = '';
+    document.getElementById('sbLabelInput').value = '';
+    document.getElementById('sbUrlInput').value = '';
+    document.getElementById('sbOrderInput').value = '0';
+    loadSiteButtons();
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.style.display = 'block';
