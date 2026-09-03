@@ -3114,15 +3114,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div>
         <h3>Get in touch</h3>
         <p style="color:var(--slate); line-height:1.6; margin-bottom:20px;">Have a story, a nomination, or a partnership in mind? We'd love to hear from you.</p>
-        <p style="font-size:14px; margin-bottom:6px;"><strong>Editorial:</strong> stories@unplugmagazine.com</p>
-        <p style="font-size:14px; margin-bottom:6px;"><strong>Advertising:</strong> ads@unplugmagazine.com</p>
-        <p style="font-size:14px;"><strong>General:</strong> hello@unplugmagazine.com</p>
+        <!-- One real inbox (info@unplugnews.com, the address used everywhere
+             else on the site), labelled by what to put in the subject line —
+             not three separate addresses. stories@/ads@/hello@unplugmagazine.com
+             were never a monitored domain; see docs/progress-log.md. -->
+        <p style="font-size:14px; margin-bottom:6px;"><strong>Editorial:</strong> <a href="mailto:info@unplugnews.com?subject=Story%20enquiry" style="color:var(--red);">info@unplugnews.com</a> (subject: Story)</p>
+        <p style="font-size:14px; margin-bottom:6px;"><strong>Advertising:</strong> <a href="mailto:info@unplugnews.com?subject=Advertising%20enquiry" style="color:var(--red);">info@unplugnews.com</a> (subject: Advertising)</p>
+        <p style="font-size:14px;"><strong>General:</strong> <a href="mailto:info@unplugnews.com" style="color:var(--red);">info@unplugnews.com</a></p>
       </div>
-      <form onsubmit="event.preventDefault(); alert('Thanks — we'll be in touch soon.');">
-        <div class="field"><label for="name">Name</label><input id="name" type="text" required></div>
-        <div class="field"><label for="email">Email</label><input id="email" type="email" required></div>
-        <div class="field"><label for="msg">Message</label><textarea id="msg" rows="4" required></textarea></div>
-        <button class="btn btn-solid" type="submit">Send Message</button>
+      <!-- Was onsubmit="...alert(...)" — didn't send anywhere. Now posts to
+           the same /inquiries endpoint the real Contact page form uses. -->
+      <form id="aboutContactForm">
+        <input type="text" name="website" id="aboutHpContact" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <div class="field"><label for="aboutCname">Name</label><input id="aboutCname" type="text" required></div>
+        <div class="field"><label for="aboutCemail">Email</label><input id="aboutCemail" type="email" required></div>
+        <div class="field"><label for="aboutCmsg">Message</label><textarea id="aboutCmsg" rows="4" required></textarea></div>
+        <button class="btn btn-solid" type="submit" id="aboutContactBtn">Send Message</button>
       </form>
     </div>
   </section>
@@ -11199,6 +11206,36 @@ async function loadShoutout() {
       subject: document.getElementById('csubject').value.trim(),
       message: document.getElementById('cmsg').value.trim(),
       website: document.getElementById('hpContact').value,
+    };
+    if (!payload.name || !payload.email || !payload.message) return;
+    btn.disabled = true; btn.textContent = 'Sending...';
+    try {
+      const data = await api('/inquiries', { method: 'POST', body: JSON.stringify(payload) });
+      showToast(data.message || 'Thanks — we\'ll be in touch soon.');
+      form.reset();
+    } catch (err) {
+      showToast(err.message || 'Could not send right now.', true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send Message';
+    }
+  });
+})();
+
+// The About page's own "Get in touch" form — same /inquiries endpoint as the
+// real Contact form above, not folded into setupContactForm() because it
+// lives in a different section with its own field ids and has no Subject
+// field. Previously onsubmit="...alert(...)" and went nowhere at all.
+(function setupAboutContactForm() {
+  const form = document.getElementById('aboutContactForm');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('aboutContactBtn');
+    const payload = {
+      name: document.getElementById('aboutCname').value.trim(),
+      email: document.getElementById('aboutCemail').value.trim(),
+      message: document.getElementById('aboutCmsg').value.trim(),
+      website: document.getElementById('aboutHpContact').value,
     };
     if (!payload.name || !payload.email || !payload.message) return;
     btn.disabled = true; btn.textContent = 'Sending...';

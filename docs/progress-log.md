@@ -1155,3 +1155,23 @@ Suite **1788 → 1791**, 0 failing. Audit PASS, smoke PASS.
 **Still open in decision 8:** item 3 — the package tier prices hardcoded in `unplug-checkout.html`
 and `unplug-magazine.html` as well as `PACKAGE_PRICES`. Those are the directory tiers, and consolidating
 them runs into decision 6 (whether the middle tier is "Standard" or `pro`), so it waits on that.
+
+---
+
+## 2026-09-03 — QA punch list, task 1/6: dead footer navigation
+
+Footer and bottom-bar links were `href="#"` — worked via a `[data-page]` click handler with JS on,
+but broke ctrl/cmd-click, view-source and crawlability. Switched to real `?p=xxx` URLs matching the
+top nav. The footer's "Submit a Story" had no `data-page` and no handler at all — genuinely dead;
+gave it the same `goToMemberDashboard()` handler as the working header CTA. Verified live in-browser.
+Pushed as `813725c`.
+
+## 2026-09-03 — QA punch list, task 2/6: stale email domain + a dead second contact form
+
+`stories@`/`ads@`/`hello@unplugmagazine.com` on the About page were never a monitored domain — every
+other contact point on the site uses `info@unplugnews.com`. Worse than the punch list flagged: that
+whole "Get in touch" block was a second, orphaned contact form (`onsubmit="...alert(...)"`) that never
+sent anywhere, duplicating the real, working Contact page form. Fixed in place rather than removed
+(non-destructive): the three labelled lines now point at the one real inbox with a subject-line hint
+each, and the form now posts to `/inquiries` — same endpoint, same honeypot, same shape as the real
+Contact form, verified by intercepting the fetch call rather than sending a live test enquiry.
