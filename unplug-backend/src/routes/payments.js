@@ -146,6 +146,36 @@ const generateReference = () =>
 // details, or the (stubbed) gateway redirect. Shared by the normal creation
 // path and the duplicate-order guard below, which returns this same shape
 // for an already-existing pending payment instead of building a second one.
+// PAY-011: the confirmation screen right after paying must say WHAT was
+// bought and its real status, not just hand over EFT bank details and leave
+// the member guessing — and it must never disagree with the same order once
+// it shows up in Payment History, so both read from this one map/rule
+// instead of each computing their own.
+const SERVICE_LABELS = {
+  profile_package: 'Directory Package', profile_upgrade: 'Package Upgrade',
+  competition_entry: 'Competition Entry', highlight: 'Highlight',
+  marketplace_listing: 'Marketplace Poster', vote_bundle: 'Vote Bundle',
+  article_publish: 'Article Submission', event_listing: 'Event Listing',
+  gallery_bundle: 'Gallery Bundle', top10_entry: 'Top 10 Entry',
+  edition_download: 'Edition Download', ad_banner: 'Page Banner',
+};
+
+function paymentDisplayFields(payment) {
+  const cash = Number(payment.amount) || 0;
+  const credit = Number(payment.credit_used) || 0;
+  const voucher = Number(payment.voucher_discount) || 0;
+  let statusLabel;
+  if (payment.status === 'failed') statusLabel = 'Failed';
+  else if (payment.status === 'pending') statusLabel = (credit > 0 || voucher > 0) ? 'Partially Paid' : 'Awaiting Payment';
+  else if (cash === 0 && credit > 0) statusLabel = 'Paid by Credit';
+  else if (cash === 0 && voucher > 0) statusLabel = 'Paid by Voucher';
+  else statusLabel = 'Paid';
+  return {
+    serviceLabel: SERVICE_LABELS[payment.linked_type] || payment.linked_type,
+    statusLabel,
+  };
+}
+
 function initiateResponseFor(payment) {
   if (payment.method === 'eft') {
     return { instructions: eftInstructions(payment.gateway_reference) };
@@ -772,31 +802,13 @@ router.get('/mine', requireAuth, async (req, res, next) => {
         LIMIT 100`,
       [req.user.id]
     );
-    const SERVICE_LABELS = {
-      profile_package: 'Directory Package', profile_upgrade: 'Package Upgrade',
-      competition_entry: 'Competition Entry', highlight: 'Highlight',
-      marketplace_listing: 'Marketplace Poster', vote_bundle: 'Vote Bundle',
-      article_publish: 'Article Submission', event_listing: 'Event Listing',
-      gallery_bundle: 'Gallery Bundle', top10_entry: 'Top 10 Entry',
-      edition_download: 'Edition Download', ad_banner: 'Page Banner',
-    };
-    const payments = rows.rows.map((p) => {
-      const cash = Number(p.amount) || 0;
-      const credit = Number(p.credit_used) || 0;
-      const voucher = Number(p.voucher_discount) || 0;
-      let label;
-      if (p.status === 'failed') label = 'Failed';
-      else if (p.status === 'pending') label = (credit > 0 || voucher > 0) ? 'Partially Paid' : 'Awaiting Payment';
-      else if (cash === 0 && credit > 0) label = 'Paid by Credit';
-      else if (cash === 0 && voucher > 0) label = 'Paid by Voucher';
-      else label = 'Paid';
-      return {
-        ...p,
-        serviceLabel: SERVICE_LABELS[p.linked_type] || p.linked_type,
-        statusLabel: label,
-        cashPortion: cash, creditPortion: credit, voucherPortion: voucher,
-      };
-    });
+    const payments = rows.rows.map((p) => ({
+      ...p,
+      ...paymentDisplayFields(p),
+      cashPortion: Number(p.amount) || 0,
+      creditPortion: Number(p.credit_used) || 0,
+      voucherPortion: Number(p.voucher_discount) || 0,
+    }));
     res.json({ payments });
   } catch (err) { next(err); }
 });
@@ -954,6 +966,7 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
         payment: prior,
         creditUsed: Number(prior.credit_used) || 0,
         alreadyPending: true,
+        ...paymentDisplayFields(prior),
         ...initiateResponseFor(prior),
       });
     }
@@ -1045,6 +1058,7 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
         payment: confirmed.rows[0],
         creditUsed,
         paidInFull: true,
+        ...paymentDisplayFields(confirmed.rows[0]),
         message: `Covered in full by your R${creditUsed.toFixed(2)} account credit — nothing to pay.`,
       });
     }
@@ -1055,6 +1069,7 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     res.status(201).json({
       payment,
       creditUsed,
+      ...paymentDisplayFields(payment),
       ...initiateResponseFor(payment),
     });
   } catch (err) {

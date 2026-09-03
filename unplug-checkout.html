@@ -247,7 +247,12 @@ body{ min-height:100vh; }
     <div class="step-label" data-step-for="resultCard"></div>
     <h2 id="resultTitle">Payment Initiated</h2>
     <div class="success-banner" id="resultSuccess"></div>
+    <!-- PAY-011: what was bought, for how much, and its real status — not
+         just bank details — so this screen answers the order on its own
+         rather than assuming the member remembers what they were buying. -->
+    <div id="resultOrderMeta" style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px 16px; font-size:13.5px; margin:10px 0; padding:10px 12px; background:#faf7f2; border:1px solid var(--paper-line); border-radius:6px;"></div>
     <div class="instructions-box" id="resultInstructions"></div>
+    <a href="unplug-member-dashboard.html" class="btn btn-line" style="display:inline-block; width:auto; margin-top:14px;">View My Order</a>
   </div>
 
 </div>
@@ -862,6 +867,14 @@ document.getElementById('payBtn').addEventListener('click', async () => {
 
     document.getElementById('paymentCard').classList.add('section-hidden');
     document.getElementById('resultCard').classList.remove('section-hidden');
+
+    // Same serviceLabel/statusLabel the member will see again in Payment
+    // History — computed once, server-side, so this screen can never say
+    // something different from their order history a minute later.
+    document.getElementById('resultOrderMeta').innerHTML = `
+      <span><b>Service:</b> ${data.serviceLabel}</span>
+      <span><b>Order total:</b> R${Number(data.payment.order_total).toFixed(2)}</span>
+      <span><b>Status:</b> ${data.statusLabel}</span>`;
 
     if (data.paidInFull) {
       // Covered fully by account credit — no gateway/EFT needed.

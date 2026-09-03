@@ -1481,3 +1481,39 @@ Top 10 entry, charged the Arena's own fee; a free Arena credit settles the entry
 two HTML files are checked as static source for the slug-carrying `goToMemberDashboard`, the Arena
 button wiring, the real-list-backed picker with slug pre-select, the outer field-switch on arrival, and
 the `createSubmission` branching. Full suite: 1879 passing, 0 failing (up from 1871).
+
+## 2026-09-03 — Website remediation punch-list, PAY-011: a real confirmation screen, not just bank details
+
+Checked the rest of Phase 1's checkout items first, since most turned out already done: PAY-004
+(cancellation summary beside the terms checkbox) is already on both checkout.html and the member
+dashboard's Submit & Pay, word-for-word what the punch-list asks for. PAY-006 (reference shown clearly)
+already appears on the result screen, in Payment History, and — via `refNotice()` — on the dashboard's
+own Submit & Pay confirmation. PAY-007/EDIT-002 (already-paid recovery) already has a working "Already
+paid? Get your download" entry point with its own dedicated test file (`editionDownloads.test.js`) from
+before this cycle. PAY-008 (credit display) already updates live via `POST /payments/quote`, built as
+part of PAY-002 earlier this cycle. None of those needed a change.
+
+PAY-011 did: `unplug-checkout.html`'s result screen showed EFT bank details or a gateway redirect and
+nothing else — no service name, no amount, no explicit status, and no link back into the site once
+you'd paid. A member had to already remember what they were buying and just trust it went through.
+
+`GET /payments/mine` (Payment History) already computed a human `serviceLabel` (e.g. "Event Listing")
+and a `statusLabel` ("Awaiting Payment" / "Paid by Credit" / etc.) inline in its own handler — pulled
+that out into one `paymentDisplayFields()` helper in `payments.js`, alongside the existing shared
+`SERVICE_LABELS` map, and used it in `/mine` **and** in all three response points of `POST
+/payments/initiate` (a fresh payment, a covered-by-credit payment, and the duplicate-order guard's
+already-pending return). One source for both screens means the confirmation a member sees right after
+paying can never disagree with what they see a minute later in their own order history.
+
+`unplug-checkout.html`'s result card now shows Service / Order total / Status above the payment
+instructions, and a "View My Order" link to the member dashboard so the screen is no longer a dead end.
+
+New test, `paymentConfirmationSummary.test.js` (6 tests, real HTTP + real Postgres for the backend
+half): a fresh EFT payment reports "Event Listing" / "Awaiting Payment"; a payment fully covered by
+account credit reports "Paid by Credit"; a resubmitted still-pending order returns the same summary
+fields, not just the first-time path; `GET /payments/mine` shows the exact same labels for the same
+payment; the checkout page's result screen renders `serviceLabel`/`order_total`/`statusLabel`; and the
+result card offers a way back into the site. Verified live in-browser (mocked `/payments/initiate`
+response, matching the real shape confirmed by the backend tests): Service/Order total/Status render
+correctly alongside the real EFT instructions, and "View My Order" is present. Full suite: 1885
+passing, 0 failing (up from 1879).
