@@ -1417,3 +1417,30 @@ checks the underlying facts it depends on are still true (the `awaiting_payment`
 in `payments.js`, a distinct admin approval route in `admin.js`) so a future change to the real workflow
 fails this test rather than leaving the page quietly wrong. Also confirms the page doesn't claim a
 Preview step. Full suite: 1867 passing, 0 failing (up from 1864).
+
+## 2026-09-03 — Website remediation punch-list, ADV-002/003: sell reach, not "a banner for 7 days"
+
+The Advertising page already had real audience numbers (`mediaKitStats`: readers, page views,
+returning %, top country — genuinely built, not fabricated) and real pricing, but nothing about the
+practical half of buying a banner: where it actually appears, what file to bring, whether the start
+date is fixed, or what happens after paying. Its one CTA for the self-serve product, "Advertise Here",
+had `data-page="brandplacement"` while already being on the brandplacement page — a no-op.
+
+Checked the real facts before writing anything: 8 real placements exist (`AD_PLACEMENTS` in
+`adBanners.js`), each a Medium Rectangle (300×250) or Leaderboard (728×90); accepted formats are JPEG/
+PNG/WebP/GIF up to 8MB (`middleware/upload.js`); the start date is genuinely chosen, not fixed
+("today or a chosen future date"); every banner goes into a real admin moderation queue before going
+live. Checked for advertiser-facing reporting too — there isn't any (the only impression tracking in
+the codebase is `popups.js`'s admin-only analytics, unrelated) — so nothing claims one.
+
+Added a "Buy a Page Banner Directly" section, separate from the curated "Get In Contact" sponsorship
+cards above it (those are negotiated placements, not this self-serve product). Placements render from
+`GET /ad-banners/options` — the same endpoint the real buy form uses — rather than a second list that
+could drift out of sync with it. The CTA now calls the same `goToMemberDashboard()` every other
+"submit something" entry point on the site uses.
+
+New test, `advertisingBannerProduct.test.js` (4 tests): the file-format/size-limit/start-date/approval
+claims are all present, placements come from the real endpoint rather than a hardcoded list, no
+reporting is claimed, and the CTA no longer points back at the page it's already on. Verified live
+in-browser (mocked API, matching the real response shape confirmed earlier this session). Full suite:
+1871 passing, 0 failing (up from 1867).

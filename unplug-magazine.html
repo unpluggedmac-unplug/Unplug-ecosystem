@@ -3465,6 +3465,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </section>
 
+  <!-- ADV-002/003: the cards above are curated, negotiated placements ("Get
+       In Contact") — this is the one product that's actually self-serve
+       today: a Page Banner, bought and paid for directly, no back-and-forth.
+       "Don't sell a banner for 7 days, sell reach" — the reach numbers are
+       already above (mediaKitStats); what was missing here was the practical
+       half: where it actually appears, what size to bring, and what happens
+       after paying. Placements come from GET /ad-banners/options — the same
+       real 8 slots and sizes the buy form itself uses, not a second list to
+       drift out of sync with it. -->
+  <section class="wrap" style="padding-top:0;">
+    <div class="section-head">
+      <div><span class="eyebrow">Self-serve, no back-and-forth</span><h2>Buy a Page Banner Directly</h2></div>
+    </div>
+    <p style="font-size:13.5px; color:var(--slate); max-width:70ch; margin-bottom:16px;">Your banner rotates in one placement of your choice for the run you pick — see the pricing in "Featured Advertisers" above. Bring a JPEG, PNG, WebP or GIF (max 8MB) at the exact size for that placement; an optional square version is shown on phones instead of the wide banner. Choose your own start date. Every banner is reviewed before it goes live, and stays within its scheduled dates automatically.</p>
+    <div class="ad-placement-grid" id="adPlacementGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px;">
+      <div class="dir-empty-state">Loading placements…</div>
+    </div>
+    <div style="text-align:center; margin-top:20px;"><button class="btn btn-solid" id="advBuyBannerBtn">Buy a Page Banner →</button></div>
+  </section>
+
   <section class="wrap" style="padding-top:0;">
     <div class="section-head">
       <div><span class="eyebrow">Now advertising</span><h2>Businesses On The Marketplace</h2></div>
@@ -9584,6 +9604,31 @@ async function loadMediaKitStats() {
   }
 }
 
+// ADV-002/003: "see where your banner appears" — the real 8 placements and
+// their real sizes, from the same GET /ad-banners/options the buy form uses.
+// Not a screenshot of each page (that's a bigger, more fragile thing to keep
+// in sync); a plain-language "here's the slot" is the honest version of a
+// preview until a real mock-up exists.
+let AD_PLACEMENTS_LOADED = false;
+async function loadAdPlacements() {
+  if (AD_PLACEMENTS_LOADED) return;
+  const el = document.getElementById('adPlacementGrid');
+  if (!el) return;
+  try {
+    const data = await api('/ad-banners/options');
+    const placements = data.placements || [];
+    if (!placements.length) { el.innerHTML = ''; return; }
+    AD_PLACEMENTS_LOADED = true;
+    el.innerHTML = placements.map((p) => `
+      <div class="brand-ad-card" style="padding:12px;">
+        <div class="brand-ad-preview" style="font-size:12px; padding:14px 8px;">${escapeHtml(p.label)}<br>${p.size ? escapeHtml(p.size.text) : ''}</div>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = '';
+  }
+}
+document.getElementById('advBuyBannerBtn') && document.getElementById('advBuyBannerBtn').addEventListener('click', goToMemberDashboard);
+
 // ---- Homepage Investor Spotlight (references a live project by ID) ----
 async function loadSpotlight(){
   const card = document.getElementById('spotlightProjectCard');
@@ -9735,6 +9780,7 @@ function goToPage(pageId){
   // rather than on every page load — an advertiser is the only person who
   // needs them.
   if (pageId === 'brandplacement' && typeof loadMediaKitStats === 'function') loadMediaKitStats();
+  if (pageId === 'brandplacement' && typeof loadAdPlacements === 'function') loadAdPlacements();
   // This site is one document, so moving between pages fires no page load.
   // unplug-popups.js listens for this to release its one-popup-per-page-view
   // lock; without it a reader could browse all evening and, having dismissed
