@@ -312,3 +312,97 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   })();
 });
+// ---------------------------------------------------------------------------
+// STEP X OF Y (spec §19)
+//
+//   "DURING SUBMISSION · Show: Step X of Y with a progress indicator.
+//    Example:  ●────○────○────○────○
+//              1     2    3    4    5"
+//
+// ONE component, used by every multi-step flow. The spec asks for this in every
+// flow, and a per-flow copy is how five slightly different indicators end up on
+// one site.
+//
+// It is told which steps are IN THIS PATH and which one the user is on, and it
+// works the rest out. That matters because a flow's length is not fixed: the
+// checkout shows a package step for a Directory listing and skips it for
+// everything else, which is why two of its cards were both hand-labelled
+// "Step 2" — with the count computed, that cannot happen.
+//
+// Built with createElement rather than innerHTML: step names come from callers,
+// and one day a caller will pass something a member typed.
+window.UnplugSteps = (function () {
+  // Draw into `host`. `steps` is the labels for this path, `currentIndex` is
+  // 0-based. Returns the host so a caller can chain.
+  function render(host, steps, currentIndex) {
+    if (!host) return host;
+    const list = Array.isArray(steps) ? steps.filter(Boolean) : [];
+    host.textContent = '';
+    if (list.length < 2) return host;   // one step is not a journey
+
+    const index = Math.max(0, Math.min(Number(currentIndex) || 0, list.length - 1));
+
+    const wrap = document.createElement('div');
+    wrap.className = 'unplug-steps';
+
+    // "Step 2 of 4" — the words the spec asks for, and what a screen reader
+    // reads out. The dots below are decorative and are hidden from it.
+    const label = document.createElement('div');
+    label.className = 'unplug-steps-label';
+    label.textContent = 'Step ' + (index + 1) + ' of ' + list.length
+      + (list[index] ? ' \u00b7 ' + list[index] : '');
+    wrap.appendChild(label);
+
+    const track = document.createElement('div');
+    track.className = 'unplug-steps-track';
+    track.setAttribute('aria-hidden', 'true');
+
+    list.forEach(function (name, i) {
+      if (i > 0) {
+        const line = document.createElement('span');
+        line.className = 'unplug-steps-line' + (i <= index ? ' done' : '');
+        track.appendChild(line);
+      }
+      const dot = document.createElement('span');
+      dot.className = 'unplug-steps-dot'
+        + (i < index ? ' done' : '')
+        + (i === index ? ' current' : '');
+      dot.title = name;
+      track.appendChild(dot);
+    });
+
+    wrap.appendChild(track);
+    host.appendChild(wrap);
+    return host;
+  }
+
+  // The styles, injected once. Kept with the component so a page cannot use it
+  // and get an unstyled row of nothing.
+  function ensureStyles() {
+    if (document.getElementById('unplug-steps-style')) return;
+    const style = document.createElement('style');
+    style.id = 'unplug-steps-style';
+    style.textContent = [
+      '.unplug-steps{margin:0 0 14px;}',
+      '.unplug-steps-label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;',
+      'color:var(--red,#d20709);font-weight:700;margin-bottom:6px;}',
+      '.unplug-steps-track{display:flex;align-items:center;gap:0;}',
+      '.unplug-steps-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;',
+      'background:transparent;border:2px solid var(--paper-line,#ddd);}',
+      '.unplug-steps-dot.done{background:var(--red,#d20709);border-color:var(--red,#d20709);}',
+      '.unplug-steps-dot.current{background:var(--red,#d20709);border-color:var(--red,#d20709);',
+      'box-shadow:0 0 0 3px rgba(210,7,9,0.18);}',
+      '.unplug-steps-line{height:2px;flex:1 1 auto;min-width:18px;',
+      'background:var(--paper-line,#ddd);}',
+      '.unplug-steps-line.done{background:var(--red,#d20709);}',
+    ].join('');
+    document.head.appendChild(style);
+  }
+
+  return {
+    render: function (host, steps, currentIndex) {
+      ensureStyles();
+      return render(host, steps, currentIndex);
+    },
+  };
+})();

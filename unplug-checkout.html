@@ -56,7 +56,7 @@ body{ min-height:100vh; }
 
   <!-- STEP 0: connect + sign in -->
   <div class="card" id="loginCard">
-    <div class="step-label">Step 1</div>
+    <div class="step-label" data-step-for="loginCard"></div>
     <h2>Sign In</h2>
     <p class="sub">Sign in with your Unplug account to continue to checkout.</p>
     <div class="error-banner" id="loginError"></div>
@@ -81,7 +81,7 @@ body{ min-height:100vh; }
 
   <!-- STEP 1: choose a Directory package -->
   <div class="card section-hidden" id="packageCard">
-    <div class="step-label">Step 2</div>
+    <div class="step-label" data-step-for="packageCard"></div>
     <h2>Choose Your Directory Package</h2>
     <p class="sub">Once-off payment. You can upgrade later for a flat R250 admin fee.</p>
     <div class="error-banner" id="packageError"></div>
@@ -132,7 +132,7 @@ body{ min-height:100vh; }
        directly. Either path resolves to the same entry, then the same tier
        picker and the same payment step every other checkout mode uses. -->
   <div class="card section-hidden" id="voteBundleCard">
-    <div class="step-label">Step 2</div>
+    <div class="step-label" data-step-for="voteBundleCard"></div>
     <h2>Buy Bulk Votes</h2>
 
     <div class="field section-hidden" id="voteCodeField">
@@ -158,7 +158,7 @@ body{ min-height:100vh; }
 
   <!-- STEP 2: payment window with referral source -->
   <div class="card section-hidden" id="paymentCard">
-    <div class="step-label">Step 3</div>
+    <div class="step-label" data-step-for="paymentCard"></div>
     <h2>Payment</h2>
     <!-- Exactly what's being bought, before any payment detail is entered:
          service type, what it includes, and the price. -->
@@ -236,7 +236,7 @@ body{ min-height:100vh; }
 
   <!-- STEP 3: result -->
   <div class="card section-hidden" id="resultCard">
-    <div class="step-label">Step 4</div>
+    <div class="step-label" data-step-for="resultCard"></div>
     <h2 id="resultTitle">Payment Initiated</h2>
     <div class="success-banner" id="resultSuccess"></div>
     <div class="instructions-box" id="resultInstructions"></div>
@@ -412,6 +412,64 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     btn.disabled = false; btn.textContent = 'Sign In';
   }
 });
+
+// SPEC 19 — "Step X of Y with a progress indicator".
+//
+// The path is not fixed: a Directory listing has a package step, a bulk-vote
+// purchase has a votes step, and an edition download has neither. That is
+// exactly why two cards were both hand-labelled "Step 2" — with the path
+// computed per mode, the numbers cannot disagree with each other again.
+//
+// Drawn by watching the cards rather than by editing every place that shows
+// one: the flow logic below stays untouched, and a card shown from anywhere
+// still gets the right label.
+function checkoutStepPath(){
+  var middle = [];
+  if (typeof DIRECTORY_MODE !== 'undefined' && DIRECTORY_MODE) middle = [['packageCard','Your package']];
+  else if (typeof VOTE_BUNDLE_MODE !== 'undefined' && VOTE_BUNDLE_MODE) middle = [['voteBundleCard','Your votes']];
+  return [['loginCard','Sign in']].concat(middle, [['paymentCard','Payment'], ['resultCard','Done']]);
+}
+
+function updateCheckoutSteps(){
+  if (!window.UnplugSteps) return;
+  var path = checkoutStepPath();
+  var labels = path.map(function(p){ return p[1]; });
+
+  // The card on screen decides which step we are on.
+  var currentIndex = -1;
+  path.forEach(function(p, i){
+    var card = document.getElementById(p[0]);
+    if (card && !card.classList.contains('section-hidden')) currentIndex = i;
+  });
+  if (currentIndex < 0) return;
+
+  // Only the visible card shows the indicator; the others are not on screen.
+  document.querySelectorAll('[data-step-for]').forEach(function(host){
+    var id = host.getAttribute('data-step-for');
+    var card = document.getElementById(id);
+    var onScreen = card && !card.classList.contains('section-hidden');
+    if (!onScreen) { host.textContent = ''; return; }
+    var idx = -1;
+    path.forEach(function(p, i){ if (p[0] === id) idx = i; });
+    if (idx < 0) { host.textContent = ''; return; }
+    window.UnplugSteps.render(host, labels, idx);
+  });
+}
+
+// Cards are shown by adding/removing a class in a dozen places. Watching for
+// that is less invasive — and less likely to be forgotten by the next person —
+// than calling an update from each of them.
+(function watchCheckoutCards(){
+  if (!window.MutationObserver) return;
+  var observer = new MutationObserver(function(){ updateCheckoutSteps(); });
+  document.addEventListener('DOMContentLoaded', function(){
+    ['loginCard','packageCard','voteBundleCard','paymentCard','resultCard'].forEach(function(id){
+      var card = document.getElementById(id);
+      if (card) observer.observe(card, { attributes: true, attributeFilter: ['class'] });
+    });
+    updateCheckoutSteps();
+  });
+})();
 
 function enterCheckout(user){
   document.getElementById('statusLine').textContent = `Signed in as ${user.email}`;

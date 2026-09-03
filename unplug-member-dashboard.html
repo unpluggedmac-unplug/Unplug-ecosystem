@@ -4340,20 +4340,63 @@ function msSetupNav(){
   if (cpw) cpw.addEventListener('click', changePassword);
 }
 
+// SPEC 12 - every service begins with an information screen: what it is, who
+// it is for, the price, what is included, what you need, that it requires
+// approval, that paying is not publishing, how long it lasts, and the terms.
+//
+// The intro lives ON the catalogue entry rather than in a second structure,
+// because a service described in two places drifts - this codebase has been
+// bitten by exactly that with image sizes, ad sizes and prices.
+//
+// ON PRICE: there is no single pricing source in this system yet (article
+// price, per-competition entry_fee, banner tiers and the upgrade fee all live
+// separately), so these strings are a SECOND statement of prices that live in
+// the backend. They say what the site already says today. A single source is
+// flagged in the progress log as the proper fix.
 const MS_SERVICES=[
-  { t:'Article Submission', d:'Publish a story', submit:'article' },
+  { t:'Article Submission', d:'Publish a story', submit:'article',
+      intro:{ what:'Write a story and have it published on Unplug Magazine.',
+        who:'Both', price:'R95 per article',
+        included:['Your article published on the site','Your name or business as the author','A cover image and up to 5 more images','A YouTube, TikTok or Instagram link'],
+        need:['Your article (300-2500 words)','A cover image','Any images you want included'],
+        duration:'Once published, an article stays on the site.' } },
   { t:'Individuals/Business Listing', d:'Directory profile', href:'unplug-magazine.html?p=directory' },
-  { t:'Events', d:'List an event', submit:'event' },
-  { t:'Marketplace Listing', d:'Advertise a poster', submit:'marketplace' },
+  { t:'Events', d:'List an event', submit:'event',
+      intro:{ what:'List an event on the Unplug community calendar.',
+        who:'Both', price:'Shown before you pay',
+        included:['Your event on the calendar','Date, venue, time and entrance fee','A poster image','A link for tickets or more detail'],
+        need:['The event name and date','A venue','A poster image'],
+        duration:'Listed until the day it ends - a multi-day event stays up until its last day.' } },
+  { t:'Marketplace Listing', d:'Advertise a poster', submit:'marketplace',
+      intro:{ what:'Put a poster on the Marketplace page.',
+        who:'Business', price:'Shown before you pay',
+        included:['Your poster on the Marketplace page','A headline','A 30-day run'],
+        need:['A poster image','A headline'],
+        duration:'30 days from the day it goes live.' } },
   // The two advertising options are easy to confuse, so each description says
   // WHERE it appears: a Page Banner runs on a page of your choosing, while a
   // Marketplace poster only ever shows on the Marketplace page.
-  { t:'Page Banner', d:'Banner on a page you choose — R300–R1000, 7/14/28 days', submit:'ad_banner' },
+  { t:'Page Banner', d:'Banner on a page you choose - R300-R1000, 7/14/28 days', submit:'ad_banner',
+      intro:{ what:'A banner advert on a page of the site you choose.',
+        who:'Business', price:'R300 - R1000, depending on the page and how long it runs',
+        included:['Your banner on the page you pick','A link to wherever you want it to go','Desktop and mobile versions'],
+        need:['A banner image','A mobile version of it','The link it should open'],
+        duration:'7, 14 or 28 days, whichever you choose.' } },
   { t:'Advertising', d:'Poster on the Marketplace page only', href:'unplug-magazine.html?p=brandplacement' },
   { t:'Sponsorship', d:'Partner with us', href:'unplug-magazine.html?p=investors' },
   { t:'Magazine Feature', d:'Get featured', href:'unplug-magazine.html?p=editions' },
-  { t:'Competitions', d:'Enter Top 10 / Arena', submit:'top10' },
-  { t:'Gallery', d:'Share photos', submit:'gallery' }
+  { t:'Competitions', d:'Enter Top 10 / Arena', submit:'top10',
+      intro:{ what:'Enter an Unplug competition and be voted for by the public.',
+        who:'Both', price:'Set per competition - shown before you pay',
+        included:['Your entry on the competition page','A 10-digit voting code once approved','Your live vote count and ranking'],
+        need:['A profile with your name and photo','Anything the competition asks for'],
+        duration:'Until the competition closes.' } },
+  { t:'Gallery', d:'Share photos', submit:'gallery',
+      intro:{ what:'Share your photographs in the Unplug gallery.',
+        who:'Both', price:'R100 for up to 3 photos',
+        included:['Up to 3 photos in the gallery','A caption on each'],
+        need:['1 to 3 photos'],
+        duration:'Once published, gallery photos stay on the site.' } }
 ];
 function msRenderServices(){
   const grid=document.getElementById('msServicesGrid'); if (!grid) return;
@@ -4366,11 +4409,117 @@ function msRenderServices(){
     if (svc.submit){
       el.addEventListener('click', function(){
         const sel=document.getElementById('submitType');
-        if (sel){ sel.value=svc.submit; sel.dispatchEvent(new Event('change')); sel.scrollIntoView({behavior:'smooth',block:'center'}); }
+        // Spec 12: the information screen comes FIRST. START then opens the form.
+        if (svc.intro) { msShowIntro(svc); return; }
+        if (sel){ sel.value=svc.submit; sel.dispatchEvent(new Event('change')); sel.scrollIntoView({behavior:'smooth',block:'start'}); }
       });
     }
     grid.appendChild(el);
   });
+}
+
+// SPEC 12 - the service introduction screen.
+//
+// Everything the spec lists, in the order it lists it, and nothing else. The
+// approval and processing sentences are fixed wording rather than per-service
+// copy: they are the same promise about every paid service, and writing them
+// six times is six chances to say it differently.
+//
+// Built with createElement throughout.
+function msShowIntro(svc){
+  var host = document.getElementById('msServicesGrid');
+  if (!host || !svc.intro) return;
+  var i = svc.intro;
+
+  var card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'msIntroCard';
+  card.style.cssText = 'margin-top:14px;';
+
+  function line(label, value){
+    var p = document.createElement('p');
+    p.style.cssText = 'margin:0 0 8px;';
+    var b = document.createElement('strong');
+    b.textContent = label + ': ';
+    p.appendChild(b);
+    p.appendChild(document.createTextNode(value));
+    card.appendChild(p);
+  }
+  function bullets(label, items){
+    var b = document.createElement('p');
+    b.style.cssText = 'margin:10px 0 4px; font-weight:700;';
+    b.textContent = label;
+    card.appendChild(b);
+    var ul = document.createElement('ul');
+    ul.style.cssText = 'margin:0 0 8px 18px; padding:0;';
+    (items || []).forEach(function(t){
+      var li = document.createElement('li');
+      li.style.cssText = 'margin:2px 0;';
+      li.textContent = t;
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+  }
+
+  var h = document.createElement('h2');
+  h.textContent = svc.t;
+  card.appendChild(h);
+
+  line('What is it', i.what);
+  line('Who is it for', i.who);
+  line('Price', i.price);
+  bullets('What is included', i.included);
+  bullets('What do I need', i.need);
+  line('How long it lasts', i.duration);
+
+  // Fixed wording: the same promise about every paid service.
+  var approval = document.createElement('p');
+  approval.className = 'sub';
+  approval.style.cssText = 'margin:10px 0 4px;';
+  approval.textContent = 'This service requires Unplug admin approval.';
+  card.appendChild(approval);
+
+  var processing = document.createElement('p');
+  processing.className = 'sub';
+  processing.style.cssText = 'margin:0 0 10px;';
+  processing.textContent = 'Paying does not publish it. We review every submission first, and we will tell you the moment it is approved or if anything needs changing.';
+  card.appendChild(processing);
+
+  var terms = document.createElement('p');
+  terms.className = 'sub';
+  var link = document.createElement('a');
+  link.href = 'unplug-magazine.html?p=terms';
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = 'Read the Terms & Conditions';
+  terms.appendChild(link);
+  card.appendChild(terms);
+
+  var start = document.createElement('button');
+  start.className = 'btn btn-solid';
+  start.style.cssText = 'width:auto; padding:9px 22px; margin-top:6px;';
+  start.textContent = 'START';
+  start.addEventListener('click', function(){
+    var sel = document.getElementById('submitType');
+    if (sel){
+      sel.value = svc.submit;
+      sel.dispatchEvent(new Event('change'));
+      sel.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+  });
+  card.appendChild(start);
+
+  var back = document.createElement('button');
+  back.className = 'btn btn-line';
+  back.style.cssText = 'width:auto; padding:9px 18px; margin:6px 0 0 8px;';
+  back.textContent = 'Back to services';
+  back.addEventListener('click', function(){ msRenderServices(); });
+  card.appendChild(back);
+
+  // Replace the grid, so the member is looking at one thing.
+  host.textContent = '';
+  host.appendChild(card);
+  card.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 function msTable(rows, cols){

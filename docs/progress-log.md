@@ -1027,3 +1027,54 @@ from migration 106, so nobody "restores" the suffix.
 
 **Still open:** §12 and §19 (awaiting the owner's call); profile/directory renewal, which goes through
 a package with a tier and a price and is a different flow from copying a service.
+
+---
+
+## 2026-09-03 — §9.2 CUTOVER APPLIED, and task 08's §12 / §19
+
+### The voting cutover is live
+
+On the owner's explicit go-ahead. Applied to **both** competitions after checking the timing:
+
+- **Top 10 Impact List** — genuinely between rounds. August ran 8–31 Aug with **3,275 free votes**;
+  September had **4** when the cutover was applied. The month had turned and the new round had
+  barely started, which is exactly the moment the recommendation described.
+- **The Arena** — 0 entries and 0 votes, so nobody was affected.
+
+Both now `daily_vote_limit = 5, daily_voting = true`.
+
+**Integrity checked immediately after:** 3,311 vote rows, 10,419 votes, 27 paid rows / 4,740 paid
+votes, 26 approved entries — identical to before. Nothing was created, destroyed or moved.
+
+**Reversible in one command:** `UPDATE competitions SET daily_vote_limit = NULL;`
+
+### §19 — Step X of Y
+
+One shared component in `unplug-shared.js` (`UnplugSteps`), wired into checkout. **It found a real
+bug:** two different cards were both hand-labelled "Step 2" (the Directory package step and the
+bulk-vote step, which are alternative paths), and an edition download showed "Step 3 of 4" for what
+is really step 2 of 3. The path is now computed per mode, so the numbers cannot disagree again.
+
+Wired by *observing* the cards rather than editing the dozen places that show one — less invasive,
+and the next person cannot forget to call it. Verified in a browser across all three paths:
+directory 4 steps, votes 4 steps, edition 3 steps, with the dots in the right states.
+
+### §12 — service introduction screens
+
+Every field the spec lists, in its order: what it is, who it is for, price, what's included, what
+you need, "This service requires Unplug admin approval", that paying is not publishing, how long it
+lasts, a terms link, and START. Six services covered — the ones with a submission form.
+
+The intro lives **on the existing catalogue entry** rather than in a second structure, because a
+service described in two places drifts.
+
+> **FLAGGED: there is no single pricing source in this system.** The article price, per-competition
+> `entry_fee`, banner tiers and the upgrade fee all live separately, so the intro screens' price
+> lines are a *second* statement of prices that live in the backend. They say what the site already
+> says today, but this is the drift risk the codebase has been bitten by before. A single pricing
+> source is the proper fix and is not built.
+
+Suite **1777**, audit PASS, smoke PASS.
+
+**Still open:** the VAT registration number (owner adding later); a single pricing source; profile
+renewal, which goes through a package with a tier and a price.
