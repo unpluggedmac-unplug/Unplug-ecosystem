@@ -1175,3 +1175,14 @@ sent anywhere, duplicating the real, working Contact page form. Fixed in place r
 (non-destructive): the three labelled lines now point at the one real inbox with a subject-line hint
 each, and the form now posts to `/inquiries` — same endpoint, same honeypot, same shape as the real
 Contact form, verified by intercepting the fetch call rather than sending a live test enquiry.
+
+## 2026-09-03 — QA punch list, task 3/6: Investor stats stuck on em-dash
+
+Not unwired — `GET /analytics/public-stats` is live and returns real numbers (confirmed:
+`monthlyReaders: 377, registeredMembers: 59, articlesPublished: 21`) — but on the live site the
+page-load call left the placeholders showing every time, while calling the same endpoint by hand a
+moment later succeeded instantly. Most likely cause: Render's free tier sleeps the backend, and the
+very first request after idle can be slow enough to fail. Added one retry after a 3s pause, and — if
+both attempts fail — hide the stat row (`.inv-stats`) entirely instead of leaving `—` showing, per the
+punch list's own fallback option. Verified both paths on the live origin by stubbing the API call:
+fail-then-succeed renders the real numbers (row stays visible), fail-then-fail hides the row.

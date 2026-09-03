@@ -282,34 +282,58 @@ window.UnplugAnalytics = (function () {
 
 document.addEventListener('DOMContentLoaded', () => {
   (async function loadPlatformStatsShared() {
+    const elReaders = document.getElementById('statReaders');
+    const elMembers = document.getElementById('statMembers');
+    const elArticles = document.getElementById('statArticles');
+    // If none of the elements exist on this page, nothing to do.
+    if (!elReaders && !elMembers && !elArticles) return;
+
+    const fmt = (n) => {
+      if (n == null) return '—';
+      if (n >= 1000000) return Math.floor(n / 1000000) + 'M+';
+      if (n >= 1000) return Math.floor(n / 1000) + 'K+';
+      return String(n);
+    };
+
+    // One attempt, then — if it failed — one retry after a short pause rather
+    // than giving up immediately. The backend is on Render's free tier and can
+    // be asleep; the very first request after idle can take long enough to
+    // fail or time out, while a second request moments later (once the
+    // instance is awake) succeeds. Confirmed live: the page-load call left the
+    // em-dash placeholders in place, while calling the same endpoint by hand a
+    // few seconds later returned real numbers immediately.
+    async function attempt() {
+      return UnplugAPI.api('/analytics/public-stats');
+    }
+
+    let data = null;
     try {
-      const elReaders = document.getElementById('statReaders');
-      const elMembers = document.getElementById('statMembers');
-      const elArticles = document.getElementById('statArticles');
-      // If none of the elements exist on this page, nothing to do.
-      if (!elReaders && !elMembers && !elArticles) return;
+      data = await attempt();
+    } catch (err) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      try {
+        data = await attempt();
+      } catch (err2) {
+        data = null;
+      }
+    }
 
-      // Use the shared API helper so it respects localStorage overrides
-      // (for local development) and any auth token if present.
-      const data = await UnplugAPI.api('/analytics/public-stats');
-
-      const fmt = (n) => {
-        if (n == null) return '—';
-        if (n >= 1000000) return Math.floor(n / 1000000) + 'M+';
-        if (n >= 1000) return Math.floor(n / 1000) + 'K+';
-        return String(n);
-      };
-
+    if (data) {
       if (elReaders) elReaders.textContent = fmt(data.monthlyReaders);
       if (elMembers) elMembers.textContent = fmt(data.registeredMembers);
       if (elArticles) elArticles.textContent = fmt(data.articlesPublished);
-    } catch (err) {
-      // Leave the existing em-dash placeholders rather than showing 0 or an
-      // error. Deliberately NO hardcoded number fallback here: these stats
-      // exist to show REAL platform numbers, and silently swapping in
-      // invented ones (12K+/340+) on an API hiccup would mislead the exact
-      // investors this section is meant to build credibility with.
+      return;
     }
+
+    // Both attempts failed. An em-dash placeholder reads as broken rather than
+    // loading — hide the row instead, matching how the rest of this section
+    // already handles "nothing to show" (the project spotlight card does the
+    // same). Deliberately NO hardcoded number fallback: these stats exist to
+    // show REAL platform numbers, and silently swapping in invented ones
+    // (12K+/340+) on an API failure would mislead the exact investors this
+    // section is meant to build credibility with.
+    const row = (elReaders || elMembers || elArticles).closest('.inv-stats');
+    if (row) row.style.display = 'none';
   })();
 });
 // ---------------------------------------------------------------------------
