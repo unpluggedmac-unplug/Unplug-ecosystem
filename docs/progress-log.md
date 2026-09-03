@@ -1117,3 +1117,41 @@ money-behaviour decision, not a refactor.
 package tier prices hardcoded in checkout and magazine as well as `PACKAGE_PRICES`, and
 `unplug-components-demo.html` advertising "R250 a month" where everything else is once-off. All
 frontend copy, and they need the tier decision settled first.
+
+---
+
+## 2026-09-03 — The frontend price copies (pricing decision 8, items 2 and 4)
+
+**The banner sentence, ten times.** The same paragraph appears ten times across `unplug-magazine.html`,
+each hardcoding R300 / R550 / R1,000 — so an admin changing a banner price left ten live pages
+advertising the old one. All ten are now tagged and rewritten by **one** loader from
+`/payments/packages?service=ad_banner`, the same rows that are charged. No price changed: the table
+holds exactly those figures today.
+
+**The wording in the HTML stays as the fallback**, so the page still reads correctly with no
+JavaScript, on a failed fetch, or before the loader runs — verified by pointing the API base at a
+dead port and confirming all ten still read R300–R1,000.
+
+**A real bug the browser caught that the tests did not.** My first version resolved the API base as
+`window.UnplugAPI && ...`. `unplug-shared.js` declares it `const UnplugAPI = (function(){…})()`, and a
+top-level `const` in a classic script is a global BINDING but **never a property of `window`** — so
+`window.UnplugAPI` was undefined, the loader bailed out silently, and all ten sentences kept showing
+the fallback. The unit test passed throughout: it checked the markup, not that the thing worked.
+Caught by setting the table to absurd values (R777 / R888 / R9,999) and looking at the page. Now
+resolved with `typeof UnplugAPI`, the way the rest of the page reaches it.
+
+**The public demo page.** `unplug-components-demo.html` is served publicly (200 on the live site) with
+no inbound links, and its illustrative FAQ said *"Packages start at R250 a month"* — wrong twice:
+directory packages are once-off, not monthly, and R250 is not one of them. The claim is removed
+rather than corrected, because choosing the right figure would be a pricing decision. A component
+example does not need a real price to demonstrate anything.
+
+> **Worth deciding: should that demo page be public at all?** It is a developer reference for
+> component usage, reachable by URL by anyone. Nothing links to it, so removing it from the deploy
+> would cost nothing.
+
+Suite **1788 → 1791**, 0 failing. Audit PASS, smoke PASS.
+
+**Still open in decision 8:** item 3 — the package tier prices hardcoded in `unplug-checkout.html`
+and `unplug-magazine.html` as well as `PACKAGE_PRICES`. Those are the directory tiers, and consolidating
+them runs into decision 6 (whether the middle tier is "Standard" or `pro`), so it waits on that.

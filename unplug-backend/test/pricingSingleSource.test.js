@@ -152,3 +152,52 @@ test('an unknown duration is refused rather than priced at a guess', async () =>
   assert.equal(price, null,
     'a duration that is not a real package must not be given an arbitrary price');
 });
+
+// ---------------------------------------------------------------------------
+// The FRONTEND copies (pricing-comparison.md, "where a price lives more than
+// once", items 2 and 4).
+
+test('THE BANNER SENTENCE NO LONGER STATES PRICES TEN TIMES', () => {
+  // The same sentence appears ten times across the magazine, and each copy used
+  // to hardcode R300 / R550 / R1,000. An admin changing a banner price left ten
+  // pages advertising the old one.
+  const page = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'unplug-magazine.html'), 'utf8');
+
+  const tagged = (page.match(/<p class="js-banner-pricing">/g) || []).length;
+  assert.ok(tagged >= 10, `expected every copy tagged, found ${tagged}`);
+
+  // One loader, not ten.
+  const loaders = (page.match(/payments\/packages\?service=ad_banner/g) || []).length;
+  assert.equal(loaders, 1, 'there should be exactly one place that fetches the prices');
+
+  // Written with textContent: these values arrive over the network.
+  assert.ok(/js-banner-pricing[\s\S]{0,4000}textContent/.test(page),
+    'the sentence must be written with textContent, not innerHTML');
+});
+
+test('...and the wording still reads correctly with no JavaScript', () => {
+  // The literal sentence stays in the HTML as the fallback, so the page is not
+  // blank or priceless for a reader without JS or on a failed fetch.
+  const page = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'unplug-magazine.html'), 'utf8');
+  assert.ok(/Advertising banners run from R\d/.test(page),
+    'the fallback wording should remain in the markup');
+});
+
+test('THE PUBLIC DEMO PAGE STATES NO PRICE', () => {
+  // unplug-components-demo.html is served publicly (200 on the live site) with
+  // no inbound links. Its illustrative FAQ said "Packages start at R250 a
+  // month", which was wrong twice: directory packages are once-off, not
+  // monthly, and R250 is not one of them. A component example does not need a
+  // real price to demonstrate anything.
+  const demo = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'unplug-components-demo.html'), 'utf8');
+
+  // Strip HTML comments first: the explanation of the removal mentions the old
+  // figure on purpose, and a comment is not a claim to a reader.
+  const visible = demo.replace(/<!--[\s\S]*?-->/g, '');
+  const prices = visible.match(/R\s?\d[\d,]*/g) || [];
+  assert.deepEqual(prices, [],
+    `the demo page still shows price(s): ${prices.join(', ')}`);
+});

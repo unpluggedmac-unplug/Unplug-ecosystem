@@ -168,11 +168,10 @@ Beyond the policy-page contradiction above:
    the table is unreadable — but if the database cannot be read, the payment row cannot be
    written either, so its practical value is questionable. Refusing the charge instead may be
    safer than guessing at it. That is a money-behaviour call, not a refactor.
-2. **The banner sentence, ten times** in `unplug-magazine.html`.
+2. ~~**The banner sentence, ten times**~~ — **RESOLVED 2026-09-03.** All ten are rendered by one loader from `/payments/packages?service=ad_banner`; the HTML wording remains as a no-JS fallback. No price changed.
 3. **Package tier prices** are hardcoded in `unplug-checkout.html` and `unplug-magazine.html`
    as well as in `PACKAGE_PRICES`.
-4. **`unplug-components-demo.html`** says *"Packages start at R250 a month"* — monthly, where
-   everything else is once-off. Worth checking whether that file is deployed.
+4. ~~**`unplug-components-demo.html`**~~ — **RESOLVED 2026-09-03.** It IS deployed (200, no inbound links). The price claim is removed rather than corrected, since picking the right figure is a pricing decision. Open question: should the page be public at all?
 
 This is the recurring bug class from `CLAUDE.md`, carrying money.
 
