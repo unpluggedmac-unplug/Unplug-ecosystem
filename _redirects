@@ -25,6 +25,67 @@
 # The target is the EXTENSIONLESS path. Pages serves /unplug-magazine.html
 # as a 308 to /unplug-magazine, and a rewrite whose destination is itself
 # a redirect is not one Pages will follow.
+# ---------------------------------------------------------------------------
+# THINGS THAT ARE IN THE REPOSITORY BUT ARE NOT THE SITE.
+#
+# Cloudflare Pages publishes the repository root, so every file committed here
+# is reachable by URL. That was serving, to anyone who asked:
+#
+#   /SECURITY.md          what protects this site and where each weak point is
+#   /PUNCH-LIST.md        every known unfinished thing
+#   /docs/progress-log.md a 70KB engineering log, including what is not yet done
+#   /docs/pricing-comparison.md   internal pricing analysis and open decisions
+#   /unplug-backend/**    the entire backend source, payments.js included
+#
+# No secrets were exposed — .env is gitignored and never committed, and a
+# request for it returns this same page. But a description of where the soft
+# spots are is a starting point somebody else does not need to be given.
+#
+# These come BEFORE the rewrites below, because Pages matches in order.
+#
+# The destination is not called 404.html on purpose: Pages adopts a file of
+# that name as the answer to EVERY unmatched request, which would change how
+# the whole site behaves. This one is used only by the rules listed here.
+
+# Internal documentation at the root.
+/CLAUDE.md                    /not-found.html   404
+/SECURITY.md                  /not-found.html   404
+/PUNCH-LIST.md                /not-found.html   404
+/BACKUPS.md                   /not-found.html   404
+/OPERATIONS.md                /not-found.html   404
+/HANDOVER-FINALISATION.md     /not-found.html   404
+/APPROVAL-QUEUE.md            /not-found.html   404
+/CHECKOUT-RECOVERY.md         /not-found.html   404
+/EMAIL.md                     /not-found.html   404
+/FORMS.md                     /not-found.html   404
+/MEMBERSHIP.md                /not-found.html   404
+/MULTILINGUAL.md              /not-found.html   404
+/NAVIGATION.md                /not-found.html   404
+/POPUPS.md                    /not-found.html   404
+/PRIVACY.md                   /not-found.html   404
+/SEARCH.md                    /not-found.html   404
+# and anything else ending .md that gets added later
+/*.md                         /not-found.html   404
+
+# The spec, the pricing analysis and the progress log.
+/docs/*                       /not-found.html   404
+
+# The backend. It is deployed to Render from this same repository; none of it
+# is meant to be fetched from the magazine's domain.
+/unplug-backend/*             /not-found.html   404
+
+# Build and tooling metadata: dependency names and versions make it easy to
+# look up which known vulnerabilities might apply.
+/package.json                 /not-found.html   404
+/package-lock.json            /not-found.html   404
+/node_modules/*               /not-found.html   404
+/.github/*                    /not-found.html   404
+/.claude/*                    /not-found.html   404
+
+# A developer reference for component usage, with no inbound links. Not part of
+# the magazine, and it should not be reachable by the public.
+/unplug-components-demo.html   /not-found.html   404
+
 /    /unplug-magazine    200
 
 # /nominate — the one page with a real path rather than ?p=.
