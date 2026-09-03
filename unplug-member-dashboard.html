@@ -633,8 +633,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field"><label for="svcArtPick">Article</label><select id="svcArtPick"><option value="">Loading…</option></select></div>
           <div class="field"><label for="svcArtDuration">Duration</label><select id="svcArtDuration"><option value="">Loading…</option></select></div>
         </div>
+        <div class="field"><label for="svcArtPayMethod">Payment Method</label><select id="svcArtPayMethod"><option value="eft" selected>Manual EFT</option></select>
+          <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT.</p>
+        </div>
         <div id="svcArtError" class="error-banner" style="display:none;"></div>
-        <label class="tc-row" style="margin:8px 0;"><input type="checkbox" id="svcArtTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+        <div class="field" style="border-top:1px solid var(--paper-line); padding-top:10px;">
+          <p style="font-size:12.5px; margin-bottom:6px;"><strong>Cancellation &amp; Credit Policy:</strong> A minimum of 7 working days' notice is required to cancel before a service starts. If eligible, 100% of the amount paid will be credited to your account (no cash refund) — credit never expires. Once a service has started, no refund or unused-period credit will be provided, subject to applicable law.</p>
+          <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline; margin-right:14px;">VIEW TERMS &amp; CONDITIONS</a>
+          <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline;">VIEW CANCELLATION, REFUND &amp; ACCOUNT CREDIT POLICY</a>
+          <label class="tc-row" style="margin-top:8px;"><input type="checkbox" id="svcArtTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+        </div>
         <button class="btn btn-solid" id="svcArtBtn" style="width:auto;">Continue to Checkout</button>
         <div class="instructions-box section-hidden" id="svcArtResult" style="margin-top:12px;"></div>
       </div>
@@ -646,8 +654,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div class="field"><label for="svcProfDuration">Duration</label><select id="svcProfDuration"><option value="">Loading…</option></select></div>
           <div class="field"><label>Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="svcProfStart" type="date"></div>
         </div>
+        <div class="field"><label for="svcProfPayMethod">Payment Method</label><select id="svcProfPayMethod"><option value="eft" selected>Manual EFT</option></select>
+          <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT.</p>
+        </div>
         <div id="svcProfError" class="error-banner" style="display:none;"></div>
-        <label class="tc-row" style="margin:8px 0;"><input type="checkbox" id="svcProfTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+        <div class="field" style="border-top:1px solid var(--paper-line); padding-top:10px;">
+          <p style="font-size:12.5px; margin-bottom:6px;"><strong>Cancellation &amp; Credit Policy:</strong> A minimum of 7 working days' notice is required to cancel before a service starts. If eligible, 100% of the amount paid will be credited to your account (no cash refund) — credit never expires. Once a service has started, no refund or unused-period credit will be provided, subject to applicable law.</p>
+          <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline; margin-right:14px;">VIEW TERMS &amp; CONDITIONS</a>
+          <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline;">VIEW CANCELLATION, REFUND &amp; ACCOUNT CREDIT POLICY</a>
+          <label class="tc-row" style="margin-top:8px;"><input type="checkbox" id="svcProfTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+        </div>
         <button class="btn btn-solid" id="svcProfBtn" style="width:auto;">Continue to Checkout</button>
         <div class="instructions-box section-hidden" id="svcProfResult" style="margin-top:12px;"></div>
       </div>
@@ -1802,6 +1818,7 @@ function enterMemberDashboard(user){
       targetId: Number(document.getElementById('svcArtPick').value),
       durationDays: Number(document.getElementById('svcArtDuration').value),
       errorEl: 'svcArtError', resultEl: 'svcArtResult', btn: 'svcArtBtn', termsChkId: 'svcArtTermsChk',
+      payMethodId: 'svcArtPayMethod',
     }));
   }
   const profBtn = document.getElementById('svcProfBtn');
@@ -1813,6 +1830,7 @@ function enterMemberDashboard(user){
       durationDays: Number(document.getElementById('svcProfDuration').value),
       requestedStartDate: document.getElementById('svcProfStart').value || undefined,
       errorEl: 'svcProfError', resultEl: 'svcProfResult', btn: 'svcProfBtn', termsChkId: 'svcProfTermsChk',
+      payMethodId: 'svcProfPayMethod',
     }));
   }
 }
@@ -2060,7 +2078,7 @@ async function loadHighlightServices() {
 // site-wide Terms & Conditions gate, same rule every other payment portal
 // enforces. Checked here rather than trusted from the caller, so a future
 // call site can't accidentally skip it.
-async function buyHighlight({ targetType, targetId, durationDays, requestedStartDate, errorEl, resultEl, btn, termsChkId }) {
+async function buyHighlight({ targetType, targetId, durationDays, requestedStartDate, errorEl, resultEl, btn, termsChkId, payMethodId }) {
   const err = document.getElementById(errorEl);
   const box = document.getElementById(resultEl);
   err.style.display = 'none';
@@ -2071,6 +2089,9 @@ async function buyHighlight({ targetType, targetId, durationDays, requestedStart
     err.style.display = 'block';
     return;
   }
+  // Falls back to 'eft' if no selector was given — EFT is the only method
+  // live sitewide today, same as every other payment portal.
+  const method = (payMethodId && document.getElementById(payMethodId)?.value) || 'eft';
   const b = document.getElementById(btn);
   b.disabled = true; b.textContent = 'Processing…';
   try {
@@ -2078,7 +2099,7 @@ async function buyHighlight({ targetType, targetId, durationDays, requestedStart
       targetType, targetId, durationDays, requestedStartDate,
     }) });
     const pay = await api('/payments/initiate', { method: 'POST', body: JSON.stringify({
-      linkedType: 'highlight', linkedId: created.highlight.id, method: 'eft',
+      linkedType: 'highlight', linkedId: created.highlight.id, method,
       termsAccepted: true, termsVersion: SUBMIT_TERMS_VERSION, useCredit: false,
     }) });
     box.classList.remove('section-hidden');
@@ -2090,7 +2111,7 @@ async function buyHighlight({ targetType, targetId, durationDays, requestedStart
         <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
         ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
         <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br><br>
-        ${i.note}` + refNotice(i.reference);
+        ${i.note}` + refNotice(i.reference) + popUploadBlock('payments', pay.payment.id);
     } else {
       box.innerHTML = `<strong>Highlight reserved.</strong> ${pay.note || ''}`;
     }
@@ -2203,7 +2224,13 @@ async function loadProfile() {
           ${higherTiers.map((t) => `<button class="btn btn-solid upgrade-btn" data-tier="${t}" style="width:auto;">${t.charAt(0).toUpperCase() + t.slice(1)} (R250 fee)</button>`).join('')}
         </div>
         <div id="upgradeError" class="error-banner" style="display:none; margin-top:6px;"></div>
-        <label class="tc-row" style="margin:8px 0;"><input type="checkbox" id="upgradeTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+        <p style="font-size:12px; color:var(--slate); margin:6px 0 0;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT.</p>
+        <div style="border-top:1px solid var(--paper-line); margin-top:8px; padding-top:10px;">
+          <p style="font-size:12.5px; margin-bottom:6px;"><strong>Cancellation &amp; Credit Policy:</strong> A minimum of 7 working days' notice is required to cancel before a service starts. If eligible, 100% of the amount paid will be credited to your account (no cash refund) — credit never expires. Once a service has started, no refund or unused-period credit will be provided, subject to applicable law.</p>
+          <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline; margin-right:14px;">VIEW TERMS &amp; CONDITIONS</a>
+          <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline;">VIEW CANCELLATION, REFUND &amp; ACCOUNT CREDIT POLICY</a>
+          <label class="tc-row" style="margin-top:8px;"><input type="checkbox" id="upgradeTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+        </div>
         <div id="upgradeResult" class="instructions-box section-hidden" style="margin-top:10px;"></div>` : ''}
       ${p.status === 'awaiting_payment' ? `<p style="font-size:12.5px; color:var(--red); margin-top:12px;">Your profile is awaiting payment — use the Unplug checkout to complete it before it can be reviewed.</p>` : ''}
 
@@ -2223,9 +2250,16 @@ async function loadProfile() {
             <div class="field"><label for="hlPackage">Package</label><select id="hlPackage"><option value="">Loading…</option></select></div>
             <div class="field"><label>Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="hlStartDate" type="date"></div>
           </div>
-          <div class="field"><label for="hlPayMethod">Payment Method</label><select id="hlPayMethod"><option value="eft" selected>Manual EFT</option></select></div>
+          <div class="field"><label for="hlPayMethod">Payment Method</label><select id="hlPayMethod"><option value="eft" selected>Manual EFT</option></select>
+            <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all payments are handled by manual EFT.</p>
+          </div>
           <div id="hlBuyError" class="error-banner" style="display:none;"></div>
-          <label class="tc-row" style="margin:8px 0;"><input type="checkbox" id="hlTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+          <div style="border-top:1px solid var(--paper-line); padding-top:10px;">
+            <p style="font-size:12.5px; margin-bottom:6px;"><strong>Cancellation &amp; Credit Policy:</strong> A minimum of 7 working days' notice is required to cancel before a service starts. If eligible, 100% of the amount paid will be credited to your account (no cash refund) — credit never expires. Once a service has started, no refund or unused-period credit will be provided, subject to applicable law.</p>
+            <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline; margin-right:14px;">VIEW TERMS &amp; CONDITIONS</a>
+            <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline;">VIEW CANCELLATION, REFUND &amp; ACCOUNT CREDIT POLICY</a>
+            <label class="tc-row" style="margin-top:8px;"><input type="checkbox" id="hlTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+          </div>
           <button class="btn btn-solid" id="hlBuyBtn" style="width:auto;">Continue to Payment</button>
           <div class="instructions-box section-hidden" id="hlBuyResult" style="margin-top:14px;"></div>
         `}
@@ -2355,7 +2389,7 @@ async function loadProfile() {
               <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
               ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
               <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br>
-              ${i.note}` + refNotice(i.reference);
+              ${i.note}` + refNotice(i.reference) + popUploadBlock('payments', pay.payment.id);
           } else {
             box.innerHTML = `<strong>Highlight reserved.</strong> ${pay.note || ''}`;
           }
@@ -2405,7 +2439,7 @@ async function loadProfile() {
               <b>Bank:</b> ${i.bank}<br><b>Account Name:</b> ${i.accountName}<br>
               ${i.accountType ? `<b>Account Type:</b> ${i.accountType}<br>` : ''}
               <b>Account Number:</b> ${i.accountNumber}<br><b>Branch Code:</b> ${i.branchCode}<br><br>
-              ${i.note}` + refNotice(i.reference);
+              ${i.note}` + refNotice(i.reference) + popUploadBlock('payments', pay.payment.id);
           } else {
             box.innerHTML = `<strong>Upgrade reserved.</strong> ${pay.note || ''}`;
           }

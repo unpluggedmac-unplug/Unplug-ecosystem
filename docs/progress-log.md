@@ -1208,3 +1208,33 @@ place. Full suite: 1825 passing, 0 failing.
 `"Target launch: August Month"` on the Investors page was hand-typed placeholder text, not pulled
 from any data source. The Arena's competition closing date is set to 31 October 2026 (migration 066);
 site owner confirmed the launch copy as October 2026 rather than a date after the close.
+
+## 2026-09-03 — QA punch list, task 6/6: Highlight/Upgrade purchases brought up to the site's own checkout standard
+
+Editions checkout and Submit & Pay both show a short-form cancellation-policy summary with links to
+the full policy before the terms checkbox, offer a real payment-method selector, and add a
+proof-of-payment upload once a reference is issued. Four other purchase entry points — Highlight
+Article, Highlight Profile (both via the shared `buyHighlight()`), the profile-page "Highlight my
+listing" button, and the tier Upgrade button — had none of that: just a bare checkbox naming the
+policies with nothing to read, EFT hardcoded in JS with no visible choice or explanation, and no
+upload widget.
+
+Fixed by extending the existing pattern into all four call sites rather than writing a new one:
+`buyHighlight()` gained an optional `payMethodId` (defaults to `'eft'`, so it can't regress a future
+caller that omits it) instead of a hardcoded method, and every EFT-instructions branch across the
+four now calls `popUploadBlock('payments', ...)` exactly as Submit & Pay does. The cancellation
+summary is the exact wording already established in Submit & Pay's `#submitTermsGate` block, reused
+rather than reworded, so there is one sentence of policy on the site, not a second one to drift out
+of sync with the real Refunds & Cancellation page.
+
+New test, `highlightCheckoutParity.test.js` (5 tests): confirms the summary sits immediately before
+each of the four terms checkboxes, that every entry point discloses its payment method, that
+`buyHighlight()` no longer hardcodes `'eft'`, that every EFT branch offers the upload, and that the
+wording is byte-identical to Submit & Pay's rather than a paraphrase. Full suite: 1825 passing, 0
+failing (up from 1820 — the 5 new tests).
+
+**All 6 punch-list items complete.** One incidental finding along the way, already resolved before
+this session touched anything: the Directory Highlight refunds-policy page previously quoted a price
+ladder R150 higher than what the system actually charges at every tier (`docs/pricing-comparison.md`,
+compiled 29 August) — checked live on 2026-09-03 and the policy page now reads the correct R100-R250
+ladder, so nothing needed doing.
