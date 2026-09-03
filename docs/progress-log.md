@@ -980,3 +980,50 @@ report to the owner; the rule goes live only on their explicit go-ahead.
 **Also flagged:** CLAUDE.md decision 1 (bulk-vote reference = code + suffix) is **stale** — migration
 106 deliberately reversed it and added `lookup_token`, because a publicly-printed code cannot be a
 credential. The file should be updated so the next reader does not "restore" the suffix.
+
+---
+
+## 2026-09-03 — Task 08: renewal (§10.9) and upgrade pricing (§10.10)
+
+Built the two revenue-relevant pieces the task puts first. §12 intro screens and §19's progress
+indicator are **not** built — the task calls them "process formalism… earns nothing alone" and says
+to ask before spending effort on them, so they are left for the owner to decide.
+
+**§10.9 one-click renewal.** A renewal is a **new submission copied from the expired one**, never an
+edit of it: §10.11 says the underlying record stays for history, reporting, renewal and audit, and
+reusing the row would also drop a live service back to awaiting_payment. The copy starts unpaid, and
+carries no dates — a fresh term, not the old one. Renewable: marketplace listings, highlights,
+adverts and events. Anything else gets a sentence saying why rather than "unknown type".
+
+**Admin-set fields are deliberately not inherited** — a member must not renew their way into a
+priority or placement an admin granted once.
+
+**A test caught a real gap:** the check that every type in `SERVICE_TYPES` is either renewable or
+explained failed on **advertising**, which had been missed. Adding it surfaced that `ad_slots` keeps
+its own vocabulary — the status column is `moderation_status` and a new advert starts
+`pending_payment`, not `awaiting_payment`. A renewed advert also has to come back `is_active = false`
+with no placement, or an unpaid advert would go straight onto the site.
+
+**§10.10 upgrade pricing: the price did NOT change.** It is still R250 — `docs/pricing-comparison.md`
+records spec and live agreeing, and decision 8 forbids a price change without a full comparison. What
+changed is that the figure was `const UPGRADE_FEE = 250.00` in a source file, which §2.3 and §10.10
+both say it must not be: migration **166** seeds it as the `profile_upgrade_fee` setting, so an admin
+can change it without a deploy. `ON CONFLICT DO NOTHING`, so a deploy can never reset a figure an
+admin set. What was quoted is stored on the upgrade row, so a later change cannot alter a price
+somebody was already given.
+
+**On the test run.** The first full-suite attempt reported 8 failures in `freePublishing.test.js` — a
+file this task did not touch. The cause was in the log: `checkpointer process exited with exit code
+1`, the embedded Postgres crashing under sustained load after a night of suites, with one test taking
+988 seconds. Re-run alone: **8/8, zero crashes.** A clean full run afterwards: **1777/1777, 0
+failing.**
+
+Verified in a browser against a real backend: Renew appears on the **expired** listing and not on the
+running one; clicking it produces a copy under *Awaiting payment* with the details filled in and no
+dates, while the expired original keeps its old term untouched.
+
+**Also corrected:** CLAUDE.md decision 1 was stale and is now marked SUPERSEDED, with the reasoning
+from migration 106, so nobody "restores" the suffix.
+
+**Still open:** §12 and §19 (awaiting the owner's call); profile/directory renewal, which goes through
+a package with a tier and a price and is a different flow from copying a service.

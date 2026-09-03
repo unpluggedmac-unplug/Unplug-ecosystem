@@ -4666,8 +4666,51 @@ function svcRender(data){
     h.className = 'subs-group';
     h.textContent = group.label + ' (' + rows.length + ')';
     host.appendChild(h);
-    rows.forEach(function(s){ host.appendChild(subsRow(s)); });
+    // Section 10.9: an expired service shows RENEW. Only that bucket - a running
+    // service has nothing to renew yet, and offering it would invite paying twice.
+    rows.forEach(function(s){
+      var row = subsRow(s);
+      if (group.key === 'expired') { svcAddRenew(row, s); }
+      host.appendChild(row);
+    });
   });
+}
+
+// ONE CLICK (section 10.9). The copy is made server-side from the expired
+// service, so the member lands on something already filled in and only has to
+// confirm, review and pay.
+//
+// Types that cannot be renewed simply get no button - the server explains why
+// if one is asked for anyway, but a button that only ever errors is worse than
+// no button.
+var RENEWABLE_TYPES = ['listing', 'highlight', 'advertising', 'event'];
+
+function svcAddRenew(row, service){
+  if (RENEWABLE_TYPES.indexOf(service.type) === -1) return;
+  var main = row.firstChild;
+  if (!main) return;
+
+  var btn = document.createElement('button');
+  btn.className = 'btn btn-solid';
+  btn.style.cssText = 'margin-top:8px; width:auto; padding:5px 14px; font-size:12px;';
+  btn.textContent = 'Renew';
+  btn.addEventListener('click', async function(){
+    btn.disabled = true;
+    var was = btn.textContent;
+    btn.textContent = 'Copying\u2026';
+    try {
+      var res = await api('/my/services/' + encodeURIComponent(service.type)
+        + '/' + encodeURIComponent(service.id) + '/renew', { method: 'POST' });
+      btn.textContent = 'Copied - awaiting payment';
+      // Reload so the new copy appears in its own bucket rather than the
+      // member wondering whether anything happened.
+      setTimeout(function(){ loadMyServices(); }, 1200);
+    } catch (err) {
+      btn.textContent = 'Could not renew';
+      setTimeout(function(){ btn.textContent = was; btn.disabled = false; }, 2500);
+    }
+  });
+  main.appendChild(btn);
 }
 
 // MY ORDERS - spec section 4.

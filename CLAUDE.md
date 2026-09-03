@@ -58,8 +58,16 @@ file) · 155 numbered SQL migrations, all re-run on every deploy. Repo:
   prices have all done this). If you find a second copy of a value, consolidate it.
 
 ## Decisions already made — implement as-is, do not re-ask
-1. Bulk vote EFT reference = contestant code + unique suffix (`1234567890-K3M9`), not the
-   bare code (bare code can't distinguish two buyers).
+1. ~~Bulk vote EFT reference = contestant code + unique suffix (`1234567890-K3M9`).~~
+   **SUPERSEDED by migration 106 (2026-09-03).** The reference is now the BARE contestant
+   code — one code, called the Reference Code, everywhere a customer sees it. The concern
+   behind the original decision is real and was accepted deliberately: two buyers for the
+   same contestant do send the same reference, and the admin queue compensates by showing
+   amount, date and buyer beside it. Two things had to follow, and both are done: `reference`
+   is no longer UNIQUE (or the second buyer could not check out at all), and it is no longer
+   the buyer's credential — an entry code is printed publicly beside every contestant, so
+   `lookup_token` replaces it as the unguessable handle in the buyer's own link.
+   **Do not "restore" the suffix without reading 106 first.**
 2. Voting moves to spec §9.2: 5 votes/person/day, across ≥2 contestants. This is a
    live-behaviour change — implement it, but flag before flipping it live so cutover timing
    can be chosen.

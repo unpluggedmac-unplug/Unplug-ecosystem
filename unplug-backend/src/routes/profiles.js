@@ -28,7 +28,28 @@ function withPublicLocation(profile) {
 
 const TIERS = ['basic', 'pro', 'premium']; // order matters — index = rank
 const PROFILE_TYPES = ['individual', 'business'];
+// The upgrade fee. §2.3 and §10.10 both require a price an admin can change
+// WITHOUT a code change, so this is the fallback, not the source of truth —
+// the live figure comes from the `profile_upgrade_fee` setting.
+//
+// R250 is exactly what the site charges today (confirmed in
+// docs/pricing-comparison.md: spec and live agree), so making it configurable
+// changes no price. Decision 8 forbids a price change without a full
+// spec-vs-live comparison, and this is not one.
 const UPGRADE_FEE = 250.00;
+
+async function upgradeFee() {
+  try {
+    const r = await pool.query(
+      `SELECT value FROM settings WHERE key = 'profile_upgrade_fee'`);
+    const configured = r.rows.length ? Number(r.rows[0].value) : NaN;
+    return Number.isFinite(configured) && configured >= 0 ? configured : UPGRADE_FEE;
+  } catch (err) {
+    // An unreadable setting must not stop somebody upgrading; the hardcoded
+    // figure is the same number the setting is seeded with.
+    return UPGRADE_FEE;
+  }
+}
 
 function slugify(name) {
   return name
@@ -412,16 +433,20 @@ router.post('/profiles/:id/upgrade', requireOwnerOrAdmin(getProfileOwnerId), asy
       return res.status(400).json({ error: 'Downgrades are not available — you can only move to a higher package.' });
     }
 
+    // Read at the moment of the upgrade, so a price an admin changed today
+    // applies today. The amount is stored on the row (fee_paid), so what was
+    // quoted is what is later charged even if the setting moves afterwards.
+    const fee = await upgradeFee();
     const upgrade = await pool.query(
       `INSERT INTO profile_upgrades (profile_id, from_tier, to_tier, fee_paid)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [req.params.id, currentTier, toTier, UPGRADE_FEE]
+      [req.params.id, currentTier, toTier, fee]
     );
 
     res.status(201).json({
       upgrade: upgrade.rows[0],
-      message: `Upgrade to ${toTier} created. Call POST /payments/initiate with linkedType "profile_upgrade" and this upgrade's id (R${UPGRADE_FEE.toFixed(2)}) — the tier changes once payment is confirmed.`,
+      message: `Upgrade to ${toTier} created. Call POST /payments/initiate with linkedType "profile_upgrade" and this upgrade's id (R${fee.toFixed(2)}) — the tier changes once payment is confirmed.`,
     });
   } catch (err) {
     next(err);

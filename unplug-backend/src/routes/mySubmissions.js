@@ -15,6 +15,7 @@ const {
 const invoices = require('../utils/invoices');
 const myVotes = require('../utils/myVotes');
 const notifPrefs = require('../utils/notificationPreferences');
+const renewals = require('../utils/renewals');
 const { generateDocument } = require('../utils/pdfDocs');
 
 // GET /my/submissions          — everything this member has submitted
@@ -164,6 +165,28 @@ router.patch('/notification-preferences', requireAuth, async (req, res, next) =>
   try {
     const preferences = await notifPrefs.updateFor(req.user.id, req.body || {});
     res.json({ preferences });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /my/services/:type/:id/renew — §10.9's one click.
+//
+// Creates a fresh submission copied from the expired one. The member then
+// confirms or updates it, reviews, pays and submits — which is exactly the
+// four steps §10.9 says should be all that is left to do.
+//
+// The old service is never touched: §10.11 says the record stays for history,
+// reporting, renewal and audit.
+router.post('/services/:type/:id/renew', requireAuth, async (req, res, next) => {
+  try {
+    const result = await renewals.renew(req.params.type, req.params.id, req.user.id);
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.status(201).json({
+      renewal: result.renewal,
+      // What to do next, in the member's terms rather than the system's.
+      message: `Your ${result.label.toLowerCase()} has been copied. Check the details, then pay to submit it.`,
+    });
   } catch (err) {
     next(err);
   }
