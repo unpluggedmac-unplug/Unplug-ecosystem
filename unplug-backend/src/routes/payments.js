@@ -209,14 +209,22 @@ async function resolveAmount(linkedType, linkedId) {
 // still never supplies a price. Types whose cost is stored per-row (edition
 // downloads, competition entries, profile packages) aren't quotable this way and
 // say so rather than guessing.
+// The flat fees, at module scope so the SAME map can be both charged and shown.
+//
+// It was declared inside priceForNewOrder, which meant a page wanting to display
+// "R95 per article" had no way to ask for it and hardcoded the number instead —
+// which is how the service intro screens ended up restating prices that live
+// here. GET /payments/fees below serves this map, so a price is stated once.
+const FIXED_FEES = {
+  article_publish: ARTICLE_PUBLISH_FEE,
+  event_listing: EVENT_LISTING_FEE,
+  gallery_bundle: GALLERY_BUNDLE_PRICE,
+  top10_entry: TOP10_ENTRY_FEE,
+  marketplace_listing: MARKETPLACE_LISTING_PRICE,
+};
+
 async function priceForNewOrder(linkedType, { durationDays, targetType } = {}) {
-  const FIXED = {
-    article_publish: ARTICLE_PUBLISH_FEE,
-    event_listing: EVENT_LISTING_FEE,
-    gallery_bundle: GALLERY_BUNDLE_PRICE,
-    top10_entry: TOP10_ENTRY_FEE,
-    marketplace_listing: MARKETPLACE_LISTING_PRICE,
-  };
+  const FIXED = FIXED_FEES;
   if (FIXED[linkedType] !== undefined) return FIXED[linkedType];
 
   if (linkedType === 'ad_banner') {
@@ -498,6 +506,19 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
     });
     res.json({ orders });
   } catch (err) { next(err); }
+});
+
+// GET /payments/fees — public. The flat, single-price services.
+//
+// The companion to /payments/packages, which covers the ones priced by duration.
+// Both exist so a price is never typed into a page by hand: a figure shown to a
+// member and the figure they are charged come from the same place.
+//
+// Services whose price is stored per row (competition entries, edition
+// downloads, directory packages) are deliberately absent — they have no single
+// figure to quote, and inventing one here is exactly the drift this prevents.
+router.get('/fees', (req, res) => {
+  res.json({ fees: FIXED_FEES });
 });
 
 // GET /payments/packages?service=highlight_article — public. The packages a

@@ -4348,15 +4348,49 @@ function msSetupNav(){
 // because a service described in two places drifts - this codebase has been
 // bitten by exactly that with image sizes, ad sizes and prices.
 //
-// ON PRICE: there is no single pricing source in this system yet (article
+// ON PRICE: a figure shown here is fetched from the backend (see MS_FEES
+// below), never typed in. The hardcoded string that remains on each service is
+// a FALLBACK for when the fetch fails, and for services whose price is stored
+// per row and has no single figure to quote. Was: there is no single pricing source (article
 // price, per-competition entry_fee, banner tiers and the upgrade fee all live
 // separately), so these strings are a SECOND statement of prices that live in
 // the backend. They say what the site already says today. A single source is
 // flagged in the progress log as the proper fix.
+// The flat fees, from the backend. Fetched once; a service whose intro names a
+// priceKey renders from this rather than from the string beside it, so the
+// figure a member reads is the figure they are charged.
+//
+// If the fetch fails the hardcoded fallback is used — an intro screen with no
+// price at all is worse than one showing the last known figure, and the real
+// amount is confirmed at checkout either way.
+var MS_FEES = null;
+async function msLoadFees(){
+  if (MS_FEES) return MS_FEES;
+  try {
+    var d = await api('/payments/fees');
+    MS_FEES = (d && d.fees) || {};
+  } catch (err) {
+    MS_FEES = {};
+  }
+  return MS_FEES;
+}
+
+// The price line for one service intro.
+function msIntroPrice(intro){
+  if (!intro) return '';
+  if (intro.priceKey && MS_FEES && MS_FEES[intro.priceKey] !== undefined) {
+    var amount = Number(MS_FEES[intro.priceKey]);
+    if (intro.priceKey === 'gallery_bundle') return 'R' + amount.toFixed(0) + ' for up to 3 photos';
+    if (intro.priceKey === 'article_publish') return 'R' + amount.toFixed(0) + ' per article';
+    return 'R' + amount.toFixed(2);
+  }
+  return intro.price || '';
+}
+
 const MS_SERVICES=[
   { t:'Article Submission', d:'Publish a story', submit:'article',
       intro:{ what:'Write a story and have it published on Unplug Magazine.',
-        who:'Both', price:'R95 per article',
+        who:'Both', priceKey:'article_publish', price:'R95 per article',
         included:['Your article published on the site','Your name or business as the author','A cover image and up to 5 more images','A YouTube, TikTok or Instagram link'],
         need:['Your article (300-2500 words)','A cover image','Any images you want included'],
         duration:'Once published, an article stays on the site.' } },
@@ -4393,13 +4427,16 @@ const MS_SERVICES=[
         duration:'Until the competition closes.' } },
   { t:'Gallery', d:'Share photos', submit:'gallery',
       intro:{ what:'Share your photographs in the Unplug gallery.',
-        who:'Both', price:'R100 for up to 3 photos',
+        who:'Both', priceKey:'gallery_bundle', price:'R100 for up to 3 photos',
         included:['Up to 3 photos in the gallery','A caption on each'],
         need:['1 to 3 photos'],
         duration:'Once published, gallery photos stay on the site.' } }
 ];
 function msRenderServices(){
   const grid=document.getElementById('msServicesGrid'); if (!grid) return;
+  // Fetch the flat fees before any intro can be opened, so a price shown on an
+  // intro screen is the one the backend charges rather than one typed in here.
+  msLoadFees();
   grid.innerHTML='';
   MS_SERVICES.forEach(function(svc){
     const el=document.createElement(svc.href?'a':'button');
@@ -4427,6 +4464,9 @@ function msRenderServices(){
 //
 // Built with createElement throughout.
 function msShowIntro(svc){
+  // If the fees have not arrived yet, draw with the fallback now and redraw
+  // once they do — a member never waits on a network call to read a page.
+  if (!MS_FEES) { msLoadFees().then(function(){ msShowIntro(svc); }); }
   var host = document.getElementById('msServicesGrid');
   if (!host || !svc.intro) return;
   var i = svc.intro;
@@ -4467,7 +4507,7 @@ function msShowIntro(svc){
 
   line('What is it', i.what);
   line('Who is it for', i.who);
-  line('Price', i.price);
+  line('Price', msIntroPrice(i));
   bullets('What is included', i.included);
   bullets('What do I need', i.need);
   line('How long it lasts', i.duration);
