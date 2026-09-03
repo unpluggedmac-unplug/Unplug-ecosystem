@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { eftInstructions } = require('../utils/eftDetails');
-const { logActivity } = require('./activityLog');
+const { logActivity, logSubmission } = require('./activityLog');
 const { recordParticipationAsync } = require('../utils/participation');
 const { captureMonth, currentPeriod, previousPeriod } = require('../utils/top10MonthlyCapture');
 
@@ -455,6 +455,10 @@ router.post('/competitions/:id/entries', requireAuth, async (req, res, next) => 
       contentType: 'competition', contentId: Number(req.params.id),
     });
 
+
+      // Recorded when it is MADE, not only when an admin acts on it, so the
+      // monthly account shows what came in as well as what was decided.
+    logSubmission(req.user.id, 'competition_entry_submitted', 'Competition entry');
     res.status(201).json({
       entry: result.rows[0],
       message: hasCredit

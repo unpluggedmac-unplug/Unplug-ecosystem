@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { logSubmission } = require('./activityLog');
 const { requireAuth, requireOwnerOrAdmin, requireRole } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
 const { buildVideoEmbed, resolveAndBuildVideoEmbed } = require('../utils/videoEmbed');
@@ -389,6 +390,13 @@ router.post('/', requireAuth, async (req, res, next) => {
       await client.query('UPDATE profiles SET free_article_credits = free_article_credits - 1 WHERE id = $1', [profileId]);
     }
     await client.query('COMMIT');
+
+    // Recorded AFTER the commit, so the log never describes an article that
+    // was rolled back. article_submitted already exists as an analytics
+    // conversion event; this is the audit record, which is a different thing
+    // and is what the monthly account reads.
+    logSubmission(req.user.id, 'article_submitted',
+      `Article "${(req.body.title || '(untitled)').toString().slice(0, 80)}"`);
 
     // A consultant reaches 'pending' without spending a credit, so the credit
     // wording would be wrong for them — telling someone they used a credit

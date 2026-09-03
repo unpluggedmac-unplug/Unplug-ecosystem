@@ -79,7 +79,7 @@ function config() {
   };
 }
 
-async function sendViaResend({ to, subject, text, html, headers }) {
+async function sendViaResend({ to, subject, text, html, headers, attachments }) {
   const from = parseFrom(DEFAULT_FROM);
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -97,6 +97,15 @@ async function sendViaResend({ to, subject, text, html, headers }) {
       // unsubscribe button, and somebody who cannot find the link in the
       // footer presses the spam button instead.
       ...(headers ? { headers } : {}),
+      // Resend takes attachment content as base64. Only included when there is
+      // one, so the request body for every other message is byte-for-byte what
+      // it was before.
+      ...(attachments && attachments.length
+        ? {
+          attachments: encodeAttachments(attachments)
+            .map((a) => ({ filename: a.filename, content: a.base64 })),
+        }
+        : {}),
     }),
   });
   if (!res.ok) {
@@ -112,7 +121,18 @@ async function sendViaResend({ to, subject, text, html, headers }) {
   return { provider: 'resend', id: body && body.id ? body.id : null };
 }
 
-async function sendViaBrevo({ to, subject, text, html, headers }) {
+// Both HTTP providers want attachment content base64-encoded; they differ only
+// in what they call the fields.
+function encodeAttachments(attachments) {
+  return (attachments || []).map((a) => ({
+    filename: a.filename,
+    base64: Buffer.isBuffer(a.content)
+      ? a.content.toString('base64')
+      : Buffer.from(a.content).toString('base64'),
+  }));
+}
+
+async function sendViaBrevo({ to, subject, text, html, headers, attachments }) {
   const from = parseFrom(DEFAULT_FROM);
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -124,6 +144,15 @@ async function sendViaBrevo({ to, subject, text, html, headers }) {
       textContent: text,
       ...(html ? { htmlContent: html } : {}),
       ...(headers ? { headers } : {}),
+      // Brevo calls it `attachment`, singular, with `name`/`content`. Only
+      // included when there is one, so every other message goes out with a
+      // request body identical to the one it had before.
+      ...(attachments && attachments.length
+        ? {
+          attachment: encodeAttachments(attachments)
+            .map((a) => ({ name: a.filename, content: a.base64 })),
+        }
+        : {}),
     }),
   });
   if (!res.ok) {
@@ -160,15 +189,26 @@ async function verifyConnection() {
 // callers pass neither and behave exactly as before — the two paths share a
 // transport, not a policy: utils/emailMarketing.js enforces suppression and
 // unsubscribe, and a password reset must never be subject to either.
-async function sendEmail({ to, subject, text, html, headers }) {
+// `attachments` is [{ filename, content }] where content is a Buffer. Optional,
+// and absent for every caller that existed before it — a message with none is
+// sent exactly as it was.
+async function sendEmail({ to, subject, text, html, headers, attachments }) {
   if (!provider) {
     console.warn('[email] No provider configured — logging instead of sending.');
     console.log(`[email] To: ${to}\n[email] Subject: ${subject}\n[email] Body:\n${text}`);
+    if (attachments && attachments.length) {
+      console.log(`[email] (${attachments.length} attachment(s) not sent: `
+        + `${attachments.map((a) => a.filename).join(', ')})`);
+    }
     return { simulated: true };
   }
-  if (provider === 'resend') return sendViaResend({ to, subject, text, html, headers });
-  if (provider === 'brevo') return sendViaBrevo({ to, subject, text, html, headers });
-  return transporter.sendMail({ from: DEFAULT_FROM, to, subject, text, html, headers });
+  if (provider === 'resend') return sendViaResend({ to, subject, text, html, headers, attachments });
+  if (provider === 'brevo') return sendViaBrevo({ to, subject, text, html, headers, attachments });
+  // Nodemailer takes Buffers directly, so these are passed through unencoded.
+  return transporter.sendMail({
+    from: DEFAULT_FROM, to, subject, text, html, headers,
+    ...(attachments && attachments.length ? { attachments } : {}),
+  });
 }
 
 module.exports = { sendEmail, isConfigured, verifyConnection, config };

@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { logSubmission } = require('./activityLog');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { publishesFree } = require("../utils/publishingRights");
 const { getPagination, paginationMeta } = require('../utils/pagination');
@@ -211,6 +212,11 @@ router.post('/', requireAuth, async (req, res, next) => {
     // One credit for the submission, not one per image — a ten-image bundle
     // is a single act of taking part.
     recordParticipationAsync(req.user.id, 'gallery_submit_or_interact', { contentType: 'gallery_image' });
+
+    // Recorded when it is MADE, not only when an admin acts on it, so the
+    // monthly account shows what came in as well as what was decided.
+    logSubmission(req.user.id, 'gallery_submitted',
+      `Gallery bundle of ${images.length} photo${images.length === 1 ? '' : 's'}`);
 
     res.status(201).json({
       bundle,

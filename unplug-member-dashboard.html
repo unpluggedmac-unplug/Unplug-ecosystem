@@ -696,9 +696,61 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <!-- Article fields -->
+      <!-- THE SAME FORM THE EDITOR FILLS IN.
+           Field for field and in the same order as the admin publish screen in
+           unplug-admin-dashboard.html, so a story arrives with the same parts an
+           editor would have given it and nobody has to go back to the writer for
+           a subtitle or a social summary after the fact.
+
+           What is deliberately NOT here, and why:
+             - URL slug, keywords, tags, key takeaways — generated from the
+               article by the server for EVERYONE, admins included. They become
+               editable after an article exists, not at submission, so a box for
+               them here would be a field the editor does not have at this point.
+             - Link to contributor, Reading access, Publish/Draft/Delete —
+               editorial decisions about the publication rather than parts of the
+               story. The server ignores them from anyone who is not an admin.
+             - The plain-text/HTML toggle — the admin editor has it because an
+               editor pastes prepared HTML. This form stays plain text, so line
+               breaks become paragraphs and no markup is invited. -->
       <div id="fields-article">
-        <div class="field"><label for="art-title">Title</label><input id="art-title"></div>
-        <div class="field"><label for="art-body">Story</label><textarea id="art-body" rows="4"></textarea></div>
+        <div class="field-row">
+          <div class="field"><label for="art-title">Headline</label><input id="art-title" placeholder="The headline readers see"></div>
+          <div class="field"><label for="art-category">Category</label>
+            <select id="art-category"><option value="">— none —</option></select>
+            <span style="font-size:12px; color:var(--slate);">Leave this if you are not sure — we work one out from your story.</span>
+          </div>
+        </div>
+        <div class="field"><label for="art-subtitle">Subtitle <span style="font-weight:400; opacity:0.7;">&mdash; optional; shown in italics under the headline</span></label>
+          <input id="art-subtitle" style="font-style:italic;" placeholder="A short line that adds context"></div>
+        <div class="field"><label for="art-seo-title">SEO title <span style="font-weight:400; opacity:0.7;">&mdash; optional; defaults to the headline</span></label>
+          <input id="art-seo-title" placeholder="Title used by Google and browser tabs"></div>
+        <div class="field"><label for="art-meta">Meta description <span style="font-weight:400; opacity:0.7;">&mdash; optional; the summary shown when this is shared on social media</span></label>
+          <input id="art-meta" maxlength="320" placeholder="Left blank, this is written for you from your story">
+          <span id="art-meta-count" style="font-size:11px; color:var(--slate);"></span></div>
+
+        <div class="field-row">
+          <div class="field"><label for="art-author">Written by <span style="font-weight:400; opacity:0.7;">&mdash; the byline readers see. Your name, or whoever wrote it.</span></label><input id="art-author" placeholder="e.g. Thandi Mokoena"></div>
+          <div class="field"><label for="art-kicker">Supplied by <span style="font-weight:400; opacity:0.7;">&mdash; optional, only if someone else sent the story in</span></label><input id="art-kicker"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="art-emotion">Emotion (optional)</label>
+            <select id="art-emotion">
+              <option value="">— none —</option>
+              <option value="inspiring">😊 Inspiring</option>
+              <option value="business">💼 Business</option>
+              <option value="community">❤️ Community</option>
+              <option value="breaking">🚨 Breaking News</option>
+              <option value="celebration">🎉 Celebration</option>
+            </select>
+          </div>
+          <div class="field"><label>Cover image</label>
+            <div id="art-cover-upload"></div>
+            <span style="font-size:12px; color:var(--slate);">The main picture shown with your story.</span>
+          </div>
+        </div>
+
+        <div class="field"><label for="art-body">Opening / main story</label><textarea id="art-body" rows="4" placeholder="Write the opening of the story here."></textarea></div>
         <p id="art-readtime-hint" style="font-size:12px; color:var(--slate); margin-top:-4px;">Aim for a 3-6 minute read (roughly 600-1200 words). Current: 0 words, ~0 min.</p>
         <div class="field">
           <label for="art-video">Video link <span style="font-weight:400; opacity:0.7;">&mdash; optional</span></label>
@@ -707,18 +759,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             Paste the link and the video appears at the top of your story with a play button. Nothing else to set &mdash; no cover picture to choose. Google Drive files must be shared as &ldquo;Anyone with the link&rdquo;.
           </span>
         </div>
-        <div class="field"><label for="art-author">Written by <span style="font-weight:400; opacity:0.7;">&mdash; the byline readers see. Your name, or whoever wrote it.</span></label><input id="art-author" placeholder="e.g. Thandi Mokoena"></div>
-        <div class="field"><label for="art-kicker">Supplied by <span style="font-weight:400; opacity:0.7;">&mdash; optional, only if someone else sent the story in</span></label><input id="art-kicker"></div>
-        <div class="field"><label>Cover image</label>
-          <div id="art-cover-upload"></div>
-          <span style="font-size:12px; color:var(--slate);">The main picture shown with your story.</span>
-        </div>
         <div class="field"><label>More images (up to 5)</label>
           <div id="art-gallery-upload"></div>
           <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="art-add-image">+ Add another image</button>
         </div>
         <div class="field"><label>Links (optional)</label>
-          <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:6px;">Social media or anything else you'd like readers to visit.</span>
+          <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:6px;">Social media or anything else you&#39;d like readers to visit.</span>
           <div id="art-links"></div>
           <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="art-add-link">+ Add a link</button>
         </div>
@@ -727,18 +773,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <label style="margin:0;">Sections (optional)</label>
             <button type="button" class="btn btn-line" style="width:auto;" id="art-add-section">+ Add section</button>
           </div>
-          <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:8px;">Break your story into parts, each with its own sub heading, paragraph and picture. Reorder with the arrows. Leave any field blank if you don't need it.</span>
+          <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:8px;">Break your story into parts, each with its own sub heading, paragraph and picture. Reorder with the arrows. Leave any field blank if you don&#39;t need it.</span>
           <div id="artSections"></div>
         </div>
-        <div class="field"><label for="art-emotion">Emotion (optional)</label>
-          <select id="art-emotion">
-            <option value="">— none —</option>
-            <option value="inspiring">😊 Inspiring</option>
-            <option value="business">💼 Business</option>
-            <option value="community">❤️ Community</option>
-            <option value="breaking">🚨 Breaking News</option>
-            <option value="celebration">🎉 Celebration</option>
-          </select>
+        <div class="field"><label for="art-conclusion">Conclusion (optional)</label>
+          <textarea id="art-conclusion" rows="3" placeholder="How the story closes."></textarea></div>
+        <div class="field-row">
+          <div class="field"><label for="art-cta-label">Call-to-action label (optional)</label><input id="art-cta-label" placeholder="e.g. Join the community"></div>
+          <div class="field"><label for="art-cta-url">Call-to-action link</label><input id="art-cta-url" type="url" placeholder="https://…"></div>
         </div>
       </div>
 
@@ -2420,6 +2462,47 @@ const SUBMIT_FIELD_IDS = ['article', 'event', 'gallery', 'top10', 'marketplace',
     `Aim for a 3-6 minute read (roughly 600-1200 words). Current: ${words} words, ~${minutes} min.`;
 });
 
+// The same category list the admin publish screen uses, from the same public
+// endpoint. Loaded once when the page loads rather than when the Article fields
+// are revealed: a select that fills in a moment after somebody looks at it
+// reads as a glitch, and this is one small request.
+(async function loadArticleCategories() {
+  const sel = document.getElementById('art-category');
+  if (!sel) return;
+  try {
+    const data = await api('/news/categories');
+    (data.categories || []).forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      // textContent, not innerHTML: a category name is still text somebody
+      // typed into the admin dashboard.
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+  } catch (err) {
+    // Not fatal. The category is optional and the server works one out from
+    // the story, so a failed list must not stand between a writer and sending
+    // their article in.
+    sel.disabled = true;
+    sel.innerHTML = '<option value="">Categories unavailable \u2014 we will pick one</option>';
+  }
+})();
+
+// Google truncates around 160 characters. The count is shown rather than
+// enforced, exactly as in the admin editor: the field is capped at 320 and what
+// happens past 160 is that the tail stops being displayed, which is a judgement
+// for the writer and not an error.
+(function articleMetaCounter() {
+  const box = document.getElementById('art-meta');
+  const out = document.getElementById('art-meta-count');
+  if (!box || !out) return;
+  box.addEventListener('input', () => {
+    const n = box.value.length;
+    out.textContent = n === 0 ? '' : n + ' characters'
+      + (n > 160 ? ' \u2014 Google usually shows about the first 160' : '');
+  });
+})();
+
 document.getElementById('submitType').addEventListener('change', (e) => {
   SUBMIT_FIELD_IDS.forEach((type) => {
     document.getElementById('fields-' + type).classList.toggle('section-hidden', type !== e.target.value);
@@ -2895,11 +2978,19 @@ async function createSubmission(type) {
     if (!title || !body) throw new Error('Title and story are required.');
     const data = await api('/articles', {
       method: 'POST',
+      // Every field the admin publish screen sends when it creates an
+      // article, in the same order, so a member's submission and an editor's
+      // arrive at the server as the same shape of thing. The server has always
+      // accepted these; until now this form simply never offered them.
       body: JSON.stringify({
         title, body,
         // Written in a plain textarea, so line breaks become paragraphs
         // rather than collapsing into one block.
         bodyFormat: 'text',
+        subtitle: document.getElementById('art-subtitle').value.trim() || undefined,
+        seoTitle: document.getElementById('art-seo-title').value.trim() || undefined,
+        metaDescription: document.getElementById('art-meta').value.trim() || undefined,
+        categoryId: document.getElementById('art-category').value || undefined,
         authorName: document.getElementById('art-author').value.trim() || undefined,
         kickerSuppliedBy: document.getElementById('art-kicker').value.trim() || undefined,
         bannerImageUrl: UnplugUpload.valueOf(document.getElementById('art-cover-upload')) || undefined,
@@ -2908,6 +2999,9 @@ async function createSubmission(type) {
         links: artCollectLinks(),
         sections: artCollectSections(),
         emotion: document.getElementById('art-emotion').value || undefined,
+        conclusion: document.getElementById('art-conclusion').value.trim() || undefined,
+        ctaLabel: document.getElementById('art-cta-label').value.trim() || undefined,
+        ctaUrl: document.getElementById('art-cta-url').value.trim() || undefined,
       }),
     });
     return {

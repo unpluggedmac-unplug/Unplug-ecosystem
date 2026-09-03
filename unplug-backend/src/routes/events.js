@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { logSubmission } = require('./activityLog');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { publishesFree, statusForNewSubmission } = require("../utils/publishingRights");
 const { getPagination, paginationMeta } = require('../utils/pagination');
@@ -105,6 +106,10 @@ router.post('/', requireAuth, async (req, res, next) => {
       message = 'Event created using your free Event credit — submitted for approval, no payment needed.';
     }
 
+
+      // Recorded when it is MADE, not only when an admin acts on it, so the
+      // monthly account shows what came in as well as what was decided.
+    logSubmission(req.user.id, 'event_submitted', 'Event listing');
     res.status(201).json({ event: result.rows[0], message });
   } catch (err) {
     next(err);

@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { logSubmission } = require('./activityLog');
 const { requireAuth } = require('../middleware/auth');
 const { packagesFor } = require('../utils/servicePackages');
 
@@ -90,6 +91,10 @@ router.post('/', requireAuth, async (req, res, next) => {
         startsAt, endsAt, req.user.id, durationDays,
       ]
     );
+
+      // Recorded when it is MADE, not only when an admin acts on it, so the
+      // monthly account shows what came in as well as what was decided.
+    logSubmission(req.user.id, 'advert_submitted', 'Advertising banner');
     res.status(201).json({
       id: result.rows[0].id,
       linkedType: 'ad_banner',

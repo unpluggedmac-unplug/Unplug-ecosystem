@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { getPagination, paginationMeta } = require('../utils/pagination');
-const { logActivity } = require('./activityLog');
+const { logActivity, logSubmission } = require('./activityLog');
 
 const router = express.Router();
 
@@ -80,6 +80,10 @@ router.post('/listings', requireAuth, async (req, res, next) => {
       [advertiserId, posterImageUrl, headline || null, requestedStartDate || null]
     );
 
+
+      // Recorded when it is MADE, not only when an admin acts on it, so the
+      // monthly account shows what came in as well as what was decided.
+    logSubmission(req.user.id, 'listing_submitted', 'Marketplace listing');
     res.status(201).json({
       listing: listing.rows[0],
       message: `Listing created — call POST /payments/initiate with linkedType "marketplace_listing" and this listing's id (R500.00, 30 days) to proceed.`,

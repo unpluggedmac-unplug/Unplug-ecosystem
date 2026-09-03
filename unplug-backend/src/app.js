@@ -311,6 +311,10 @@ setInterval(() => {
 // trying, rather than writing an error every night that everybody learns to
 // scroll past. A backup system nobody trusts the logs of is not one anybody
 // checks.
+// The monthly record of activity, emailed on the 1st. Checks hourly and keeps
+// the month it last sent in `settings`, so a restart does not resend it.
+require('./utils/activityReportScheduler').start();
+
 const backupRunner = require('./utils/backupRunner');
 const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let backupWarned = false;

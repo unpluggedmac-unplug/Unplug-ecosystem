@@ -1840,7 +1840,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- ACTIVITY LOG -->
     <div class="admin-section" id="section-activitylog">
-      <div class="main-head"><div><h1>Activity Log</h1><p>Who did what, when, and from where. Search by name, reference or address.</p></div></div>
+      <div class="main-head"><div><h1>Activity Log</h1><p>Who did what, when, and from where. Search by name, reference or address. A record of each month is emailed on the 1st and can be downloaded here.</p></div></div>
       <div class="panel">
         <div class="panel-body" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; border-bottom:1px solid var(--line);">
           <div style="flex:1 1 220px;">
@@ -1863,6 +1863,21 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <input id="alHighRisk" type="checkbox"> High risk only
           </label>
           <button class="btn" id="alClear" style="margin-bottom:2px;">Clear</button>
+        </div>
+        <!-- Keeping the record, as opposed to reading it. The filters above
+             search what is in the database; this takes a whole month out of it
+             as a document that survives the database. -->
+        <div class="panel-body" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; border-bottom:1px solid var(--line);">
+          <div style="flex:0 1 190px;">
+            <label for="alReportMonth" style="display:block; font-size:12px; font-weight:700; margin-bottom:4px;">Monthly record</label>
+            <input id="alReportMonth" type="month" style="width:100%;">
+          </div>
+          <button class="btn btn-solid" id="alReportDownload" style="margin-bottom:2px;">Download PDF</button>
+          <p style="flex:1 1 260px; font-size:12px; color:var(--slate); margin:0 0 10px;">
+            Everything recorded in that month — approvals, rejections, votes added and
+            reversed, payments, and what members submitted. The same document is emailed
+            automatically on the 1st.
+          </p>
         </div>
         <div class="panel-body" id="activityLogBody" style="padding:0;"></div>
         <div class="panel-body" id="activityLogPager" style="display:none; justify-content:space-between; align-items:center; border-top:1px solid var(--line);">
@@ -11053,6 +11068,49 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   on('alPrev', 'click', () => { if (alPage > 1) { alPage -= 1; loadActivityLog(); } });
   on('alNext', 'click', () => { alPage += 1; loadActivityLog(); });
+
+  // The month box starts on LAST month, which is the one that is complete.
+  // Offering the current month first would hand somebody a partial record that
+  // looks like a whole one.
+  const monthBox = document.getElementById('alReportMonth');
+  if (monthBox) {
+    const sa = new Date(Date.now() + (2 * 60 * 60 * 1000));   // SAST is UTC+2
+    let y = sa.getUTCFullYear();
+    let m = sa.getUTCMonth();          // 0-based, so this IS last month 1-based
+    if (m === 0) { y -= 1; m = 12; }
+    monthBox.value = y + '-' + String(m).padStart(2, '0');
+    monthBox.max = monthBox.value;     // no month that has not finished yet
+  }
+
+  on('alReportDownload', 'click', async () => {
+    const btn = document.getElementById('alReportDownload');
+    const month = (document.getElementById('alReportMonth') || {}).value;
+    if (!month) { showToast('Choose a month first.', true); return; }
+    btn.disabled = true;
+    const was = btn.textContent;
+    btn.textContent = 'Preparing…';
+    try {
+      // Fetched with the admin token rather than linked directly: the endpoint
+      // needs the Authorization header and a plain <a href> cannot send one.
+      const res = await fetch(API_BASE + '/admin/activity-log/report?month='
+        + encodeURIComponent(month), { headers: { Authorization: 'Bearer ' + AUTH_TOKEN } });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Could not build the record for that month.');
+      }
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'unplug-activity-' + month + '.pdf';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      showToast(err.message || 'Could not download the record.', true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = was;
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

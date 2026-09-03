@@ -41,15 +41,15 @@ function isHighRisk(action) {
 // details). The fourth argument is for callers outside a request — a scheduled
 // job — that want to say so explicitly rather than have the context read back
 // empty.
-async function logActivity(adminUserId, action, details, override) {
+async function logActivity(adminUserId, action, details, override, actorRole = 'admin') {
   try {
     const ctx = override || requestContext.current();
     await pool.query(
       `INSERT INTO admin_activity_log
-         (admin_user_id, action, details, ip_address, user_agent, high_risk)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+         (admin_user_id, action, details, ip_address, user_agent, high_risk, actor_role)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [adminUserId, action, details || null,
-       ctx.ip || null, ctx.userAgent || null, isHighRisk(action)]
+       ctx.ip || null, ctx.userAgent || null, isHighRisk(action), actorRole]
     );
   } catch (err) {
     // Never throws. An audit entry failing must not be the reason the action
@@ -59,6 +59,18 @@ async function logActivity(adminUserId, action, details, override) {
   }
 
   if (isHighRisk(action)) alertOnHighRisk(adminUserId, action, details, override);
+}
+
+// The member's own action, recorded in the same place as staff decisions.
+//
+// A separate function rather than a fifth argument at every call site: the 117
+// existing calls are all admin actions and should keep saying so by default,
+// and a submission route reading `logSubmission(...)` says what it is.
+//
+// Same guarantees as logActivity: never throws, and a failed audit entry never
+// stops the thing it describes.
+async function logSubmission(userId, action, details) {
+  return logActivity(userId, action, details, undefined, 'member');
 }
 
 // Tells somebody, now, when a safeguard was removed or money moved.
@@ -201,4 +213,40 @@ router.get('/actions', requireRole('admin'), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-module.exports = { router, logActivity, isHighRisk, HIGH_RISK_ACTIONS };
+// GET /admin/activity-log/report?month=YYYY-MM — the month as a PDF.
+//
+// The same document that is emailed on the 1st. Available on demand because a
+// record you can only get by waiting for an email, and only if that email
+// arrived, is not a record you can rely on.
+//
+// Defaults to LAST month rather than this one: a report of a month still in
+// progress is a partial answer that looks like a complete one.
+router.get('/report', requireRole('admin'), async (req, res, next) => {
+  try {
+    const activityReport = require('../utils/activityReport');
+
+    let year;
+    let month;
+    const asked = String(req.query.month || '').trim();
+    if (asked) {
+      const m = /^(\d{4})-(\d{2})$/.exec(asked);
+      if (!m) return res.status(400).json({ error: 'month must look like 2026-09.' });
+      year = Number(m[1]);
+      month = Number(m[2]);
+      if (month < 1 || month > 12) {
+        return res.status(400).json({ error: 'month must be between 01 and 12.' });
+      }
+    } else {
+      ({ year, month } = activityReport.previousMonth());
+    }
+
+    const { pdf, filename } = await activityReport.buildForMonth(year, month);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdf);
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = { router, logActivity, logSubmission, isHighRisk, HIGH_RISK_ACTIONS };
