@@ -95,10 +95,16 @@ async function resolveVoteBundle(handle) {
 // /competitions below).
 
 // GET /competitions — public, open competitions only.
+//
+// entry_fee added for the Submit & Pay competition selector (website
+// remediation punch-list, ARENA-002): a member choosing which competition to
+// enter needs to see what each one costs before picking one, from the same
+// column POST /competitions/:id/entries actually charges — not a second
+// figure that could disagree with it.
 router.get('/competitions', async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, slug, description, opens_at, closes_at
+      `SELECT id, name, slug, description, opens_at, closes_at, entry_fee
        FROM competitions
        WHERE status = 'open'
        ORDER BY closes_at ASC`

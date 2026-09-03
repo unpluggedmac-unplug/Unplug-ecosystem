@@ -4376,8 +4376,15 @@ loadTierExamples();
   checkVisible();
 })();
 
-function goToMemberDashboard() {
-  window.location.href = MEMBER_DASHBOARD_URL;
+// ARENA-002: an optional competition slug deep-links straight to that
+// competition being pre-selected on the Submit & Pay form, instead of
+// landing on the generic dashboard and defaulting to Top 10 (the mischarge
+// this fix closes). Every existing call site omits the argument and is
+// unaffected.
+function goToMemberDashboard(competitionSlug) {
+  window.location.href = competitionSlug
+    ? MEMBER_DASHBOARD_URL + '?competition=' + encodeURIComponent(competitionSlug)
+    : MEMBER_DASHBOARD_URL;
 }
 
 // Welcome gate — greets a visitor once per browser session on the homepage.
@@ -8238,7 +8245,7 @@ async function loadArena() {
       <span class="eyebrow">Open now · Closes ${closesDate}</span>
       <h2>${escapeHtml(data.competition.name)}</h2>
       <p>${escapeHtml(data.competition.description || '')}</p>
-      <button class="btn btn-solid" style="background:var(--red); border-color:var(--red); color:var(--cream);" onclick="goToMemberDashboard()">Submit a Nomination</button>
+      <button class="btn btn-solid" style="background:var(--red); border-color:var(--red); color:var(--cream);" onclick="goToMemberDashboard(ARENA_SLUG)">Submit a Nomination</button>
       <div class="comp-meta">
         <div><span class="k">Entries close</span><span class="v">${closesDate}</span></div>
         <div><span class="k">Entry fee</span><span class="v">R${Number(data.competition.entry_fee).toFixed(0)}</span></div>

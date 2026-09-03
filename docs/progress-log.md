@@ -1444,3 +1444,40 @@ claims are all present, placements come from the real endpoint rather than a har
 reporting is claimed, and the CTA no longer points back at the page it's already on. Verified live
 in-browser (mocked API, matching the real response shape confirmed earlier this session). Full suite:
 1871 passing, 0 failing (up from 1867).
+
+## 2026-09-03 — Website remediation punch-list, ARENA-002: fix the Arena entry mischarge (confirmed live bug)
+
+Not a documentation gap — a real bug, escalated and fixed as its own task per instruction. No frontend
+anywhere called the backend's already-built `POST /competitions/:id/entries` route. The member
+dashboard's only competition-entry field was "Top 10 Entry", which always called `POST /top10/enter`
+regardless of which competition the member actually meant — so entering The Arena (R250, votes-until-
+close, eligible for a free `free_arena_credits` entry) was silently entered and charged as a Top 10
+entry (R100, monthly) instead. Confirmed by grep: zero call sites for the entries route anywhere in
+the frontend before this fix.
+
+Backend: `GET /competitions` now selects `entry_fee` (it queried everything else already) — the field
+the dashboard needs to show a real price before charging it. The entries route itself needed no
+change; it was already correct, just unreachable.
+
+Frontend, member dashboard: the old single-purpose "Top 10 Entry" field is now a real competition
+picker (`setupCompetitionFields()`), populated from the live `/competitions` list plus a fixed Top 10
+option (Top 10 has no row in the `competitions` table — its own dedicated endpoint, R100, no
+`competition_id`). `createSubmission('top10')` branches on the chosen option's `kind` from a trusted
+`COMP_OPTIONS` map (not a raw form value) and posts to the correct route; for a real competition,
+`needsPayment` is read from the entry's actual returned `status` rather than assumed, so a free Arena
+credit (status `'pending'`) is not double-charged.
+
+Frontend, Arena page: its "Submit a Nomination" button called the same bare `goToMemberDashboard()`
+as every other entry point, landing on the dashboard with no competition implied — the exact gap that
+caused the mischarge. `goToMemberDashboard()` now takes an optional slug (every other call site is
+unaffected by omitting it) and deep-links with `?competition=the-arena`; the dashboard reads that
+param to pre-select the right option in the picker AND to switch "What are you submitting?" to the
+competitions field group itself (pre-selecting the inner dropdown alone would do nothing if the
+section holding it is never revealed), then scrolls the Submit & Pay card into view.
+
+New test, `arenaCompetitionEntry.test.js` (8 tests, real HTTP + real Postgres for the backend half):
+`GET /competitions` returns `entry_fee`; entering the Arena creates a `competition_entries` row, not a
+Top 10 entry, charged the Arena's own fee; a free Arena credit settles the entry without payment; the
+two HTML files are checked as static source for the slug-carrying `goToMemberDashboard`, the Arena
+button wiring, the real-list-backed picker with slug pre-select, the outer field-switch on arrival, and
+the `createSubmission` branching. Full suite: 1879 passing, 0 failing (up from 1871).

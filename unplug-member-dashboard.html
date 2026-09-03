@@ -835,9 +835,19 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="field"><label for="gal-cap-3">Caption 3 (optional)</label><input id="gal-cap-3"></div>
       </div>
 
-      <!-- Top 10 fields -->
+      <!-- Competition entry fields (ARENA-002: was hardcoded to Top 10 only —
+           the "Competitions" card said "Enter Top 10 / Arena" but had no way
+           to actually choose the Arena or anything else, so a member entering
+           from the Arena page was silently charged the Top 10 fee instead.
+           comp-select is populated from the real Top 10 fee plus GET
+           /competitions (every other currently-open competition — The Arena
+           today, whatever else exists later), never a hardcoded list. -->
       <div id="fields-top10" class="section-hidden">
-        <p class="sub" style="margin-top:0;">Submits your existing Directory profile for Top 10 consideration. No extra details needed.</p>
+        <div class="field"><label for="comp-select">Which competition?</label>
+          <select id="comp-select"><option value="">Loading…</option></select>
+        </div>
+        <p class="sub" style="margin-top:0;">Submits your existing Directory profile for consideration. No extra details needed.</p>
+        <div id="comp-details" class="instructions-box section-hidden" style="margin-top:10px;"></div>
       </div>
 
       <!-- Marketplace fields -->
@@ -1808,6 +1818,21 @@ function enterMemberDashboard(user){
   setupSubmitGate();
   loadHighlightServices();
   loadPaymentHistory();
+
+  // ARENA-002: a competition's own page (e.g. The Arena's "Submit a
+  // Nomination" button) links here with ?competition=<slug>. That param
+  // pre-selects the right entry in #comp-select once the competitions
+  // fields are showing (see setupCompetitionFields), but "What are you
+  // submitting?" still defaults to Article — so without this, the member
+  // would have to notice and manually switch it, which is exactly the kind
+  // of miss that caused the mischarge this fix closes.
+  if (new URLSearchParams(location.search).get('competition')) {
+    const submitTypeSel = document.getElementById('submitType');
+    submitTypeSel.value = 'top10';
+    submitTypeSel.dispatchEvent(new Event('change'));
+    const card = submitTypeSel.closest('.card');
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   // Highlight Article / Highlight Profile purchase buttons.
   const artBtn = document.getElementById('svcArtBtn');
@@ -3100,9 +3125,28 @@ async function createSubmission(type) {
   }
 
   if (type === 'top10') {
-    const data = await api('/top10/enter', { method: 'POST' });
-    // No free path exists for Top 10 entries today — always needs payment.
-    return { linkedType: 'top10_entry', linkedId: data.entry.id, label: 'Top 10 Entry', needsPayment: true };
+    // ARENA-002 fix: which competition, not always Top 10. comp-select's
+    // value is looked up in COMP_OPTIONS (set by setupCompetitionFields)
+    // rather than trusted directly, so a stale/tampered value can't send a
+    // request for a competition id that was never actually offered.
+    const chosen = COMP_OPTIONS[document.getElementById('comp-select').value];
+    if (!chosen) throw new Error('Choose a competition to enter.');
+
+    if (chosen.kind === 'top10') {
+      const data = await api('/top10/enter', { method: 'POST' });
+      // No free path exists for Top 10 entries today — always needs payment.
+      return { linkedType: 'top10_entry', linkedId: data.entry.id, label: 'Top 10 Entry', needsPayment: true };
+    }
+
+    const data = await api(`/competitions/${chosen.id}/entries`, { method: 'POST' });
+    // A free Arena credit settles the entry on the spot (status 'pending',
+    // not 'awaiting_payment') — the real status from the response decides
+    // this, not an assumption that entering always costs money.
+    const needsPayment = data.entry.status === 'awaiting_payment';
+    return {
+      linkedType: 'competition_entry', linkedId: data.entry.id,
+      label: chosen.name + ' Entry', needsPayment, message: data.message,
+    };
   }
 
   if (type === 'marketplace') {
@@ -3171,6 +3215,7 @@ async function setupSubmitGate(){
     }
   } catch (e) {}
   setupBannerFields();
+  setupCompetitionFields();
 }
 
 let _bannerFieldsReady = false;
@@ -3209,6 +3254,66 @@ async function setupBannerFields() {
     document.getElementById('ab-placement').innerHTML = '<option value="">Could not load placements</option>';
   }
   updateSubmitOrderDetails();
+}
+
+// ARENA-002: which competition a member is entering, and what it actually
+// costs and closes, shown before they pay — not assumed, and not limited to
+// Top 10. Top 10 has no row in the competitions table (its own dedicated
+// POST /top10/enter, R100, no competition_id at all — see routes/
+// competitions.js), so it's offered here as a fixed first option; every
+// other currently-open competition (The Arena today) comes from the real
+// GET /competitions list, keyed by id, and is entered through the general
+// POST /competitions/:id/entries. COMP_OPTIONS is what createSubmission
+// reads to know which route to call.
+let _competitionFieldsReady = false;
+let COMP_OPTIONS = {}; // value -> { kind: 'top10' } | { kind: 'competition', id, entryFee }
+async function setupCompetitionFields() {
+  if (_competitionFieldsReady) return;
+  _competitionFieldsReady = true;
+  const sel = document.getElementById('comp-select');
+  const details = document.getElementById('comp-details');
+  try {
+    const data = await api('/competitions');
+    COMP_OPTIONS = { top10: { kind: 'top10', entryFee: 100 } };
+    let optionsHtml = '<option value="top10">Top 10 — R100</option>';
+    (data.competitions || []).forEach((c) => {
+      const value = 'comp-' + c.id;
+      COMP_OPTIONS[value] = {
+        kind: 'competition', id: c.id, entryFee: Number(c.entry_fee),
+        name: c.name, description: c.description, closesAt: c.closes_at,
+      };
+      optionsHtml += `<option value="${value}">${escapeAttrM(c.name)} — R${Number(c.entry_fee).toFixed(0)}</option>`;
+    });
+    sel.innerHTML = optionsHtml;
+
+    const showDetails = () => {
+      const opt = COMP_OPTIONS[sel.value];
+      if (!opt) { details.classList.add('section-hidden'); return; }
+      const closes = opt.closesAt
+        ? new Date(opt.closesAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })
+        : null;
+      details.innerHTML = `
+        <p style="font-size:12.5px; margin:0 0 6px;"><strong>Entry fee:</strong> R${opt.entryFee.toFixed(0)}</p>
+        ${closes ? `<p style="font-size:12.5px; margin:0 0 6px;"><strong>Entries close:</strong> ${closes}</p>` : ''}
+        ${opt.description ? `<p style="font-size:12.5px; margin:0 0 6px;">${escapeHtmlM(opt.description)}</p>` : ''}
+        <p style="font-size:12.5px; margin:0; color:var(--slate);">The public votes for entries until the competition closes — whoever has the most votes at that point wins. Refunds and cancellation follow our standard policy below.</p>`;
+      details.classList.remove('section-hidden');
+    };
+    sel.addEventListener('change', showDetails);
+    showDetails();
+
+    // Deep-linked from a specific competition's own page (e.g. The Arena's
+    // "Submit a Nomination" button) — pre-select it rather than leaving the
+    // default Top 10 option and risking exactly the mischarge this fixes.
+    const wantSlug = new URLSearchParams(location.search).get('competition');
+    if (wantSlug) {
+      const match = (data.competitions || []).find((c) => c.slug === wantSlug);
+      if (match) { sel.value = 'comp-' + match.id; showDetails(); }
+    }
+  } catch (e) {
+    sel.innerHTML = '<option value="top10">Top 10 — R100</option>';
+    COMP_OPTIONS = { top10: { kind: 'top10', entryFee: 100 } };
+  }
 }
 
 // ---------------------------------------------------------------------------
