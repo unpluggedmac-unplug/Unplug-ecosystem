@@ -1,0 +1,32 @@
+-- Bulk vote tiers stop charging more per vote for buying more votes.
+--
+-- docs/pricing-comparison.md, decision 3. The 70/150/200/300-vote tiers were
+-- each priced ABOVE the 50-vote tier's rate of R0.40/vote (R50 for 70 votes is
+-- R0.714/vote; R150 for 200 votes is R0.75/vote), so a voter who noticed could
+-- buy smaller tiers instead and get more votes for less money — e.g. two
+-- 50-vote tiers (100 votes, R40) cost less than one 70-vote tier (R50).
+--
+-- FIX: everything from 50 votes up is now a flat R0.40/vote, the rate the
+-- 50-vote tier already charged. 10 and 50 are UNCHANGED (site owner's choice:
+-- correct by lowering the tiers above them, not by raising these two) — the
+-- 10-vote tier stays the one purchase without a bulk discount.
+--
+--   votes   old price   old rate     new price   new rate
+--    10       R10.00     R1.000/v      R10.00     R1.000/v   (unchanged)
+--    50       R20.00     R0.400/v      R20.00     R0.400/v   (unchanged)
+--    70       R50.00     R0.714/v      R28.00     R0.400/v
+--   150      R100.00     R0.667/v      R60.00     R0.400/v
+--   200      R150.00     R0.750/v      R80.00     R0.400/v
+--   300      R200.00     R0.667/v     R120.00     R0.400/v
+--
+-- No tier's vote count or the 300-vote cap changed — only the four prices that
+-- were out of line with the rate the site already offered at 50 votes.
+--
+-- vote_bundle_tiers has no admin-edit route (confirmed: no PATCH/PUT exists
+-- anywhere in src/routes/), so unlike service_packages this table has always
+-- been re-asserted on every deploy via ON CONFLICT DO UPDATE (see
+-- 010_new_pricing_model.sql) — there is no admin edit for a migration to
+-- clobber, so the same pattern is safe to repeat here.
+INSERT INTO vote_bundle_tiers (votes, price) VALUES
+  (10, 10.00), (50, 20.00), (70, 28.00), (150, 60.00), (200, 80.00), (300, 120.00)
+ON CONFLICT (votes) DO UPDATE SET price = EXCLUDED.price;

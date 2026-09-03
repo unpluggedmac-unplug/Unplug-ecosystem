@@ -1,7 +1,11 @@
 # Pricing — the specification, the system, and what customers are shown
 
 Compiled 29 August 2026, task 03. Rewritten after the first version was found wanting.
-**Nothing here has been changed in the code.**
+
+**2026-09-03 — all 8 decisions below answered by the site owner.** See "Decisions needed" at the
+bottom for each answer and what it changed. `spec-extracted.md` is a faithful extraction and is not
+edited to match these — this document is the reconciliation, and stays the record of record for what
+was decided and why.
 
 ## How this was checked, and what was wrong the first time
 
@@ -24,6 +28,11 @@ was luck rather than method, and checking properly is what surfaced the finding 
 ---
 
 ## The headline: the site contradicts itself, and the spec copied the wrong half
+
+**RESOLVED, before this session touched anything.** Checked live again on 2026-09-03: the refunds
+policy page now reads the correct R100/R150/R200/R250 ladder and the worked example says "28-Day
+Business Highlight for R250" — someone corrected the page between 29 August and now. Left as
+historical record below since it explains where the spec's wrong §4.4 figures came from.
 
 **Directory / business listing highlight, all four durations.**
 
@@ -74,6 +83,9 @@ The banner line agrees everywhere, but the sentence *"Advertising banners run fr
 §6.1 names R1,000 with no duration. It matches the 28-day package exactly, so this may be
 agreement with the term unsaid, or may mean a flat price. The document cannot settle it.
 
+**RESOLVED 2026-09-03: §6.1's R1,000 means the 28-day banner package.** No system change — there is
+no duration-independent flat-price mechanism today, and none was requested.
+
 ### Differs
 
 **Article highlight** — the spec has one "Featured Listing" product; the system has two.
@@ -88,6 +100,12 @@ agreement with the term unsaid, or may mean a flat price. The document cannot se
 At 28 days the article highlight is *above* the spec, the directory highlight well *below*.
 Deciding this needs the product question first: is a highlighted article the same purchase as
 a highlighted Directory profile?
+
+**RESOLVED 2026-09-03: two products, not one.** No price changed — this was a documentation
+question, not a pricing one. `spec-extracted.md` is not edited (see the note at the top); this
+paragraph is the record that Article Highlight and Directory Highlight are two separate, deliberately
+different-priced products, and the spec's single "Featured Listing" figure does not describe either
+of them precisely.
 
 **Bulk votes (§9.5)** — verified live via `GET /vote-bundle-tiers`.
 
@@ -112,6 +130,15 @@ cannot be compared row by row. Two things stand independently of which list is c
 - The system's tiers have **no names**; Starter/Supporter/Champion/Power/Dominator/Ultimate
   do not exist in the database.
 
+**RESOLVED 2026-09-03: kept the system's 6 tiers and 300-vote cap; fixed the non-monotonic
+pricing.** Migration `169_vote_bundle_monotonic_pricing.sql`. 10 and 50 votes are unchanged
+(R10.00, R20.00) — the site owner chose to correct by lowering the tiers above them rather than
+raising these two. 70/150/200/300 are now a flat R0.40/vote (the rate 50 votes already charged):
+70 → R28.00 (was R50.00), 150 → R60.00 (was R100.00), 200 → R80.00 (was R150.00), 300 → R120.00
+(was R200.00). Held in place by `test/voteBundleMonotonic.test.js`, which checks the actual property
+that was missing — that no combination of smaller tiers ever beats a larger one — not just that six
+numbers match.
+
 **Directory package tiers (§2.3)** — no price conflict, the spec states none. But the middle
 tier is **"Standard"** in the spec and **`pro`** in the system, on the checkout page and the
 rate card.
@@ -121,6 +148,10 @@ rate card.
 | Basic | `basic` | R150 | R500 |
 | Standard | **`pro`** | R280 | R700 |
 | Premium | `premium` | R400 | R1,000 |
+
+**RESOLVED 2026-09-03: keep `pro` as built.** No live change — this is what customers already see
+in the database, checkout and rate card everywhere. The spec's "Standard" is the one that doesn't
+match reality, not the system.
 
 ### In the spec, not built
 
@@ -132,6 +163,10 @@ rate card.
 
 §5.6 Event Promotion has no equivalent anywhere: no `event_promotion` service key, no
 packages, no price. Confirmed by search. **These cannot be bought.**
+
+**RESOLVED 2026-09-03: dropped, not built.** No code change — there was none to make. This document
+is the record that Event Promotion is not a live product; `spec-extracted.md` is left as the
+faithful extraction it is (see the note at the top) and is not edited to remove it.
 
 ### Charged live, absent from the spec
 
@@ -145,6 +180,10 @@ packages, no price. Confirmed by search. **These cannot be bought.**
 
 §8.1 says entry is "ALWAYS PAID" but names no figure, so these are neither confirmed nor
 contradicted.
+
+**RESOLVED 2026-09-03: confirmed correct, as-is.** No price changed. These five are documented
+here as the record of the intended, live prices — `spec-extracted.md` itself is not edited (see the
+note at the top of this document).
 
 ---
 
@@ -170,8 +209,11 @@ Beyond the policy-page contradiction above:
    safer than guessing at it. That is a money-behaviour call, not a refactor.
 2. ~~**The banner sentence, ten times**~~ — **RESOLVED 2026-09-03.** All ten are rendered by one loader from `/payments/packages?service=ad_banner`; the HTML wording remains as a no-JS fallback. No price changed.
 3. **Package tier prices** are hardcoded in `unplug-checkout.html` and `unplug-magazine.html`
-   as well as in `PACKAGE_PRICES`.
-4. ~~**`unplug-components-demo.html`**~~ — **RESOLVED 2026-09-03.** It IS deployed (200, no inbound links). The price claim is removed rather than corrected, since picking the right figure is a pricing decision. Open question: should the page be public at all?
+   as well as in `PACKAGE_PRICES`. Was waiting on decision 6 (the tier-naming question below),
+   which is now answered — **unblocked, but not done.** Consolidating three hardcoded copies
+   into one source, matching how the ad-banner sentence was resolved, is a real task of its own
+   and was not part of what was asked for on 2026-09-03.
+4. ~~**`unplug-components-demo.html`**~~ — **RESOLVED 2026-09-03.** It IS deployed (200, no inbound links). The price claim is removed rather than corrected, since picking the right figure is a pricing decision. Open question — should the page be public at all? — **also resolved 2026-09-03: no.** Blocked in `functions/[[path]].js`'s `NOT_THE_SITE` list; confirmed 404 live.
 
 This is the recurring bug class from `CLAUDE.md`, carrying money.
 
@@ -179,20 +221,28 @@ This is the recurring bug class from `CLAUDE.md`, carrying money.
 
 ## Decisions needed
 
-Nothing in this document may be changed until these are answered.
+**All 8 answered by the site owner, 2026-09-03.** `spec-extracted.md` is not touched by any of
+these — it is a faithful extraction and stays one (see the note at the top of this document); this
+section, and the resolution notes inline above, are the record of what was decided.
 
-1. **The refunds policy ladder** — correct the page to R100–R250, or raise the system's prices
-   to R250–R400? This is live customer-facing policy either way.
-2. **Featured listing** — one product or two, and which ladder is right?
-3. **Bulk votes** — the spec's six tiers, the system's six, or a new set? The non-monotonic
-   pricing needs resolving regardless.
-4. **Homepage banner** — does §6.1's R1,000 mean the 28-day package, or a flat price?
-5. **Event promotion** — build the three packages, or drop them from the spec?
-6. **Directory middle tier** — "Standard" per the spec, or `pro` as built?
-7. **The five live-only services** — confirm their prices, or add them to the spec.
-8. **The duplicated prices** — ~~consolidate, and in which task~~. **Item 1 above is done** (the
-   dead copies in `payments.js`, deleted with no price change). Items 2, 3 and 4 remain: the
-   banner sentence repeated ten times in `unplug-magazine.html`, the package tier prices
-   hardcoded in `unplug-checkout.html` and `unplug-magazine.html` as well as `PACKAGE_PRICES`,
-   and `unplug-components-demo.html` saying "Packages start at R250 a month" where everything
-   else is once-off. Those are frontend copy and need the tier decisions (6) settled first.
+1. ~~**The refunds policy ladder**~~ — turned out to be moot: checked live on 2026-09-03 and the
+   page already reads the correct R100–R250 ladder. Someone fixed it between 29 August and now,
+   before this document's re-check found anything to decide.
+2. ~~**Featured listing**~~ — **kept as two products** (Article Highlight, Directory Highlight).
+   No price changed.
+3. ~~**Bulk votes**~~ — **kept the system's 6 tiers and 300-vote cap; fixed the non-monotonic
+   pricing.** 10 and 50 votes unchanged; 70/150/200/300 lowered to a flat R0.40/vote. Migration
+   `169_vote_bundle_monotonic_pricing.sql`.
+4. ~~**Homepage banner**~~ — **§6.1's R1,000 means the 28-day package.** No system change.
+5. ~~**Event promotion**~~ — **dropped, not built.** No code change — there was none to make.
+6. ~~**Directory middle tier**~~ — **kept `pro` as built.** No live change.
+7. ~~**The five live-only services**~~ — **confirmed correct, as-is.** No price changed.
+8. **The duplicated prices** — referring to the numbered list under "Where a price lives more than
+   once" above: item 1 (the dead `payments.js` copies) is **done**, deleted 2026-09-03 with no
+   price change. Item 2 (the banner sentence, ten times) is **done** (`f2c3501`, resolved alongside
+   adding the 21-day banner tier). Item 4 (`unplug-components-demo.html`) is **done** — the page is
+   blocked entirely, so its stale price claim is no longer reachable either way. **Item 3 remains:
+   package tier prices are still hardcoded in `unplug-checkout.html`, `unplug-magazine.html` and
+   `PACKAGE_PRICES`.** It was waiting on decision 6, which is now settled — unblocked, but
+   consolidating three hardcoded copies into one source is a task of its own and was not part of
+   what was asked for today.
