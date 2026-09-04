@@ -707,6 +707,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Redirects in place</h3></div>
         <div class="panel-body" id="redirectsBody" style="padding:0;"></div>
       </div>
+
+      <!-- PERF-001: the CSP collection endpoint and this admin route already
+           existed with nowhere to actually look at what they'd found — the
+           punch-list's own note ("2,245 rows... review it") had no page to
+           review it FROM. Read-only: nothing here needs an action, just eyes
+           on what a stricter policy would currently break. -->
+      <div class="panel">
+        <div class="panel-head"><h3>Content Security Policy reports</h3></div>
+        <div class="panel-body" id="cspReportsBody" style="padding:0;"></div>
+      </div>
     </div>
 
     <!-- DEAF JOBS -->
@@ -8080,6 +8090,40 @@ async function loadRedirects() {
     const msg = '<div class="empty-state">Could not load: ' + escapeHtmlAdmin(e.message || 'unknown error') + '</div>';
     rulesBody.innerHTML = msg;
     missBody.innerHTML = msg;
+  }
+  loadCspReports();
+}
+
+async function loadCspReports() {
+  const body = document.getElementById('cspReportsBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state">Loading&hellip;</div>';
+  try {
+    const data = await api('/security/csp-reports');
+    const list = data.reports || [];
+    if (!list.length) {
+      body.innerHTML = '<div class="empty-state">No CSP violations reported yet.</div>';
+      return;
+    }
+    body.innerHTML = '';
+    const note = document.createElement('p');
+    note.style.cssText = 'font-size:12.5px; color:var(--slate); padding:12px 16px 0;';
+    note.textContent = data.note || '';
+    body.appendChild(note);
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Directive</th><th>Blocked</th><th>Page</th><th>Times</th><th>Last seen</th></tr>';
+    list.forEach((r) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><code style="font-size:12px;">' + escapeHtmlAdmin(r.directive) + '</code></td>'
+        + '<td style="font-size:11.5px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtmlAdmin(r.blocked_uri || '—') + '</td>'
+        + '<td style="font-size:11.5px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtmlAdmin(r.document_uri || '—') + '</td>'
+        + '<td>' + r.hit_count + '</td>'
+        + '<td style="white-space:nowrap; font-size:12px;">' + new Date(r.last_seen_at).toLocaleDateString() + '</td>';
+      table.appendChild(tr);
+    });
+    body.appendChild(table);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">Could not load: ' + escapeHtmlAdmin(e.message || 'unknown error') + '</div>';
   }
 }
 

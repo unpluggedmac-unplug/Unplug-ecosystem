@@ -5879,13 +5879,20 @@ function articleGateHtml(a) {
   // open redirect, and this one is on the end of a link we invite people to
   // click.
   const back = encodeURIComponent('?p=article&id=' + a.id);
-  const join = MEMBER_DASHBOARD_URL + '?next=' + back;
+  // NAV-002: signup=1 is what lets the welcome modal's "Sign Up" button skip
+  // straight to the sign-up form instead of the generic sign-in/sign-up
+  // choice \u2014 this button promised the same thing but never carried it,
+  // so "Create a free account" here landed on the choice screen anyway and
+  // needed a second click, exactly the friction the dashboard's own signup=1
+  // guard was written to avoid.
+  const joinSignup = MEMBER_DASHBOARD_URL + '?signup=1&next=' + back;
+  const joinSignin = MEMBER_DASHBOARD_URL + '?next=' + back;
   return `<aside class="art-gate" role="note" aria-labelledby="artGateTitle">
     <h2 id="artGateTitle" data-cms="gate.title">Keep reading \u2014 it\u2019s free</h2>
     <p data-cms="gate.body">The rest of this story is for Unplug members. An account costs nothing, takes a minute, and opens every gated story on the site.</p>
     <div class="btn-row">
-      <a class="btn btn-solid" href="${join}">Create a free account</a>
-      <a class="btn btn-line" href="${join}">I already have one</a>
+      <a class="btn btn-solid" href="${joinSignup}">Sign Up</a>
+      <a class="btn btn-line" href="${joinSignin}">I already have one</a>
     </div>
     <p class="art-gate-note" data-cms="gate.note">No payment, no card details. We ask for an email address so we know who you are.</p>
   </aside>`;
@@ -12381,6 +12388,38 @@ function setupPosterCarousel(widget) {
       for (var i = 0; i < nodes.length; i++) nodes[i].textContent = text;
     })
     .catch(function () { /* the wording already in the page stands */ });
+})();
+
+// PERF-002: unplug-responsive-images.js already builds UnplugImg.lazifyExisting()
+// — a sweep that adds loading="lazy" to any <img>/<iframe> that doesn't already
+// opt out — but nothing on this page ever actually called it, so it sat dormant
+// while ~19 of the site's <img> tags (card avatars, edition covers, testimonial
+// photos, contributor bylines...) had no lazy attribute at all. A single
+// DOMContentLoaded sweep only catches what's on the page at that moment; this
+// SPA inserts almost everything afterwards via innerHTML from dozens of
+// separate render functions, so a debounced MutationObserver re-sweeps after
+// every batch of DOM changes instead of having to remember to call it from
+// each one individually.
+(function () {
+  if (!window.UnplugImg || !window.MutationObserver) return;
+  var pending = null;
+  function sweep() {
+    pending = null;
+    UnplugImg.lazifyExisting();
+  }
+  var observer = new MutationObserver(function () {
+    if (pending) return;
+    pending = setTimeout(sweep, 200);
+  });
+  function start() {
+    UnplugImg.lazifyExisting();
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
 })();
 </script>
 </body>

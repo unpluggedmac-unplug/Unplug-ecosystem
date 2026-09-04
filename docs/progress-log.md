@@ -1863,3 +1863,71 @@ non-empty feed; each card escapes its real API fields; the loader runs on homepa
 in-browser: confirmed the fallback card's real (fixed) HTML, confirmed the testimonials section starts
 hidden with no data, then confirmed it reveals and renders two mocked real-shaped testimonials correctly
 once the feed returns them. Full suite: 1962 passing, 0 failing (up from 1948).
+
+## 2026-09-04 — Website remediation punch-list, Phase 6: NAV-001/002, PERF-001/002, N-3/N-4/N-5
+
+Worked through the rest of Phase 6 in one pass. Several turned out already correctly built — verified,
+not assumed — and two had real, fixable gaps.
+
+**N-4 (VAT) — already correct, verified.** `unplug-member-dashboard.html`'s invoice list only shows the
+VAT breakdown when `iv.vatRegistered` is true, and `unplug-backend/src/utils/invoices.js` computes that
+field as `vat_registration_number.length > 0` — genuinely tied to real registration, not to
+`vat_rate > 0`. Since the registration number is empty in production, no invoice implies VAT
+registration today. Checkout carries no VAT text at all. No change needed.
+
+**N-5 (WhatsApp CTA) — already correct, verified.** The only place `settings.whatsapp_number` is read is
+`chatbot.js`'s handoff link, already gated on `if (HANDOFF.number)` — an empty number correctly suppresses
+the link rather than dead-ending on `wa.me/`. The site's other WhatsApp links (share buttons, social
+follow) are hardcoded to a real number, unrelated to this setting. No change needed.
+
+**NAV-001 (dead-end / 404 audit) — mostly already built, verified.** `not_found_log`'s whole pipeline
+already exists end to end: the Cloudflare Pages Function (`functions/[[path]].js`) reports a genuine miss
+to `POST /seo/not-found` after checking for a redirect rule, and the admin "Redirects & 404s" section
+already lists and lets an admin resolve them. Structural checks came back clean: every `data-page="X"`
+used anywhere in `unplug-magazine.html` has a matching `id="page-X"` (checked programmatically, not by
+eye — zero mismatches), and all 9 `href="#"` placeholder links have a confirmed working click handler
+(several via one delegated document-level listener, the established pattern here) — none are genuine
+dead ends. A full manual click-through of every header/footer/card link across every page was not
+performed; the live 404 pipeline already catches real broken links going forward.
+
+**NAV-002 (CTA consistency) — a real, if small, gap: fixed.** Three different phrasings existed for the
+same "create a free account" action across the site. The welcome modal's "Sign Up" button carries
+`?signup=1`, which skips straight to the sign-up form instead of the generic sign-in/sign-up choice
+screen — a deliberate fix (per its own code comment) for exactly the kind of friction that loses someone
+at the moment they decided to join. The article paywall gate's "Create a free account" button promised
+the same thing but never carried the param, so it landed on the choice screen anyway and needed a second
+click. Fixed: same `?signup=1`, same "Sign Up" wording. The comment thread's "Sign in or create a free
+account" link was left as its own wording on purpose — it genuinely serves both a returning and a new
+visitor in one link, which "Sign Up" alone would misstate.
+
+**PERF-001 (measure / CSP reports) — a real gap: fixed.** `GET /security/csp-reports` already existed
+(admin-only, real data) with no admin page to actually view it from — the punch-list's own note ("2,245
+rows... review it") had nowhere to be acted on. Added a read-only panel to the existing "Redirects & 404s"
+admin section, listing directive/blocked URI/page/count/last-seen, with the route's own note that this is
+Report-Only data (nothing has actually been blocked yet). No broader Lighthouse-style performance audit
+was run — outside what this session can measure without a live deployed target.
+
+**PERF-002 (lazy loading) — a real gap: fixed.** `unplug-responsive-images.js` already built
+`UnplugImg.lazifyExisting()` — a sweep adding `loading="lazy" decoding="async"` to any `<img>`/`<iframe>`
+without one — but nothing on the page ever called it. ~19 of the site's `<img>` tags (card avatars,
+edition covers, the testimonial photos just added, contributor bylines, the hall-of-fame grid) had no
+lazy attribute at all. Wired a debounced `MutationObserver` that re-sweeps 200ms after every batch of DOM
+changes, since this SPA inserts nearly all of its content after page load via `innerHTML` from dozens of
+separate render functions — a single `DOMContentLoaded` call alone would only have caught what happened
+to already be on the page at that instant.
+
+**N-3 (Supabase split-brain) — could not verify from here, flagged honestly rather than guessed.**
+Neither Supabase project ref (`jaywxegcxjgyqhcwzbte` nor the older `fkuzbwysvyskhsskjmmi`) is hardcoded
+anywhere in the codebase — the project is selected entirely by the `SUPABASE_URL` env var set on Render,
+which this session has no access to inspect. Confirming which project is actually live, and whether any
+asset URL still points at the old bucket, needs someone with Render/Supabase dashboard access — not a
+code-level check. Left as an open item for the publisher rather than claimed as checked.
+
+New test, `navPerfFixes.test.js` (8 tests): NAV-002's two links carry the right params; PERF-002's
+observer/sweep wiring exists and runs both up front and on mutation; PERF-001's admin viewer calls the
+real endpoint and loads alongside the existing redirects section; and (real HTTP + real Postgres) a
+genuinely reported CSP violation shows up in the admin list with the query string stripped and the
+report-only note present, gated to admins only. Verified live in-browser: the lazy-load sweep correctly
+tagged both the images already on the page and a dynamically-inserted gallery image within the debounce
+window; the paywall gate's two links resolved to the correct URLs; the CSP admin panel rendered a mocked
+real-shaped violation correctly. Full suite: 1970 passing, 0 failing (up from 1962).
