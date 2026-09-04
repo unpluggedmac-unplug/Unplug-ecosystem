@@ -1963,3 +1963,31 @@ both individual and business, including the toggle correctly swapping the whole 
 passing, 0 failing (up from 1970).
 
 **This closes every item in the punch-list document (`Unplug-Website-Punchlist-for-Claude-Code_1.md`).**
+
+## 2026-09-04 — N-3: a real tool for the split-brain Supabase check, not a live answer I don't have
+
+N-3 asks to confirm all live reads/writes and storage now target the production Supabase project
+(`jaywxegcxjgyqhcwzbte`), not the older, retired one (`fkuzbwysvyskhsskjmmi`) some assets still point at.
+That's a question about live data this session's local test harness cannot answer — grepped every
+migration, route, and HTML file for the old project ref first and found nothing hardcoded, so any stale
+URL exists only as data an admin typed in at some point (the punch-list's own example: a
+`youtube_image_url` setting), which only real database access can see.
+
+Built the access instead of guessing at the answer: `GET /admin/storage-audit` (admin-only) scans every
+URL-shaped column in the database for the old project's ref — discovered from the database's own
+catalog (`information_schema.columns`) rather than a hand-typed list, so it stays correct as the schema
+grows, plus `settings.value` explicitly (a generic key/value table whose column name gives no hint it
+might hold a URL). New "Storage audit" panel in the admin dashboard's Redirects & 404s section, run on
+demand — a scan across every column in the database is worth doing deliberately, not on every page load.
+
+New test, `storageAudit.test.js` (6 tests, real HTTP + real Postgres): admin-only; a real stale value
+planted directly in `settings` is found and correctly attributed to its table/column/row; a clean
+production-project URL is never flagged; the search host is overridable via a query param, proven by
+searching for the production host instead and getting a different real hit back; dozens of real columns
+are actually discovered, not a short hand-picked list. Verified live in-browser: mocked a realistic
+finding and confirmed the admin panel renders it correctly. Full suite: 1982 passing, 0 failing (up from
+1976).
+
+The audit itself has not been run against the real production database — that needs whoever has live
+Render/Supabase access to click "Run audit" once deployed. What this closes is the *tool*, not the
+live-data confirmation the punch-list item ultimately asks for.

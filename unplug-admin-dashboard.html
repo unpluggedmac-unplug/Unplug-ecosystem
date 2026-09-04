@@ -717,6 +717,22 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Content Security Policy reports</h3></div>
         <div class="panel-body" id="cspReportsBody" style="padding:0;"></div>
       </div>
+
+      <!-- N-3: some stored images/settings still point at the OLDER of the
+           two Supabase projects rather than production. Nothing hardcodes
+           the old project anywhere in this codebase (checked directly) —
+           any stale URL only exists as data someone typed in, which only
+           live access can see. On demand, not automatic: this scans every
+           URL-shaped column in the database, which is worth doing
+           deliberately rather than on every page load. -->
+      <div class="panel">
+        <div class="panel-head"><h3>Storage audit &mdash; old Supabase project</h3></div>
+        <div class="panel-body">
+          <p style="font-size:12.5px; color:var(--slate); margin-bottom:10px;">Checks every URL-shaped column in the database for anything still pointing at the older, retired Supabase project instead of production. Nothing changes automatically &mdash; this only reports what it finds.</p>
+          <button class="btn btn-line" id="storageAuditBtn" style="width:auto;">Run audit</button>
+          <div id="storageAuditBody" style="margin-top:12px;"></div>
+        </div>
+      </div>
     </div>
 
     <!-- DEAF JOBS -->
@@ -8126,6 +8142,43 @@ async function loadCspReports() {
     body.innerHTML = '<div class="empty-state">Could not load: ' + escapeHtmlAdmin(e.message || 'unknown error') + '</div>';
   }
 }
+
+// N-3: run on demand (not on every page load — this scans every URL-shaped
+// column in the database, worth doing deliberately) via
+// GET /admin/storage-audit.
+document.getElementById('storageAuditBtn') && document.getElementById('storageAuditBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('storageAuditBtn');
+  const body = document.getElementById('storageAuditBody');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  body.innerHTML = '<div class="loading-state">Scanning every URL-shaped column&hellip;</div>';
+  try {
+    const data = await api('/admin/storage-audit');
+    if (!data.findings.length) {
+      body.innerHTML = '<div class="empty-state">' + escapeHtmlAdmin(data.note) + '</div>';
+      return;
+    }
+    body.innerHTML = '';
+    const note = document.createElement('p');
+    note.style.cssText = 'font-size:12.5px; color:var(--slate); margin-bottom:10px;';
+    note.textContent = data.note;
+    body.appendChild(note);
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Table</th><th>Column</th><th>Row</th><th>Value</th></tr>';
+    data.findings.forEach((f) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><code style="font-size:12px;">' + escapeHtmlAdmin(f.table) + '</code></td>'
+        + '<td><code style="font-size:12px;">' + escapeHtmlAdmin(f.column) + '</code></td>'
+        + '<td>' + escapeHtmlAdmin(String(f.rowId)) + '</td>'
+        + '<td style="font-size:11.5px; word-break:break-all;">' + escapeHtmlAdmin(f.value) + '</td>';
+      table.appendChild(tr);
+    });
+    body.appendChild(table);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">Could not run the audit: ' + escapeHtmlAdmin(e.message || 'unknown error') + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Run audit';
+  }
+});
 
 function renderNotFound(body, list) {
   if (!list.length) {

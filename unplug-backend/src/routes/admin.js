@@ -1608,4 +1608,76 @@ router.delete('/interactions/saves/:id', requireRole('admin'), async (req, res, 
   }
 });
 
+// GET /admin/storage-audit — N-3: find any stored URL still pointing at the
+// OLDER Supabase project (fkuzbwysvyskhsskjmmi) rather than production
+// (jaywxegcxjgyqhcwzbte). This can't be answered from the codebase alone —
+// grepped every migration/route/HTML file for the old project ref and found
+// nothing hardcoded, so any stale URL exists only as data an admin typed in
+// at some point (e.g. a site-settings image field), and only live database
+// access can see it. This is that access, from inside the app itself.
+//
+// Rather than hand-list every *_url/*_image_url column (this schema has
+// dozens, across dozens of tables, and a hand-built list goes stale the
+// moment a new one is added), the columns to check are discovered from the
+// database's own catalog: every text-like column whose name contains "url".
+// Table/column names come from information_schema, never from the request,
+// so building each per-column query by interpolating them is safe.
+router.get('/storage-audit', requireRole('admin'), async (req, res, next) => {
+  try {
+    const needle = (req.query.host || 'fkuzbwysvyskhsskjmmi').toString();
+
+    const cols = await pool.query(
+      `SELECT table_name, column_name
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND data_type IN ('character varying', 'text')
+          AND column_name ILIKE '%url%'
+        ORDER BY table_name, column_name`
+    );
+
+    // settings is a generic key/value table — its URL-shaped content (e.g.
+    // youtube_image_url) lives in a column literally named "value", which
+    // the name-based discovery above can never match. Checked explicitly,
+    // since it's the one place in this schema an arbitrary URL can hide
+    // behind a column name that gives no hint of what it holds.
+    const columnsToCheck = [...cols.rows, { table_name: 'settings', column_name: 'value' }];
+
+    const findings = [];
+    for (const { table_name: table, column_name: column } of columnsToCheck) {
+      try {
+        // settings is a key/value table with no "id" column — its own key
+        // IS the identifier, so it's addressed differently from every
+        // other table here (which all use a plain serial "id").
+        const idCol = table === 'settings' ? 'key' : 'id';
+        const r = await pool.query(
+          `SELECT "${idCol}" AS row_id, "${column}" AS value
+             FROM "${table}"
+            WHERE "${column}" ILIKE $1
+            LIMIT 20`,
+          [`%${needle}%`]
+        );
+        r.rows.forEach((row) => {
+          findings.push({ table, column, rowId: row.row_id, value: row.value });
+        });
+      } catch (e) {
+        // A column that turns out not to be simply queryable this way (no
+        // "id"/"key", or a permissions quirk) is skipped rather than
+        // failing the whole audit — this is a best-effort sweep, not a
+        // guarantee every column was reachable.
+      }
+    }
+
+    res.json({
+      searchedHost: needle,
+      columnsChecked: columnsToCheck.length,
+      findings,
+      note: findings.length === 0
+        ? `No stored value contains "${needle}" across ${columnsToCheck.length} URL-shaped columns checked. This does not prove nothing is stale (a column named differently, e.g. without "url" in its name, would not be checked) but nothing obvious was found.`
+        : `${findings.length} value(s) still reference "${needle}" — these are real rows to fix or re-upload to the production storage bucket.`,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
