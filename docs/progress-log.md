@@ -1797,3 +1797,35 @@ Verified live in-browser: mocked the Arena API response with no details set — 
 is absent entirely; re-mocked with all four filled in — confirmed all four render legibly in a clean grid
 under the entry-fee/closing-date row, and rank numbers (#1, #2) show correctly on entry cards sorted by
 vote count. Full suite: 1939 passing, 0 failing (up from 1933).
+
+## 2026-09-04 — Website remediation punch-list, INV-001/INV-002: real evidence, and a real gap flagged
+
+**INV-001.** The Investors page had no evidence dashboard at all — just a paragraph of intent, an empty
+investor-profile grid, and a hardcoded "Latest Project" block. Asked first whether commercial/revenue
+figures belonged on a page anyone can open before building anything: the answer was no — that's a
+conversation for a real investor, not something published to the world the way audience figures already
+are on the homepage. Built the audience/community/content half only.
+
+New public `GET /analytics/investor-snapshot`, sourced from the same real tables the homepage stats and
+advertiser media kit already use — no new/invented numbers. Audience (readers + page views over the last
+30 days, plus reader growth vs. the prior 30 days — reported as `null`, not a fake `0%`, when there isn't
+yet 60 days of history to compare against). Community (registered members, directory profiles, votes
+actually cast). Content (approved articles, approved gallery images, published editions — a pending
+article or unmoderated photo is not public evidence of anything). The Investors page now renders all
+three groups in a clean stat layout; a `null` growth figure is simply omitted rather than shown as
+"null%".
+
+**INV-002** (investment proposition — problem, market, revenue model, growth strategy) is a genuine gap,
+left unbuilt on purpose: this is a narrative pitch only the founders can actually write, not something to
+draft as generic startup copy standing in for their real answer. Flagged for Darius/Pierre rather than
+invented.
+
+New tests: `investorSnapshot.test.js` (5 tests, real HTTP + real Postgres — seeded real rows across
+articles/profiles/gallery_images/editions/competition_entries/votes/analytics_sessions and confirmed
+each figure counts only what it should: approved-only content, real distinct-visitor sessions in the
+window, growth genuinely `null` with no prior-window data, and — checked directly — the response never
+contains the words "revenue" or "payment" anywhere) and `investorPageWiring.test.js` (4 tests, frontend
+static source — the page calls the real endpoint, the page-load trigger actually calls the new loader,
+the three groups render and a commercial/revenue one does not, `null` growth is excluded not displayed
+literally). Verified live in-browser: mocked a realistic response and confirmed all three groups render
+legibly with correctly formatted numbers. Full suite: 1948 passing, 0 failing (up from 1939).

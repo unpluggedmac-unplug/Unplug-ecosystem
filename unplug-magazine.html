@@ -1438,6 +1438,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .poll-pct{ position:absolute; right:10px; top:50%; transform:translateY(-50%); font-size:12px; font-weight:700; color:var(--ink); }
 .poll-vote-btn{ font-size:11px; padding:8px 14px; flex-shrink:0; }
 
+/* ---- INV-001: investor evidence snapshot ---- */
+.inv-snapshot{ display:flex; flex-direction:column; gap:28px; }
+.inv-stat-group h3{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--red); margin-bottom:12px; }
+.inv-stat-row{ display:flex; gap:32px; flex-wrap:wrap; }
+.inv-stat{ display:flex; flex-direction:column; }
+.inv-stat .v{ font-family:'Playfair Display',serif; font-size:30px; font-weight:700; }
+.inv-stat .k{ font-size:12.5px; color:var(--slate); margin-top:2px; }
+
 /* ---- investor profiles ---- */
 .inv-profile-grid{ display:flex; flex-direction:column; gap:32px; }
 .inv-profile-card{ border:1px solid var(--paper-line); padding:32px; margin-bottom:28px; }
@@ -3031,6 +3039,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <p class="lede">Unplug Magazine is building the media home for good news, verified changemakers, and the brands who back them. Here's where things stand.</p>
     <p style="color:var(--slate); line-height:1.6; margin-top:12px; max-width:80ch;">This is where we showcase detailed profiles of our investors — including their story, projects they've done with Unplug, slogan, social media handles, a photo gallery, linked videos, and contact details.</p>
   </div>
+
+  <!-- INV-001: real evidence, not generic claims — every figure here comes
+       from GET /analytics/investor-snapshot, the same live tables the
+       homepage stats and the advertiser media kit already draw from.
+       Deliberately no revenue figure: that's a conversation for a real
+       investor, not something published to anyone who opens this page. -->
+  <section class="wrap" style="padding-top:40px;">
+    <div class="inv-snapshot" id="investorSnapshot"><div class="dir-empty-state">Loading real platform figures…</div></div>
+  </section>
 
   <section class="wrap" style="padding-top:56px;">
     <div data-ad-slot="investors-leaderboard" class="ad-slot" style="margin-bottom:32px;"><span class="label">Advertisement — 728×90 Leaderboard</span><span>Reserve this space</span></div>
@@ -7656,6 +7673,46 @@ async function loadInvestors() {
   }
 }
 
+// INV-001: real evidence, sourced from GET /analytics/investor-snapshot —
+// audience, community and content only, never revenue (see the route's own
+// comment for why). A stat with no real number to show (growth, with fewer
+// than 60 days of history) is left out rather than padded with a guess.
+function invStatHtml(value, label) {
+  return `<div class="inv-stat"><span class="v">${value}</span><span class="k">${label}</span></div>`;
+}
+
+async function loadInvestorSnapshot() {
+  const el = document.getElementById('investorSnapshot');
+  if (!el) return;
+  try {
+    const s = await api('/analytics/investor-snapshot');
+    const fmt = (n) => Number(n).toLocaleString('en-ZA');
+    const growth = s.audience.readerGrowthPct;
+    const audienceStats = [
+      invStatHtml(fmt(s.audience.readers), 'Readers (30 days)'),
+      invStatHtml(fmt(s.audience.pageViews), 'Page views (30 days)'),
+      growth !== null ? invStatHtml((growth >= 0 ? '+' : '') + growth + '%', 'Reader growth vs. prior 30 days') : '',
+    ].join('');
+    const communityStats = [
+      invStatHtml(fmt(s.community.registeredMembers), 'Registered members'),
+      invStatHtml(fmt(s.community.directoryProfiles), 'Directory profiles'),
+      invStatHtml(fmt(s.community.votesCast), 'Votes cast'),
+    ].join('');
+    const contentStats = [
+      invStatHtml(fmt(s.content.articlesPublished), 'Articles published'),
+      invStatHtml(fmt(s.content.galleryImages), 'Gallery images'),
+      invStatHtml(fmt(s.content.editionsPublished), 'Editions published'),
+    ].join('');
+    el.innerHTML = `
+      <div class="inv-stat-group"><h3>Audience</h3><div class="inv-stat-row">${audienceStats}</div></div>
+      <div class="inv-stat-group"><h3>Community</h3><div class="inv-stat-row">${communityStats}</div></div>
+      <div class="inv-stat-group"><h3>Content</h3><div class="inv-stat-row">${contentStats}</div></div>
+      <p style="font-size:12px; color:var(--slate); margin-top:16px;">${escapeHtml(s.note)}</p>`;
+  } catch (err) {
+    el.innerHTML = '';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Marketplace — real listings from GET /marketplace/listings.
 // ---------------------------------------------------------------------------
@@ -9926,6 +9983,7 @@ function goToPage(pageId){
     investorsLoaded = true;
     loadInvestors();
     loadProjects();
+    loadInvestorSnapshot();
   }
   // Not cached on a "loaded" flag like the others: the username in the URL
   // decides what this page shows, so it must re-fetch per profile.

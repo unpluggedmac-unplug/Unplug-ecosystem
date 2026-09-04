@@ -122,6 +122,77 @@ router.get('/media-kit', async (req, res, next) => {
   }
 });
 
+// GET /analytics/investor-snapshot — public, no auth. INV-001: an evidence
+// dashboard for the Investors page, sourced from the same real tables as
+// the homepage stats and the advertiser media kit — never invented, and
+// deliberately NOT including revenue: what money is moving through the
+// platform is something to discuss with a real investor directly, not
+// publish to anyone who opens this page.
+router.get('/investor-snapshot', async (req, res, next) => {
+  try {
+    const since30 = new Date(Date.now() - 30 * 864e5);
+    const since60 = new Date(Date.now() - 60 * 864e5);
+
+    const [
+      audienceNow, audiencePrior, membersTotal, articlesTotal,
+      profilesTotal, galleryTotal, editionsTotal, votesTotal,
+    ] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(DISTINCT visitor_id)::int AS readers, COALESCE(SUM(page_count), 0)::int AS page_views
+           FROM analytics_sessions WHERE started_at >= $1`,
+        [since30]
+      ),
+      // The 30 days BEFORE the current window — growth is a comparison, not
+      // a number that means anything on its own.
+      pool.query(
+        `SELECT COUNT(DISTINCT visitor_id)::int AS readers
+           FROM analytics_sessions WHERE started_at >= $1 AND started_at < $2`,
+        [since60, since30]
+      ),
+      pool.query(`SELECT COUNT(*)::int AS c FROM users`),
+      pool.query(`SELECT COUNT(*)::int AS c FROM articles WHERE status = 'approved'`),
+      pool.query(`SELECT COUNT(*)::int AS c FROM profiles WHERE status = 'approved'`),
+      pool.query(`SELECT COUNT(*)::int AS c FROM gallery_images WHERE status = 'approved'`),
+      pool.query(`SELECT COUNT(*)::int AS c FROM editions`),
+      pool.query(`SELECT COUNT(*)::int AS c FROM votes`),
+    ]);
+
+    const readersNow = audienceNow.rows[0].readers;
+    const readersPrior = audiencePrior.rows[0].readers;
+    // null, not 0%, when there is nothing in the prior window to compare
+    // against — a "0% growth" reading would imply flat traffic when the
+    // truth is there is not yet enough history to say either way.
+    const readerGrowthPct = readersPrior > 0
+      ? Math.round(((readersNow - readersPrior) / readersPrior) * 100)
+      : null;
+
+    res.json({
+      windowDays: 30,
+      audience: {
+        readers: readersNow,
+        pageViews: audienceNow.rows[0].page_views,
+        readerGrowthPct,
+      },
+      community: {
+        registeredMembers: membersTotal.rows[0].c,
+        directoryProfiles: profilesTotal.rows[0].c,
+        votesCast: votesTotal.rows[0].c,
+      },
+      content: {
+        articlesPublished: articlesTotal.rows[0].c,
+        galleryImages: galleryTotal.rows[0].c,
+        editionsPublished: editionsTotal.rows[0].c,
+      },
+      measuredFrom: since30.toISOString(),
+      note: readersNow === 0
+        ? 'No audience data yet for this window. Analytics began recording recently, and only for visitors who accept the cookie bar.'
+        : 'Audience figures measured on unplugnews.com over the last 30 days. Counts only visitors who accepted analytics, so the true audience is larger. Community and content totals are all-time.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /analytics/track — public, called once per page view by a small
 // snippet on the public site. No login required, no personal data stored
 // — session_id is just a random ID the visitor's own browser generates
