@@ -2057,3 +2057,40 @@ HTML directly.
 Full suite: 1996 passing, 1 failing on first run — `twoFactor.test.js`'s TOTP-timing flake documented
 earlier this cycle, unrelated to anything touched here. Re-ran that file alone: clean 16/16. Effectively
 1997 passing, 0 failing (up from 1987, +10 for this feature).
+
+## 2026-09-04 — Members can open a mission and mark it complete themselves
+
+Requested directly: let a member click a daily/weekly/monthly mission and complete it from inside. Asked
+two questions before writing anything, since the existing system had no click target at all — every
+mission has always completed itself invisibly, the moment the member did whatever real action it's keyed
+to (`action_code`, tracked separately across the whole site, behind an anti-cheat engine and daily caps).
+Confirmed directly: completion should be a **trust-based self-report** — clicking "Mark as complete"
+awards the points immediately, no proof asked for, same as ticking off a paper to-do list — applied the
+same way to daily, weekly and monthly.
+
+New SQL function, `complete_mission_manually(user_id, mission_code)`
+(`174_mission_manual_complete.sql`): finds the member's assigned, not-yet-completed row for that mission,
+jumps `progress_count` straight to `target_count`, then reuses the *exact* `award_points()` +
+notification + achievement-sync sequence the automatic path already uses — so nothing about how points
+are scored changes, only how a mission gets marked done does. Refuses a mission that isn't currently
+assigned to the caller, one already completed, or an unknown code. New route, `POST
+/participation/missions/:code/complete` (member-only).
+
+Both dashboards' mission rows (today's missions, this week's mission, this month's challenge) are now
+clickable — each opens a detail modal (title, description, points, progress for weekly/monthly) with a
+"Mark as complete" button, wired through a single delegated click listener per container so it survives
+the innerHTML re-render every dashboard refresh does. An already-completed mission opens read-only with
+no button. Completing one calls the new endpoint, toasts the points earned, and reloads the dashboard.
+
+New test, `missionSelfComplete.test.js` (9 tests, real HTTP + real Postgres): clicking complete awards the
+mission's own points with a real ledger row behind it, not just a flag; a mission not assigned to the
+caller is refused; the same mission can't be completed twice (exactly one ledger entry, not two); an
+unknown code is rejected; one member's completion never touches another member's row; signed-out is
+refused; both weekly and monthly missions self-complete the same way, for the full `points_reward`
+regardless of `target_count`. Re-ran `participationRoutes.test.js`, `missionProgramme.test.js`,
+`weeklyMissions.test.js` and `monthlyChallenges.test.js` (48 tests) to confirm the new migration didn't
+disturb the existing automatic-completion path — all clean. Verified live in-browser against a mocked
+backend: opened a daily mission, a weekly mission (progress "1 / 3" rendered correctly), and an
+already-completed mission (read-only, no button); clicked Mark as complete and confirmed the toast, modal
+close, and dashboard refresh; confirmed both the Close button and clicking the backdrop dismiss the modal.
+Full suite: 2006 passing, 0 failing (up from 1997).

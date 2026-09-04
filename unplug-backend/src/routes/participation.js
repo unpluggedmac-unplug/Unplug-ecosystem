@@ -332,6 +332,26 @@ router.post('/action', requireAuth, async (req, res, next) => {
   }
 });
 
+// POST /participation/missions/:code/complete — MEMBER SELF-REPORT.
+// A mission has always completed itself invisibly, the moment the member
+// does whatever real action it's keyed to (see POST /action above). This is
+// a second, deliberate way to finish one: the member opens it on the
+// dashboard and says directly "I did this" — no proof asked for, same as
+// ticking off a paper to-do list. It reuses the exact same award_points() +
+// notification + achievement-sync sequence the automatic path already uses
+// (see complete_mission_manually()), so nothing about how points are scored
+// changes; only how a mission gets marked done does.
+router.post('/missions/:code/complete', requireAuth, async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT * FROM complete_mission_manually($1, $2)', [req.user.id, req.params.code]);
+    const row = result.rows[0];
+    if (!row.ok) return res.status(400).json({ error: row.message });
+    res.json({ success: true, pointsAwarded: row.points_awarded });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /participation/dashboard — the full "My Unplug" payload.
 router.get('/dashboard', requireAuth, async (req, res, next) => {
   try {

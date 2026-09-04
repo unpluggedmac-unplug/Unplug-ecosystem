@@ -1237,6 +1237,27 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   </div>
 </div>
 
+<!-- Mission detail — opened by clicking a daily/weekly/monthly mission row
+     on the dashboard (see openMissionModal). "Mark as complete" is a
+     trust-based self-report: the member says they did it, no proof asked
+     for, same as ticking off a paper to-do list. -->
+<div id="missionOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--cream); border-radius:10px; padding:24px; max-width:420px; width:100%;">
+    <div id="missionModalType" style="font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--slate); font-weight:700;"></div>
+    <h3 id="missionModalTitle" style="font-family:'Playfair Display',serif; margin:6px 0 10px;"></h3>
+    <p id="missionModalDesc" class="sub" style="margin:0 0 14px;"></p>
+    <div id="missionModalProgress" style="font-size:12.5px; color:var(--slate); margin-bottom:14px;"></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+      <div id="missionModalPoints" style="font-family:'Playfair Display',serif; color:var(--red); font-weight:700; font-size:20px;"></div>
+      <div id="missionModalDone" style="display:none; font-weight:600; color:var(--slate);">&#10003; Completed</div>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <button class="btn btn-line" id="missionModalCloseBtn" type="button" style="width:auto; padding:9px 16px;">Close</button>
+      <button class="btn btn-solid" id="missionModalCompleteBtn" type="button" style="width:auto; padding:9px 16px;">Mark as complete</button>
+    </div>
+  </div>
+</div>
+
 <script src="image-upload.js"></script>
 <script>
 // API base. Defaults to the LIVE backend: an http://localhost fallback on an
@@ -4151,6 +4172,73 @@ function msDate(d){ return d ? new Date(d).toLocaleDateString() : '—'; }
 let MU_PROFILE = null;
 let MU_TAXONOMY = null;
 
+// Mission click-to-open (see the mission overlay markup and loadMyUnplug's
+// mission-rendering block). MU_MISSIONS is keyed by mission_code so the
+// modal can render instantly from what the dashboard already fetched.
+let MU_MISSIONS = {};
+let MU_MODAL_MISSION_CODE = null;
+let _missionClicksWired = false;
+const MISSION_TYPE_LABEL = { daily: "Today's mission", weekly: "This week's mission", challenge: "This month's challenge" };
+
+function wireMissionClicks() {
+  if (_missionClicksWired) return;
+  _missionClicksWired = true;
+  ['unplugMissions', 'unplugWeeklyMission', 'unplugMonthlyChallenge'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', (e) => {
+      const row = e.target.closest('[data-mission-code]');
+      if (row) openMissionModal(row.getAttribute('data-mission-code'));
+    });
+  });
+  document.getElementById('missionModalCloseBtn').addEventListener('click', closeMissionModal);
+  document.getElementById('missionOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'missionOverlay') closeMissionModal();
+  });
+  document.getElementById('missionModalCompleteBtn').addEventListener('click', submitMissionComplete);
+}
+
+function openMissionModal(code) {
+  const m = MU_MISSIONS[code];
+  if (!m) return;
+  MU_MODAL_MISSION_CODE = code;
+  document.getElementById('missionModalType').textContent = MISSION_TYPE_LABEL[m.mission_type] || 'Mission';
+  document.getElementById('missionModalTitle').textContent = m.title;
+  document.getElementById('missionModalDesc').textContent = m.description;
+  const target = m.target_count || 1;
+  document.getElementById('missionModalProgress').textContent = target > 1
+    ? `Progress: ${Math.min(m.progress_count, target)} / ${target}`
+    : '';
+  document.getElementById('missionModalPoints').textContent = `+${m.points_reward} pts`;
+  document.getElementById('missionModalDone').style.display = m.is_completed ? '' : 'none';
+  document.getElementById('missionModalCompleteBtn').style.display = m.is_completed ? 'none' : '';
+  document.getElementById('missionOverlay').style.display = 'flex';
+}
+
+function closeMissionModal() {
+  document.getElementById('missionOverlay').style.display = 'none';
+  MU_MODAL_MISSION_CODE = null;
+}
+
+// Trust-based self-report: the member says they did it, no proof asked
+// for — see POST /participation/missions/:code/complete.
+async function submitMissionComplete() {
+  if (!MU_MODAL_MISSION_CODE) return;
+  const btn = document.getElementById('missionModalCompleteBtn');
+  btn.disabled = true;
+  btn.textContent = 'Completing…';
+  try {
+    const result = await api('/participation/missions/' + encodeURIComponent(MU_MODAL_MISSION_CODE) + '/complete', { method: 'POST' });
+    showToast(`Mission complete — +${result.pointsAwarded} points!`);
+    closeMissionModal();
+    await loadMyUnplug();
+  } catch (err) {
+    showToast(err.message || 'Could not complete that mission.', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Mark as complete';
+  }
+}
+
 function muCountWords(text) {
   return String(text || '').trim().split(/\s+/).filter(Boolean).length;
 }
@@ -4376,46 +4464,63 @@ async function loadMyUnplug() {
     const earnedPassport = (data.passport || []).filter((p) => p.earned).length;
     document.getElementById('unplugPassportCount').textContent = `${earnedPassport} / ${(data.passport || []).length}`;
 
-    // Missions
+    // Missions — every row is now clickable and opens a detail view where
+    // the member can mark it complete themselves (openMissionModal below).
+    // MU_MISSIONS caches what that view needs so it doesn't re-fetch.
+    MU_MISSIONS = {};
     const missions = data.todayMissions || [];
+    missions.forEach((m) => { MU_MISSIONS[m.mission_code] = Object.assign({}, m, { mission_type: 'daily' }); });
     document.getElementById('unplugMissions').innerHTML = missions.length
       ? missions.map((m) => `
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--paper-line);">
+        <div class="mission-row" data-mission-code="${escapeAttrM(m.mission_code)}" style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--paper-line); cursor:pointer;">
           <div>
             <div style="font-weight:600; font-size:13.5px;">${m.is_completed ? '✓ ' : ''}${escapeHtmlM(m.title)}</div>
             <div style="font-size:12px; color:var(--slate);">${escapeHtmlM(m.description)}</div>
           </div>
-          <div style="font-family:'Playfair Display',serif; color:var(--red); font-weight:700; white-space:nowrap; margin-left:12px;">+${m.points_reward}</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-left:12px;">
+            <div style="font-family:'Playfair Display',serif; color:var(--red); font-weight:700; white-space:nowrap;">+${m.points_reward}</div>
+            <div style="color:var(--slate);">&#8250;</div>
+          </div>
         </div>`).join('')
       : '<p class="sub" style="margin:0;">No missions assigned yet — check back tomorrow.</p>';
 
     // Weekly mission
     const wm = data.weeklyMission;
+    if (wm) MU_MISSIONS[wm.mission_code] = Object.assign({}, wm, { mission_type: 'weekly' });
     document.getElementById('unplugWeeklyMission').innerHTML = wm
       ? `
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0;">
+        <div class="mission-row" data-mission-code="${escapeAttrM(wm.mission_code)}" style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; cursor:pointer;">
           <div>
             <div style="font-weight:600; font-size:13.5px;">${wm.is_completed ? '✓ ' : ''}${escapeHtmlM(wm.title)}</div>
             <div style="font-size:12px; color:var(--slate);">${escapeHtmlM(wm.description)}</div>
             <div style="font-size:11.5px; color:var(--slate); margin-top:4px;">${Math.min(wm.progress_count, wm.target_count)} / ${wm.target_count}</div>
           </div>
-          <div style="font-family:'Playfair Display',serif; color:var(--red); font-weight:700; white-space:nowrap; margin-left:12px;">+${wm.points_reward}</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-left:12px;">
+            <div style="font-family:'Playfair Display',serif; color:var(--red); font-weight:700; white-space:nowrap;">+${wm.points_reward}</div>
+            <div style="color:var(--slate);">&#8250;</div>
+          </div>
         </div>`
       : '<p class="sub" style="margin:0;">No weekly mission assigned yet — check back soon.</p>';
 
     // Monthly challenge
     const mc = data.monthlyChallenge;
+    if (mc) MU_MISSIONS[mc.mission_code] = Object.assign({}, mc, { mission_type: 'challenge' });
     document.getElementById('unplugMonthlyChallenge').innerHTML = mc
       ? `
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0;">
+        <div class="mission-row" data-mission-code="${escapeAttrM(mc.mission_code)}" style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; cursor:pointer;">
           <div>
             <div style="font-weight:600; font-size:13.5px;">${mc.is_completed ? '✓ ' : ''}${escapeHtmlM(mc.title)}</div>
             <div style="font-size:12px; color:var(--slate);">${escapeHtmlM(mc.description)}</div>
             <div style="font-size:11.5px; color:var(--slate); margin-top:4px;">${Math.min(mc.progress_count, mc.target_count)} / ${mc.target_count}</div>
           </div>
-          <div style="font-family:'Playfair Display',serif; color:var(--red); font-weight:700; white-space:nowrap; margin-left:12px;">+${mc.points_reward}</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-left:12px;">
+            <div style="font-family:'Playfair Display',serif; color:var(--red); font-weight:700; white-space:nowrap;">+${mc.points_reward}</div>
+            <div style="color:var(--slate);">&#8250;</div>
+          </div>
         </div>`
       : '<p class="sub" style="margin:0;">No monthly challenge assigned yet — check back soon.</p>';
+
+    wireMissionClicks();
 
     // Referral link
     const refCode = data.profile ? data.profile.referral_code : null;
