@@ -1931,3 +1931,35 @@ report-only note present, gated to admins only. Verified live in-browser: the la
 tagged both the images already on the page and a dynamically-inserted gallery image within the debounce
 window; the paywall gate's two links resolved to the correct URLs; the CSP admin panel rendered a mocked
 real-shaped violation correctly. Full suite: 1970 passing, 0 failing (up from 1962).
+
+## 2026-09-04 — Website remediation punch-list, DIR-002: the package comparison table (closes the list)
+
+Prices were confirmed (Basic R150/R500, Pro R280/R700, Premium R400/R1000, individual/business) but the
+actual feature differences between tiers — the doc's Open Question Q4 — were not. Rather than ask the
+publisher to write a feature list from scratch, traced what each tier already actually does in the code
+first: search-result ordering (`ORDER BY CASE package_tier...` in `routes/profiles.js`), which profile
+fields render at all (`profileDetailHtml`'s `showExtras`/`showGallery` gates in `unplug-magazine.html`),
+the listing-photo limit (`routes/gallery.js`'s `PHOTO_LIMITS`), the second-category/demo-reel flags
+(`routes/profiles.js`'s `allowSecondCategory`/`allowDemoReel`), and the free credits granted per billing
+cycle (`routes/admin.js`'s `creditsForTier`). Presented the derived table to the publisher for
+confirmation before building anything — confirmed accurate as-is.
+
+Built as a real comparison table on the Directory page (`#pkgCompareTable`), swapping between an
+individual and a business row set on the same Individual/Business toggle the price cards already use —
+same event, same moment, not a second toggle to keep in sync. Six rows for individual (search placement,
+Quote/Achievements/Career, gallery, demo reel, photo limit, credits), six for business (the same set with
+demo reel swapped for second category). Static content, matching how the tier prices themselves are
+already presented on this page — not re-fetched live from the backend, since these are fixed,
+infrequently-changing product definitions — but tied to the real source with an explicit code comment,
+the same bridge this codebase already uses elsewhere for facts that live in two places.
+
+New test, `directoryPackageComparison.test.js` (6 tests): the table's listing-photo limits and prices are
+checked directly against the real `PHOTO_LIMITS` and `PACKAGE_PRICES` constants (not hand-copied
+expectations) so either one drifting fails this test rather than the public page quietly going stale; the
+Quote/Achievements/Career and gallery rows are checked against the real `showExtras`/`showGallery` gates;
+demo reel is individual-only and second category is business-only in the respective tables; the table
+re-renders on the existing type toggle. Verified live in-browser: confirmed the exact rendered HTML for
+both individual and business, including the toggle correctly swapping the whole row set. Full suite: 1976
+passing, 0 failing (up from 1970).
+
+**This closes every item in the punch-list document (`Unplug-Website-Punchlist-for-Claude-Code_1.md`).**

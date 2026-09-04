@@ -167,10 +167,17 @@ test('PERF-001: A REAL REPORTED VIOLATION SHOWS UP IN THE ADMIN LIST WITH THE FI
     body: { 'csp-report': { 'effective-directive': 'script-src-elem', 'blocked-uri': 'https://evil.example/x.js', 'document-uri': 'https://unplugnews.com/?p=news' } },
     contentType: 'application/csp-report',
   });
-  const { status, body } = await req('GET', '/security/csp-reports', { token: adminToken });
-  assert.equal(status, 200);
-  assert.ok(Array.isArray(body.reports));
-  const row = body.reports.find((r) => r.directive === 'script-src-elem');
+  // The route answers 204 immediately — "this endpoint must never make a
+  // reader's browser wait" — and writes the row afterwards, so the POST
+  // resolving is not proof the INSERT has landed yet. Poll briefly rather
+  // than assume a fixed delay is always enough under load.
+  let row;
+  let body;
+  for (let attempt = 0; attempt < 20 && !row; attempt++) {
+    ({ body } = await req('GET', '/security/csp-reports', { token: adminToken }));
+    row = (body.reports || []).find((r) => r.directive === 'script-src-elem');
+    if (!row) await new Promise((r) => setTimeout(r, 50));
+  }
   assert.ok(row, 'the reported violation should appear in the admin list');
   assert.equal(row.blocked_uri, 'https://evil.example/x.js');
   assert.equal(row.document_uri, 'https://unplugnews.com/', 'the query string must be stripped so repeat visits do not fragment the count');

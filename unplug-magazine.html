@@ -1396,6 +1396,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 @media(max-width:900px){ .tier-grid{ grid-template-columns:1fr; } }
 .tier-card{ border:1px solid var(--paper-line); padding:28px 24px; display:flex; flex-direction:column; gap:10px; }
 .tier-card.tier-featured{ border-color:var(--red); background:rgba(210,7,9,0.04); }
+
+/* ---- DIR-002: package comparison table ---- */
+.pkg-compare-wrap{ border:1px solid var(--paper-line); border-radius:8px; }
+.pkg-compare{ width:100%; min-width:520px; border-collapse:collapse; font-size:13.5px; }
+.pkg-compare th, .pkg-compare td{ padding:12px 16px; text-align:center; border-bottom:1px solid var(--paper-line); }
+.pkg-compare tr:last-child th, .pkg-compare tr:last-child td{ border-bottom:none; }
+.pkg-compare th{ font-weight:700; }
+.pkg-compare th[scope="row"]{ text-align:left; font-weight:600; color:var(--ink); white-space:nowrap; }
+.pkg-compare tr:first-child th{ background:var(--paper); font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--slate); }
+.pkg-compare-dash{ color:var(--paper-line); }
 .tier-price{ font-family:'Playfair Display',serif; font-size:26px; font-weight:700; color:var(--red); }
 .tier-featured .tier-price{ color:var(--red); }
 .tier-price span{ font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.03em; color:var(--slate); margin-left:4px; }
@@ -2568,6 +2578,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       </div>
     </div>
     <p style="font-size:12.5px; color:var(--slate); margin-top:14px; max-width:70ch;">Want to move up a tier later? Upgrades are a flat <strong>R250 admin fee</strong> — no need to pay the price difference. Downgrading to a lower package isn't available once you're listed.</p>
+
+    <!-- DIR-002: exactly what each package actually includes, side by side —
+         every row here is real, enforced behaviour (checked against the
+         code, not written from scratch): search placement order
+         (profiles.js), the Quote/Achievements/Career/Gallery/Demo-reel
+         fields (profileDetailHtml's showExtras/showGallery), the listing
+         photo limit (gallery.js's PHOTO_LIMITS) and the free credits per
+         cycle (admin.js's creditsForTier). If any of those change, this
+         table needs updating to match — it is not read from them live. -->
+    <div class="pkg-compare-wrap" style="margin-top:28px; overflow-x:auto;">
+      <table class="pkg-compare" id="pkgCompareTable"></table>
+    </div>
 
     <!-- DIR-003: what actually happens after "Choose", verified against the
          real code — POST /profiles creates the profile at
@@ -4305,6 +4327,38 @@ const PKG_DESCS = {
 };
 let PKG_TYPE = 'individual';
 
+// DIR-002: one row per real, enforced difference. '' renders as an em dash
+// (does not apply / not included); '✓' as a plain check — no partial-credit
+// wording, since every row here is a fact from the code, not a sales pitch.
+const PKG_COMPARE_ROWS = {
+  individual: [
+    { label: 'Search placement', basic: 'Standard', pro: 'Higher', premium: 'Highest' },
+    { label: 'Quote, Achievements &amp; Career shown', basic: '', pro: '✓', premium: '✓' },
+    { label: 'Photo gallery on profile', basic: '', pro: '', premium: '✓ (up to 5 photos)' },
+    { label: 'Demo reel / music link', basic: '', pro: '', premium: '✓' },
+    { label: 'Listing photo limit', basic: '1', pro: '3', premium: '5' },
+    { label: 'Free credits per billing cycle', basic: '—', pro: '1 article, 1 gallery', premium: '1 article, 1 event, 1 Arena entry, 2 gallery' },
+  ],
+  business: [
+    { label: 'Search placement', basic: 'Standard', pro: 'Higher', premium: 'Highest' },
+    { label: 'Second category', basic: '', pro: '', premium: '✓' },
+    { label: 'Quote, Achievements &amp; Career shown', basic: '', pro: '✓', premium: '✓' },
+    { label: 'Photo gallery on profile', basic: '', pro: '', premium: '✓' },
+    { label: 'Listing photo limit', basic: '1', pro: '3', premium: '5' },
+    { label: 'Free credits per billing cycle', basic: '—', pro: '1 article', premium: '1 article, 1 event' },
+  ],
+};
+
+function renderPkgCompareTable() {
+  const el = document.getElementById('pkgCompareTable');
+  if (!el) return;
+  const rows = PKG_COMPARE_ROWS[PKG_TYPE];
+  const cell = (v) => `<td>${v || '<span class="pkg-compare-dash">—</span>'}</td>`;
+  el.innerHTML = `
+    <tr><th></th><th>Basic</th><th>Pro</th><th>Premium</th></tr>
+    ${rows.map((r) => `<tr><th scope="row">${r.label}</th>${cell(r.basic)}${cell(r.pro)}${cell(r.premium)}</tr>`).join('')}`;
+}
+
 document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-ptype]');
   if (!btn) return;
@@ -4316,8 +4370,10 @@ document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
   document.querySelectorAll('.pkg-desc').forEach((el) => {
     el.textContent = PKG_DESCS[PKG_TYPE][el.dataset.tier];
   });
+  renderPkgCompareTable();
   loadTierExamples();
 });
+renderPkgCompareTable();
 
 function choosePackage(tier) {
   window.location.href = 'unplug-checkout.html?ptype=' + PKG_TYPE + '&tier=' + tier;
