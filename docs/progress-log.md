@@ -1662,3 +1662,27 @@ tests down with it while all other 1912 tests passed both runs. That file touche
 does (dates/timezones, not payments) and passes cleanly 7/7 every time it's run standalone — confirmed
 directly rather than assumed. Treated as the known accumulated-postgres-process flakiness this session
 already ran into once before, not a regression from this change.
+
+## 2026-09-04 — Website remediation punch-list, MOB-001: mobile viewport pass — real bug found and fixed
+
+Started the mobile nav/layout verification (MOB-001) by emulating a 375px viewport and looking at the
+homepage. First thing on screen was a real bug in last session's own work: the Floating Buttons feature
+(shipped this cycle) places its stack at `bottom:14px` in the bottom-right corner — the exact same corner
+the site's pre-existing `chatbot.js` chat bubble already occupies, at the same offset, with a z-index
+(99990) more than a hundred times higher than the buttons' (900). Any button an admin ever activates
+would render completely invisible, hidden behind the chat bubble, on every page, forever — not caught
+during that task's own verification because no button was active in the live database yet to actually
+render and collide.
+
+Fixed in `unplug-site-buttons.js`: the stack's `bottom` offset moved from `14px` to `84px` — the same
+gap chatbot.js's own expanded window (`.ub-win`) already leaves above its collapsed bubble (its bubble is
+`bottom:20px` + `height:52px` = 72px of footprint; 84px clears that with room to spare). Confirmed live
+with the mobile-emulated browser: one button clears the bubble; three buttons (the stack growing upward)
+still clear it. The accessibility widget (`accessibility.js`) sits at the opposite corner (`left`), so no
+collision there.
+
+New test in `siteButtons.test.js` (1 test, now 11 total for that file): reads chatbot.js's own `.ub-fab`
+bottom/height rule directly (not hand-copied) and asserts the stack's offset exceeds that combined
+footprint — so a future resize of either widget is what this test actually tracks, not a frozen number.
+No horizontal scroll on the homepage at 375px width, confirmed directly. Full suite: 1920 passing, 0
+failing (up from 1919). Continuing the rest of the MOB-001 mobile pass next.

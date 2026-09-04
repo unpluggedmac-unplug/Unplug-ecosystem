@@ -174,3 +174,34 @@ test('DELETING A BUTTON REMOVES IT FROM BOTH THE ADMIN LIST AND THE PUBLIC FEED'
 test('DELETING A BUTTON THAT DOES NOT EXIST IS A 404', async () => {
   assert.equal((await api('DELETE', '/site-buttons/999999', null, adminToken)).status, 404);
 });
+
+// ---------------------------------------------------------------- placement
+
+// MOB-001 verification (mobile viewport check) surfaced a real bug here: the
+// site already ships a pre-existing chat widget (chatbot.js) whose collapsed
+// bubble sits at the SAME bottom-right corner, z-index 99990. This stack's
+// original bottom:14px placed it directly behind that bubble — completely
+// hidden, on every single page, forever. Caught live in a mobile-emulated
+// browser, not by reading the code.
+test('THE FLOATING STACK IS OFFSET CLEAR OF chatbot.js\'S BUBBLE, NOT PLACED AT THE SAME CORNER OFFSET', () => {
+  const file = path.join(__dirname, '..', '..', 'unplug-site-buttons.js');
+  assert.ok(fs.existsSync(file));
+  const src = fs.readFileSync(file, 'utf8').split('\r\n').join('\n');
+  const chatbotFile = path.join(__dirname, '..', '..', 'chatbot.js');
+  assert.ok(fs.existsSync(chatbotFile), 'chatbot.js should exist — this test protects against colliding with it');
+  const chatbotSrc = fs.readFileSync(chatbotFile, 'utf8').split('\r\n').join('\n');
+
+  // The bubble's own mobile offset + height, from its own stylesheet — not
+  // hand-copied, so a future change to the bubble's size is what this test
+  // actually tracks.
+  const bottomMatch = chatbotSrc.match(/\.ub-fab\{[^}]*bottom:(\d+)px/);
+  const heightMatch = chatbotSrc.match(/\.ub-fab\{[^}]*height:(\d+)px/);
+  assert.ok(bottomMatch && heightMatch, 'could not read chatbot.js\'s own bubble geometry — update this test if its CSS structure changed');
+  const bubbleClearance = Number(bottomMatch[1]) + Number(heightMatch[1]);
+
+  const posMatch = src.match(/position:fixed; right:\d+px; bottom:(\d+)px/);
+  assert.ok(posMatch, 'expected a single position:fixed rule with an explicit bottom offset');
+  const ourBottom = Number(posMatch[1]);
+  assert.ok(ourBottom > bubbleClearance,
+    `stack's bottom offset (${ourBottom}px) must clear the chat bubble's own footprint (${bubbleClearance}px) with room to spare`);
+});

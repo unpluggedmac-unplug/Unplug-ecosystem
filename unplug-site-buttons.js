@@ -37,8 +37,16 @@
     // overlay on this site (welcome gate 1000, consent bar 1100, search
     // overlay 99997+) — a floating button must never sit visually on top of
     // a modal that is supposed to have the visitor's full attention.
+    //
+    // bottom:84px, not 14px: chatbot.js's own chat bubble already occupies
+    // bottom-right at right/bottom:14px (mobile) or 20px (desktop), z-index
+    // 99990 — starting this stack at the SAME corner offset would render it
+    // completely hidden behind that bubble on every single page, forever.
+    // 84px matches the gap chatbot.js's own expanded window (.ub-win) already
+    // leaves above the collapsed bubble, so this stacks cleanly above it
+    // instead of colliding with it.
     host.style.cssText =
-      'position:fixed; right:14px; bottom:14px; z-index:900;'
+      'position:fixed; right:14px; bottom:84px; z-index:900;'
       + 'display:flex; flex-direction:column; gap:8px; align-items:flex-end;';
 
     buttons.forEach(function (b) {
