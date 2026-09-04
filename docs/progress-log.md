@@ -1829,3 +1829,37 @@ static source — the page calls the real endpoint, the page-load trigger actual
 the three groups render and a commercial/revenue one does not, `null` growth is excluded not displayed
 literally). Verified live in-browser: mocked a realistic response and confirmed all three groups render
 legibly with correctly formatted numbers. Full suite: 1948 passing, 0 failing (up from 1939).
+
+## 2026-09-04 — Website remediation punch-list, TRUST-003: real testimonials, and a fabricated one removed
+
+Checked first: no testimonials system existed anywhere (schema, routes, admin, public pages — nothing).
+Built the mechanism the same way as the Arena's prize/rules (ARENA-001) and Floating Buttons: real,
+admin-entered content, off by default, shown only once actually filled in — the punch-list is explicit
+that a fabricated quote is worse than none.
+
+New table `testimonials` (migration 173): quote, author name, author role (free text — "Directory
+member (Pro)", "Advertiser since 2026", whatever's true), optional photo, display order, active
+(default false). New route file `testimonials.js`: public `GET /testimonials` (active only, in display
+order, cached) plus admin CRUD, mounted in `app.js`. Admin dashboard gets a new "Testimonials" section
+under Website Settings, alongside Floating Buttons — same inline-editable-row pattern. Homepage gets a
+new "What people say" section, entirely hidden (not shown empty) until at least one testimonial is
+switched on.
+
+**Found something worse while building this: a real fabricated testimonial already live on the
+homepage.** The Investor Spotlight's fallback card — shown whenever no project spotlight is active,
+which is the current live state since `investors` = 0 rows — attributed an invented quote to a named
+"David Khumalo, Strategic Partner · Cape Town": *"Unplug isn't just a media brand — it's an
+infrastructure for community trust."* No such person exists in the database. This is exactly the
+fabricated-testimonial problem TRUST-003 warns about, just already shipped rather than a gap to fill.
+Replaced with honest, unattributed copy pointing at the real Investor Relations page — no invented name,
+no invented quote.
+
+New tests: `testimonials.test.js` (10 tests, real HTTP + real Postgres, same coverage shape as
+`siteButtons.test.js` — off by default, required fields, public feed shows only active in order and
+strips admin-only fields, editing can't blank a field, toggling and deleting take effect immediately)
+and `testimonialsFrontend.test.js` (4 tests — the fabricated name/quote is gone from the actual rendered
+card, not just the surrounding explanatory comment; the section starts hidden and only reveals on a
+non-empty feed; each card escapes its real API fields; the loader runs on homepage load). Verified live
+in-browser: confirmed the fallback card's real (fixed) HTML, confirmed the testimonials section starts
+hidden with no data, then confirmed it reveals and renders two mocked real-shaped testimonials correctly
+once the feed returns them. Full suite: 1962 passing, 0 failing (up from 1948).

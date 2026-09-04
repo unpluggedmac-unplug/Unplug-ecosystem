@@ -184,6 +184,9 @@ app.use('/popups', require('./routes/popups'));
 // Site Buttons: the always-visible floating CTA stack (distinct from Popups,
 // which interrupt) — the public feed, plus the admin's controls.
 app.use('/site-buttons', require('./routes/siteButtons'));
+// Testimonials: real quotes only (TRUST-003) — the public feed, plus the
+// admin's controls.
+app.use('/testimonials', require('./routes/testimonials'));
 // The social feed: hand-entered posts. No API call to Meta anywhere — see
 // routes/social.js for why (Basic Display was switched off in Dec 2024).
 app.use('/social', require('./routes/social'));

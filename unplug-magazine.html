@@ -1446,6 +1446,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .inv-stat .v{ font-family:'Playfair Display',serif; font-size:30px; font-weight:700; }
 .inv-stat .k{ font-size:12.5px; color:var(--slate); margin-top:2px; }
 
+/* ---- TRUST-003: real testimonials ---- */
+.testimonial-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; }
+.testimonial-card{ border:1px solid var(--paper-line); padding:24px; }
+.testimonial-card blockquote{ margin:0 0 16px; font-family:'Playfair Display',serif; font-size:17px; line-height:1.5; }
+.testimonial-card blockquote::before{ content:'\201C'; }
+.testimonial-card blockquote::after{ content:'\201D'; }
+.testimonial-author{ display:flex; align-items:center; gap:10px; }
+.testimonial-author img{ width:40px; height:40px; border-radius:50%; object-fit:cover; }
+.testimonial-author .name{ font-weight:700; font-size:14px; }
+.testimonial-author .role{ font-size:12.5px; color:var(--slate); }
+
 /* ---- investor profiles ---- */
 .inv-profile-grid{ display:flex; flex-direction:column; gap:32px; }
 .inv-profile-card{ border:1px solid var(--paper-line); padding:32px; margin-bottom:28px; }
@@ -2282,17 +2293,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <p class="inv-quote" id="spotlightNote"></p>
         <span class="btn btn-line" style="border-color:rgba(255,255,255,0.3); color:var(--cream); margin-top:8px; display:inline-block;">View Project →</span>
       </a>
-      <!-- Fallback when no project spotlight is active -->
+      <!-- Fallback when no project spotlight is active.
+           TRUST-003: this used to attribute an invented quote to a named
+           "David Khumalo, Strategic Partner" — a fabricated testimonial on
+           the live homepage, the exact thing the punch-list warns against.
+           There are 0 real investor rows to draw a real one from yet, so
+           this is honest, unattributed copy instead of an invented person. -->
       <div class="inv-card" id="spotlightFallbackCard">
         <div class="inv-avatar"></div>
         <div>
-          <div class="inv-name">David Khumalo</div>
-          <div class="inv-title">Strategic Partner · Cape Town</div>
+          <div class="inv-name">Building in the open</div>
         </div>
-        <p class="inv-quote">"Unplug isn't just a media brand — it's an infrastructure for community trust. That's why I'm backing it."</p>
+        <p class="inv-quote">No project is spotlighted here right now — see what we're building and how to get involved on the Investor Relations page.</p>
         <button class="btn btn-line" style="border-color:rgba(255,255,255,0.3); color:var(--cream); margin-top:8px;" data-page="investors">View Investor Relations →</button>
       </div>
     </div>
+  </section>
+
+  <!-- TRUST-003: real quotes only, from GET /testimonials — the whole
+       section is hidden (not shown empty) until at least one is switched
+       on, same "real content or hide it" rule as every stat on this page. -->
+  <section class="wrap home-section" id="testimonialsSection" hidden>
+    <div class="section-head"><div><span class="eyebrow">In their words</span><h2>What people say</h2></div></div>
+    <div class="testimonial-grid" id="testimonialsGrid"></div>
   </section>
 
   <!-- FEATURED ADVERTISERS POSTER SLIDESHOW -->
@@ -7601,6 +7624,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSpotlight();
   loadFeaturedMembers();
   loadDiscovery();
+  loadTestimonials();
 });
 
 // ---------------------------------------------------------------------------
@@ -9759,6 +9783,35 @@ async function loadSpotlight(){
     card.style.display = '';
     if (fallback) fallback.style.display = 'none';
   } catch (e) { card.style.display = 'none'; if (fallback) fallback.style.display = ''; }
+}
+
+// TRUST-003: real quotes only, from GET /testimonials. The section is
+// hidden entirely — not shown with a placeholder — until at least one is
+// switched on, same rule the rest of this page's stats already follow.
+function testimonialCardHtml(t) {
+  const photo = t.author_photo_url
+    ? `<img src="${escapeHtml(t.author_photo_url)}" alt="${escapeHtml(t.author_name)}">`
+    : '';
+  return `<div class="testimonial-card">
+    <blockquote>${escapeHtml(t.quote)}</blockquote>
+    <div class="testimonial-author">${photo}
+      <div><div class="name">${escapeHtml(t.author_name)}</div>${t.author_role ? `<div class="role">${escapeHtml(t.author_role)}</div>` : ''}</div>
+    </div>
+  </div>`;
+}
+
+async function loadTestimonials() {
+  const section = document.getElementById('testimonialsSection');
+  const grid = document.getElementById('testimonialsGrid');
+  if (!section || !grid) return;
+  try {
+    const list = await api('/testimonials');
+    if (!Array.isArray(list) || list.length === 0) { section.hidden = true; return; }
+    grid.innerHTML = list.map(testimonialCardHtml).join('');
+    section.hidden = false;
+  } catch (e) {
+    section.hidden = true;
+  }
 }
 
 // ---- Project showcases (Investors → Projects) ----

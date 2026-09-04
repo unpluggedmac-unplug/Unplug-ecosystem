@@ -368,6 +368,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="pagecms">Page Content</a>
         <a data-section="placements">Marketplace Placements</a>
         <a data-section="sitebuttons">Floating Buttons</a>
+        <a data-section="testimonials">Testimonials</a>
       </div>
     </div>
 
@@ -1545,6 +1546,26 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
         <div id="siteButtonFormError" style="color:var(--red); margin-bottom:12px; display:none;"></div>
         <div class="panel-body" id="siteButtonsBody" style="padding:0;"></div>
+      </div>
+    </div>
+
+    <!-- TESTIMONIALS -->
+    <div class="admin-section" id="section-testimonials">
+      <div class="main-head"><div><h1>Testimonials</h1>
+        <p>Real quotes only, from real directory members, advertisers or featured people — never invented. Shown on the homepage once switched on.</p></div></div>
+      <div class="panel" style="padding:20px;">
+        <div style="margin-bottom:20px;">
+          <div class="field"><label style="display:block; font-size:12px; margin-bottom:4px;">Quote</label><textarea id="tstQuoteInput" rows="3" style="width:100%; padding:8px;" maxlength="2000"></textarea></div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-top:10px;">
+            <div><label style="display:block; font-size:12px; margin-bottom:4px;">Name</label><input id="tstNameInput" placeholder="e.g. Naledi Mokoena" style="padding:8px;" maxlength="160"></div>
+            <div><label style="display:block; font-size:12px; margin-bottom:4px;">Role <span style="color:var(--slate);">(optional)</span></label><input id="tstRoleInput" placeholder="e.g. Directory member" style="padding:8px; width:200px;" maxlength="160"></div>
+            <div><label style="display:block; font-size:12px; margin-bottom:4px;">Photo URL <span style="color:var(--slate);">(optional)</span></label><input id="tstPhotoInput" placeholder="https://..." style="padding:8px; width:220px;"></div>
+            <div><label style="display:block; font-size:12px; margin-bottom:4px;">Order <span style="color:var(--slate);">(lower shows first)</span></label><input id="tstOrderInput" type="number" value="0" style="padding:8px; width:80px;"></div>
+            <button class="approve" id="createTestimonialBtn" style="padding:9px 16px;">Add Testimonial</button>
+          </div>
+        </div>
+        <div id="testimonialFormError" style="color:var(--red); margin-bottom:12px; display:none;"></div>
+        <div class="panel-body" id="testimonialsBody" style="padding:0;"></div>
       </div>
     </div>
 
@@ -3706,6 +3727,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'forms') loadForms();
     if (section === 'vouchers') loadVouchers();
     if (section === 'sitebuttons') loadSiteButtons();
+    if (section === 'testimonials') loadTestimonials();
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
     if (section === 'unplugmissions') loadUnplugMissions();
@@ -11336,6 +11358,136 @@ document.getElementById('createSiteButtonBtn').addEventListener('click', async (
     document.getElementById('sbUrlInput').value = '';
     document.getElementById('sbOrderInput').value = '0';
     loadSiteButtons();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Testimonials (TRUST-003) — real quotes only. Each row stays directly
+// editable, same pattern as Floating Buttons: a three-line record does not
+// need a separate edit mode.
+// ---------------------------------------------------------------------------
+async function loadTestimonials() {
+  const body = document.getElementById('testimonialsBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const rows = await api('/testimonials/admin/all');
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-state">No testimonials yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Quote</th><th>Name</th><th>Role</th><th>Order</th><th>Status</th><th></th></tr>';
+    rows.forEach((t) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><textarea class="tst-quote" rows="2" style="width:220px; padding:6px;" maxlength="2000">${escapeAttrAdmin(t.quote)}</textarea></td>
+        <td><input class="tst-name" value="${escapeAttrAdmin(t.author_name)}" style="width:120px; padding:6px;" maxlength="160"></td>
+        <td><input class="tst-role" value="${escapeAttrAdmin(t.author_role || '')}" style="width:120px; padding:6px;" maxlength="160"></td>
+        <td><input class="tst-order" type="number" value="${t.display_order}" style="width:60px; padding:6px;"></td>
+        <td>${t.active ? '<span style="color:green; font-weight:700;">Active</span>' : '<span style="color:var(--slate);">Off</span>'}</td>
+        <td style="white-space:nowrap;"></td>`;
+      const actionsTd = tr.querySelector('td:last-child');
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'approve';
+      saveBtn.textContent = 'Save';
+      saveBtn.style.marginRight = '6px';
+      saveBtn.addEventListener('click', () => saveTestimonial(t.id, tr));
+      actionsTd.appendChild(saveBtn);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = t.active ? 'reject' : 'approve';
+      toggleBtn.textContent = t.active ? 'Turn off' : 'Turn on';
+      toggleBtn.style.marginRight = '6px';
+      toggleBtn.addEventListener('click', () => toggleTestimonial(t.id, !t.active));
+      actionsTd.appendChild(toggleBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'reject';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', () => deleteTestimonial(t.id, t.author_name));
+      actionsTd.appendChild(delBtn);
+
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+async function saveTestimonial(id, row) {
+  const quote = row.querySelector('.tst-quote').value.trim();
+  const authorName = row.querySelector('.tst-name').value.trim();
+  if (!quote || !authorName) { showToast('Quote and name are both required.', true); return; }
+  try {
+    await api(`/testimonials/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        quote, authorName,
+        authorRole: row.querySelector('.tst-role').value.trim() || null,
+        displayOrder: Number(row.querySelector('.tst-order').value) || 0,
+      }),
+    });
+    showToast('Testimonial saved.');
+    loadTestimonials();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function toggleTestimonial(id, active) {
+  try {
+    await api(`/testimonials/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) });
+    showToast(active ? 'Testimonial switched on — now visible on the homepage.' : 'Testimonial turned off.');
+    loadTestimonials();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function deleteTestimonial(id, authorName) {
+  if (!confirm(`Delete the testimonial from "${authorName}"? This can't be undone.`)) return;
+  try {
+    await api(`/testimonials/${id}`, { method: 'DELETE' });
+    showToast('Testimonial deleted.');
+    loadTestimonials();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+document.getElementById('createTestimonialBtn').addEventListener('click', async () => {
+  const errorEl = document.getElementById('testimonialFormError');
+  errorEl.style.display = 'none';
+  const quote = document.getElementById('tstQuoteInput').value.trim();
+  const authorName = document.getElementById('tstNameInput').value.trim();
+  const authorRole = document.getElementById('tstRoleInput').value.trim();
+  const authorPhotoUrl = document.getElementById('tstPhotoInput').value.trim();
+  const displayOrder = Number(document.getElementById('tstOrderInput').value) || 0;
+
+  if (!quote || !authorName) {
+    errorEl.textContent = 'Quote and name are both required.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    await api('/testimonials', {
+      method: 'POST',
+      body: JSON.stringify({ quote, authorName, authorRole: authorRole || null, authorPhotoUrl: authorPhotoUrl || null, displayOrder }),
+    });
+    showToast('Testimonial added — off by default, switch it on when ready.');
+    document.getElementById('tstQuoteInput').value = '';
+    document.getElementById('tstNameInput').value = '';
+    document.getElementById('tstRoleInput').value = '';
+    document.getElementById('tstPhotoInput').value = '';
+    document.getElementById('tstOrderInput').value = '0';
+    loadTestimonials();
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.style.display = 'block';
