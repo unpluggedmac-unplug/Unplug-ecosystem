@@ -263,6 +263,7 @@ router.get('/competitions/admin/all', requireRole('admin'), async (req, res, nex
       // only ever asked as a yes/no, and this stops at the first row.
       `SELECT c.id, c.name, c.slug, c.description, c.opens_at, c.closes_at,
               c.status, c.entry_fee, c.daily_voting, c.created_at,
+              c.prize, c.rules, c.eligibility, c.winner_process,
               COUNT(ce.id)::int AS entry_count,
               COUNT(ce.id) FILTER (WHERE ce.status <> 'awaiting_payment')::int AS paid_entry_count,
               EXISTS (
@@ -354,6 +355,14 @@ router.patch('/competitions/:id', requireRole('admin'), async (req, res, next) =
     if (b.status !== undefined) put('status', b.status);
     if (b.entryFee !== undefined) put('entry_fee', Number(b.entryFee));
     if (b.dailyVoting !== undefined) put('daily_voting', !!b.dailyVoting);
+    // ARENA-001: real editorial content (prize/rules/eligibility/winner
+    // process), admin-supplied and optional — an empty string clears the
+    // field back to unset rather than storing a blank line as if it were
+    // a real answer.
+    if (b.prize !== undefined) put('prize', String(b.prize || '').trim() || null);
+    if (b.rules !== undefined) put('rules', String(b.rules || '').trim() || null);
+    if (b.eligibility !== undefined) put('eligibility', String(b.eligibility || '').trim() || null);
+    if (b.winnerProcess !== undefined) put('winner_process', String(b.winnerProcess || '').trim() || null);
     if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
     vals.push(id);

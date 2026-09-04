@@ -1767,3 +1767,33 @@ New test, `birthdayConfirmationDate.test.js` (3 tests, real HTTP + real Postgres
 exact submitted date; a leap-day birthday (29 February) formats correctly rather than breaking on the
 edge case; the date in the message matches what the row actually stored. Full suite: 1933 passing, 0
 failing (up from 1930).
+
+## 2026-09-04 — Website remediation punch-list, ARENA-001: rankings and real competition details
+
+Closing date and vote count were already shown; entries were already sorted by vote count. Missing: an
+explicit rank number (a reader had to count grid position), plus prize, eligibility, rules and
+winner-selection process — none of which exist anywhere in the system (checked the schema, the routes,
+every page, before writing anything). This is genuinely undecided editorial content, not something to
+invent — asked first, and the answer was: build the mechanism, leave it empty until the publisher fills
+it in, same "real content or hide it" rule already applied elsewhere this cycle.
+
+Rank number: `arenaEntryCardHtml(entry, rank)` now takes the entry's 1-based position in the same
+vote-sorted array it's rendered from — `#1 · Activists`, not a separately guessed number that could
+disagree with the actual displayed order.
+
+New nullable columns on `competitions` (migration 172): `prize`, `rules`, `eligibility`,
+`winner_process`. `PATCH /competitions/:id` accepts them (blank clears back to `null`, not an empty
+string masquerading as a real answer); `GET /competitions/admin/all` now selects them so the admin editor
+can show and edit them (new textareas per competition, alongside the existing name/status/dates/fee
+fields). The public `GET /competitions/:slug` route already used `SELECT *`, so it picked them up with no
+route change. On the Arena page, each is rendered only if actually set — the whole details block is
+omitted entirely rather than shown half-empty when nothing has been filled in yet.
+
+New tests: 3 added to `competitionsAdmin.test.js` (fields are null until set; an admin can set and
+independently clear each one; the admin list also returns them) and a new `arenaRankingDetails.test.js`
+(3 tests, frontend static source) confirming the rank is derived from the same sort the entries are
+rendered in, and the details block is genuinely conditional rather than always-present-but-empty.
+Verified live in-browser: mocked the Arena API response with no details set — confirmed the details block
+is absent entirely; re-mocked with all four filled in — confirmed all four render legibly in a clean grid
+under the entry-fee/closing-date row, and rank numbers (#1, #2) show correctly on entry cards sorted by
+vote count. Full suite: 1939 passing, 0 failing (up from 1933).

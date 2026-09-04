@@ -448,3 +448,56 @@ test('rejecting a paid entry hides it but keeps its votes and payment', async ()
   assert.equal(kept.rows[0].votes, 1, 'rejecting destroyed the votes');
   assert.equal(kept.rows[0].pays, 1, 'rejecting destroyed the payment record');
 });
+
+// ------------------------------------------------------- ARENA-001 details
+
+test('PRIZE/RULES/ELIGIBILITY/WINNER-PROCESS ARE UNSET UNTIL AN ADMIN FILLS THEM IN', async () => {
+  const created = await req('POST', '/competitions', {
+    token: adminToken,
+    body: { name: 'Details Test', slug: 'details-test', opensAt: '2026-01-01', closesAt: '2026-12-01' },
+  });
+  assert.equal(created.body.competition.prize, null);
+  assert.equal(created.body.competition.rules, null);
+  assert.equal(created.body.competition.eligibility, null);
+  assert.equal(created.body.competition.winner_process, null);
+
+  const pub = await req('GET', `/competitions/${created.body.competition.slug}`);
+  assert.equal(pub.body.competition.prize, null, 'the public detail route must also show it unset, not a stray empty string');
+});
+
+test('AN ADMIN CAN SET AND LATER CLEAR EACH DETAIL FIELD INDEPENDENTLY', async () => {
+  const created = await req('POST', '/competitions', {
+    token: adminToken,
+    body: { name: 'Fill Test', slug: 'fill-test', opensAt: '2026-01-01', closesAt: '2026-12-01' },
+  });
+  const id = created.body.competition.id;
+
+  const filled = await req('PATCH', `/competitions/${id}`, {
+    token: adminToken,
+    body: { prize: 'A feature in the magazine', eligibility: 'Anyone 18+', rules: 'One entry per person', winnerProcess: 'Most votes when voting closes' },
+  });
+  assert.equal(filled.status, 200);
+  assert.equal(filled.body.competition.prize, 'A feature in the magazine');
+  assert.equal(filled.body.competition.eligibility, 'Anyone 18+');
+  assert.equal(filled.body.competition.rules, 'One entry per person');
+  assert.equal(filled.body.competition.winner_process, 'Most votes when voting closes');
+
+  // An admin clearing a field back out (blank textarea) must actually clear
+  // it to null, not store an empty string that would still look "set".
+  const cleared = await req('PATCH', `/competitions/${id}`, { token: adminToken, body: { prize: '   ' } });
+  assert.equal(cleared.body.competition.prize, null);
+  assert.equal(cleared.body.competition.eligibility, 'Anyone 18+', 'clearing one field must not touch the others');
+});
+
+test('THE ADMIN LIST ALSO RETURNS THE DETAIL FIELDS, NOT JUST THE PUBLIC ROUTE', async () => {
+  const created = await req('POST', '/competitions', {
+    token: adminToken,
+    body: { name: 'Admin List Details', slug: 'admin-list-details', opensAt: '2026-01-01', closesAt: '2026-12-01' },
+  });
+  await req('PATCH', `/competitions/${created.body.competition.id}`, { token: adminToken, body: { prize: 'A trophy' } });
+
+  const list = await req('GET', '/competitions/admin/all', { token: adminToken });
+  const row = list.body.competitions.find((c) => c.slug === 'admin-list-details');
+  assert.ok(row);
+  assert.equal(row.prize, 'A trophy');
+});

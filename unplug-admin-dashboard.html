@@ -13188,6 +13188,16 @@ function competitionRowHtml(c) {
       ${votingField}
     </div>
     <div class="field"><label>Description</label><textarea class="comp-desc" rows="2">${escapeHtmlAdmin(c.description || '')}</textarea></div>
+    <!-- ARENA-001: real, publisher-supplied answers to the questions a
+         visitor actually has before entering or voting — blank until someone
+         fills them in, never a placeholder. Shown on the public page only
+         once set. -->
+    <div class="grid-2">
+      <div class="field"><label>Prize <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional</span></label><textarea class="comp-prize" rows="2" placeholder="What the winner actually receives">${escapeHtmlAdmin(c.prize || '')}</textarea></div>
+      <div class="field"><label>Eligibility <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional</span></label><textarea class="comp-eligibility" rows="2" placeholder="Who can enter or be nominated">${escapeHtmlAdmin(c.eligibility || '')}</textarea></div>
+      <div class="field"><label>Rules <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional</span></label><textarea class="comp-rules" rows="2" placeholder="How entering and voting works">${escapeHtmlAdmin(c.rules || '')}</textarea></div>
+      <div class="field"><label>How a winner is chosen <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional</span></label><textarea class="comp-winner-process" rows="2" placeholder="e.g. most votes when voting closes">${escapeHtmlAdmin(c.winner_process || '')}</textarea></div>
+    </div>
     <button class="approve" style="padding:5px 12px;" onclick="saveCompetition(${c.id})">Save changes</button>
     ${deleteBtn}
   </div>`;
@@ -13221,6 +13231,10 @@ async function saveCompetition(id) {
       name,
       description: row.querySelector('.comp-desc').value,
       status: row.querySelector('.comp-status').value,
+      prize: row.querySelector('.comp-prize').value,
+      eligibility: row.querySelector('.comp-eligibility').value,
+      rules: row.querySelector('.comp-rules').value,
+      winnerProcess: row.querySelector('.comp-winner-process').value,
       ...(fee !== null ? { entryFee: fee } : {}),
       // Omitted when the control is disabled, so a locked rule is never
       // resent — the backend would reject an actual change anyway, but

@@ -795,6 +795,12 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .comp-meta .k{ font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--gold); margin-bottom:4px; }
 .comp-meta .v{ font-size:16px; font-weight:600; }
 
+/* ARENA-001: prize/eligibility/rules/winner-process, each shown only when
+   the publisher has actually filled it in. */
+.comp-details{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; margin-top:32px; padding-top:28px; border-top:1px solid rgba(255,255,255,0.14); }
+.comp-detail h4{ font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--gold); margin-bottom:6px; }
+.comp-detail p{ font-size:14px; color:#cfcac0; line-height:1.55; margin:0; max-width:none; }
+
 .winners{ margin-top:48px; }
 
 /* ---- about ---- */
@@ -8234,8 +8240,12 @@ loadHomeTop10Mini();
 const ARENA_SLUG = 'the-arena';
 let arenaLoaded = false;
 
-function arenaEntryCardHtml(entry) {
-  return `<article class="story-card"><div class="story-thumb"></div><span class="story-tag">${escapeHtml(entry.category || '')}</span><h3>${escapeHtml(entry.display_name)}</h3><p>${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</p></article>`;
+// ARENA-001: a reader had to count grid position to work out anyone's
+// ranking. rank is the entry's 1-based position in the already vote-sorted
+// list the caller builds — not recomputed here, so it can never disagree
+// with the order the entries are actually shown in.
+function arenaEntryCardHtml(entry, rank) {
+  return `<article class="story-card"><div class="story-thumb"></div><span class="story-tag">#${rank}${entry.category ? ' · ' + escapeHtml(entry.category) : ''}</span><h3>${escapeHtml(entry.display_name)}</h3><p>${entry.vote_count} vote${entry.vote_count === 1 ? '' : 's'}</p></article>`;
 }
 
 async function loadHallOfFame() {
@@ -8265,6 +8275,16 @@ async function loadArena() {
   try {
     const data = await api('/competitions/' + ARENA_SLUG);
     const closesDate = new Date(data.competition.closes_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
+    // ARENA-001: prize/eligibility/rules/winner-process are real,
+    // publisher-supplied content — each shown only once actually filled in,
+    // never a placeholder standing in for an answer nobody's given yet.
+    const detail = (label, text) => text ? `<div class="comp-detail"><h4>${label}</h4><p>${escapeHtml(text)}</p></div>` : '';
+    const details = [
+      detail('Prize', data.competition.prize),
+      detail('Who can enter', data.competition.eligibility),
+      detail('Rules', data.competition.rules),
+      detail('How the winner is chosen', data.competition.winner_process),
+    ].join('');
     heroEl.innerHTML = `
       <span class="print-mark"></span>
       <span class="eyebrow">Open now · Closes ${closesDate}</span>
@@ -8274,10 +8294,11 @@ async function loadArena() {
       <div class="comp-meta">
         <div><span class="k">Entries close</span><span class="v">${closesDate}</span></div>
         <div><span class="k">Entry fee</span><span class="v">R${Number(data.competition.entry_fee).toFixed(0)}</span></div>
-      </div>`;
+      </div>
+      ${details ? `<div class="comp-details">${details}</div>` : ''}`;
 
     entriesEl.innerHTML = data.entries.length
-      ? [...data.entries].sort((a, b) => b.vote_count - a.vote_count).map(arenaEntryCardHtml).join('')
+      ? [...data.entries].sort((a, b) => b.vote_count - a.vote_count).map((e, i) => arenaEntryCardHtml(e, i + 1)).join('')
       : '<div class="dir-empty-state">No entries yet — be the first to nominate someone.</div>';
 
     if (window.UnplugSchema) {
