@@ -1686,3 +1686,28 @@ bottom/height rule directly (not hand-copied) and asserts the stack's offset exc
 footprint — so a future resize of either widget is what this test actually tracks, not a frozen number.
 No horizontal scroll on the homepage at 375px width, confirmed directly. Full suite: 1920 passing, 0
 failing (up from 1919). Continuing the rest of the MOB-001 mobile pass next.
+
+**Continued — the rest of MOB-001, and MOB-002.** Checked every real page (12 client-routed pages on
+`unplug-magazine.html`, plus `unplug-checkout.html` in all three modes and `unplug-member-dashboard.html`)
+for horizontal overflow at both 375px and 320px, by measuring `document.documentElement.scrollWidth`
+vs `clientWidth` directly rather than eyeballing screenshots. The hamburger menu itself is solid: opens/
+closes correctly, all five nav groups expand with real touch targets (44px+ everywhere measured), no
+clipping. All 12 magazine pages: clean at both widths.
+
+`unplug-checkout.html`'s Directory-package mode was NOT clean: 34px of real horizontal overflow at
+320px. Traced to the exact element with `getBoundingClientRect()` on every node — `#applyVoucherBtn`,
+pushed off-screen by its sibling `#voucherCode` input. The input had `flex:1` and nothing else; a flex
+item's default `min-width` is `auto` (its own content size), so `flex:1` alone does not let it shrink
+past that on a narrow screen. Fixed with the standard `min-width:0`. Grepped for the same `style="flex:1;"`
+pattern rather than assuming this was the only place it existed, and found the identical bug in two more
+spots: the member dashboard's Submit & Pay and cart-checkout voucher rows (`#submitVoucher`/
+`#cartVoucher`, same input+button shape), and the Article submission form's dynamically-added link rows
+(`.art-link-row`, two inputs squeezing a Remove button instead). All four fixed the same way.
+
+New test, `mobileVoucherOverflow.test.js` (4 tests): each of the four fixed inputs carries `min-width:0`.
+Verified live in-browser at a real 320px viewport (not assumed from the CSS alone): checkout's voucher
+row measured 354px of scrollWidth against a 320px viewport before the fix, 320px (no overflow) after;
+the two member-dashboard voucher rows (reached by clearing their `section-hidden` ancestors directly,
+since they sit behind login/tab gates a static-server preview can't authenticate through) measured clean
+after the same fix, both button and input ending well inside 320px. Full suite: 1924 passing, 0 failing
+(up from 1920).

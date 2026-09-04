@@ -910,7 +910,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="field">
         <label>Voucher code (optional)</label>
         <div style="display:flex; gap:8px; align-items:flex-start;">
-          <input id="submitVoucher" placeholder="e.g. UNPLUG2026" style="flex:1;">
+          <!-- MOB-002: min-width:0 — flex:1 alone doesn't let a flex item
+               shrink past its own content size, which pushed Apply off
+               narrow (320px) screens. -->
+          <input id="submitVoucher" placeholder="e.g. UNPLUG2026" style="flex:1; min-width:0;">
           <button class="btn btn-line" type="button" id="submitApplyVoucher" style="width:auto; white-space:nowrap;">Apply</button>
         </div>
         <p id="submitVoucherNote" style="font-size:11.5px; margin:4px 0 0;"></p>
@@ -986,7 +989,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="field">
         <label>Voucher code (optional)</label>
         <div style="display:flex; gap:8px; align-items:flex-start;">
-          <input id="cartVoucher" placeholder="e.g. UNPLUG2026" style="flex:1;">
+          <!-- MOB-002: min-width:0, same reason as submitVoucher above. -->
+          <input id="cartVoucher" placeholder="e.g. UNPLUG2026" style="flex:1; min-width:0;">
           <button class="btn btn-line" type="button" id="cartApplyVoucherBtn" style="width:auto; white-space:nowrap;">Apply</button>
         </div>
         <p id="cartVoucherNote" style="font-size:11.5px; margin:4px 0 0;"></p>
@@ -2813,8 +2817,10 @@ function artAddLinkRow(link) {
   row.style.cssText = 'display:flex; gap:8px; margin-bottom:8px;';
   const safeLabel = String((link && link.label) || '').replace(/"/g, '&quot;');
   const safeUrl = String((link && link.url) || '').replace(/"/g, '&quot;');
-  row.innerHTML = `<input class="art-link-label" placeholder="Label, e.g. Instagram" style="flex:1;" value="${safeLabel}">
-    <input class="art-link-url" placeholder="https://…" style="flex:2;" value="${safeUrl}">`;
+  // MOB-002: min-width:0 on both — same flex-shrink footgun as the voucher
+  // rows above, here squeezing the Remove button off narrow screens instead.
+  row.innerHTML = `<input class="art-link-label" placeholder="Label, e.g. Instagram" style="flex:1; min-width:0;" value="${safeLabel}">
+    <input class="art-link-url" placeholder="https://…" style="flex:2; min-width:0;" value="${safeUrl}">`;
   const remove = document.createElement('button');
   remove.type = 'button';
   remove.className = 'btn btn-line';
