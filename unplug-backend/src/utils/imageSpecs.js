@@ -31,7 +31,29 @@ const IMAGE_SPECS = {
     //   article page      up to 860 x 420 (~2.05:1, a max-height cap)
     // 16:9 sits between the widest and the narrowest, and is what cameras and
     // phones export anyway. It is cropped at both ends, hence the note.
+    //
+    // Still used by the Highlight boost's own optional override image
+    // (a separate, admin-only feature — see routes/highlights.js), which
+    // is unrelated to publishing the article itself. NOT used for the
+    // article's own cover any more — see the two below.
     note: 'Cropped to 4:3 on story cards and wider on the article page, so keep the subject centred.',
+  },
+  // The article cover doubles as the article's own social-share image
+  // (og:image/twitter:image — see seoSetImage in unplug-magazine.html), so
+  // the choice offered when publishing is the two ratios those platforms
+  // actually use, not a third, site-specific one: 1.91:1 is Facebook's and
+  // Twitter's own link-preview ratio, 4:5 is Instagram's own portrait-post
+  // ratio. Whichever is chosen is still cropped into whatever shape the
+  // on-site story cards/slider need (same as article_cover always was) —
+  // this only changes what shape is offered and cropped from at upload
+  // time, not how the site displays it afterwards.
+  article_cover_landscape: {
+    w: 1080, h: 566, label: '1.91:1 landscape',
+    note: 'Facebook and Twitter\'s own link-preview ratio. Still cropped to fit the story cards and slider on the site itself.',
+  },
+  article_cover_portrait: {
+    w: 1080, h: 1350, label: '4:5 portrait',
+    note: 'Instagram\'s own portrait-post ratio. Still cropped to fit the story cards and slider on the site itself.',
   },
   article_body_image: {
     w: 1600, h: 1200, label: '4:3 landscape',

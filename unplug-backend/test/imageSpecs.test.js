@@ -213,11 +213,16 @@ test('NO UPLOAD FIELD WRITES ITS OWN SIZE', () => {
 });
 
 test('every upload field states a size, or is one whose size is not fixed', () => {
-  // Three fields legitimately cannot name a size in the source, because it
+  // These fields legitimately cannot name a size in the source, because it
   // depends on the row: the ad banner an admin edits (the SLOT decides), the
-  // Cover Images screen (the TYPE decides), and the swappable site pictures
-  // (the server sends each one's own). Everything else must name a key.
-  const dynamic = ['adImage_', 'coverImg', 'siteImg-', 'abImage'];
+  // Cover Images screen (the TYPE decides), the swappable site pictures (the
+  // server sends each one's own), and the article cover image (the chosen
+  // landscape/portrait ORIENTATION decides — see artCoverSpecFor/
+  // artCoverOrientation in unplug-admin-dashboard.html and the matching
+  // artCoverSpecFor in unplug-member-dashboard.html, both of which still
+  // call imgSpecFull() themselves, just one layer removed from this literal
+  // scan). Everything else must name a key.
+  const dynamic = ['adImage_', 'coverImg', 'siteImg-', 'abImage', 'cover', 'bannerImage'];
   const silent = [];
   DASHBOARDS.forEach((f) => {
     const src = fs.readFileSync(path.join(siteRoot, f), 'utf8');

@@ -1358,7 +1358,17 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
                 </span>
               </label>
             </div>
-            <div><label>Main image</label><div id="artBannerUpload"></div></div>
+            <div><label>Main image</label>
+              <!-- This image doubles as the article's og:image/twitter:image
+                   (seoSetImage), so the choice offered is the two ratios
+                   those platforms actually use: 1.91:1 (Facebook/Twitter
+                   link previews) and 4:5 (Instagram). -->
+              <div style="display:flex; gap:20px; font-size:13px; margin-bottom:6px;">
+                <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="artCoverOrientation" value="landscape" checked> Landscape (1080×566)</label>
+                <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="artCoverOrientation" value="portrait"> Portrait (1080×1350)</label>
+              </div>
+              <div id="artBannerUpload"></div>
+            </div>
           </div>
 
           <div style="margin-top:14px;"><label for="artBody">Opening / main story</label>
@@ -5853,8 +5863,9 @@ async function loadPublishSection() {
   }
   // Seed the editor: an empty banner upload field and the article picker.
   if (!document.querySelector('#artBannerUpload .img-upload')) {
-    document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '', '', imgSpecFull('article_cover'));
+    artRenderCoverField('');
   }
+  artWireCoverOrientationRadios();
   // Photo upload for the manual Top 10 entry form.
   if (!document.querySelector('#top10ManualImgUpload .img-upload')) {
     document.getElementById('top10ManualImgUpload').innerHTML = UnplugUpload.fieldHtml('top10ManualImage', '', '', imgSpecFull('competition_entry'));
@@ -6006,6 +6017,34 @@ function artShowDerived(a) {
   }
 }
 
+// Cover image orientation — landscape (1.91:1, Facebook/Twitter's link-
+// preview ratio) or portrait (4:5, Instagram's) — since this same image
+// becomes the article's og:image/twitter:image. Every render of the upload
+// widget goes through here, so the three places that create it (initial
+// setup, a fresh article, loading an existing one) can never disagree on
+// which spec a given orientation means.
+function artCoverOrientation() {
+  const checked = document.querySelector('input[name="artCoverOrientation"]:checked');
+  return checked ? checked.value : 'landscape';
+}
+function artCoverSpecFor(orientation) {
+  return imgSpecFull(orientation === 'portrait' ? 'article_cover_portrait' : 'article_cover_landscape');
+}
+function artRenderCoverField(value) {
+  document.getElementById('artBannerUpload').innerHTML =
+    UnplugUpload.fieldHtml('bannerImage', value || '', '', artCoverSpecFor(artCoverOrientation()));
+}
+let _artCoverRadiosWired = false;
+function artWireCoverOrientationRadios() {
+  if (_artCoverRadiosWired) return;
+  _artCoverRadiosWired = true;
+  document.querySelectorAll('input[name="artCoverOrientation"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      artRenderCoverField(UnplugUpload.valueOf(document.getElementById('artBannerUpload')));
+    });
+  });
+}
+
 function artReset() {
   ART_EDITING_ID = null;
   ART_EDITING_STATUS = null;
@@ -6014,7 +6053,8 @@ function artReset() {
   document.getElementById('artContributor').value = '';
   document.getElementById('artEmotion').value = '';
   document.getElementById('artRequiresAccount').checked = false;
-  document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', '', '', imgSpecFull('article_cover'));
+  document.querySelector('input[name="artCoverOrientation"][value="landscape"]').checked = true;
+  artRenderCoverField('');
   artRenderSections([]);
   document.getElementById("artGallery").innerHTML = "";
   document.getElementById("artLinks").innerHTML = "";
@@ -6084,7 +6124,23 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     document.getElementById('artVideo').value = a.video_url || '';
     document.getElementById('artCtaLabel').value = a.cta_label || '';
     document.getElementById('artCtaUrl').value = a.cta_url || '';
-    document.getElementById('artBannerUpload').innerHTML = UnplugUpload.fieldHtml('bannerImage', a.banner_image_url || '', '', imgSpecFull('article_cover'));
+    // The toggle defaults to landscape, then corrects itself once the
+    // existing image's own real dimensions come back — an article saved
+    // before this feature existed, or one whose cover happens to be
+    // portrait-shaped, must not silently show "Landscape" selected while a
+    // taller-than-wide picture sits in the field below it.
+    document.querySelector('input[name="artCoverOrientation"][value="landscape"]').checked = true;
+    artRenderCoverField(a.banner_image_url || '');
+    if (a.banner_image_url) {
+      const probe = new Image();
+      probe.onload = () => {
+        if (probe.naturalHeight > probe.naturalWidth) {
+          document.querySelector('input[name="artCoverOrientation"][value="portrait"]').checked = true;
+          artRenderCoverField(a.banner_image_url);
+        }
+      };
+      probe.src = a.banner_image_url;
+    }
     artRenderSections(data.sections || []);
     document.getElementById("artGallery").innerHTML = "";
     (a.gallery_images || []).forEach((url) => artAddGallerySlot(url));

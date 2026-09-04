@@ -761,6 +761,17 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             </select>
           </div>
           <div class="field"><label>Cover image</label>
+            <!-- The cover image doubles as the article's social-share image
+                 (og:image/twitter:image — see seoSetImage), so the two
+                 choices offered are the two ratios those platforms actually
+                 use: 1.91:1 (Facebook/Twitter link previews) and 4:5
+                 (Instagram). Landscape is the default since it's the
+                 closer match to how the cover already displays elsewhere
+                 on the site. -->
+            <div style="display:flex; gap:20px; font-size:13px; margin-bottom:8px;">
+              <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="art-cover-orientation" value="landscape" checked> Landscape (1080×566)</label>
+              <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="art-cover-orientation" value="portrait"> Portrait (1080×1350)</label>
+            </div>
             <div id="art-cover-upload"></div>
             <span style="font-size:12px; color:var(--slate);">The main picture shown with your story.</span>
           </div>
@@ -2785,9 +2796,29 @@ function hideSubmitError() {
 // URL points at someone else's server and can vanish or change.
 const ART_MAX_GALLERY = 5;
 
+// Cover image orientation — landscape (1.91:1, Facebook/Twitter's link-
+// preview ratio) or portrait (4:5, Instagram's) — since this same image
+// becomes the article's og:image/twitter:image (see seoSetImage). Switching
+// the toggle re-renders the upload widget with the new ratio/hint, keeping
+// whatever image is already there; the widget's own "Re-crop this image"
+// button (built into fieldHtml when a ratio is passed) picks up the new
+// ratio from that point on.
+function artCoverSpecFor(orientation) {
+  return imgSpecFull(orientation === 'portrait' ? 'article_cover_portrait' : 'article_cover_landscape');
+}
+
 function artEnsureCoverField() {
   const el = document.getElementById('art-cover-upload');
-  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('cover', '', '', imgSpecFull('article_cover'));
+  if (el && !el.querySelector('.img-upload')) el.innerHTML = UnplugUpload.fieldHtml('cover', '', '', artCoverSpecFor('landscape'));
+
+  document.querySelectorAll('input[name="art-cover-orientation"]').forEach((radio) => {
+    if (radio.dataset.wired) return;
+    radio.dataset.wired = '1';
+    radio.addEventListener('change', () => {
+      const current = UnplugUpload.valueOf(el);
+      el.innerHTML = UnplugUpload.fieldHtml('cover', current, '', artCoverSpecFor(radio.value));
+    });
+  });
 }
 
 function artAddGallerySlot(value) {

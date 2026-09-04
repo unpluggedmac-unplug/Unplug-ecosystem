@@ -2016,3 +2016,44 @@ product lines; nothing in the whole section matches the shape of a fabricated ma
 growth-percentage figure; the growth strategy names the real systems behind it, not generic language
 alone. Verified live in-browser: confirmed the rendered text reads cleanly in the intended order. Full
 suite: 1987 passing, 0 failing (up from 1982).
+
+## 2026-09-04 — Article cover image: landscape or portrait, chosen at publish time
+
+Requested directly: a member or admin publishing an article should be able to bring either a landscape
+(1080×566, 1.91:1) or a portrait (1080×1350, 4:5) cover image, not just the one fixed shape it was before.
+Those two ratios aren't arbitrary — the cover doubles as the article's own `og:image`/`twitter:image`
+(`seoSetImage` in `unplug-magazine.html`), so 1.91:1 is Facebook/Twitter's own link-preview ratio and 4:5
+is Instagram's own portrait-post ratio; whichever is picked is still cropped into the story cards/slider
+same as before, so no on-site display code needed to change.
+
+Two new `IMAGE_SPECS` entries, `article_cover_landscape` and `article_cover_portrait` (the old
+`article_cover` is untouched — it's still used by the unrelated Highlight-boost override image). No
+backend route changes needed; `GET /image-specs` already spreads the whole registry. The client-side
+cropper (`image-upload.js`) already supported arbitrary ratios read off the widget's markup, so no crop
+logic changed either — this is purely "which spec the widget is built with."
+
+Both dashboards got a landscape/portrait radio toggle above the cover-image upload field, defaulting to
+landscape, that re-renders the widget with the new ratio's spec while preserving whatever's already
+uploaded (`UnplugUpload.valueOf` read before the re-render, not discarded). The admin form additionally
+auto-detects orientation when opening an *existing* article for editing — a probe `Image()` checks the
+real file's pixel dimensions and flips the toggle to portrait if it's actually taller than wide, so a
+portrait cover already on file doesn't sit under a toggle silently defaulting back to landscape.
+
+Fixed a real regression this surfaced in the pre-existing `imageSpecs.test.js`: its static-analysis check
+for "every upload field states a size" does a literal-string search for `imgSpecFull(` next to each
+field's render call, which can't see through the new `artCoverSpecFor()` wrapper — added `cover` and
+`bannerImage` to that test's own `dynamic` allowlist (the field's spec now depends on which radio is
+checked, not a fixed literal), verified this doesn't accidentally exempt unrelated fields like
+`profileCover`/`edCover`/`coverImg`.
+
+New test, `articleCoverOrientation.test.js` (10 tests): the two new specs are the exact dimensions/ratios
+requested; the old `article_cover` spec is untouched; `GET /image-specs` actually serves both new keys;
+both dashboards' toggles exist with the right markup and default; both forms resolve the choice through
+the real server spec, not a local guess; a fresh article resets to landscape; loading an existing article
+detects orientation from the real image rather than defaulting blind; all three admin render sites go
+through the one shared helper, with exactly one place in the whole file allowed to build the widget's
+HTML directly.
+
+Full suite: 1996 passing, 1 failing on first run — `twoFactor.test.js`'s TOTP-timing flake documented
+earlier this cycle, unrelated to anything touched here. Re-ran that file alone: clean 16/16. Effectively
+1997 passing, 0 failing (up from 1987, +10 for this feature).
