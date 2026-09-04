@@ -1711,3 +1711,29 @@ the two member-dashboard voucher rows (reached by clearing their `section-hidden
 since they sit behind login/tab gates a static-server preview can't authenticate through) measured clean
 after the same fix, both button and input ending well inside 320px. Full suite: 1924 passing, 0 failing
 (up from 1920).
+
+## 2026-09-04 — Website remediation punch-list, DEAF-003/PASSPORT-001: explain, then preview, before submitting
+
+**DEAF-003.** The Passport panel already said "shows for 14 days" (intro copy above the list), but never
+said why, or what happens once it expires — and the ask is specifically to explain this *before*
+submission, not leave it only discoverable afterwards via the self-service manage link built earlier this
+cycle (PASSPORT-002). Added an explainer at the top of the create-passport modal: 14 days is deliberate
+(keeps every visible passport current, not something posted months ago and forgotten), renewal is one
+click away via the same emailed manage link, and contact details are never shown publicly.
+
+**PASSPORT-001.** No preview of the finished card existed before submitting — a member typed into six
+fields and had to trust the result. Pulled the card's head+skills/certifications/communication block out
+of `dcPassportHtml()` into its own `dcPassportCardBodyHtml()`, then built the preview by calling that same
+function with the form's live values, wired to `input` on every relevant field plus once on modal open.
+What a member sees while typing is the literal function the real live card renders with, not a
+hand-maintained mockup that could quietly drift from it — the same principle used for order summaries
+elsewhere this cycle.
+
+New test, `passportPreviewAndExplainer.test.js` (6 tests): the explainer names 14 days, renewal, and
+contact privacy, positioned before the submit button; `dcPassportHtml` reuses the shared body function
+rather than duplicating it; the preview element exists before the submit button; all six relevant fields
+are wired to the live update; the update function calls the shared body function, not a second template;
+opening the modal renders the preview immediately. Verified live in-browser: opened the create-passport
+modal, confirmed the explainer text, typed into all five preview-relevant fields and confirmed the
+preview rendered the exact expected HTML with the values shown correctly. Full suite: 1930 passing, 0
+failing (up from 1924).

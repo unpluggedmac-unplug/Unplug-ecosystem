@@ -3795,6 +3795,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <button class="shoutout-modal-close" id="dcPassportModalClose" aria-label="Close">&times;</button>
     <span class="eyebrow" style="color:var(--red);">Deaf Community</span>
     <h3 style="font-family:'Playfair Display',serif; font-size:23px; margin:8px 0 12px;">Create your Opportunity Passport</h3>
+    <!-- DEAF-003: the why-14-days and what-happens-after questions, answered
+         before submission rather than only discoverable afterwards. -->
+    <p style="font-size:12.5px; color:var(--slate); background:var(--paper); border:1px solid var(--paper-line); border-radius:6px; padding:10px 12px; margin-bottom:14px; line-height:1.5;">
+      Your passport shows for <strong>14 days</strong> — short on purpose, so every passport visitors see is
+      current, not a listing you posted months ago and forgot about. Before it expires (or any time after),
+      we'll email you a link to edit, renew for another 14 days, or take it down — no account or password
+      needed. Your contact details are <strong>never shown publicly</strong>; interested employers reach out
+      through Unplug.
+    </p>
     <div class="shoutout-form-msg" id="dcPassportMsg"></div>
     <div class="field"><label>Name &amp; surname *</label><input id="dcPassName" maxlength="200"></div>
     <div class="field"><label>Email * (for verification only — never shown)</label><input id="dcPassEmail" type="email"></div>
@@ -3804,6 +3813,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <div class="field"><label>Communication preferences</label><input id="dcPassComm" placeholder="e.g. SASL, WhatsApp text, email"></div>
     <div class="field"><label>Availability</label><input id="dcPassAvail" placeholder="e.g. Full-time, immediately"></div>
     <input type="text" name="website" id="hpPassport" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <!-- PASSPORT-001: a live preview, built from the exact same rendering
+         function the real card uses (dcPassportCardBodyHtml) — this is
+         genuinely what employers will see, not an artist's impression of it. -->
+    <div class="field" style="border-top:1px solid var(--paper-line); padding-top:12px; margin-top:4px;">
+      <label style="margin-bottom:8px;">Live preview — this is what employers will see</label>
+      <div class="dc-pass" id="dcPassPreview" style="pointer-events:none;"></div>
+    </div>
     <button class="btn btn-solid" id="dcPassSubmit" style="width:100%; margin-top:6px;">Submit passport</button>
     <p class="consent-note">By submitting, you agree to our <a href="?p=privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="?p=terms" target="_blank" rel="noopener">Terms of Use</a>.</p>
   </div>
@@ -10237,18 +10253,26 @@ async function loadDeafPassports() {
   }
 }
 
-function dcPassportHtml(p) {
+// PASSPORT-001: the head + skills/certifications/communication block is
+// pulled out on its own so the "what employers will see" preview in the
+// create-passport modal can render the exact same markup a live card does —
+// not a hand-maintained second copy that could quietly drift from it.
+function dcPassportCardBodyHtml(p) {
   const img = p.profile_image_url
     ? `<img class="dc-pass-img" src="${escapeHtml(p.profile_image_url)}" alt="${escapeHtml(p.name)}">`
     : `<div class="dc-pass-img"></div>`;
   const row = (label, val) => val ? `<dt>${label}</dt><dd>${escapeHtml(val)}</dd>` : '';
-  return `<div class="dc-pass">
-    <div class="dc-pass-head">${img}<div><h4>${escapeHtml(p.name)}</h4>${p.availability ? `<div class="dc-avail">${escapeHtml(p.availability)}</div>` : ''}</div></div>
+  return `<div class="dc-pass-head">${img}<div><h4>${escapeHtml(p.name || 'Your name')}</h4>${p.availability ? `<div class="dc-avail">${escapeHtml(p.availability)}</div>` : ''}</div></div>
     <dl>
       ${row('Skills', p.skills)}
       ${row('Certifications', p.certifications)}
       ${row('Communication', p.communication_preferences)}
-    </dl>
+    </dl>`;
+}
+
+function dcPassportHtml(p) {
+  return `<div class="dc-pass">
+    ${dcPassportCardBodyHtml(p)}
     <div class="dc-comments" data-id="${p.id}">
       <div class="dc-comment-thread" id="dc-comments-${p.id}"></div>
       <form class="dc-comment-form" data-id="${p.id}">
@@ -10326,13 +10350,29 @@ function setupDcJobModal() {
 }
 
 // --- passport modal ---
+function updateDcPassPreview() {
+  const el = document.getElementById('dcPassPreview');
+  if (!el) return;
+  el.innerHTML = dcPassportCardBodyHtml({
+    name: document.getElementById('dcPassName').value.trim(),
+    profile_image_url: document.getElementById('dcPassImage').value.trim(),
+    skills: document.getElementById('dcPassSkills').value.trim(),
+    certifications: document.getElementById('dcPassCerts').value.trim(),
+    communication_preferences: document.getElementById('dcPassComm').value.trim(),
+    availability: document.getElementById('dcPassAvail').value.trim(),
+  });
+}
+
 function setupDcPassportModal() {
   const modal = document.getElementById('dcPassportModal');
   const openBtn = document.getElementById('dcCreatePassportBtn');
   const msg = document.getElementById('dcPassportMsg');
   document.getElementById('dcPassportModalClose').addEventListener('click', () => modal.classList.remove('open'));
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
-  openBtn.addEventListener('click', () => { msg.className = 'shoutout-form-msg'; modal.classList.add('open'); });
+  openBtn.addEventListener('click', () => { msg.className = 'shoutout-form-msg'; modal.classList.add('open'); updateDcPassPreview(); });
+  ['dcPassName', 'dcPassImage', 'dcPassSkills', 'dcPassCerts', 'dcPassComm', 'dcPassAvail'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', updateDcPassPreview);
+  });
 
   document.getElementById('dcPassSubmit').addEventListener('click', async () => {
     const payload = {
@@ -10354,6 +10394,7 @@ function setupDcPassportModal() {
       const data = await api('/deaf-community/passports', { method: 'POST', body: JSON.stringify(UnplugForms.decorate(payload)) });
       msg.className = 'shoutout-form-msg show success'; msg.textContent = data.message || 'Submitted for verification.';
       ['dcPassName', 'dcPassEmail', 'dcPassImage', 'dcPassSkills', 'dcPassCerts', 'dcPassComm', 'dcPassAvail'].forEach((id) => document.getElementById(id).value = '');
+      updateDcPassPreview();
     } catch (err) {
       msg.className = 'shoutout-form-msg show error'; msg.textContent = err.message;
     } finally {
