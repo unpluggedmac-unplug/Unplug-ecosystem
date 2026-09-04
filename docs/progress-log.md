@@ -1991,3 +1991,28 @@ finding and confirmed the admin panel renders it correctly. Full suite: 1982 pas
 The audit itself has not been run against the real production database — that needs whoever has live
 Render/Supabase access to click "Run audit" once deployed. What this closes is the *tool*, not the
 live-data confirmation the punch-list item ultimately asks for.
+
+## 2026-09-04 — INV-002: the investment proposition, written on request
+
+Flagged earlier this cycle as content only the founders could really author — problem, market, revenue
+model, growth strategy is a pitch, not something to fabricate. Asked directly to write it anyway, so it
+was — grounded entirely in what the platform actually is and has actually built this cycle, not invented
+market-size figures or revenue projections nobody supplied.
+
+Five sections on the Investors page, in pitch order, before the real evidence dashboard (INV-001): the
+problem (good news rarely gets sustained coverage or a lasting home), what Unplug is (real editorial
+journalism plus a paid Directory plus ongoing public recognition plus an actual participating
+community), market (South African readers/individuals/small businesses/brands, described honestly, no
+invented size), revenue model (the real, already-priced product lines this whole cycle verified —
+Directory packages, competition entries, advertising, marketplace, editions), and growth strategy (the
+real systems already in the schema: the sales-consultant referral network with commission tracking, and
+the participation engine — badges, streaks, missions — that rewards members for showing up, not just
+paying once).
+
+New test, `investorProposition.test.js` (5 tests): all five sections exist in pitch order before the
+evidence dashboard; the one quantitative claim it makes (the Directory price range) is checked directly
+against the real `PACKAGE_PRICES` rather than a hand-typed number; the revenue model names only real
+product lines; nothing in the whole section matches the shape of a fabricated market-size or
+growth-percentage figure; the growth strategy names the real systems behind it, not generic language
+alone. Verified live in-browser: confirmed the rendered text reads cleanly in the intended order. Full
+suite: 1987 passing, 0 failing (up from 1982).
