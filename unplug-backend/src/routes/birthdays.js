@@ -71,7 +71,13 @@ router.post('/submit', publicSubmitLimiter, honeypot, spamCheck('birthday submis
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
       [name.trim(), m, d, (photoUrl || '').trim() || null, (message || '').trim() || null, address]
     );
-    res.status(201).json({ message: 'Thanks! The birthday has been submitted for review.' });
+    // BDAY-001: names the actual date it will appear on, not just
+    // "submitted" — 2000 is only a leap year to format against, so
+    // 29 February is a valid date to build a label from.
+    const dateLabel = new Date(2000, m - 1, d).toLocaleDateString('en-ZA', { month: 'long', day: 'numeric' });
+    res.status(201).json({
+      message: `Thanks! The birthday has been submitted for review — once approved, it'll appear on ${dateLabel} every year.`,
+    });
   } catch (err) {
     next(err);
   }

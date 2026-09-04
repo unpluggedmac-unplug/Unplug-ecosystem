@@ -1737,3 +1737,33 @@ opening the modal renders the preview immediately. Verified live in-browser: ope
 modal, confirmed the explainer text, typed into all five preview-relevant fields and confirmed the
 preview rendered the exact expected HTML with the values shown correctly. Full suite: 1930 passing, 0
 failing (up from 1924).
+
+## 2026-09-04 — Website remediation punch-list, GALLERY-002/FORM-002/BDAY-001
+
+**GALLERY-002 (comments) — already fully built, verified only.** The Gallery grid's interaction bar
+(`renderInteractionBarsBatch('gallery_image', ...)`) already wires up the same universal comments system
+articles use: display + count (`Comments (N)`), reading public, posting gated behind sign-in (`Sign in
+or create a free account to comment` when signed out), and on submit the poster is told `Comment sent for
+review`. Backend (`comments.js`) confirmed to run every post through `honeypot`, `publicSubmitLimiter`
+and `spamCheck('comment')`, and every comment is held `pending` until an admin approves it — every
+comment a visitor can ever see has already been through moderation, which is a stronger guarantee than a
+reader-facing "report" button on live content would add on top of it. No code change needed.
+
+**FORM-002 (nomination confirmation) — already fully built, verified only.** Both nomination entry points
+(`nomSubmit` on the dedicated Nominate page, `shoutoutNomSubmit` in the header modal) post to the same
+`POST /shoutouts/nominate` and surface its `message` verbatim: "Thanks! Your shout-out nomination has been
+submitted for review. Approved nominations go into a queue and appear about a week later." — covers
+success, moderation, and a concrete "what happens next" timeframe already. No reference code exists for a
+nomination, and none would be useful: there is no status-lookup flow for one to feed. No code change needed.
+
+**BDAY-001 — a real, if small, gap: fixed.** The birthday confirmation said "submitted for review" but
+never confirmed WHEN it would actually appear — the third specific thing the punch-list asks this message
+to cover, alongside success and "reviewed before publication" (both already present). `POST
+/birthdays/submit` now builds the confirmation from the exact `birthMonth`/`birthDay` it just validated
+and stored, so the date named can never drift from what was actually saved: "…once approved, it'll appear
+on 23 July every year."
+
+New test, `birthdayConfirmationDate.test.js` (3 tests, real HTTP + real Postgres): the message names the
+exact submitted date; a leap-day birthday (29 February) formats correctly rather than breaking on the
+edge case; the date in the message matches what the row actually stored. Full suite: 1933 passing, 0
+failing (up from 1930).
