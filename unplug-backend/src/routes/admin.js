@@ -1365,6 +1365,17 @@ router.patch('/settings/:key', requireRole('admin'), async (req, res, next) => {
     if (req.params.key === 'bundle_vote_price' && (value === '' || isNaN(parseFloat(value)))) {
       return res.status(400).json({ error: 'bundle_vote_price must be a number.' });
     }
+    // Same 8-value vocabulary every other part of this feature uses.
+    if (req.params.key === 'feature_edition_animation_effect') {
+      const ALLOWED_ANIM = ['none', 'fade', 'fade-up', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'zoom'];
+      if (!ALLOWED_ANIM.includes(value)) {
+        return res.status(400).json({ error: 'feature_edition_animation_effect must be one of: ' + ALLOWED_ANIM.join(', ') });
+      }
+    }
+    if (req.params.key === 'feature_edition_transition_duration_ms'
+        && !(Number.isInteger(Number(value)) && Number(value) > 0)) {
+      return res.status(400).json({ error: 'feature_edition_transition_duration_ms must be a positive whole number of milliseconds.' });
+    }
 
     const result = await pool.query(
       `UPDATE settings SET value = $1, updated_at = now() WHERE key = $2 RETURNING *`,

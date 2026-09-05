@@ -672,6 +672,28 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
         </div>
       </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Feature Edition image animation</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Controls the homepage "Let's feature you" image. Defaults to the original slow zoom-out; picking anything else plays a quick effect once, on page load, instead.</p>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="field"><label for="feAnimSelect">Effect</label>
+              <select id="feAnimSelect" style="padding:8px;">
+                <option value="zoom">Zoom (original slow pan)</option>
+                <option value="none">None</option><option value="fade">Fade</option>
+                <option value="fade-up">Fade up</option><option value="slide-up">Slide up</option>
+                <option value="slide-down">Slide down</option><option value="slide-left">Slide left</option>
+                <option value="slide-right">Slide right</option>
+              </select>
+            </div>
+            <div class="field"><label for="feAnimDur">Speed (ms)</label>
+              <input id="feAnimDur" type="number" min="1" value="24000" style="padding:8px; width:120px;">
+            </div>
+            <button class="btn btn-solid" style="width:auto;" id="saveFeAnimBtn">Save</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- REDIRECTS & 404s -->
@@ -8717,6 +8739,10 @@ async function loadSiteSettings() {
     document.getElementById('ytImageUpload').innerHTML = UnplugUpload.fieldHtml('ytImage', yt ? yt.value : '', '', imgSpecFull('youtube_thumb'));
     const fm = (data.settings || []).find((s) => s.key === 'featured_members_count');
     document.getElementById('featuredMembersCount').value = fm ? fm.value : '5';
+    const feEffect = (data.settings || []).find((s) => s.key === 'feature_edition_animation_effect');
+    const feDur = (data.settings || []).find((s) => s.key === 'feature_edition_transition_duration_ms');
+    document.getElementById('feAnimSelect').value = feEffect ? feEffect.value : 'zoom';
+    document.getElementById('feAnimDur').value = feDur ? feDur.value : '24000';
   } catch (err) {
     showToast(err.message, true);
   }
@@ -8768,6 +8794,20 @@ document.getElementById('saveYtImageBtn').addEventListener('click', async () => 
   const value = UnplugUpload.valueOf(document.getElementById('ytImageUpload'));
   try {
     await api('/admin/settings/youtube_image_url', { method: 'PATCH', body: JSON.stringify({ value }) });
+    showToast('Saved.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+// Two independent settings, two round trips — no batch endpoint exists for
+// settings, same as featured_members_count/youtube_image_url above.
+document.getElementById('saveFeAnimBtn').addEventListener('click', async () => {
+  const effect = document.getElementById('feAnimSelect').value;
+  const dur = document.getElementById('feAnimDur').value.trim();
+  try {
+    await api('/admin/settings/feature_edition_animation_effect', { method: 'PATCH', body: JSON.stringify({ value: effect }) });
+    await api('/admin/settings/feature_edition_transition_duration_ms', { method: 'PATCH', body: JSON.stringify({ value: dur }) });
     showToast('Saved.');
   } catch (err) {
     showToast(err.message, true);

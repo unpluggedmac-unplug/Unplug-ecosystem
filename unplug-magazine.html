@@ -678,6 +678,22 @@ section.home-section:last-of-type{ margin-bottom:0; }
   @keyframes unplug-anim-slide-right{ from{ opacity:0; transform:translateX(-40px); } to{ opacity:1; transform:none; } }
   @keyframes unplug-anim-zoom       { from{ opacity:0; transform:scale(.92); } to{ opacity:1; transform:none; } }
 
+  /* ---- Feature Edition image: plays once on load, no hover/carousel -----
+     'zoom' is special-cased to keep the ORIGINAL slow, continuous Ken Burns
+     pan (featureZoomOut, unchanged below) rather than the shared library's
+     fast ~400ms entrance — the two are structurally different effects that
+     only share a name. Any other admin choice reuses this same block's own
+     keyframes directly, since a "play once on load" trigger needs nothing
+     beyond a plain CSS animation — no .anim-target/.is-active bookkeeping,
+     no [hidden] toggle, unlike the carousels or the Featured Stories slider. */
+  .feature-edition-thumb img[data-anim="zoom"]       { transform:scale(1.18); animation:featureZoomOut var(--anim-dur,24s) ease-out both; }
+  .feature-edition-thumb img[data-anim="fade"]       { animation:unplug-anim-fade var(--anim-dur,400ms) ease-out both; }
+  .feature-edition-thumb img[data-anim="fade-up"]    { animation:unplug-anim-fade-up var(--anim-dur,400ms) ease-out both; }
+  .feature-edition-thumb img[data-anim="slide-up"]   { animation:unplug-anim-slide-up var(--anim-dur,400ms) ease-out both; }
+  .feature-edition-thumb img[data-anim="slide-down"] { animation:unplug-anim-slide-down var(--anim-dur,400ms) ease-out both; }
+  .feature-edition-thumb img[data-anim="slide-left"] { animation:unplug-anim-slide-left var(--anim-dur,400ms) ease-out both; }
+  .feature-edition-thumb img[data-anim="slide-right"]{ animation:unplug-anim-slide-right var(--anim-dur,400ms) ease-out both; }
+
   /* ---- cover mode: [data-cover-anim], hover/focus only, no JS -----------
      Article/edition covers put a real <img> inside the container; Directory
      cards paint the photo as the CONTAINER's own background-image instead
@@ -1135,13 +1151,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .feature-edition-title{ font-size:clamp(22px,3vw,32px); font-weight:600; line-height:1.25; color:var(--ink); margin:10px 0 12px; max-width:36ch; }
 .feature-edition-card p{ color:var(--slate); font-size:15px; line-height:1.6; max-width:60ch; margin-bottom:24px; }
 .feature-edition-thumb{ overflow:hidden; margin-bottom:24px; }
-.feature-edition-thumb img{
-  display:block; width:100%; height:auto;
-  transform:scale(1.18); animation:featureZoomOut 24s ease-out both;
-  will-change:transform;
-}
+.feature-edition-thumb img{ display:block; width:100%; height:auto; will-change:transform; }
 @keyframes featureZoomOut{ from{ transform:scale(1.18); } to{ transform:scale(1); } }
-@media (prefers-reduced-motion: reduce){ .feature-edition-thumb img{ animation:none; transform:scale(1); } }
+@media (prefers-reduced-motion: reduce){ .feature-edition-thumb img{ animation:none !important; transform:scale(1) !important; } }
 .feature-edition-btn{ align-self:flex-start; background:var(--red); border-color:var(--red); color:#fff; }
 .feature-edition-btn:hover{ background:var(--maroon); border-color:var(--maroon); }
 
@@ -11772,6 +11784,7 @@ loadLatestEdition();
 loadShoutout();
 setupCalendarEvents();
 loadYoutubeImage();
+applyFeatureEditionAnimation();
 setInterval(loadLiveVisitors, 30000);
 
 // If the page was opened via a deep link (?p=news, ?p=article&id=5, …),
@@ -11856,6 +11869,29 @@ async function loadYoutubeImage() {
     }
   } catch (err) {
     /* keep the embedded playlist on failure */
+  }
+}
+
+// Which entrance effect the Feature Edition image plays, and how fast — an
+// admin's own choice, seeded to reproduce the original 24s Ken Burns pan
+// exactly (see 182_feature_edition_animation_settings.sql). The <img> itself
+// is only unhidden once it actually loads (existing data-cms-img logic
+// above), so this only ever needs to set the two attributes the CSS reads —
+// the animation plays once, automatically, the moment the browser applies
+// the rule, no JS trigger needed.
+async function applyFeatureEditionAnimation() {
+  const img = document.querySelector('.feature-edition-thumb img[data-cms-img]');
+  if (!img) return;
+  try {
+    const data = await api('/public-settings');
+    const effect = (data.settings && data.settings.feature_edition_animation_effect) || 'zoom';
+    const dur = Number(data.settings && data.settings.feature_edition_transition_duration_ms) || 24000;
+    img.setAttribute('data-anim', effect);
+    img.style.setProperty('--anim-dur', dur + 'ms');
+  } catch (err) {
+    // Keep the original hardcoded look on failure.
+    img.setAttribute('data-anim', 'zoom');
+    img.style.setProperty('--anim-dur', '24000ms');
   }
 }
 

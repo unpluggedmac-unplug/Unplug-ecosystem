@@ -119,6 +119,8 @@ test('and ONLY the whitelisted settings, never the whole table', async () => {
     'unlisted_pages',      // the magazine hides its own menu entries
     'whatsapp_number',     // the assistant's "talk to a person" handoff
     'whatsapp_hours',
+    'feature_edition_animation_effect',      // Feature Edition image's entrance effect
+    'feature_edition_transition_duration_ms', // and its speed
   ];
   assert.deepEqual(
     Object.keys(res.body.settings).filter((k) => !EXPECTED_PUBLIC.includes(k)),

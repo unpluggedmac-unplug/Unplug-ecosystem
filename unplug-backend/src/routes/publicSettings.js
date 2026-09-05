@@ -17,6 +17,11 @@ const PUBLIC_KEYS = [
   // offer the button without knowing it.
   'whatsapp_number',
   'whatsapp_hours',
+  // The homepage Feature Edition image's entrance effect + speed — the
+  // public page needs both to render the Ken Burns pan (or whatever an
+  // admin has since chosen instead).
+  'feature_edition_animation_effect',
+  'feature_edition_transition_duration_ms',
 ];
 
 // GET /public-settings — returns a whitelisted subset of settings for the

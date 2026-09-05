@@ -2781,3 +2781,52 @@ Full suite: 2208 passing, 0 failing (up from 2184; also required fixing an unrel
 be public first" review its own comment asks for. Fixed by adding the two new Feature Edition keys to that
 list — the real fix belongs to part 5 below, since that's the change that triggered it.)
 
+## 2026-09-05 — Animation controls, part 5: Homepage Feature Edition image
+
+Part 5 of 6, and the odd one out architecturally: every other surface in this feature is a table of rows
+an admin picks from and edits per-item, but the Feature Edition image is a single CMS-swappable picture
+with no table row behind it at all. Its two values live in the existing generic `settings` key/value table
+instead — exactly like `youtube_image_url` already does — new migration
+`182_feature_edition_animation_settings.sql` seeds `feature_edition_animation_effect`/
+`feature_edition_transition_duration_ms` to `'zoom'`/`'24000'`, reproducing today's exact hardcoded 24-
+second Ken Burns pan so nothing changes until an admin picks something else. `publicSettings.js`'s
+`PUBLIC_KEYS` whitelist gained both, and `admin.js`'s generic settings PATCH gained the same enum/positive-
+integer validation every other part of this feature already has.
+
+The image's current effect is a slow, continuous pan — structurally different from the fast (~300-600ms)
+entrance effects every other surface uses for the SAME effect names — so it keeps its own bespoke
+`@keyframes featureZoomOut` rather than folding into the shared library: picking `'zoom'` plays the
+original pan (at whatever speed is now configured); picking anything else reuses that same shared
+library's keyframes directly, since this image needed a third, simpler trigger than either of the other
+two this feature built — no `.is-active`/`[hidden]` bookkeeping (unlike the carousels or the Featured
+Stories slider) and no `:hover` (unlike static covers), just a plain CSS `animation` that plays once,
+automatically, the moment its `data-anim` attribute is set. New `applyFeatureEditionAnimation()`
+(`unplug-magazine.html`), modeled directly on the existing `loadYoutubeImage()` — the established pattern
+for "one specific homepage element needs one specific admin-chosen setting" — fetches `/public-settings`
+and sets `data-anim`/`--anim-dur` on the image; a fetch failure falls back to the exact original hardcoded
+values, never a broken or blank state. One real, acknowledged tradeoff: the pan now starts fractionally
+later than before (after the settings fetch resolves, previously immediate on page load) — negligible for
+a 24-second homepage decoration, called out here rather than left silent.
+
+Fixing this part's own regression surfaced something worth recording on its own: `pageVisibility.test.js`
+carries a deliberate canary test — an explicit list of every key `/public-settings` is allowed to expose,
+with a comment asking whoever breaks it to "think about whether it should be public first." Adding the two
+new keys tripped it exactly as designed; the fix (adding both to that list) is the record that this was a
+deliberate, considered exposure, not an accident.
+
+New tests: `featureEditionAnimation.test.js` (6, real HTTP + real Postgres) — the migration seeds both
+keys correctly; `GET /public-settings` (unauthenticated) returns both; a non-admin is blocked; an invalid
+effect and a non-positive duration are both clean 400s; a valid change is immediately visible on the public
+route. `featureEditionAnimationUi.test.js` (5, static-source) — the Site Settings panel exists with the
+correct default and full enum; loading populates both fields from the server (defaulting to zoom/24000 if
+unset); saving sends two independent PATCH calls (no batch settings endpoint exists); the public page's own
+function fetches `/public-settings` and sets the right attributes, with the correct failure fallback; the
+CSS keeps `featureZoomOut` as its own keyframe rather than the shared library's fast version.
+
+Verified live in-browser against a mocked backend: the homepage image correctly picked up a `slide-up`/
+450ms setting from `/public-settings` instead of the hardcoded zoom; in the admin dashboard, Site Settings
+loaded the mocked values correctly and saving a change sent two independent PATCH calls that both landed.
+
+Full suite: 2208 passing, 0 failing (up from 2184; includes the `pageVisibility.test.js` fix noted in
+part 4 above, which belongs to this part).
+
