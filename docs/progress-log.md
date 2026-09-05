@@ -2145,3 +2145,53 @@ vars are set, this deploys as a no-op — `r2Configured` stays false and every u
 exactly as it does today (still blocked by the egress-quota restriction, independently of this change).
 
 Full suite: 2019 passing, 0 failing (up from 2006).
+
+The R2 setup itself was then walked through live with the user (Cloudflare account, both buckets, Public
+Development URL, an Account API token). Caught two real snags along the way: the first API token was created
+on Cloudflare's general-purpose token page rather than the R2-specific one, producing a credential of the
+wrong length entirely (recreated correctly from R2's own "Manage API tokens" screen instead); the second was
+simply "Object Read only" selected instead of "Object Read & Write" (writes were needed, not just reads).
+Confirmed live: a real image upload on the production admin dashboard succeeded once the correct credentials
+were set on Render.
+
+## 2026-09-05 — Landscape/portrait extended to each article SECTION's own picture
+
+Requested directly, then narrowed by a clarifying question: should this extend beyond the cover (already
+done) to the body/section picture fields too? Confirmed yes, with a real tradeoff flagged first — unlike the
+cover (always cropped into fixed story cards regardless of choice), a section's picture displays completely
+uncropped (`.art-figure img` is `height:auto`, no forced box), so a portrait choice here is a genuinely
+visible difference on the live article, not a cosmetic one. That ruled out reusing the cover's exact ratios
+(1.91:1/4:5, chosen for social-share platforms) in favour of a plain 4:3/3:4 flip of the section image's own
+existing shape — no external platform reason applies here the way it does for the cover.
+
+Two new specs, `article_section_image_landscape` (1600×1200) and `article_section_image_portrait`
+(1200×1600) — the pre-existing `article_body_image` spec is untouched, since the separate "More images"
+gallery feature (`.art-gallery img`, a genuinely fixed `aspect-ratio:4/3` grid box) would just crop a portrait
+image right back to landscape, so that field deliberately keeps its one fixed shape rather than gaining a
+toggle that would do nothing.
+
+Each section now renders its own landscape/portrait toggle, radio-grouped by a per-section id (independent of
+its position, so reordering sections can't rename the group and cause two sections to fight over which is
+checked) — one delegated `change` listener on the stable `#artSections` container covers every section,
+present now or added later, and re-renders just that section's image field. Loading an existing article
+(admin) or restoring a saved draft (member) probes every section's real already-uploaded image the same way
+the cover already does, flipping to portrait for a genuinely taller-than-wide picture rather than defaulting
+blind. Both dashboards got the identical treatment, confirming a member's Story Builder already matches
+admin's field-for-field (a pre-existing design choice, not new).
+
+Fixed a real regression this surfaced in the pre-existing `imageSpecs.test.js`: added `sectionImage` to its
+`dynamic` allowlist, since the field's spec now resolves through `artSectionImageSpecFor()` rather than a
+literal `imgSpecFull(` call the test's static scan can see directly — same pattern as `cover`/`bannerImage`
+from the earlier cover-orientation task.
+
+New test, `articleSectionImageOrientation.test.js` (14 tests): the two new specs are a straight ratio flip,
+not borrowed numbers; the old gallery spec is untouched; `GET /image-specs` serves both new keys; both
+dashboards render a uniquely-named toggle per section; the image field resolves through the orientation
+wrapper, not a fixed literal; switching one section's toggle touches only that section, preserving any
+already-uploaded value; a real portrait image flips its own section's toggle on load/restore; the "More
+images" gallery field is confirmed untouched in both files. Verified live in-browser against a mocked
+backend: added two sections on both dashboards, confirmed independently-named radio groups, switched one
+section to portrait and confirmed only that section's crop spec changed (1600×1200 stayed on the other),
+and confirmed a real 300×500 test image auto-flips its section to portrait on load.
+
+Full suite: 2033 passing, 0 failing (up from 2019).

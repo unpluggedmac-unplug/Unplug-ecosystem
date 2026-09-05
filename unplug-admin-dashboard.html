@@ -5885,8 +5885,22 @@ let ART_EDITING_ID = null;
 // publish a draft or just amend a live piece.
 let ART_EDITING_STATUS = null;
 
+// Unlike every other image field on this form, .art-figure img is
+// height:auto with no forced crop box, so whichever shape is chosen actually
+// shows at its own real proportions on the article page — landscape/portrait
+// here is a real, visible choice, not a cosmetic one, so each section gets
+// its own toggle like the cover does.
+function artSectionImageSpecFor(orientation) {
+  return imgSpecFull(orientation === 'portrait' ? 'article_section_image_portrait' : 'article_section_image_landscape');
+}
+let _artSectionSeq = 0;
 function artSectionHtml(index, data) {
   const d = data || {};
+  // A per-section id for the orientation radios' `name`, independent of the
+  // section's position — reordering renumbers data-index but must not rename
+  // these, or two sections could briefly share a group and fight over which
+  // is checked.
+  const uid = ++_artSectionSeq;
   return `<div class="art-section" data-index="${index}">
     <div class="art-section-head">
       <strong>SECTION ${index + 1}</strong>
@@ -5897,10 +5911,52 @@ function artSectionHtml(index, data) {
     <label>Paragraph</label>
     <textarea class="art-sec-para" rows="4" placeholder="Write this part of the story…">${d.paragraph || ''}</textarea>
     <label>Picture (optional)</label>
-    <div class="art-sec-image">${UnplugUpload.fieldHtml('sectionImage', d.image_url || '', '', imgSpecFull('article_body_image'))}</div>
+    <div style="margin-bottom:8px;">
+      <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin-right:16px;"><input type="radio" name="sectionOrientation-${uid}" value="landscape" checked> Landscape (1600×1200)</label>
+      <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;"><input type="radio" name="sectionOrientation-${uid}" value="portrait"> Portrait (1200×1600)</label>
+    </div>
+    <div class="art-sec-image">${UnplugUpload.fieldHtml('sectionImage', d.image_url || '', '', artSectionImageSpecFor('landscape'))}</div>
     <label>Note by the picture (optional)</label>
     <input class="art-sec-note" value="${(d.image_note || '').replace(/"/g, '&quot;')}" placeholder="Caption or credit">
   </div>`;
+}
+
+// One delegated listener on the stable #artSections container covers every
+// section's radios, present now or added later — re-rendering just that
+// section's image field, preserving whatever's already uploaded there.
+let _artSectionOrientationWired = false;
+function artWireSectionOrientation() {
+  if (_artSectionOrientationWired) return;
+  _artSectionOrientationWired = true;
+  document.getElementById('artSections').addEventListener('change', (e) => {
+    const radio = e.target.closest('input[name^="sectionOrientation-"]');
+    if (!radio) return;
+    const imageWrap = radio.closest('.art-section').querySelector('.art-sec-image');
+    const current = UnplugUpload.valueOf(imageWrap);
+    imageWrap.innerHTML = UnplugUpload.fieldHtml('sectionImage', current, '', artSectionImageSpecFor(radio.value));
+  });
+}
+artWireSectionOrientation();
+
+// A section's toggle defaults to landscape, then corrects itself once a
+// real already-uploaded image's own dimensions come back — same reasoning
+// as the cover's own auto-detect, for an article whose section picture
+// happens to be portrait-shaped.
+function artProbeSectionOrientations() {
+  document.querySelectorAll('#artSections .art-section').forEach((section) => {
+    const imageWrap = section.querySelector('.art-sec-image');
+    const url = UnplugUpload.valueOf(imageWrap);
+    if (!url) return;
+    const probe = new Image();
+    probe.onload = () => {
+      if (probe.naturalHeight > probe.naturalWidth) {
+        const portraitRadio = section.querySelector('input[value="portrait"]');
+        if (portraitRadio) portraitRadio.checked = true;
+        imageWrap.innerHTML = UnplugUpload.fieldHtml('sectionImage', url, '', artSectionImageSpecFor('portrait'));
+      }
+    };
+    probe.src = url;
+  });
 }
 
 function artRenderSections(sections) {
@@ -6142,6 +6198,7 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
       probe.src = a.banner_image_url;
     }
     artRenderSections(data.sections || []);
+    artProbeSectionOrientations();
     document.getElementById("artGallery").innerHTML = "";
     (a.gallery_images || []).forEach((url) => artAddGallerySlot(url));
     document.getElementById("artLinks").innerHTML = "";

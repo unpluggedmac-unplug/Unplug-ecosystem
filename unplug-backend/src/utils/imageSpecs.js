@@ -59,6 +59,20 @@ const IMAGE_SPECS = {
     w: 1600, h: 1200, label: '4:3 landscape',
     note: 'Pictures inside the story body.',           // .art-gallery img 4/3
   },
+  // The per-SECTION picture, not the "More images" gallery above — .art-figure
+  // img is height:auto with no forced crop, so unlike every other image field
+  // on the site, whichever shape is chosen here shows at its own real
+  // proportions on the article page. Landscape and portrait are therefore a
+  // straight 4:3/3:4 flip of the same numbers, not a different pair borrowed
+  // from a social-platform convention the way the cover's is.
+  article_section_image_landscape: {
+    w: 1600, h: 1200, label: '4:3 landscape',
+    note: 'Pictures inside the story body, shown at their own natural shape (not cropped to a box).',
+  },
+  article_section_image_portrait: {
+    w: 1200, h: 1600, label: '3:4 portrait',
+    note: 'Pictures inside the story body, shown at their own natural shape (not cropped to a box).',
+  },
 
   event_image: {
     w: 1600, h: 900, label: '16:9 landscape',
