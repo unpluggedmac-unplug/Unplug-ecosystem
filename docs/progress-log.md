@@ -2830,3 +2830,46 @@ loaded the mocked values correctly and saving a change sent two independent PATC
 Full suite: 2208 passing, 0 failing (up from 2184; includes the `pageVisibility.test.js` fix noted in
 part 4 above, which belongs to this part).
 
+## 2026-09-05 — Animation controls, part 6 (final): cross-surface audit and closing summary
+
+Part 6 of 6 — this closes the "admin control over banner/cover animation effects" feature. No new code;
+a final audit across all five parts before calling it done.
+
+**`prefers-reduced-motion` audit.** Every rule the shared entrance library added (parts 1-3's carousels,
+covers, and the Featured Stories slider) lives inside a single `@media (prefers-reduced-motion:
+no-preference)` block introduced in part 1 — confirmed by grep, not just by memory: under `reduce`, none of
+those selectors match at all, so every affected element falls back to its plain, unanimated default state
+automatically, with no separate override needed per surface. The Feature Edition image (part 5) is the one
+exception with its own explicit `@media (prefers-reduced-motion: reduce)` rule, because its base
+`[data-anim="zoom"]` rule predates the shared library's convention and needed the same explicit-override
+treatment its `featureZoomOut` keyframe always had.
+
+**Marketplace poster carousel's inner-wrapper**, flagged in part 2 as the one surface most likely to show a
+visual conflict (an entrance effect wrapped inside the track's own permanent `translateX` positioning) —
+re-verified live: the track's position and the inner wrapper's `.is-active` state stayed in sync through a
+full rotation, no stutter or double-transform artifact.
+
+**What shipped, across 5 commits + this one:**
+- Ad Banners (part 1): per-banner entrance effect, transition speed, and display duration, replacing one
+  fixed crossfade/rotation rate for every banner alike. Introduced the shared CSS entrance-effect library
+  every later part reused.
+- Marketplace poster carousel (part 2): the same per-item mechanism, plus a genuine generalisation of the
+  Manage Content admin editor to support real `<select>` fields for any resource's enum column.
+- Article/Edition/Directory covers (part 3): a hover/focus-revealed effect where none existed before,
+  through the existing shared Cover Images screen, scoped to exactly the 3 resource types this feature
+  covers (7 others explicitly untouched).
+- Highlighted Articles (part 4): a per-placement override of an article's own cover effect, mirroring the
+  existing `admin_image_url` override relationship exactly.
+- Homepage Feature Edition (part 5): the one settings-table-backed surface, defaulting to the original
+  Ken Burns pan.
+
+**Total new automated coverage**: 10 test files, 63 tests (42 real-HTTP-and-real-Postgres, 21
+static-source), plus one pre-existing test file's deliberate whitelist canary updated. Full suite: **2208
+passing, 0 failing** (from a baseline of 2145 before this feature started — 63 new tests exactly accounts
+for the difference).
+
+Everything reuses the same 8-value effect vocabulary (`none/fade/fade-up/slide-up/slide-down/slide-left/
+slide-right/zoom`) already established by Popups before this feature existed — one consistent choice list
+for an admin to learn, across every surface on the site that now animates on purpose rather than by
+accident of hardcoded CSS.
+
