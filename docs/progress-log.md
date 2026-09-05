@@ -2094,3 +2094,54 @@ backend: opened a daily mission, a weekly mission (progress "1 / 3" rendered cor
 already-completed mission (read-only, no button); clicked Mark as complete and confirmed the toast, modal
 close, and dashboard refresh; confirmed both the Close button and clicking the backdrop dismiss the modal.
 Full suite: 2006 passing, 0 failing (up from 1997).
+
+## 2026-09-05 — Cloudflare R2 becomes the preferred object storage, Supabase stays as fallback
+
+Production uploads broke: Supabase's free-tier org exceeded its cached-egress quota, and Supabase locked
+Storage for the whole project until the plan is upgraded or the window resets (confirmed directly against
+Supabase's own API — a 402 with `exceed_cached_egress_quota`, not a bucket or credential problem; the two
+missing buckets found first were real too, but a secondary issue). R2 has **no egress fees**, so this exact
+failure mode can't recur there. Requested directly: start the swap now.
+
+Every persistent-storage function in `uploads.js` (the only file in the whole codebase that talks to
+Supabase Storage directly — confirmed by grep) now tries R2 first, then Supabase, in that order:
+`putPublicObject`, `putPrivateObject` (new — factored out of what were two near-identical inline Supabase
+calls in `uploadToSupabasePrivate`/`uploadBufferToSupabasePrivate`), and `fetchFromSupabasePrivate`, which
+detects an R2 URL by its host and signs a short-lived presigned GET rather than sending Supabase's
+Bearer/apikey headers — old Supabase-stored private files (proof-of-payment uploads, edition download PDFs)
+keep working through the exact same function, untouched. `isPublicStorageUrl()` now recognises both a
+Supabase public path and an R2 public URL.
+
+Every function keeps its original name and return shape, so nothing outside `uploads.js` changed — not
+`adminPaymentQueue.js`, not `editions.js`, not `forms.js`, not `shareCards.js`. The exported `supabaseConfigured`/
+`supabasePrivateConfigured` flags were deliberately widened in meaning (R2 **or** Supabase) rather than
+renamed, for the same reason — every caller of those flags needed zero changes. New `r2Configured`/
+`r2PrivateConfigured` flags are exported too, for future diagnostics.
+
+Uses `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` (new dependencies) rather than hand-rolling AWS
+SigV4 signing — R2's own docs recommend the S3 SDK, and getting request-signing subtly wrong is a worse risk
+than the dependency. Caught one real bug via the new test before it ever reached a live bucket: the SDK
+defaults to virtual-hosted-style URLs (`<bucket>.<account>.r2.cloudflarestorage.com`), which R2 doesn't
+reliably support — fixed by setting `forcePathStyle: true`, which Cloudflare's own R2 documentation
+recommends.
+
+New test, `objectStorageR2.test.js` (13 tests, no Postgres needed — pure module-level tests with
+`S3Client.prototype.send` and `global.fetch` mocked, no real network calls): every env-var combination is
+detected correctly; a public upload goes to R2 when configured, falls back to Supabase when only that's
+configured, and prefers R2 when both are configured; a private upload lands in the R2 private bucket and is
+never mistaken for a public URL; reading a private file back signs a presigned GET for an R2 URL but still
+uses Supabase's original headers for an old Supabase URL; both public-URL shapes are recognised; both public
+and private uploads refuse cleanly when nothing at all is configured. Re-ran every test file that touches
+`uploads.js` transitively through those four other route files (145 tests: `editionDownloads`,
+`editionOrderConfirmation`, `editionsAdmin`, `forms`, `paymentQueuePhase6`, `shareCards`, `storageAudit`,
+`imageSpecs`) — all clean, confirming the widened flags and unchanged function contracts really do mean zero
+caller changes.
+
+**Not done yet, and cannot be done from here**: creating the actual Cloudflare account/R2 bucket/API token
+(account creation and credential generation are exactly the actions this session must not do on a user's
+behalf), and setting the five `R2_*` env vars on Render. The code is written and tested end-to-end against a
+mocked S3 API; it has not been exercised against a real R2 bucket, because none exists yet. Until those env
+vars are set, this deploys as a no-op — `r2Configured` stays false and every upload keeps going to Supabase
+exactly as it does today (still blocked by the egress-quota restriction, independently of this change).
+
+Full suite: 2019 passing, 0 failing (up from 2006).
