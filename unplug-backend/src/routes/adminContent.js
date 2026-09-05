@@ -74,7 +74,15 @@ const RESOURCES = {
   marketplace: {
     table: 'marketplace_listings',
     label: 'headline',
-    editable: ['headline', 'poster_image_url', 'active_from', 'active_to'],
+    editable: ['headline', 'poster_image_url', 'active_from', 'active_to',
+               'animation_effect', 'transition_duration_ms', 'display_duration_ms'],
+    // Same 8-value vocabulary unplug-popups.js already validates for its own
+    // entrance-animation dropdown — lets the generic admin editor render a
+    // real <select> for this column instead of a free-text box an admin
+    // could mistype (see openManageEditor in unplug-admin-dashboard.html).
+    selectFields: {
+      animation_effect: ['none', 'fade', 'fade-up', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'zoom'],
+    },
   },
   highlights: {
     table: 'highlights',
@@ -146,7 +154,7 @@ router.get('/:resource', requireRole('admin'), async (req, res, next) => {
       `SELECT * FROM ${spec.table} ${where} ORDER BY created_at DESC LIMIT 300`,
       params
     );
-    res.json({ items: result.rows, editable: spec.editable });
+    res.json({ items: result.rows, editable: spec.editable, selectFields: spec.selectFields || {} });
   } catch (err) {
     next(err);
   }
@@ -223,6 +231,26 @@ router.patch('/:resource/:id', requireRole('admin'), async (req, res, next) => {
       }
     }
 
+    // Marketplace-specific field validation (animation_effect / the two _ms
+    // duration columns) — not a DB CHECK constraint an admin would ever hit
+    // through this generic route in practice (the values come from a real
+    // <select>/number input), but validated the same way gallery's fields
+    // above are, so a bad value is a clean 400 rather than a raw constraint
+    // error surfacing as a 500.
+    if (req.params.resource === 'marketplace') {
+      const ALLOWED_ANIM = ['none', 'fade', 'fade-up', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'zoom'];
+      if (req.body.animation_effect !== undefined && req.body.animation_effect !== '' && req.body.animation_effect !== null
+          && !ALLOWED_ANIM.includes(req.body.animation_effect)) {
+        return res.status(400).json({ error: 'animation_effect must be one of: ' + ALLOWED_ANIM.join(', ') });
+      }
+      for (const f of ['transition_duration_ms', 'display_duration_ms']) {
+        if (req.body[f] !== undefined && req.body[f] !== '' && req.body[f] !== null
+            && !(Number.isInteger(Number(req.body[f])) && Number(req.body[f]) > 0)) {
+          return res.status(400).json({ error: f + ' must be a positive whole number of milliseconds.' });
+        }
+      }
+    }
+
     const sets = [];
     const values = [];
     spec.editable.forEach((col) => {
@@ -232,7 +260,7 @@ router.patch('/:resource/:id', requireRole('admin'), async (req, res, next) => {
         value = value.trim();
         if (value === '') value = null;
       }
-      if (col === 'display_order' && value !== null) value = Number(value);
+      if ((col === 'display_order' || col.endsWith('_ms')) && value !== null) value = Number(value);
       values.push(value);
       sets.push(`${col} = $${values.length}`);
     });

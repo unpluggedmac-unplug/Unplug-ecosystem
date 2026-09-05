@@ -2629,3 +2629,47 @@ just decorates the markup.
 
 Full suite: 2157 passing, 0 failing (up from 2145).
 
+## 2026-09-05 — Animation controls, part 2: Marketplace poster carousel
+
+Part 2 of 6. Same mechanism as part 1 (Ad Banners), applied to the "Featured Advertisers" poster carousel
+that appears on ~9 pages. New migration `179_marketplace_poster_animation.sql`: the same three columns
+(`animation_effect`/`transition_duration_ms`/`display_duration_ms`) on `marketplace_listings`, defaulted to
+`'none'`/500/4000 — the carousel's current look has no extra entrance effect beyond the track's own 0.5s
+slide, so `'none'` is what actually reproduces today's behaviour here (unlike Ad Banners, whose default was
+`'fade'`).
+
+One real architecture wrinkle, discovered while implementing rather than assumed up front: the poster
+carousel's outer `.poster-slide` already carries the track's own permanent `translateX` positioning
+transform, so an entrance effect placed directly on it would fight that transform. Fixed by wrapping each
+slide's content in an inner `.poster-slide-inner` that gets `data-anim`/`--anim-dur` and its own `.is-active`
+toggle, independent of the outer slide's positioning — `goToPoster()` now moves the track AND toggles the
+inner wrapper's class in the same step. The rotation timer got the identical `setInterval`→duration-aware-
+`setTimeout` change part 1 made for Ad Banners, reading `listings[posterIndex].display_duration_ms` on each
+advance.
+
+Unlike Ad Banners' bespoke per-row form, these three fields are edited through the fully generic "Manage
+Content" editor (`adminContent.js`'s `RESOURCES.marketplace`) — which meant a real gap to fix first: that
+editor could only render a plain text input, a textarea, or a date input, with no way to offer a constrained
+choice. Rather than hardcode a marketplace-only branch, the editor gained genuine `<select>` support: the
+server now optionally declares `selectFields: {column: [...values]}` per resource, and
+`openManageEditor()` renders a real dropdown for any field present there — a small, reusable generalisation
+of a shared tool that will still be resource-agnostic for the next admin who needs an enum column edited
+here, not something bolted on only for this feature. Fields ending in `_ms` also now get a number input
+rather than falling through to plain text.
+
+New tests: `marketplacePosterAnimation.test.js` (8, real HTTP + real Postgres) — the same CHECK-constraint,
+default-preservation, clean-400, and public-round-trip coverage as part 1, plus one check specific to this
+route: the PATCH here is a genuine partial patch (unlike Ad Banners' full-row-replace), so editing only the
+animation fields must leave `poster_image_url` untouched — and a check that the other 6 resources this
+generic editor manages did not silently gain `selectFields`/the new columns.
+`manageContentSelectFields.test.js` (4, static-source) — the editor captures `selectFields` from the
+server, renders a real `<select>` for a declared field, renders a number input for a `_ms` field, and the
+marketplace resource declares the exact same 8-value enum Ad Banners uses.
+
+Verified live in-browser against a mocked backend serving two listings (one `zoom`, one `fade`, both
+1.5s): both inner wrappers carried the correct `data-anim`/`--anim-dur`; the carousel's active inner
+wrapper and the track's own position stayed in sync as it rotated; the rotation itself advanced at the
+seeded ~1.5s pace, not the old fixed 4s.
+
+Full suite: 2184 passing, 0 failing (up from 2145, confirmed together with part 3 below).
+

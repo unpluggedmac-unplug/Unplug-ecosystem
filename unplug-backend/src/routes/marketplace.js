@@ -23,6 +23,7 @@ router.get('/listings', async (req, res, next) => {
 
     const result = await pool.query(
       `SELECT l.id, l.poster_image_url, l.headline, l.active_from, l.active_to,
+              l.animation_effect, l.transition_duration_ms, l.display_duration_ms,
               a.business_name, a.contact_email, a.contact_phone, a.contact_website
        FROM marketplace_listings l
        JOIN advertisers a ON a.id = l.advertiser_id

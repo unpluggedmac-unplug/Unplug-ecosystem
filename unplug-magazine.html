@@ -12416,35 +12416,61 @@ async function loadShoutout() {
 function posterSlideHtml(listing) {
   const dest = listing.contact_website || ('?p=brandplacement');
   const label = escapeHtml(listing.business_name || 'Advertiser');
+  // The entrance effect/speed are per-listing (admin-controlled). They live
+  // on an INNER wrapper, not on .poster-slide itself: the outer slide already
+  // carries the track's own permanent translateX positioning, and an
+  // entrance transform placed directly on it would fight that.
+  const anim = escapeAttr(listing.animation_effect || 'none');
+  const dur = Number(listing.transition_duration_ms) > 0 ? Number(listing.transition_duration_ms) : 500;
   return `<div class="poster-slide">
-        <a href="${escapeHtml(dest)}" target="_blank" rel="noopener sponsored" style="display:block; width:100%; height:100%;">
-          <img src="${escapeHtml(listing.poster_image_url)}" alt="${label}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">
-        </a>
+        <div class="poster-slide-inner anim-target" data-anim="${anim}" style="--anim-dur:${dur}ms; width:100%; height:100%;">
+          <a href="${escapeHtml(dest)}" target="_blank" rel="noopener sponsored" style="display:block; width:100%; height:100%;">
+            <img src="${escapeHtml(listing.poster_image_url)}" alt="${label}" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">
+          </a>
+        </div>
       </div>`;
 }
 
-function setupPosterCarousel(widget) {
+function setupPosterCarousel(widget, listings) {
   const posterTrack = widget.querySelector('.poster-track');
   const posterSlides = posterTrack.children;
   const posterDotsWrap = widget.querySelector('.poster-dots');
   let posterIndex = 0;
+  let timer = null;
 
   for (let i = 0; i < posterSlides.length; i++) {
     const dot = document.createElement('span');
     if (i === 0) dot.classList.add('active');
-    dot.addEventListener('click', () => goToPoster(i));
+    dot.addEventListener('click', () => { goToPoster(i); scheduleNext(); });
     posterDotsWrap.appendChild(dot);
   }
+  const innerOf = (i) => posterSlides[i] && posterSlides[i].querySelector('.poster-slide-inner');
+  if (innerOf(0)) innerOf(0).classList.add('is-active');
 
   function goToPoster(i) {
+    const prevInner = innerOf(posterIndex);
+    if (prevInner) prevInner.classList.remove('is-active');
     posterIndex = (i + posterSlides.length) % posterSlides.length;
     posterTrack.style.transform = `translateX(-${posterIndex * 100}%)`;
+    const nextInner = innerOf(posterIndex);
+    if (nextInner) nextInner.classList.add('is-active');
     Array.from(posterDotsWrap.children).forEach((d, idx) => d.classList.toggle('active', idx === posterIndex));
   }
-  widget.querySelector('.poster-nav.prev').addEventListener('click', () => goToPoster(posterIndex - 1));
+  // Each listing decides how long IT stays up before the carousel advances —
+  // a per-slide duration, re-read from the newly-active listing every time
+  // the carousel steps forward, same mechanism the Ad Banner rotation uses.
+  const currentDisplayMs = () => {
+    const d = Number(listings[posterIndex] && listings[posterIndex].display_duration_ms);
+    return d >= 1000 ? d : 4000;
+  };
+  const scheduleNext = () => {
+    clearTimeout(timer);
+    if (posterSlides.length > 1) timer = setTimeout(() => { goToPoster(posterIndex + 1); scheduleNext(); }, currentDisplayMs());
+  };
+  widget.querySelector('.poster-nav.prev').addEventListener('click', () => { goToPoster(posterIndex - 1); scheduleNext(); });
   if (posterSlides.length > 1) {
-    widget.querySelector('.poster-nav.next').addEventListener('click', () => goToPoster(posterIndex + 1));
-    setInterval(() => goToPoster(posterIndex + 1), 4000);
+    widget.querySelector('.poster-nav.next').addEventListener('click', () => { goToPoster(posterIndex + 1); scheduleNext(); });
+    scheduleNext();
   }
 }
 
@@ -12459,7 +12485,7 @@ function setupPosterCarousel(widget) {
     widgets.forEach((widget) => {
       widget.querySelector('.poster-track').innerHTML = slidesHtml;
       widget.style.display = '';
-      setupPosterCarousel(widget);
+      setupPosterCarousel(widget, listings);
     });
   } catch (err) {
     // stays hidden on failure — no fake content to fall back to

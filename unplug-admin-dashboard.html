@@ -7016,6 +7016,10 @@ const MANAGE_HIDE_COLUMNS = ['id', 'user_id', 'owner_id', 'profile_id', 'adverti
 
 // Which fields the server will accept edits for, from the last load.
 let manageEditable = [];
+// { fieldName: [allowed, values, ...] } for any field the server declares as
+// a fixed enum — lets this generic editor render a real <select> for that
+// one field without needing a resource-specific form anywhere.
+let manageSelectFields = {};
 
 function manageCellText(value) {
   if (value === null || value === undefined || value === '') return '—';
@@ -7037,6 +7041,7 @@ async function loadManageContent() {
     const query = status ? `?status=${encodeURIComponent(status)}` : '';
     const data = await api(`/admin/content/${resource}${query}`);
     manageEditable = data.editable || [];
+    manageSelectFields = data.selectFields || {};
     const items = data.items || [];
     document.getElementById('manageListTitle').textContent = `Items (${items.length})`;
     if (items.length === 0) {
@@ -7132,12 +7137,23 @@ function openManageEditor(resource, item) {
     wrap.style.marginBottom = '12px';
     const label = document.createElement('label');
     label.textContent = field.replace(/_/g, ' ');
-    // Long-form fields get a textarea; a one-line input for a body of text is
-    // unusable for the person who has to fix a typo in the middle of it.
+    // A field the server declared as a fixed enum (e.g. animation_effect)
+    // gets a real <select> instead of free text an admin could mistype.
+    const options = manageSelectFields[field];
     const isLong = ['body', 'bio', 'description', 'achievements', 'career', 'quote', 'conclusion', 'meta_description'].includes(field);
-    const input = document.createElement(isLong ? 'textarea' : 'input');
+    const input = document.createElement(options ? 'select' : (isLong ? 'textarea' : 'input'));
     if (isLong) input.rows = 6;
-    if (/_date$|^event_date$|_from$|_to$/.test(field)) input.type = 'date';
+    if (options) {
+      options.forEach((v) => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v;
+        input.appendChild(opt);
+      });
+    } else {
+      if (/_date$|^event_date$|_from$|_to$/.test(field)) input.type = 'date';
+      // A "how many milliseconds" field is a plain positive number, not text.
+      else if (field.endsWith('_ms')) { input.type = 'number'; input.min = '1'; }
+    }
     const value = item[field];
     input.value = value == null ? ''
       : (input.type === 'date' && /^\d{4}-\d{2}-\d{2}/.test(String(value)) ? String(value).slice(0, 10) : String(value));
