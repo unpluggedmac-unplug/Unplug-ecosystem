@@ -4181,6 +4181,18 @@ async function aqOpenReview(row) {
       if (f.type === 'html' || f.type === 'textarea') {
         return label + `<textarea id="${id}" data-col="${escapeHtmlAdmin(f.col)}" rows="${f.type === 'html' ? 10 : 3}" style="width:100%; font-family:inherit; font-size:13.5px; padding:8px 10px; border:1px solid var(--paper-line,#e2ddd6);"></textarea>`;
       }
+      if (f.type === 'image') {
+        // The actual picture, not just the URL string that used to be all an
+        // admin saw here — a broken/wrong/inappropriate image should be
+        // obvious before approving, not discovered afterward on the live
+        // site. Hidden until it loads, so a blank/removed URL shows nothing
+        // rather than a browser's broken-image icon.
+        const preview = val
+          ? `<img id="${id}_preview" src="${escapeAttrAdmin(val)}" alt="" style="max-width:100%; max-height:260px; display:block; margin-bottom:8px; border:1px solid var(--paper-line,#e2ddd6); object-fit:contain; background:var(--paper,#f4f1ec);" onerror="this.style.display='none';">`
+          : '';
+        return label + preview
+          + `<input id="${id}" data-col="${escapeHtmlAdmin(f.col)}" type="url" style="width:100%; font-size:13.5px; padding:8px 10px; border:1px solid var(--paper-line,#e2ddd6);">`;
+      }
       const inputType = f.type === 'date' ? 'date' : (f.type === 'email' ? 'email' : 'text');
       return label + `<input id="${id}" data-col="${escapeHtmlAdmin(f.col)}" type="${inputType}" style="width:100%; font-size:13.5px; padding:8px 10px; border:1px solid var(--paper-line,#e2ddd6);">`;
     }).join('');

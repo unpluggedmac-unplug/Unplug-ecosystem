@@ -2195,3 +2195,43 @@ section to portrait and confirmed only that section's crop spec changed (1600×1
 and confirmed a real 300×500 test image auto-flips its section to portrait on load.
 
 Full suite: 2033 passing, 0 failing (up from 2019).
+
+Also from this window: confirmed the admin-only nav link on unplug-magazine.html is genuinely role-gated
+(only `role === 'admin'` sees "Admin Dashboard"; every other role sees "Dashboard") — a screenshot showing
+"Admin Dashboard" for a supposed member test account turned out to be because that account's real database
+role was `admin` (id 136, collarsilver@gmail.com), not a code bug. Audited every admin-role account in
+production: only that one and the original founding admin (id 1) — confirmed clean, nothing else
+accidentally promoted. Confirmed intentional; left as is.
+
+## 2026-09-05 — Approval Queue: a real picture, not just a URL, before approving
+
+Requested directly, from the Gallery Image review modal: an admin deciding on a submission with an image
+saw only the raw URL string in a text box, never the actual picture — meaning a wrong, broken or
+inappropriate image was only discovered after approving and checking the live site.
+
+Every submission-type field definition in `adminApprovalQueue.js` that names a real picture
+(`banner_image_url`, `feature_image_url`, `image_url` ×3, `manual_image_url`, `poster_image_url`,
+`admin_image_url` ×2, `mobile_image_url` — 9 in total, across articles, directory profiles, gallery
+images, events, competition entries, marketplace listings and highlights) is now typed `'image'` instead
+of the generic `'url'` it shared with genuine link fields. Left as plain `'url'`: `cta_url`, both
+`contact_website` fields, both `link_url` fields, `event_link`, `nominee_social_url` — these point
+somewhere else on the web, not at a picture, and an `<img>` for one would just show a broken-image icon.
+
+The review modal's field renderer now draws the real image (hidden on a broken/removed URL via `onerror`,
+so a blank field shows nothing rather than a broken-image icon) directly above the same editable URL text
+input as before — nothing about editing/replacing the URL changed, this only adds the preview.
+
+New test, `approvalQueueImagePreview.test.js` (5 tests, real HTTP + real Postgres for the two behavioural
+tests, static source checks for the completeness/regression ones): an article's cover image is typed
+`'image'` while its button link stays `'url'`; a gallery submission's picture is `'image'` while its "find
+out more" link stays `'url'`; every column with "image" in its name across the whole file is confirmed
+`'image'`, not `'url'` (catches a forgotten one automatically, rather than needing one assertion per
+field); none of the 5 genuine link fields were accidentally swept in; the dashboard's renderer actually
+draws an `<img>`, escapes the URL into `src`, hides itself on a broken link, and renders nothing at all
+when the field is blank. Verified live in-browser against a mocked backend: a real photo rendered and
+loaded successfully with the URL input still holding its value, and a blank poster-image field on a
+different submission type correctly showed no `<img>` at all.
+
+Re-ran `adminApprovalQueue.test.js` + `approvalQueueEdit.test.js` (41 tests) to confirm the field-type
+change didn't disturb the existing edit/approve flow — all clean.
+
