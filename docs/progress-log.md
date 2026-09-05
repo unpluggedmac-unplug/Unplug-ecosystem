@@ -2366,3 +2366,39 @@ requests (confirmed via the request log); clicking a social link inside a flippe
 
 Full suite: 2090 passing, 0 failing (up from 2075).
 
+## 2026-09-05 — Impact Makers, part 4 (final): homepage teaser + sitemap
+
+Part 4 of 4 — this closes the Impact Makers build. New homepage section cloning "Highlighted Directory
+Profiles"' exact shape (`.section-head` with eyebrow+h2, a `.view-all[data-page]` button auto-wired for
+free by the existing delegated nav handler, a grid container) — a "View all Impact Makers →" link through
+to the full gallery. `loadImpactMakersTeaser()` fetches the published feed, shows featured Impact Makers
+first (falling back to the first 4 published if none are featured yet), and **reuses the exact same
+`impactMakerCardHtml()` builder** the full gallery page uses — a card on the homepage teaser is the same
+card, flip interaction included, not a second copy that could drift.
+
+That reuse needed one small widening: the flip's click listener was scoped to `#imGrid` (part 3), which
+the teaser's own grid isn't. Widened it to a single delegated listener on `document` — matching the
+keydown handler, which was already delegated globally — so both grids' cards flip identically, with no
+duplicated listener and no risk of a card double-toggling.
+
+`sitemap.js` gets one new `STATIC_PAGES` row for the listing page. No per-profile sitemap entries yet,
+since no individual profile page exists in this v1 (spec §22) — a comment marks exactly where that block
+would join the article/profile ones once it does.
+
+New test, `impactMakersHomepageTeaser.test.js` (6 tests): the teaser section clones the reference shape;
+it calls the real shared card builder, not a duplicate; featured-first-capped-at-4 logic matches the
+site's other teasers; it loads at script init alongside every other homepage teaser, not behind a page
+guard; the flip listener is confirmed delegated on `document` with the old `#imGrid`-scoped one gone
+entirely (not just supplemented); the sitemap lists the page with no premature per-profile entries.
+Updated two `impactMakersPublicPage.test.js` assertions that referenced the now-widened listener. Verified
+live in-browser against a mocked backend: the homepage teaser showed exactly the one featured mock profile
+(correctly excluding the non-featured one), the "View all" button was present, and clicking the teaser
+card's own flip worked identically to the full gallery page's.
+
+Full suite: 2097 passing, 0 failing (up from 2090).
+
+**This closes the Impact Makers feature (parts 1-4).** Everything in the spec is built except individual
+profile pages, which were deliberately deferred as the spec itself frames them as future scalability
+(§22) — the `slug` column already exists on `impact_makers` so that page is addable later with no schema
+change, and the sitemap/SEO code both already have a marked spot to extend into when it is.
+

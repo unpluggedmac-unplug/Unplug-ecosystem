@@ -25,6 +25,11 @@ const STATIC_PAGES = [
   { path: '/?p=deafcommunity', freq: 'weekly', priority: '0.7' },
   { path: '/?p=competitions', freq: 'weekly', priority: '0.6' },
   { path: '/?p=gallery', freq: 'monthly', priority: '0.5' },
+  // Individual Impact Maker profiles have no page of their own yet (see
+  // migrations/175_impact_makers.sql) — only the listing page is indexable
+  // for now; a per-profile entries block can join the article/profile ones
+  // below once that page exists, with no other change needed here.
+  { path: '/?p=impact-makers', freq: 'weekly', priority: '0.6' },
   { path: '/?p=about', freq: 'monthly', priority: '0.5' },
   { path: '/?p=contact', freq: 'monthly', priority: '0.5' },
   // Listed even though it is not in the site's navigation. It is out of the

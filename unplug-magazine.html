@@ -2311,6 +2311,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     </div>
   </section>
 
+  <section class="wrap home-section">
+    <div class="section-head">
+      <div>
+        <span class="eyebrow">recognition</span>
+        <h2>Impact Makers</h2>
+      </div>
+      <button class="view-all" data-page="impact-makers">View all Impact Makers →</button>
+    </div>
+    <div class="im-grid" id="impactMakersTeaserGrid">
+      <div class="dir-empty-state">Loading...</div>
+    </div>
+  </section>
+
   <!-- INVESTOR SPOTLIGHT -->
   <section class="home-section">
     <div class="investor-spotlight">
@@ -7119,7 +7132,9 @@ document.getElementById('imSearchInput').addEventListener('input', (e) => {
 // The flip itself — role="button" tabindex="0", delegated click AND keydown
 // (Enter/Space), same accessible pattern as the homepage story cards, so a
 // keyboard-only visitor can open every card exactly like a mouse user can.
-document.getElementById('imGrid').addEventListener('click', (e) => {
+// Delegated on document, not just #imGrid, so the homepage teaser grid's
+// cards (same .im-card markup, different container) flip too.
+document.addEventListener('click', (e) => {
   const card = e.target.closest('.im-card');
   if (!card || e.target.closest('a')) return; // a social link inside the flipped card must not also toggle it
   const flipped = card.classList.toggle('flipped');
@@ -7842,6 +7857,24 @@ async function loadHighlightedProfiles() {
   }
 }
 
+// Impact Makers homepage teaser — same shape as loadHighlightedProfiles
+// above (fetch, slice to 4, reuse the real card builder), reusing
+// impactMakerCardHtml() from the full gallery page so a flip-card here
+// behaves identically to one on ?p=impact-makers, featured styling included.
+async function loadImpactMakersTeaser() {
+  const el = document.getElementById('impactMakersTeaserGrid');
+  try {
+    const makers = await api('/impact-makers');
+    const featured = makers.filter((m) => m.featured).slice(0, 4);
+    const shown = featured.length ? featured : makers.slice(0, 4);
+    el.innerHTML = shown.length
+      ? shown.map(impactMakerCardHtml).join('')
+      : '<div class="dir-empty-state">No Impact Makers featured yet.</div>';
+  } catch (err) {
+    el.innerHTML = errorStateHtml("Couldn't load right now.", 'loadImpactMakersTeaser()');
+  }
+}
+
 // Platform stats (statReaders/statMembers/statArticles) are populated by
 // the centralized loader in unplug-shared.js — no per-page script needed.
 
@@ -7931,6 +7964,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadFeaturedMembers();
   loadDiscovery();
   loadTestimonials();
+  loadImpactMakersTeaser();
 });
 
 // ---------------------------------------------------------------------------

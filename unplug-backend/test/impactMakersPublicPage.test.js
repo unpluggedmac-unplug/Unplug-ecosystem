@@ -133,10 +133,17 @@ test('THE FLIP IS ACCESSIBLE: role=button, tabindex=0, aria-pressed, AND WORKS O
 
 test('CLICKING A SOCIAL LINK INSIDE THE FLIPPED CARD OPENS THE LINK, NOT ALSO RE-FLIPPING THE CARD', () => {
   const src = readMagazine();
-  const idx = src.indexOf("getElementById('imGrid').addEventListener('click'");
+  const idx = src.indexOf("const card = e.target.closest('.im-card');");
   assert.ok(idx > -1);
-  const body = src.slice(idx, idx + 300);
+  const body = src.slice(Math.max(0, idx - 400), idx + 300);
   assert.match(body, /e\.target\.closest\('a'\)/, 'a click landing on the <a> itself must be excluded from the toggle');
+});
+
+test('THE FLIP CLICK HANDLER IS DELEGATED ON document, NOT SCOPED TO ONE GRID — SO THE HOMEPAGE TEASER\'S CARDS FLIP TOO', () => {
+  const src = readMagazine();
+  const idx = src.indexOf("const card = e.target.closest('.im-card');");
+  const before = src.slice(Math.max(0, idx - 200), idx);
+  assert.match(before, /document\.addEventListener\('click'/, 'scoping this to #imGrid alone would leave the homepage teaser\'s cards unclickable');
 });
 
 test('THE PAGE SETS ITS OWN SEO TITLE AND META DESCRIPTION ON LOAD', () => {
