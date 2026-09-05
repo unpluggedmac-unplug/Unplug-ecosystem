@@ -1642,10 +1642,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-top:10px;">
             <div><label style="display:block; font-size:12px; margin-bottom:4px;">Name</label><input id="tstNameInput" placeholder="e.g. Naledi Mokoena" style="padding:8px;" maxlength="160"></div>
             <div><label style="display:block; font-size:12px; margin-bottom:4px;">Role <span style="color:var(--slate);">(optional)</span></label><input id="tstRoleInput" placeholder="e.g. Directory member" style="padding:8px; width:200px;" maxlength="160"></div>
-            <div><label style="display:block; font-size:12px; margin-bottom:4px;">Photo URL <span style="color:var(--slate);">(optional)</span></label><input id="tstPhotoInput" placeholder="https://..." style="padding:8px; width:220px;"></div>
             <div><label style="display:block; font-size:12px; margin-bottom:4px;">Order <span style="color:var(--slate);">(lower shows first)</span></label><input id="tstOrderInput" type="number" value="0" style="padding:8px; width:80px;"></div>
             <button class="approve" id="createTestimonialBtn" style="padding:9px 16px;">Add Testimonial</button>
           </div>
+          <div class="field" style="margin-top:12px; max-width:260px;"><label style="display:block; font-size:12px; margin-bottom:4px;">Photo <span style="color:var(--slate);">(optional)</span></label><div id="tstPhotoUpload"></div></div>
         </div>
         <div id="testimonialFormError" style="color:var(--red); margin-bottom:12px; display:none;"></div>
         <div class="panel-body" id="testimonialsBody" style="padding:0;"></div>
@@ -11807,24 +11807,38 @@ async function loadTestimonials() {
       return;
     }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Quote</th><th>Name</th><th>Role</th><th>Order</th><th>Status</th><th></th></tr>';
+    table.innerHTML = '<tr><th>Photo</th><th>Quote</th><th>Name</th><th>Role</th><th>Order</th><th>Status</th><th></th></tr>';
     rows.forEach((t) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><textarea class="tst-quote" rows="2" style="width:220px; padding:6px;" maxlength="2000">${escapeAttrAdmin(t.quote)}</textarea></td>
-        <td><input class="tst-name" value="${escapeAttrAdmin(t.author_name)}" style="width:120px; padding:6px;" maxlength="160"></td>
-        <td><input class="tst-role" value="${escapeAttrAdmin(t.author_role || '')}" style="width:120px; padding:6px;" maxlength="160"></td>
-        <td><input class="tst-order" type="number" value="${t.display_order}" style="width:60px; padding:6px;"></td>
+        <td>${t.author_photo_url ? `<img src="${escapeHtmlAdmin(t.author_photo_url)}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;">` : '—'}</td>
+        <td style="max-width:260px;">${escapeHtmlAdmin(t.quote)}</td>
+        <td>${escapeHtmlAdmin(t.author_name)}</td>
+        <td>${escapeHtmlAdmin(t.author_role || '—')}</td>
+        <td>${t.display_order}</td>
         <td>${t.active ? '<span style="color:green; font-weight:700;">Active</span>' : '<span style="color:var(--slate);">Off</span>'}</td>
         <td style="white-space:nowrap;"></td>`;
       const actionsTd = tr.querySelector('td:last-child');
 
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'approve';
-      saveBtn.textContent = 'Save';
-      saveBtn.style.marginRight = '6px';
-      saveBtn.addEventListener('click', () => saveTestimonial(t.id, tr));
-      actionsTd.appendChild(saveBtn);
+      // Editing reloads the entry into the form above — same pattern as
+      // Hall of Fame and Impact Makers — so the real upload widget only
+      // ever has to exist in one place, not once per row.
+      const editBtn = document.createElement('button');
+      editBtn.className = 'approve';
+      editBtn.textContent = 'Edit';
+      editBtn.style.marginRight = '6px';
+      editBtn.addEventListener('click', () => {
+        document.getElementById('tstQuoteInput').value = t.quote;
+        document.getElementById('tstNameInput').value = t.author_name;
+        document.getElementById('tstRoleInput').value = t.author_role || '';
+        document.getElementById('tstOrderInput').value = t.display_order;
+        document.getElementById('tstPhotoUpload').innerHTML = UnplugUpload.fieldHtml('tstPhoto', t.author_photo_url || '', '', imgSpecFull('person_portrait'));
+        TST_EDITING_ID = t.id;
+        document.getElementById('createTestimonialBtn').textContent = 'Save Changes';
+        showToast('Loaded for editing — change what you need and save.');
+        document.getElementById('tstQuoteInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      actionsTd.appendChild(editBtn);
 
       const toggleBtn = document.createElement('button');
       toggleBtn.className = t.active ? 'reject' : 'approve';
@@ -11845,26 +11859,6 @@ async function loadTestimonials() {
     body.appendChild(table);
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
-  }
-}
-
-async function saveTestimonial(id, row) {
-  const quote = row.querySelector('.tst-quote').value.trim();
-  const authorName = row.querySelector('.tst-name').value.trim();
-  if (!quote || !authorName) { showToast('Quote and name are both required.', true); return; }
-  try {
-    await api(`/testimonials/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        quote, authorName,
-        authorRole: row.querySelector('.tst-role').value.trim() || null,
-        displayOrder: Number(row.querySelector('.tst-order').value) || 0,
-      }),
-    });
-    showToast('Testimonial saved.');
-    loadTestimonials();
-  } catch (err) {
-    showToast(err.message, true);
   }
 }
 
@@ -11895,7 +11889,7 @@ document.getElementById('createTestimonialBtn').addEventListener('click', async 
   const quote = document.getElementById('tstQuoteInput').value.trim();
   const authorName = document.getElementById('tstNameInput').value.trim();
   const authorRole = document.getElementById('tstRoleInput').value.trim();
-  const authorPhotoUrl = document.getElementById('tstPhotoInput').value.trim();
+  const authorPhotoUrl = UnplugUpload.valueOf(document.getElementById('tstPhotoUpload')) || null;
   const displayOrder = Number(document.getElementById('tstOrderInput').value) || 0;
 
   if (!quote || !authorName) {
@@ -11905,15 +11899,26 @@ document.getElementById('createTestimonialBtn').addEventListener('click', async 
   }
 
   try {
-    await api('/testimonials', {
-      method: 'POST',
-      body: JSON.stringify({ quote, authorName, authorRole: authorRole || null, authorPhotoUrl: authorPhotoUrl || null, displayOrder }),
-    });
-    showToast('Testimonial added — off by default, switch it on when ready.');
+    const editingId = TST_EDITING_ID;
+    if (editingId) {
+      await api(`/testimonials/${editingId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ quote, authorName, authorRole: authorRole || null, authorPhotoUrl, displayOrder }),
+      });
+      showToast('Testimonial saved.');
+    } else {
+      await api('/testimonials', {
+        method: 'POST',
+        body: JSON.stringify({ quote, authorName, authorRole: authorRole || null, authorPhotoUrl, displayOrder }),
+      });
+      showToast('Testimonial added — off by default, switch it on when ready.');
+    }
+    TST_EDITING_ID = null;
+    document.getElementById('createTestimonialBtn').textContent = 'Add Testimonial';
     document.getElementById('tstQuoteInput').value = '';
     document.getElementById('tstNameInput').value = '';
     document.getElementById('tstRoleInput').value = '';
-    document.getElementById('tstPhotoInput').value = '';
+    document.getElementById('tstPhotoUpload').innerHTML = UnplugUpload.fieldHtml('tstPhoto', '', '', imgSpecFull('person_portrait'));
     document.getElementById('tstOrderInput').value = '0';
     loadTestimonials();
   } catch (err) {
@@ -11925,10 +11930,10 @@ document.getElementById('createTestimonialBtn').addEventListener('click', async 
 // ---------------------------------------------------------------------------
 // Impact Makers — a digital recognition gallery of people, brands, sponsors,
 // partners and organisations. Field count is closer to Hall of Fame than
-// Testimonials (image widget, category, type, 7 social links, status), so
-// this follows Hall of Fame's shape: one form above (Add, or Edit-loads-back-
-// into-it), one management table below — not Testimonials' edit-in-row table,
-// which doesn't have room for a real UnplugUpload widget.
+// Testimonials (category, type, 7 social links, status), so this follows
+// Hall of Fame's shape: one form above (Add, or Edit-loads-back-into-it),
+// one management table below — same Edit-reload pattern Testimonials itself
+// now uses for its own photo upload widget.
 //
 // "Activate/Deactivate" (spec §24's action list) toggles published<->draft;
 // "archived" is reached through the Status dropdown in the form itself, not

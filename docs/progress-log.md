@@ -2518,3 +2518,32 @@ Verified live in-browser against a mocked backend: switching to "Page on this si
 field; submitting with Impact Makers selected produced `url: "unplug-magazine.html?p=impact-makers"` in the
 real POST body.
 
+## 2026-09-05 — Testimonials: a real image upload, not a pasted URL
+
+Requested directly: "allow admin to manually upload image (same as when publish article)." The Testimonials
+panel's author photo was a plain "Photo URL" text box — the only image field left on the site still asking
+an admin to paste a URL by hand instead of using the same drag-and-drop upload widget every other image
+field (articles, Hall of Fame, Impact Makers) already has.
+
+Backend needed no change at all — `testimonials.js` already stored and returned `author_photo_url` as a
+plain string; it never cared how that string was produced. This is an admin-dashboard-only change, but a
+structural one: Testimonials used to be a fully inline-editable table (quote/name/role/order all editable
+directly in each row), which has no room for a real upload widget — one widget per row would mean
+rebuilding it for every row on every refresh. So the panel moved to the same Add-or-Edit-reloads-the-form
+pattern Hall of Fame and Impact Makers already use: one shared form above (with the real upload widget,
+`person_portrait` spec — the same headshot spec Hall of Fame uses), a management table below where "Edit"
+loads a row's values back into that form rather than editing in place. Saving now branches on whether an
+edit is in progress, so clicking "Save Changes" on an existing testimonial updates it instead of creating a
+duplicate.
+
+New `testimonialsPhotoUpload.test.js` (5 static-source tests): the old text input is completely gone, not
+left dangling; the real upload widget exists using the `person_portrait` spec; editing reloads a row's
+existing photo into that same widget; saving reads the widget's real value; saving correctly branches
+between create and update.
+
+Verified live in-browser against a mocked backend: the upload widget rendered in place of the old text
+field; editing an existing testimonial (seeded with a photo URL) correctly carried that URL into the
+widget and set edit mode; saving sent a real PATCH to the existing row (confirmed via the admin list
+afterward still holding exactly one row) rather than creating a second one, and the button reverted to
+"Add Testimonial" afterward.
+
