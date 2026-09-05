@@ -1600,7 +1600,30 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:20px;">
           <div><label style="display:block; font-size:12px; margin-bottom:4px;">Icon <span style="color:var(--slate);">(optional emoji)</span></label><input id="sbIconInput" placeholder="e.g. 💬" style="padding:8px; width:70px;" maxlength="20"></div>
           <div><label style="display:block; font-size:12px; margin-bottom:4px;">Label</label><input id="sbLabelInput" placeholder="e.g. Chat with us" style="padding:8px;" maxlength="60"></div>
-          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Link</label><input id="sbUrlInput" placeholder="https:// or a page on this site" style="padding:8px; width:260px;"></div>
+          <div><label style="display:block; font-size:12px; margin-bottom:4px;">Link type</label>
+            <select id="sbLinkType" style="padding:8px;">
+              <option value="external">External link</option>
+              <option value="page">Page on this site</option>
+            </select>
+          </div>
+          <div id="sbUrlField"><label style="display:block; font-size:12px; margin-bottom:4px;">Link</label><input id="sbUrlInput" placeholder="https://…" style="padding:8px; width:260px;"></div>
+          <div id="sbPageField" style="display:none;"><label style="display:block; font-size:12px; margin-bottom:4px;">Page</label>
+            <select id="sbPageSelect" style="padding:8px; width:220px;">
+              <option value="home">Home</option>
+              <option value="news">Latest News</option>
+              <option value="directory">Directory</option>
+              <option value="gallery">Gallery</option>
+              <option value="editions">Editions</option>
+              <option value="top10">Top 10</option>
+              <option value="competitions">Competitions</option>
+              <option value="investors">Investors</option>
+              <option value="brandplacement">Marketplace</option>
+              <option value="deafcommunity">Deaf Community</option>
+              <option value="impact-makers">Impact Makers</option>
+              <option value="about">About</option>
+              <option value="contact">Contact</option>
+            </select>
+          </div>
           <div><label style="display:block; font-size:12px; margin-bottom:4px;">Order <span style="color:var(--slate);">(lower shows first)</span></label><input id="sbOrderInput" type="number" value="0" style="padding:8px; width:80px;"></div>
           <button class="approve" id="createSiteButtonBtn" style="padding:9px 16px;">Add Button</button>
         </div>
@@ -11717,11 +11740,24 @@ async function deleteSiteButton(id, label) {
   }
 }
 
+document.getElementById('sbLinkType').addEventListener('change', (e) => {
+  const isPage = e.target.value === 'page';
+  document.getElementById('sbUrlField').style.display = isPage ? 'none' : '';
+  document.getElementById('sbPageField').style.display = isPage ? '' : 'none';
+});
+
 document.getElementById('createSiteButtonBtn').addEventListener('click', async () => {
   const errorEl = document.getElementById('siteButtonFormError');
   errorEl.style.display = 'none';
   const label = document.getElementById('sbLabelInput').value.trim();
-  const url = document.getElementById('sbUrlInput').value.trim();
+  const isPage = document.getElementById('sbLinkType').value === 'page';
+  // A page picked from the list is stored the same way unplug-site-buttons.js's
+  // own doc comment already says an internal link must look — the full
+  // filename plus its ?p= query — not a bare page id, since the button is
+  // rendered as a plain <a href> with no router of its own to expand it.
+  const url = isPage
+    ? ('unplug-magazine.html?p=' + document.getElementById('sbPageSelect').value)
+    : document.getElementById('sbUrlInput').value.trim();
   const icon = document.getElementById('sbIconInput').value.trim();
   const displayOrder = Number(document.getElementById('sbOrderInput').value) || 0;
 
@@ -11753,7 +11789,15 @@ document.getElementById('createSiteButtonBtn').addEventListener('click', async (
 // editable, same pattern as Floating Buttons: a three-line record does not
 // need a separate edit mode.
 // ---------------------------------------------------------------------------
+let TST_EDITING_ID = null;
+
 async function loadTestimonials() {
+  // Same guard loadHallOfFame() uses: the upload widget is only ever built
+  // once, here — re-running this on every refresh would otherwise wipe out
+  // a file the admin had already chosen but not yet saved.
+  if (!document.querySelector('#tstPhotoUpload .img-upload')) {
+    document.getElementById('tstPhotoUpload').innerHTML = UnplugUpload.fieldHtml('tstPhoto', '', '', imgSpecFull('person_portrait'));
+  }
   const body = document.getElementById('testimonialsBody');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
   try {

@@ -2493,3 +2493,28 @@ delete removes the listing and cleans up its gallery images, and a second delete
 Verified live in-browser against a mocked backend: creating a listing jumped straight into its editor;
 deleting it (with the confirm auto-accepted) hid the editor and removed it from the picker's list.
 
+## 2026-09-05 — Site Buttons: any external link, or pick a page on this site
+
+Requested directly, from a screenshot of the Floating Buttons admin panel: "allow admin to link button
+with any external link and allow admin to choose page on website." The backend (`siteButtons.js`) already
+stored `url` as an unrestricted free-text column — pasting any `https://` link already worked, and still
+does. What was missing was a friendly way to link to a page ON this site: the field's own placeholder
+("https:// or a page on this site") was hinting at a format — `unplug-magazine.html?p=<page>`, per
+`unplug-site-buttons.js`'s own doc comment — that an admin had to already know and type by hand.
+
+Purely an admin-dashboard change, no backend or schema change. The "Add Button" form gained a "Link type"
+selector: "External link" (unchanged — the existing free-text field) or "Page on this site" (a dropdown of
+the same page list the CMS image-block picker already offers, plus Impact Makers). Choosing a page composes
+the exact URL shape `unplug-site-buttons.js` expects for internal navigation, so the button opens in the
+same tab instead of the external-link path (which opens a new tab) — matching that script's own
+`isExternal` check, which decides that entirely from what the URL looks like.
+
+New `siteButtonsPagePicker.test.js` (4 static-source tests): the link-type selector exists with both
+options; the page dropdown lists real pages including Impact Makers; choosing "page" swaps the two input
+fields; submitting with "page" composes the exact string shape the public script expects, while the
+external-link path is untouched.
+
+Verified live in-browser against a mocked backend: switching to "Page on this site" swapped the visible
+field; submitting with Impact Makers selected produced `url: "unplug-magazine.html?p=impact-makers"` in the
+real POST body.
+
