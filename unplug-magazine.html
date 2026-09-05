@@ -771,6 +771,36 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .gallery-item{ aspect-ratio:4/5; background:linear-gradient(160deg,var(--paper),#e3d8c2); position:relative; display:block; }
 .gallery-cap{ position:absolute; left:10px; bottom:10px; font-size:11px; color:#fff; background:rgba(39,38,38,0.55); padding:4px 8px; text-transform:uppercase; letter-spacing:0.03em; }
 
+/* ---- impact makers ----
+   4:5 portrait cards (same real-image-shape reasoning as the gallery grid
+   above), each a 3D flip card: front = photo, back = bio + socials. */
+.im-toolbar{ display:flex; flex-wrap:wrap; gap:14px; align-items:center; justify-content:space-between; margin:0 0 24px; }
+.im-filters{ display:flex; flex-wrap:wrap; gap:8px; }
+.im-filter-chip{ border:1px solid var(--paper-line); background:#fff; padding:7px 16px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; cursor:pointer; color:var(--ink); }
+.im-filter-chip.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.im-search{ border:1px solid var(--paper-line); padding:9px 14px; font-size:13.5px; min-width:220px; font-family:inherit; }
+
+.im-grid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:20px; }
+@media(max-width:1000px){ .im-grid{ grid-template-columns:repeat(3, 1fr); } }
+@media(max-width:700px){ .im-grid{ grid-template-columns:repeat(2, 1fr); gap:14px; } }
+@media(max-width:460px){ .im-grid{ grid-template-columns:1fr; } }
+
+.im-card{ aspect-ratio:4/5; perspective:1400px; }
+.im-card-inner{ position:relative; width:100%; height:100%; transition:transform 0.5s cubic-bezier(.4,.1,.2,1); transform-style:preserve-3d; cursor:pointer; }
+.im-card.flipped .im-card-inner{ transform:rotateY(180deg); }
+.im-card-face{ position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border:1px solid var(--paper-line); overflow:hidden; background:#fff; }
+.im-card-front{ background:linear-gradient(160deg,var(--paper),#e3d8c2); }
+.im-card-front img{ width:100%; height:100%; object-fit:cover; display:block; }
+.im-card-label{ position:absolute; top:10px; left:10px; background:rgba(20,19,19,0.65); color:#fff; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:4px 9px; }
+.im-card-back{ transform:rotateY(180deg); padding:18px; display:flex; flex-direction:column; }
+.im-card-back h3{ font-family:'Playfair Display',serif; font-size:18px; margin:0 0 8px; }
+.im-card-back p{ font-size:12.5px; line-height:1.55; color:var(--slate); margin:0 0 12px; overflow-y:auto; flex:1; }
+.im-card-social{ font-size:11.5px; border-top:1px solid var(--paper-line); padding-top:10px; }
+.im-card-social span{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); margin-bottom:6px; }
+.im-card-social a{ color:var(--ink); text-decoration:underline; margin-right:10px; display:inline-block; margin-bottom:4px; }
+.im-card.im-featured .im-card-face{ border-color:var(--red); border-width:2px; }
+@media (prefers-reduced-motion: reduce){ .im-card-inner{ transition:none; } }
+
 /* ---- competitions ---- */
 /* Hall of Fame */
 .hof-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:24px; }
@@ -1870,6 +1900,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
           <a class="nav-item" href="?p=directory" data-page="directory"><span class="nav-item-label" data-i18n="nav.directory">Directory</span><span class="nav-item-desc" data-i18n="nav.directory.desc">Find people and businesses</span></a>
           <a class="nav-item" href="?p=members" data-page="members"><span class="nav-item-label" data-i18n="nav.members">Members</span><span class="nav-item-desc" data-i18n="nav.members.desc">Everyone with an Unplug profile</span></a>
           <a class="nav-item" href="?p=deafcommunity" data-page="deafcommunity"><span class="nav-item-label" data-i18n="nav.deafcommunity">Deaf Community</span><span class="nav-item-desc" data-i18n="nav.deafcommunity.desc">Jobs, SASL and the Passport</span></a>
+          <a class="nav-item" href="?p=impact-makers" data-page="impact-makers"><span class="nav-item-label" data-i18n="nav.impactmakers">Impact Makers</span><span class="nav-item-desc" data-i18n="nav.impactmakers.desc">People and brands making a difference</span></a>
         </div>
       </div>
       <div class="nav-group" data-nav-group="takepart">
@@ -2790,6 +2821,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <a href="https://vnkdigital.co.za" target="_blank" class="btn btn-solid vnk-btn">Get In Touch →</a>
   </div>
 
+</main>
+
+<!-- ============ IMPACT MAKERS ============ -->
+<main class="page" id="page-impact-makers">
+  <div class="wrap" style="padding-top:56px;">
+    <span class="eyebrow">Impact Makers</span>
+    <h1 style="font-size:clamp(32px,4.5vw,52px); margin:14px 0 8px;">Impact Makers</h1>
+    <p class="lede">Celebrating the people, brands and visionaries making a difference.</p>
+    <p style="color:var(--slate); line-height:1.7; max-width:70ch; margin-top:14px;">Impact doesn't always make headlines. Sometimes it starts with one person, one idea, one business or one decision to make a difference. Impact Makers celebrates the people, brands and organisations creating meaningful change, inspiring others and helping shape the world around them.</p>
+  </div>
+
+  <section class="wrap" style="padding-top:16px;">
+    <div class="im-toolbar">
+      <div class="im-filters" id="imFilters" role="group" aria-label="Filter Impact Makers">
+        <button class="im-filter-chip active" type="button" data-filter="all" aria-pressed="true">All</button>
+      </div>
+      <input type="search" class="im-search" id="imSearchInput" placeholder="Search Impact Makers…" aria-label="Search Impact Makers">
+    </div>
+    <div class="im-grid" id="imGrid">
+      <div class="dir-empty-state">Loading…</div>
+    </div>
+  </section>
+
+  <section class="wrap" style="text-align:center; padding:56px 20px 40px;">
+    <h2 style="font-family:'Playfair Display',serif; font-size:clamp(22px,3vw,32px); margin-bottom:10px;">Want to make an impact?</h2>
+    <p style="color:var(--slate); max-width:50ch; margin:0 auto 22px;">Your story, your work or your brand could inspire someone else.</p>
+    <button class="btn btn-solid" data-page="contact">Become an Impact Maker</button>
+  </section>
 </main>
 
 <!-- ============ EDITIONS ============ -->
@@ -4266,6 +4325,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
         <li><a href="?p=gallery" data-page="gallery">Gallery</a></li>
         <li><a href="?p=editions" data-page="editions">Editions</a></li>
         <li><a href="?p=top10" data-page="top10">Top 10</a></li>
+        <li><a href="?p=impact-makers" data-page="impact-makers">Impact Makers</a></li>
       </ul></div>
       <div><h4>Magazine</h4><ul>
         <li><a href="?p=competitions" data-page="competitions">Competitions</a></li>
@@ -6919,6 +6979,160 @@ document.getElementById('galleryLoadMoreBtn').addEventListener('click', () => {
 });
 
 let galleryLoadedOnce = false;
+
+// ---------------------------------------------------------------------------
+// Impact Makers — a digital recognition gallery of people, brands, sponsors,
+// partners and organisations. Fetched once per visit (the published feed is
+// small and cached server-side for 60s); filtering and search below are then
+// pure client-side, no refetch, against that one array.
+//
+// Filter chips are built from CATEGORY (the admin-manageable list), not
+// Impact Maker Type — Category is the one piece of this feature's taxonomy
+// that's actually CMS-driven, so it's what the "generated from the CMS"
+// filter row can honestly claim to be. Type is still searchable via the
+// search box below.
+// ---------------------------------------------------------------------------
+let impactMakersLoaded = false;
+let IM_ALL = [];
+let IM_ACTIVE_FILTER = 'all';
+let IM_SEARCH_TERM = '';
+
+const IM_TYPE_LABELS_PUBLIC = {
+  individual: 'Individual', business: 'Business', sponsor: 'Sponsor', partner: 'Partner',
+  organisation: 'Organisation', changemaker: 'Changemaker', entrepreneur: 'Entrepreneur',
+  creative: 'Creative', community_leader: 'Community Leader', professional: 'Professional',
+  artist: 'Artist', founder: 'Founder', other: 'Other',
+};
+
+// The small label on the card front (spec: sponsors read "IMPACT SPONSOR" or
+// "IMPACT PARTNER", so the sponsor relationship reads as ecosystem
+// recognition, not a paid ad) — derived from type, not a separate field.
+function imDesignationLabel(type) {
+  if (type === 'sponsor') return 'Impact Sponsor';
+  if (type === 'partner') return 'Impact Partner';
+  return 'Impact Maker';
+}
+
+const IM_SOCIAL_FIELDS = [
+  ['instagram_url', 'Instagram'], ['facebook_url', 'Facebook'], ['linkedin_url', 'LinkedIn'],
+  ['tiktok_url', 'TikTok'], ['youtube_url', 'YouTube'], ['x_url', 'X'], ['website_url', 'Website'],
+];
+
+function impactMakerCardHtml(m) {
+  const name = escapeHtml(m.display_name);
+  const bio = escapeHtml(m.bio || '');
+  const label = imDesignationLabel(m.impact_maker_type);
+  const photo = m.photo_url
+    ? `<img src="${escapeHtml(m.photo_url)}" alt="" loading="lazy" decoding="async">`
+    : '<span class="print-mark tiny"></span>';
+  const socials = IM_SOCIAL_FIELDS
+    .filter(([col]) => m[col])
+    .map(([col, platformLabel]) => `<a href="${escapeHtml(m[col])}" target="_blank" rel="noopener">${platformLabel}</a>`)
+    .join('');
+  const searchHaystack = escapeAttr(
+    [m.display_name, m.category_name, IM_TYPE_LABELS_PUBLIC[m.impact_maker_type]].filter(Boolean).join(' ').toLowerCase()
+  );
+  return `<div class="im-card${m.featured ? ' im-featured' : ''}" role="button" tabindex="0" aria-pressed="false"
+      aria-label="${escapeAttr(m.display_name)} — press Enter to read their story" data-category="${m.category_id || ''}" data-search="${searchHaystack}">
+    <div class="im-card-inner">
+      <div class="im-card-face im-card-front">
+        ${photo}
+        <span class="im-card-label">${label}</span>
+      </div>
+      <div class="im-card-face im-card-back">
+        <h3>${name}</h3>
+        <p>${bio}</p>
+        ${socials ? `<div class="im-card-social"><span>Connect</span>${socials}</div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function imApplyFiltersAndRender() {
+  const grid = document.getElementById('imGrid');
+  const filtered = IM_ALL.filter((m) => {
+    if (IM_ACTIVE_FILTER !== 'all' && String(m.category_id || '') !== IM_ACTIVE_FILTER) return false;
+    if (IM_SEARCH_TERM) {
+      const haystack = [m.display_name, m.category_name, IM_TYPE_LABELS_PUBLIC[m.impact_maker_type]]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(IM_SEARCH_TERM)) return false;
+    }
+    return true;
+  });
+  grid.innerHTML = filtered.length
+    ? filtered.map(impactMakerCardHtml).join('')
+    : '<div class="dir-empty-state">No Impact Makers match that search.</div>';
+}
+
+function imRenderFilters(categories) {
+  const wrap = document.getElementById('imFilters');
+  const chips = categories
+    .filter((c) => IM_ALL.some((m) => m.category_id === c.id))
+    .map((c) => `<button class="im-filter-chip" type="button" data-filter="${c.id}" aria-pressed="false">${escapeHtml(c.name)}</button>`)
+    .join('');
+  wrap.innerHTML = `<button class="im-filter-chip active" type="button" data-filter="all" aria-pressed="true">All</button>${chips}`;
+}
+
+async function loadImpactMakersPage() {
+  const grid = document.getElementById('imGrid');
+  grid.innerHTML = '<div class="dir-empty-state">Loading…</div>';
+  try {
+    const [makers, categories] = await Promise.all([api('/impact-makers'), api('/impact-makers/categories')]);
+    IM_ALL = makers;
+    imRenderFilters(categories);
+    imApplyFiltersAndRender();
+  } catch (err) {
+    grid.innerHTML = '<div class="dir-empty-state">Couldn\'t load Impact Makers right now. Please try again shortly.</div>';
+  }
+  seoSetTitle('Impact Makers');
+  seoSetDescription('Meet the people, brands, sponsors, partners and visionaries making a difference through the Unplug Magazine Impact Makers platform.');
+}
+
+// Filter chips: one delegated listener, since the chip set itself is
+// rebuilt from the category list on every load.
+document.getElementById('imFilters').addEventListener('click', (e) => {
+  const btn = e.target.closest('.im-filter-chip');
+  if (!btn) return;
+  document.querySelectorAll('#imFilters .im-filter-chip').forEach((c) => {
+    c.classList.remove('active');
+    c.setAttribute('aria-pressed', 'false');
+  });
+  btn.classList.add('active');
+  btn.setAttribute('aria-pressed', 'true');
+  IM_ACTIVE_FILTER = btn.dataset.filter;
+  imApplyFiltersAndRender();
+});
+
+// Debounced, same timing as the Members page search, but filtering the
+// already-fetched array in memory rather than refetching — spec asks for
+// no page reload, and there's no server round trip to justify one here.
+let imSearchDebounce = null;
+document.getElementById('imSearchInput').addEventListener('input', (e) => {
+  clearTimeout(imSearchDebounce);
+  const value = e.target.value;
+  imSearchDebounce = setTimeout(() => {
+    IM_SEARCH_TERM = value.trim().toLowerCase();
+    imApplyFiltersAndRender();
+  }, 350);
+});
+
+// The flip itself — role="button" tabindex="0", delegated click AND keydown
+// (Enter/Space), same accessible pattern as the homepage story cards, so a
+// keyboard-only visitor can open every card exactly like a mouse user can.
+document.getElementById('imGrid').addEventListener('click', (e) => {
+  const card = e.target.closest('.im-card');
+  if (!card || e.target.closest('a')) return; // a social link inside the flipped card must not also toggle it
+  const flipped = card.classList.toggle('flipped');
+  card.setAttribute('aria-pressed', String(flipped));
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest && e.target.closest('.im-card');
+  if (!card) return;
+  e.preventDefault();
+  const flipped = card.classList.toggle('flipped');
+  card.setAttribute('aria-pressed', String(flipped));
+});
 
 // ---------------------------------------------------------------------------
 // Top 10 — one shared list of entrants drives four displays: the Top 10
@@ -10046,6 +10260,7 @@ function goToPage(pageId){
     news: 'Latest News — Unplug Magazine',
     directory: 'Directory — Unplug Magazine',
     gallery: 'Community Gallery — Unplug Magazine',
+    'impact-makers': 'Impact Makers — Unplug Magazine',
     editions: 'Editions — Unplug Magazine',
     top10: 'Top 10 — Unplug Magazine',
     competitions: 'Competitions — Unplug Magazine',
@@ -10159,6 +10374,10 @@ function goToPage(pageId){
   if (pageId === 'members' && !membersLoaded) {
     membersLoaded = true;
     initMembersPage();
+  }
+  if (pageId === 'impact-makers' && !impactMakersLoaded) {
+    impactMakersLoaded = true;
+    loadImpactMakersPage();
   }
 }
 document.querySelectorAll('[data-page]').forEach(el => {

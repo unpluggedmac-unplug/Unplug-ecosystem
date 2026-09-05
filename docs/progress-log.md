@@ -2324,3 +2324,45 @@ Full suite: 2074 passing, 1 failing on first run — `twoFactor.test.js`'s pre-e
 documented earlier this cycle, unrelated to anything touched here. Re-ran that file alone: clean 16/16.
 Effectively 2075 passing, 0 failing (up from 2063).
 
+## 2026-09-05 — Impact Makers, part 3: the public gallery page
+
+Part 3 of 4. New `?p=impact-makers` page in `unplug-magazine.html` — needed no new branch in `routeFromUrl()`,
+since the generic `page-<p>` fallback already covers any plain listing page; just the markup, a
+`PAGE_TITLES` entry, a first-load guard, and nav links (the Community mega-menu panel, plus the footer
+sitemap list for an extra internal link per spec §21).
+
+The flip-card interaction is genuinely new CSS/JS — confirmed nothing like it (`rotateY`/`perspective`/
+`backface-visibility`) existed anywhere in the codebase before this. Built accessibly: `role="button"
+tabindex="0" aria-pressed`, a delegated click handler plus a delegated keydown handler for Enter/Space,
+cloned from the homepage story-card pattern — a keyboard-only visitor can open every card exactly like a
+mouse user can, and clicking a social link inside a flipped card opens the link without also re-flipping
+the card. `prefers-reduced-motion` disables the transition. The card-front designation label ("Impact
+Maker" / "Impact Partner" / "Impact Sponsor") is derived from `impact_maker_type`, not a new field, per
+spec §25's sponsor-recognition requirement.
+
+Filter chips are built from **Category** (the one part of this feature's taxonomy that's actually
+CMS-driven, per the earlier decision) — clicking one narrows the already-fetched grid instantly, no
+refetch. Search is debounced at 350ms (the Members page's own timing) but filters the same in-memory
+array rather than hitting the server, since spec §10/§11 explicitly rule out a page reload for either.
+Social links use the Directory's own "only show if present, open in a new tab" pattern, extended from 6 to
+7 platforms. A real free-text field (name/category) going into an HTML attribute (`data-search`,
+`aria-label`) uses the quote-safe `escapeAttr`, not the plain `escapeHtml` every other interpolation here
+uses — caught before it shipped, since a real name containing a literal `"` would otherwise have broken
+out of the attribute.
+
+New test, `impactMakersPublicPage.test.js` (15 tests, static-source checks — the backend and admin panel
+already have their own real-behaviour tests): the page/router/nav/footer wiring exists; the header carries
+the requested copy; the CTA links to Contact, not a new form; the flip CSS is genuinely 3D and respects
+reduced motion; the grid's responsive breakpoints match spec §13; a featured card gets a real CSS
+distinction; the designation label is correctly derived; social links are filtered to only real URLs and
+open in a new tab; filtering and search never call the API; filter chips come from category; the flip is
+keyboard-accessible; a social-link click doesn't also re-flip its card; the page sets its own SEO
+title/description; attribute-bound free text uses the safe escape. Verified live in-browser against a
+mocked backend: both a featured and a non-featured card rendered with correct designations (including the
+sponsor's "Impact Sponsor" label); clicking flipped a card and Enter-on-focus flipped a different one with
+no mouse; a category filter and a live search each narrowed the grid with zero additional network
+requests (confirmed via the request log); clicking a social link inside a flipped card opened it
+(`target="_blank"`, correct href) without re-flipping the card.
+
+Full suite: 2090 passing, 0 failing (up from 2075).
+
