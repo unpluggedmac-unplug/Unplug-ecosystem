@@ -369,6 +369,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="placements">Marketplace Placements</a>
         <a data-section="sitebuttons">Floating Buttons</a>
         <a data-section="testimonials">Testimonials</a>
+        <a data-section="impactmakers">Impact Makers</a>
       </div>
     </div>
 
@@ -1603,6 +1604,83 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div id="testimonialFormError" style="color:var(--red); margin-bottom:12px; display:none;"></div>
         <div class="panel-body" id="testimonialsBody" style="padding:0;"></div>
       </div>
+    </div>
+
+    <!-- IMPACT MAKERS -->
+    <div class="admin-section" id="section-impactmakers">
+      <div class="main-head"><div><h1>Impact Makers</h1>
+        <p>People, brands, sponsors, partners and organisations recognised on the Impact Makers gallery. A profile cannot be published until its name, image, bio, category and type are all filled in.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3 id="imEditorTitle">Add an Impact Maker</h3></div>
+        <div class="panel-body">
+          <div class="form-row">
+            <div><label for="imFirstName">First name</label><input id="imFirstName" placeholder="Jane"></div>
+            <div><label for="imSurname">Surname</label><input id="imSurname" placeholder="Doe"></div>
+            <div style="grid-column:span 2;"><label for="imDisplayName">Display name *</label><input id="imDisplayName" placeholder="How their name appears on the card"></div>
+          </div>
+          <div class="form-row">
+            <div><label for="imCategory">Category</label><select id="imCategory" style="padding:8px; width:100%;"><option value="">— choose —</option></select></div>
+            <div style="grid-column:span 2;"><label for="imType">Impact Maker type</label>
+              <select id="imType" style="padding:8px; width:100%;">
+                <option value="individual">Individual</option>
+                <option value="business">Business</option>
+                <option value="sponsor">Sponsor</option>
+                <option value="partner">Partner</option>
+                <option value="organisation">Organisation</option>
+                <option value="changemaker">Changemaker</option>
+                <option value="entrepreneur">Entrepreneur</option>
+                <option value="creative">Creative</option>
+                <option value="community_leader">Community Leader</option>
+                <option value="professional">Professional</option>
+                <option value="artist">Artist</option>
+                <option value="founder">Founder</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div><label for="imStatus">Status</label>
+              <select id="imStatus" style="padding:8px; width:100%;">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+          </div>
+          <div class="field"><label>Profile / brand image *</label><div id="imPhotoUpload"></div></div>
+          <div class="field"><label for="imBio">5-sentence bio *</label><textarea id="imBio" rows="4" placeholder="Who they are. What they do. Their area of impact. What they've achieved. Why they're an Impact Maker."></textarea></div>
+          <div class="form-row">
+            <div><label for="imInstagram">Instagram URL</label><input id="imInstagram" placeholder="https://instagram.com/…"></div>
+            <div><label for="imFacebook">Facebook URL</label><input id="imFacebook" placeholder="https://facebook.com/…"></div>
+            <div><label for="imLinkedin">LinkedIn URL</label><input id="imLinkedin" placeholder="https://linkedin.com/…"></div>
+            <div><label for="imTiktok">TikTok URL</label><input id="imTiktok" placeholder="https://tiktok.com/…"></div>
+          </div>
+          <div class="form-row">
+            <div><label for="imYoutube">YouTube URL</label><input id="imYoutube" placeholder="https://youtube.com/…"></div>
+            <div><label for="imX">X / Twitter URL</label><input id="imX" placeholder="https://x.com/…"></div>
+            <div style="grid-column:span 2;"><label for="imWebsite">Website URL</label><input id="imWebsite" placeholder="https://…"></div>
+          </div>
+          <div class="form-row">
+            <div><label style="display:block;"><input type="checkbox" id="imFeatured" style="width:auto; margin-right:6px;">Featured</label></div>
+            <div><label for="imOrder">Display order <span style="color:var(--slate); text-transform:none;">(lower shows first)</span></label><input id="imOrder" type="number" value="0"></div>
+          </div>
+          <div id="impactMakerFormError" style="color:var(--red); margin-bottom:12px; display:none;"></div>
+          <button class="btn btn-solid" style="width:auto;" id="addImpactMakerBtn">Add Impact Maker</button>
+          <button class="btn btn-line" style="width:auto; display:none;" id="cancelImpactMakerEditBtn">Cancel edit</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Manage categories</h3></div>
+        <div class="panel-body">
+          <div style="display:flex; gap:10px; align-items:end; margin-bottom:14px;">
+            <div style="flex:1;"><label for="imcNewName" style="display:block; font-size:12px; margin-bottom:4px;">New category name</label><input id="imcNewName" style="padding:8px; width:100%;" placeholder="e.g. Health &amp; Wellness"></div>
+            <button class="btn btn-line" style="width:auto;" id="imcAddBtn">Add category</button>
+          </div>
+          <div id="imcFormError" style="color:var(--red); margin-bottom:12px; display:none;"></div>
+          <div id="imcBody"><div class="loading-state">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="panel"><div class="panel-head"><h3>Impact Makers</h3></div><div class="panel-body" id="impactMakersBody" style="padding:0;"></div></div>
     </div>
 
     <!-- SALES & CRM -->
@@ -3764,6 +3842,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'vouchers') loadVouchers();
     if (section === 'sitebuttons') loadSiteButtons();
     if (section === 'testimonials') loadTestimonials();
+    if (section === 'impactmakers') { loadImpactMakerCategories(); loadImpactMakers(); }
     if (section === 'unplugmembers') loadUnplugLeaderboard();
     if (section === 'unplugsponsors') { loadUnplugSponsorships(); loadUnplugCampaigns(); }
     if (section === 'unplugmissions') loadUnplugMissions();
@@ -11710,6 +11789,266 @@ document.getElementById('createTestimonialBtn').addEventListener('click', async 
     document.getElementById('tstPhotoInput').value = '';
     document.getElementById('tstOrderInput').value = '0';
     loadTestimonials();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Impact Makers — a digital recognition gallery of people, brands, sponsors,
+// partners and organisations. Field count is closer to Hall of Fame than
+// Testimonials (image widget, category, type, 7 social links, status), so
+// this follows Hall of Fame's shape: one form above (Add, or Edit-loads-back-
+// into-it), one management table below — not Testimonials' edit-in-row table,
+// which doesn't have room for a real UnplugUpload widget.
+//
+// "Activate/Deactivate" (spec §24's action list) toggles published<->draft;
+// "archived" is reached through the Status dropdown in the form itself, not
+// the quick toggle, since it's a deliberate housekeeping state, not the
+// everyday on/off switch. "Preview" opens the listing page (?p=impact-
+// makers) — no individual profile page exists yet in this v1 (spec §22).
+// ---------------------------------------------------------------------------
+let IM_EDITING_ID = null;
+let IM_CATEGORIES = [];
+
+function imResetForm() {
+  IM_EDITING_ID = null;
+  ['imFirstName', 'imSurname', 'imDisplayName', 'imBio', 'imInstagram', 'imFacebook',
+    'imLinkedin', 'imTiktok', 'imYoutube', 'imX', 'imWebsite'].forEach((id) => { document.getElementById(id).value = ''; });
+  document.getElementById('imCategory').value = '';
+  document.getElementById('imType').value = 'individual';
+  document.getElementById('imStatus').value = 'draft';
+  document.getElementById('imFeatured').checked = false;
+  document.getElementById('imOrder').value = '0';
+  document.getElementById('imPhotoUpload').innerHTML = UnplugUpload.fieldHtml('impactMakerPhoto', '', '', imgSpecFull('impact_maker_photo'));
+  document.getElementById('imEditorTitle').textContent = 'Add an Impact Maker';
+  document.getElementById('addImpactMakerBtn').textContent = 'Add Impact Maker';
+  document.getElementById('cancelImpactMakerEditBtn').style.display = 'none';
+}
+
+async function loadImpactMakerCategories() {
+  const select = document.getElementById('imCategory');
+  const current = select.value;
+  const body = document.getElementById('imcBody');
+  try {
+    IM_CATEGORIES = await api('/impact-makers/categories');
+    select.innerHTML = '<option value="">— choose —</option>'
+      + IM_CATEGORIES.map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
+    select.value = current;
+
+    if (!IM_CATEGORIES.length) {
+      body.innerHTML = '<div class="empty-state">No categories yet — add one above.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Name</th><th></th></tr>';
+    IM_CATEGORIES.forEach((c) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><input class="imc-name" value="${escapeAttrAdmin(c.name)}" style="width:220px; padding:6px;"></td><td style="white-space:nowrap;"></td>`;
+      const actionsTd = tr.querySelector('td:last-child');
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'approve'; saveBtn.textContent = 'Save'; saveBtn.style.marginRight = '6px';
+      saveBtn.addEventListener('click', async () => {
+        const name = tr.querySelector('.imc-name').value.trim();
+        if (!name) { showToast('A category needs a name.', true); return; }
+        try {
+          await api(`/impact-makers/categories/${c.id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+          showToast('Category renamed.');
+          loadImpactMakerCategories();
+        } catch (err) { showToast(err.message, true); }
+      });
+      actionsTd.appendChild(saveBtn);
+      const delBtn = document.createElement('button');
+      delBtn.className = 'reject'; delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => {
+        if (!confirm(`Delete the category "${c.name}"? Impact Makers using it just lose the label, they are not deleted.`)) return;
+        try {
+          await api(`/impact-makers/categories/${c.id}`, { method: 'DELETE' });
+          showToast('Category deleted.');
+          loadImpactMakerCategories();
+        } catch (err) { showToast(err.message, true); }
+      });
+      actionsTd.appendChild(delBtn);
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load categories: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+document.getElementById('imcAddBtn').addEventListener('click', async () => {
+  const errorEl = document.getElementById('imcFormError');
+  errorEl.style.display = 'none';
+  const name = document.getElementById('imcNewName').value.trim();
+  if (!name) { errorEl.textContent = 'A category needs a name.'; errorEl.style.display = 'block'; return; }
+  try {
+    await api('/impact-makers/categories', { method: 'POST', body: JSON.stringify({ name }) });
+    document.getElementById('imcNewName').value = '';
+    showToast('Category added.');
+    loadImpactMakerCategories();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+  }
+});
+
+const IM_TYPE_LABELS = {
+  individual: 'Individual', business: 'Business', sponsor: 'Sponsor', partner: 'Partner',
+  organisation: 'Organisation', changemaker: 'Changemaker', entrepreneur: 'Entrepreneur',
+  creative: 'Creative', community_leader: 'Community Leader', professional: 'Professional',
+  artist: 'Artist', founder: 'Founder', other: 'Other',
+};
+const IM_STATUS_LABELS = {
+  draft: '<span style="color:var(--slate);">Draft</span>',
+  published: '<span style="color:green; font-weight:700;">Published</span>',
+  archived: '<span style="color:var(--slate);">Archived</span>',
+};
+
+async function loadImpactMakers() {
+  if (!document.querySelector('#imPhotoUpload .img-upload')) {
+    document.getElementById('imPhotoUpload').innerHTML = UnplugUpload.fieldHtml('impactMakerPhoto', '', '', imgSpecFull('impact_maker_photo'));
+  }
+  const body = document.getElementById('impactMakersBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const rows = await api('/impact-makers/admin/all');
+    if (!rows.length) {
+      body.innerHTML = '<div class="empty-state">No Impact Makers yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Name</th><th>Type</th><th>Category</th><th>Featured</th><th>Status</th><th>Order</th><th></th></tr>';
+    rows.forEach((m) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtmlAdmin(m.display_name)}</td>
+        <td>${escapeHtmlAdmin(IM_TYPE_LABELS[m.impact_maker_type] || m.impact_maker_type)}</td>
+        <td>${escapeHtmlAdmin(m.category_name || '—')}</td>
+        <td>${m.featured ? '★' : '—'}</td>
+        <td>${IM_STATUS_LABELS[m.status] || escapeHtmlAdmin(m.status)}</td>
+        <td>${m.display_order}</td>
+        <td style="white-space:nowrap;"></td>`;
+      const actionsTd = tr.querySelector('td:last-child');
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'approve'; editBtn.textContent = 'Edit'; editBtn.style.marginRight = '6px';
+      editBtn.addEventListener('click', () => {
+        IM_EDITING_ID = m.id;
+        document.getElementById('imFirstName').value = m.first_name || '';
+        document.getElementById('imSurname').value = m.surname || '';
+        document.getElementById('imDisplayName').value = m.display_name || '';
+        document.getElementById('imCategory').value = m.category_id || '';
+        document.getElementById('imType').value = m.impact_maker_type;
+        document.getElementById('imStatus').value = m.status;
+        document.getElementById('imBio').value = m.bio || '';
+        document.getElementById('imInstagram').value = m.instagram_url || '';
+        document.getElementById('imFacebook').value = m.facebook_url || '';
+        document.getElementById('imLinkedin').value = m.linkedin_url || '';
+        document.getElementById('imTiktok').value = m.tiktok_url || '';
+        document.getElementById('imYoutube').value = m.youtube_url || '';
+        document.getElementById('imX').value = m.x_url || '';
+        document.getElementById('imWebsite').value = m.website_url || '';
+        document.getElementById('imFeatured').checked = m.featured;
+        document.getElementById('imOrder').value = m.display_order;
+        document.getElementById('imPhotoUpload').innerHTML = UnplugUpload.fieldHtml('impactMakerPhoto', m.photo_url || '', '', imgSpecFull('impact_maker_photo'));
+        document.getElementById('imEditorTitle').textContent = `Edit — ${m.display_name}`;
+        document.getElementById('addImpactMakerBtn').textContent = 'Save Changes';
+        document.getElementById('cancelImpactMakerEditBtn').style.display = '';
+        showToast('Loaded for editing — change what you need and save.');
+        document.getElementById('imDisplayName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      actionsTd.appendChild(editBtn);
+
+      const previewBtn = document.createElement('button');
+      previewBtn.className = 'btn btn-line'; previewBtn.style.cssText = 'width:auto; margin-right:6px;'; previewBtn.textContent = 'Preview';
+      previewBtn.addEventListener('click', () => window.open('unplug-magazine.html?p=impact-makers', '_blank'));
+      actionsTd.appendChild(previewBtn);
+
+      const toggleBtn = document.createElement('button');
+      const isLive = m.status === 'published';
+      toggleBtn.className = isLive ? 'reject' : 'approve';
+      toggleBtn.textContent = isLive ? 'Deactivate' : 'Activate';
+      toggleBtn.style.marginRight = '6px';
+      toggleBtn.addEventListener('click', async () => {
+        try {
+          await api(`/impact-makers/${m.id}`, { method: 'PATCH', body: JSON.stringify({ status: isLive ? 'draft' : 'published' }) });
+          showToast(isLive ? 'Set back to draft.' : 'Published — now visible on the gallery.');
+          loadImpactMakers();
+        } catch (err) { showToast(err.message, true); }
+      });
+      actionsTd.appendChild(toggleBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'reject'; delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => {
+        if (!confirm(`Delete "${m.display_name}" from Impact Makers? This can't be undone.`)) return;
+        try {
+          await api(`/impact-makers/${m.id}`, { method: 'DELETE' });
+          showToast('Deleted.');
+          if (IM_EDITING_ID === m.id) imResetForm();
+          loadImpactMakers();
+        } catch (err) { showToast(err.message, true); }
+      });
+      actionsTd.appendChild(delBtn);
+
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+document.getElementById('cancelImpactMakerEditBtn').addEventListener('click', imResetForm);
+
+document.getElementById('addImpactMakerBtn').addEventListener('click', async () => {
+  const errorEl = document.getElementById('impactMakerFormError');
+  errorEl.style.display = 'none';
+  const payload = {
+    firstName: document.getElementById('imFirstName').value.trim() || null,
+    surname: document.getElementById('imSurname').value.trim() || null,
+    displayName: document.getElementById('imDisplayName').value.trim(),
+    categoryId: document.getElementById('imCategory').value || null,
+    impactMakerType: document.getElementById('imType').value,
+    status: document.getElementById('imStatus').value,
+    photoUrl: UnplugUpload.valueOf(document.getElementById('imPhotoUpload')) || null,
+    bio: document.getElementById('imBio').value.trim() || null,
+    instagramUrl: document.getElementById('imInstagram').value.trim() || null,
+    facebookUrl: document.getElementById('imFacebook').value.trim() || null,
+    linkedinUrl: document.getElementById('imLinkedin').value.trim() || null,
+    tiktokUrl: document.getElementById('imTiktok').value.trim() || null,
+    youtubeUrl: document.getElementById('imYoutube').value.trim() || null,
+    xUrl: document.getElementById('imX').value.trim() || null,
+    websiteUrl: document.getElementById('imWebsite').value.trim() || null,
+    featured: document.getElementById('imFeatured').checked,
+    displayOrder: Number(document.getElementById('imOrder').value) || 0,
+  };
+  if (!payload.displayName) {
+    errorEl.textContent = 'An Impact Maker needs a name.';
+    errorEl.style.display = 'block';
+    return;
+  }
+  try {
+    if (IM_EDITING_ID) {
+      // status is sent along with every other field here, same as a create —
+      // the server's publish gate judges the whole merged row either way, so
+      // this is never stricter or looser than editing status on its own.
+      await api(`/impact-makers/${IM_EDITING_ID}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      showToast('Changes saved.');
+    } else {
+      // A brand-new row is always created as a draft server-side regardless
+      // of what the Status dropdown shows — status is not sent on create,
+      // matching the "never live by accident" rule the whole site follows.
+      const { status, ...createPayload } = payload;
+      await api('/impact-makers', { method: 'POST', body: JSON.stringify(createPayload) });
+      showToast('Impact Maker added — still a draft, publish it when ready.');
+    }
+    imResetForm();
+    loadImpactMakers();
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.style.display = 'block';

@@ -2286,3 +2286,41 @@ deleting them.
 Full suite: 2063 passing, 0 failing (up from 2033) — covers this commit plus the image-preview and wording
 fix that landed alongside it in this same batch.
 
+## 2026-09-05 — Impact Makers, part 2: admin dashboard UI
+
+Part 2 of 4 (database/backend was part 1). New "Impact Makers" nav section in `unplug-admin-dashboard.html`,
+modelled on Hall of Fame's shape rather than Testimonials' — the field count here (name/surname/display
+name, image, category, type, bio, 7 social links, featured, order, status) needs a real form with room for
+the `UnplugUpload` widget, not Testimonials' edit-in-table-row pattern, which has no space for one.
+
+Add/edit form covers every field the spec's §7 lists; the photo field uses the real upload widget
+(`UnplugUpload.fieldHtml('impactMakerPhoto', ..., imgSpecFull('impact_maker_photo'))`), not a bare URL
+text input. Editing a row loads it back into the form (Hall of Fame's exact pattern) rather than opening a
+separate modal. The management table matches spec §24's columns exactly (Name/Type/Category/Featured/
+Status/Order) with Edit/Preview/Activate-Deactivate/Delete per row — the quick Activate/Deactivate toggle
+flips published↔draft only; reaching `archived` goes through the Status dropdown in the form itself, since
+it's a deliberate housekeeping state, not the everyday on/off switch. Preview opens the gallery listing
+page (no individual profile page exists yet in this v1, per the plan). A small "Manage categories" panel
+(add/rename/delete) sits above the main table, since Category was confirmed as its own admin-manageable
+list rather than a fixed set.
+
+New test, `impactMakersAdminUi.test.js` (12 tests, static-source checks — the backend's real behaviour is
+already covered by `impactMakers.test.js`): the nav/section exist and are wired to the loaders; every
+spec-required field is present; the 13 type options in the dropdown are checked byte-for-byte against the
+migration's own CHECK constraint (so the two can never silently drift apart); the photo field uses the real
+widget, not a bare input; editing restores every field including the image and all 7 social links; the
+management table's columns and per-row actions match spec §24; the quick toggle only ever touches
+published/draft; deleting the row currently open in the editor resets the form instead of leaving it
+pointing at a gone id; a new row is never created with a live status even if the dropdown shows one;
+category add/rename/delete each call the real endpoint; the category dropdown and the management table
+share one fetch, not two independent ones. Re-ran `imageSpecs.test.js` (14 tests) to confirm the new field
+doesn't disturb the existing size-guidance checks — clean. Verified live in-browser against a mocked
+backend: both a published and a draft row render with the right per-status actions; Edit correctly loads
+every field (including the photo widget's value) back into the form; clicking Activate on an incomplete
+draft shows the real publish-gate error as a toast; filling in the missing fields and saving succeeds and
+resets the form; adding and renaming a category updates the dropdown immediately.
+
+Full suite: 2074 passing, 1 failing on first run — `twoFactor.test.js`'s pre-existing TOTP-timing flake
+documented earlier this cycle, unrelated to anything touched here. Re-ran that file alone: clean 16/16.
+Effectively 2075 passing, 0 failing (up from 2063).
+
