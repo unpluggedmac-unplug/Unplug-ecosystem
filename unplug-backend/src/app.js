@@ -187,6 +187,10 @@ app.use('/site-buttons', require('./routes/siteButtons'));
 // Testimonials: real quotes only (TRUST-003) — the public feed, plus the
 // admin's controls.
 app.use('/testimonials', require('./routes/testimonials'));
+// Impact Makers: a digital recognition gallery of people, brands, sponsors,
+// partners and organisations — the public feed, the homepage teaser's data
+// source, plus the admin's add/edit/reorder/feature/status controls.
+app.use('/impact-makers', require('./routes/impactMakers'));
 // The social feed: hand-entered posts. No API call to Meta anywhere — see
 // routes/social.js for why (Basic Display was switched off in Dec 2024).
 app.use('/social', require('./routes/social'));

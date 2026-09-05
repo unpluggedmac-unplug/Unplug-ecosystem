@@ -2241,3 +2241,48 @@ A one-word correction to the INV-002 investor-proposition copy: Unplug's Edition
 the parenthetical next to "real editorial journalism" said the opposite. Fixed in the one sentence it
 appears in; no test references this exact wording, so nothing else needed changing.
 
+## 2026-09-05 — Impact Makers, part 1: database + backend CRUD
+
+Requested as a large, fully-specified new feature (30-section spec, supplied directly): a premium,
+admin-curated recognition gallery of people/brands/sponsors/partners/organisations, flip-card interaction,
+filterable/searchable, homepage-teased, built so individual profile pages are addable later without a
+rearchitecture. Planned properly first — three parallel Explore agents traced the closest existing
+patterns (Testimonials as the CRUD template, Directory's category/social-link mechanisms, homepage-teaser
++ `?p=` routing + SEO conventions) before any code was written, and two genuinely open product questions
+the spec itself didn't settle were confirmed directly: the "Become an Impact Maker" button links to the
+existing Contact page (no new public submission form), and Impact Makers gets its own category/type
+system rather than reusing Directory's shared one — Category ends up admin-manageable (its own small
+table), Impact Maker Type stays a short fixed list (a stable classification, not an open one).
+
+This is part 1 of 4 planned commits (database, admin UI, public gallery, homepage teaser — matching the
+scale of prior multi-part features this cycle):
+
+New migration `175_impact_makers.sql`: `impact_maker_categories` (own dedicated table, seeded with the
+spec's 15 suggested categories) and `impact_makers` (name fields, `photo_url`, `category_id`,
+`impact_maker_type` — a 13-value CHECK matching the spec's suggested list, `bio`, seven plain social/
+website URL columns — not the shared `social_links` table, which only allows 6 platforms and has never
+been widened — `featured`, `display_order`, a real `draft`/`published`/`archived` `status` rather than
+Testimonials' plain boolean, and a `slug` column that exists from day one but is read by nothing yet).
+
+New `impact_maker_photo` image spec (1080×1350, 4:5 portrait — the user's own explicit request, reusing
+`gallery_photo`'s exact numbers for a real card-shape reason, not a borrowed one).
+
+New route file `impactMakers.js`: public `GET /impact-makers` (published only, featured first, cached),
+public `GET /impact-makers/categories`; admin CRUD for both Impact Makers and categories
+(`requireRole('admin')`, Testimonials' dynamic-SET-clause PATCH pattern). The publish gate (spec: "cannot
+be published unless name/image/bio/category/type are complete") judges the row's real MERGED state, not
+just what one PATCH request happens to send — an admin filling in a profile across several small edits and
+then flipping status to `published` last is judged correctly either way. Every social/website URL is
+shape-validated (`new URL()`, http/https only) before saving.
+
+New test, `impactMakers.test.js` (25 tests, real HTTP + real Postgres): the seeded category list and all
+13 types are real; admin-only gating on every mutating route; a blank name and a bad social URL are both
+refused; the publish gate refuses an incomplete profile and correctly judges a profile built up across
+several PATCHes rather than just the last one; a complete profile publishes in one request; the public
+feed shows only published rows, featured first, and never a draft; category CRUD including a duplicate-
+name refusal and a category deletion that detaches its Impact Makers (`ON DELETE SET NULL`) without
+deleting them.
+
+Full suite: 2063 passing, 0 failing (up from 2033) — covers this commit plus the image-preview and wording
+fix that landed alongside it in this same batch.
+

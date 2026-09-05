@@ -99,6 +99,14 @@ const IMAGE_SPECS = {
     w: 800, h: 800, label: '1:1 square',
     note: 'A head-and-shoulders photo works best.',
   },
+  impact_maker_photo: {
+    w: 1080, h: 1350, label: '4:5 portrait',
+    // Same numbers as gallery_photo below — a real card-shape reason, not
+    // borrowed. Also used for a sponsor/business image: the crop is a
+    // recommendation, not a demand (see the file header), so a landscape
+    // logo still uploads fine without needing a second spec.
+    note: 'A tall photo fills the Impact Makers card; a wide one is cropped at both ends.',
+  },
 
   // --- gallery ----------------------------------------------------------
   gallery_photo: {
