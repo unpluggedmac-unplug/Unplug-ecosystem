@@ -1052,7 +1052,30 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
               <select id="dpNewTier"><option value="basic">Basic</option><option value="pro">Pro</option><option value="premium">Premium</option></select>
             </div>
           </div>
-          <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="dpCreateBtn">Create listing</button>
+          <!-- Same requirements a member fills in at their own checkout package
+               step (unplug-checkout.html): second category is Business+Premium
+               only, a demo reel link is Individual+Premium only. -->
+          <div class="form-row section-hidden" id="dpNewSecondCategoryField" style="margin-top:10px;">
+            <div style="grid-column:1/-1;"><label for="dpNewSecondCategory">Second category <span style="font-weight:400; color:var(--slate);">— Business Premium only</span></label><select id="dpNewSecondCategory"><option value="">— none —</option></select></div>
+          </div>
+          <div class="form-row section-hidden" id="dpNewDemoReelField" style="margin-top:10px;">
+            <div style="grid-column:1/-1;"><label for="dpNewDemoReelUrl">Demo reel / music link <span style="font-weight:400; color:var(--slate);">— Individual Premium only</span></label><input id="dpNewDemoReelUrl" placeholder="https://youtube.com/... or https://soundcloud.com/..."></div>
+          </div>
+          <!-- LOCATION — optional, same as a member's own submission. Street
+               address only applies to a business. -->
+          <div style="border-top:1px solid var(--paper-line); margin-top:14px; padding-top:12px;">
+            <div style="font-weight:700; font-size:13.5px;">Location <span style="font-weight:400; color:var(--slate);">— optional</span></div>
+            <div class="field section-hidden" id="dpNewStreetField" style="margin-top:10px;"><label>Street address <span style="font-weight:400; color:var(--slate);">— business listings only</span></label><input id="dpNewStreetAddress" maxlength="200"></div>
+            <div class="form-row" style="margin-top:10px;">
+              <div><label for="dpNewSuburb">Suburb</label><input id="dpNewSuburb" maxlength="120"></div>
+              <div><label for="dpNewCity">Town / City</label><input id="dpNewCity" maxlength="120"></div>
+            </div>
+            <div class="form-row" style="margin-top:10px;">
+              <div><label for="dpNewProvince">Province</label><select id="dpNewProvince"><option value="">— none —</option></select></div>
+              <div><label for="dpNewCountry">Country</label><input id="dpNewCountry" maxlength="80" value="South Africa"></div>
+            </div>
+          </div>
+          <button class="btn btn-solid" style="width:auto; margin-top:14px;" id="dpCreateBtn">Create listing</button>
           <span id="dpCreateNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
         </div>
       </div>
@@ -5026,10 +5049,32 @@ async function loadDirProfiles() {
     const cats = await api('/directory/categories');
     document.getElementById('dpCategory').innerHTML = '<option value="">— unchanged —</option>'
       + (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
-    document.getElementById('dpNewCategory').innerHTML = '<option value="">— none —</option>'
-      + (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
+    const catOptions = (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
+    document.getElementById('dpNewCategory').innerHTML = '<option value="">— none —</option>' + catOptions;
+    document.getElementById('dpNewSecondCategory').innerHTML = '<option value="">— none —</option>' + catOptions;
   } catch (err) { /* leave the unchanged option */ }
+  // Province options — same list, and the same validation, the member's own
+  // checkout package step uses.
+  try {
+    const provinces = (await api('/directory/provinces')).provinces || [];
+    document.getElementById('dpNewProvince').innerHTML = '<option value="">— none —</option>'
+      + provinces.map((p) => `<option value="${escapeHtmlAdmin(p)}">${escapeHtmlAdmin(p)}</option>`).join('');
+  } catch (err) { /* leave the none option */ }
 }
+
+// Second category (Business+Premium only), demo reel (Individual+Premium
+// only), and street address (business only) — exactly the same conditional
+// requirements a member sees at their own checkout package step.
+function dpNewUpdateConditionalFields() {
+  const type = document.getElementById('dpNewType').value;
+  const tier = document.getElementById('dpNewTier').value;
+  const isBusiness = type === 'business';
+  document.getElementById('dpNewSecondCategoryField').classList.toggle('section-hidden', !(isBusiness && tier === 'premium'));
+  document.getElementById('dpNewDemoReelField').classList.toggle('section-hidden', !(!isBusiness && tier === 'premium'));
+  document.getElementById('dpNewStreetField').classList.toggle('section-hidden', !isBusiness);
+}
+document.getElementById('dpNewType').addEventListener('change', dpNewUpdateConditionalFields);
+document.getElementById('dpNewTier').addEventListener('change', dpNewUpdateConditionalFields);
 
 document.getElementById('dpCreateBtn').addEventListener('click', async () => {
   const note = document.getElementById('dpCreateNote');
@@ -5040,6 +5085,7 @@ document.getElementById('dpCreateBtn').addEventListener('click', async () => {
   note.textContent = 'Creating…';
   try {
     const catVal = document.getElementById('dpNewCategory').value;
+    const secondCatVal = document.getElementById('dpNewSecondCategory').value;
     const data = await api('/admin/profiles', {
       method: 'POST',
       body: JSON.stringify({
@@ -5047,11 +5093,28 @@ document.getElementById('dpCreateBtn').addEventListener('click', async () => {
         type: document.getElementById('dpNewType').value,
         packageTier: document.getElementById('dpNewTier').value,
         categoryId: catVal ? Number(catVal) : null,
+        secondaryCategoryId: secondCatVal ? Number(secondCatVal) : null,
+        demoReelUrl: document.getElementById('dpNewDemoReelUrl').value.trim() || undefined,
+        streetAddress: document.getElementById('dpNewStreetAddress').value.trim() || undefined,
+        suburb: document.getElementById('dpNewSuburb').value.trim() || undefined,
+        city: document.getElementById('dpNewCity').value.trim() || undefined,
+        province: document.getElementById('dpNewProvince').value || undefined,
+        country: document.getElementById('dpNewCountry').value.trim() || undefined,
       }),
     });
     showToast(data.message || 'Listing created.');
     document.getElementById('dpNewName').value = '';
     document.getElementById('dpNewCategory').value = '';
+    document.getElementById('dpNewSecondCategory').value = '';
+    document.getElementById('dpNewDemoReelUrl').value = '';
+    document.getElementById('dpNewStreetAddress').value = '';
+    document.getElementById('dpNewSuburb').value = '';
+    document.getElementById('dpNewCity').value = '';
+    document.getElementById('dpNewProvince').value = '';
+    document.getElementById('dpNewCountry').value = 'South Africa';
+    document.getElementById('dpNewType').value = 'individual';
+    document.getElementById('dpNewTier').value = 'basic';
+    dpNewUpdateConditionalFields();
     note.textContent = '';
     await loadDirProfiles();
     // Jump straight into the editor for the listing just created, so the

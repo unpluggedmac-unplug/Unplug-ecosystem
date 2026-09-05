@@ -561,15 +561,20 @@ function profileSlugify(name) {
 // queue and no payment, the same free-and-instant treatment every other
 // admin-authored submission gets on this site.
 //
-// The listing starts minimal (name, type, tier, category) and is finished
-// off with the SAME editor every other listing uses (PATCH /profiles/:id)
-// — bio, contact details, location, feature image. If it should later
+// The requirement set matches exactly what a member fills in at their own
+// "Choose Your Directory Package" checkout step (unplug-checkout.html):
+// second category only for a business on Premium, a demo reel link only for
+// an individual on Premium, location entirely optional with a street address
+// only for a business. Everything else about the listing — bio, achievements,
+// contact details, feature image — is filled in afterward through the SAME
+// editor every other listing uses (PATCH /profiles/:id). If it should later
 // belong to a real member, the existing "Link a listing to a member
 // account" panel (adminProfileLinks.js) does that without recreating
 // anything.
 router.post('/profiles', requireRole('admin'), async (req, res, next) => {
   try {
-    const { type, categoryId, packageTier, displayName } = req.body;
+    const { type, categoryId, secondaryCategoryId, packageTier, displayName, demoReelUrl,
+            streetAddress, suburb, city, province, country } = req.body;
     if (!displayName || !displayName.trim()) {
       return res.status(400).json({ error: 'displayName is required.' });
     }
@@ -578,6 +583,9 @@ router.post('/profiles', requireRole('admin'), async (req, res, next) => {
       return res.status(400).json({ error: `packageTier must be one of: ${PACKAGE_TIERS.join(', ')}` });
     }
     const profileType = type === 'business' ? 'business' : 'individual';
+    const isBusiness = profileType === 'business';
+    const allowSecondCategory = isBusiness && packageTier === 'premium';
+    const allowDemoReel = !isBusiness && packageTier === 'premium';
 
     let slug = profileSlugify(displayName);
     const slugTaken = await pool.query('SELECT id FROM profiles WHERE slug = $1', [slug]);
@@ -586,10 +594,17 @@ router.post('/profiles', requireRole('admin'), async (req, res, next) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO profiles (user_id, type, category_id, package_tier, slug, display_name, status)
-       VALUES (NULL, $1, $2, $3, $4, $5, 'approved')
+      `INSERT INTO profiles
+        (user_id, type, category_id, secondary_category_id, package_tier, slug, display_name, status,
+         demo_reel_url, street_address, suburb, city, province, country)
+       VALUES (NULL, $1, $2, $3, $4, $5, $6, 'approved', $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [profileType, categoryId || null, packageTier, slug, displayName.trim()]
+      [profileType, categoryId || null, allowSecondCategory ? (secondaryCategoryId || null) : null,
+       packageTier, slug, displayName.trim(),
+       allowDemoReel ? ((demoReelUrl || '').trim() || null) : null,
+       isBusiness ? ((streetAddress || '').trim() || null) : null,
+       (suburb || '').trim() || null, (city || '').trim() || null,
+       (province || '').trim() || null, (country || '').trim() || null]
     );
 
     await logActivity(req.user.id, 'directory_listing_created_by_admin',

@@ -2547,3 +2547,31 @@ widget and set edit mode; saving sent a real PATCH to the existing row (confirme
 afterward still holding exactly one row) rather than creating a second one, and the button reverted to
 "Add Testimonial" afterward.
 
+## 2026-09-05 — Admin-created listings get the same requirements a member's own submission does
+
+Follow-up to the same day's "admin can create Directory listings directly": requested directly, "admin
+should be able to choose package and then add the requirements which should be the same as when user
+submit their directory." The create form had shipped with only the four fields strictly required by the
+database (name, type, tier, category) — everything a member actually sees at their own checkout package
+step (unplug-checkout.html) was missing: a second category, a demo reel link, and location.
+
+Those three are conditional on type and tier, not always shown — copied exactly from
+`updateSecondCategoryVisibility()`/`updateLocationFields()` in the checkout page, the one place this logic
+already existed: a second category only for a Business on Premium, a demo reel link only for an Individual
+on Premium, a street address only for a business (an individual's home address is never captured or
+published, on this form same as every other one). `POST /admin/profiles` (admin.js) now accepts and
+enforces the same rules server-side — sending a second category for a non-qualifying type/tier is silently
+ignored, not rejected, matching how the column itself behaves for a member's own submission.
+
+New tests appended to `adminCreatedProfiles.test.js` (4 tests): the full field set is accepted and stored
+for a Business Premium listing; a second category is silently dropped when type/tier doesn't qualify (both
+directions — wrong tier, wrong type); a demo reel link is accepted for Individual Premium and dropped
+otherwise; a street address is never stored for an individual. New tests appended to
+`adminCreatedProfilesUi.test.js` (3 tests): the conditional fields exist; the visibility function checks
+the same two conditions the checkout page's own function does, wired to both the Type and Tier selects;
+the submit payload always sends every conditional field and lets the backend decide which apply.
+
+Verified live in-browser against a mocked backend: switching Type/Tier through all four combinations
+(Individual Basic, Business Basic, Business Premium, Individual Premium) showed exactly the right fields
+each time; a full submission with every field filled in created the listing correctly with a null owner.
+

@@ -134,6 +134,63 @@ test('AN ADMIN CREATES A STANDALONE LISTING — LIVE IMMEDIATELY, NO OWNER AT AL
   assert.equal(pub.body.profile.display_name, 'Acme Sponsorship Co');
 });
 
+test('THE SAME REQUIREMENTS A MEMBER FILLS IN AT CHECKOUT ARE ACCEPTED HERE TOO — second category, location, street address for a Business Premium listing', async () => {
+  const catRows = await pool.query(`SELECT id FROM categories WHERE type = 'directory' ORDER BY id LIMIT 2`);
+  const [cat1, cat2] = catRows.rows;
+  const r = await req('POST', '/admin/profiles', {
+    token: adminToken,
+    body: {
+      displayName: 'Full Fields Business', type: 'business', packageTier: 'premium',
+      categoryId: cat1.id, secondaryCategoryId: cat2.id,
+      streetAddress: '1 Main Road', suburb: 'Sea Point', city: 'Cape Town', province: 'Western Cape', country: 'South Africa',
+    },
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.profile.category_id, cat1.id);
+  assert.equal(r.body.profile.secondary_category_id, cat2.id, 'a Business Premium listing may have a second category, same as a member submission');
+  assert.equal(r.body.profile.street_address, '1 Main Road');
+  assert.equal(r.body.profile.suburb, 'Sea Point');
+  assert.equal(r.body.profile.province, 'Western Cape');
+});
+
+test('A SECOND CATEGORY IS SILENTLY IGNORED WHEN THE TIER OR TYPE DOES NOT ALLOW IT — matches the member-facing rule exactly', async () => {
+  const catRows = await pool.query(`SELECT id FROM categories WHERE type = 'directory' ORDER BY id LIMIT 2`);
+  const [cat1, cat2] = catRows.rows;
+  const notPremium = await req('POST', '/admin/profiles', {
+    token: adminToken,
+    body: { displayName: 'Business Not Premium', type: 'business', packageTier: 'pro', secondaryCategoryId: cat2.id },
+  });
+  assert.equal(notPremium.body.profile.secondary_category_id, null, 'Pro is not Premium, so no second category');
+
+  const notBusiness = await req('POST', '/admin/profiles', {
+    token: adminToken,
+    body: { displayName: 'Individual Premium No Second Cat', type: 'individual', packageTier: 'premium', secondaryCategoryId: cat1.id },
+  });
+  assert.equal(notBusiness.body.profile.secondary_category_id, null, 'an individual never gets a second category, regardless of tier');
+});
+
+test('A DEMO REEL LINK IS ACCEPTED FOR AN INDIVIDUAL PREMIUM LISTING, IGNORED OTHERWISE', async () => {
+  const allowed = await req('POST', '/admin/profiles', {
+    token: adminToken,
+    body: { displayName: 'Individual Premium With Reel', type: 'individual', packageTier: 'premium', demoReelUrl: 'https://youtube.com/watch?v=abc' },
+  });
+  assert.equal(allowed.body.profile.demo_reel_url, 'https://youtube.com/watch?v=abc');
+
+  const ignored = await req('POST', '/admin/profiles', {
+    token: adminToken,
+    body: { displayName: 'Business Premium No Reel', type: 'business', packageTier: 'premium', demoReelUrl: 'https://youtube.com/watch?v=xyz' },
+  });
+  assert.equal(ignored.body.profile.demo_reel_url, null, 'a demo reel is an individual-only field, regardless of tier');
+});
+
+test('A STREET ADDRESS IS ONLY EVER STORED FOR A BUSINESS LISTING', async () => {
+  const r = await req('POST', '/admin/profiles', {
+    token: adminToken,
+    body: { displayName: 'Individual With Street Attempt', type: 'individual', packageTier: 'basic', streetAddress: '5 Home Street' },
+  });
+  assert.equal(r.body.profile.street_address, null, 'an individual\'s address must never be captured or published, same as the member-facing rule');
+});
+
 test('A SECOND STANDALONE LISTING IS ALSO FINE — TWO NULL OWNERS DO NOT COLLIDE', async () => {
   const r = await req('POST', '/admin/profiles', {
     token: adminToken, body: { displayName: 'Second Sponsor Co', packageTier: 'basic' },
