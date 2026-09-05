@@ -2235,3 +2235,9 @@ different submission type correctly showed no `<img>` at all.
 Re-ran `adminApprovalQueue.test.js` + `approvalQueueEdit.test.js` (41 tests) to confirm the field-type
 change didn't disturb the existing edit/approve flow — all clean.
 
+## 2026-09-05 — Investors page: "print-style Editions" → "online-style Editions"
+
+A one-word correction to the INV-002 investor-proposition copy: Unplug's Editions are online, not print —
+the parenthetical next to "real editorial journalism" said the opposite. Fixed in the one sentence it
+appears in; no test references this exact wording, so nothing else needed changing.
+
