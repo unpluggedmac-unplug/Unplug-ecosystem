@@ -193,3 +193,70 @@ test('a paying member with no gallery credit still owes for their bundle', async
   assert.equal(r.body.bundle.status, 'awaiting_payment');
   assert.match(r.body.message, /payments\/initiate/);
 });
+
+// --------------------------------------------------- per-consultant toggle
+//
+// Requested directly: free publishing used to be all-or-nothing for the
+// whole 'consultant' role. An admin can now revoke it from one specific
+// person without demoting them out of the role — see
+// 176_consultant_free_publishing_toggle.sql and publishingRights.js.
+
+test('A CONSULTANT TOKEN WITH free_publishing_enabled:false IS BILLED LIKE A NORMAL MEMBER', async () => {
+  const jwt = require('jsonwebtoken');
+  const revokedToken = jwt.sign(
+    { id: 2, email: 'rep@unplugnews.com', role: 'consultant', free_publishing_enabled: false },
+    process.env.JWT_SECRET
+  );
+  const r = await req('POST', '/articles', {
+    token: revokedToken,
+    body: { title: 'No Longer Free', body: 'Free publishing was switched off for this one person.', bodyFormat: 'text' },
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.article.status, 'awaiting_payment', 'with the toggle off, a consultant owes like any other member');
+  assert.match(r.body.message, /payments\/initiate/);
+});
+
+test('AN OLDER TOKEN WITH NO free_publishing_enabled CLAIM AT ALL STILL PUBLISHES FREE — the column must default to allowed, not silently revoke everyone', async () => {
+  // consultantToken (signed in `before` with no such claim) is exactly this
+  // case, and its two tests above already prove it — this test exists so the
+  // guarantee is stated explicitly, not just an accidental side effect of
+  // token construction elsewhere in this file.
+  const jwt = require('jsonwebtoken');
+  const noClaimToken = jwt.sign({ id: 2, email: 'rep@unplugnews.com', role: 'consultant' }, process.env.JWT_SECRET);
+  const r = await req('POST', '/articles', {
+    token: noClaimToken,
+    body: { title: 'Old Token Still Free', body: 'No free_publishing_enabled claim at all.', bodyFormat: 'text' },
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.article.status, 'pending');
+  assert.match(r.body.message, /no payment needed/i);
+});
+
+test('EXPLICITLY free_publishing_enabled:true BEHAVES IDENTICALLY TO NO CLAIM AT ALL', async () => {
+  const jwt = require('jsonwebtoken');
+  const explicitTrueToken = jwt.sign(
+    { id: 2, email: 'rep@unplugnews.com', role: 'consultant', free_publishing_enabled: true },
+    process.env.JWT_SECRET
+  );
+  const r = await req('POST', '/events', {
+    token: explicitTrueToken,
+    body: { name: 'Still Free Event', eventDate: '2026-12-15' },
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.event.status, 'pending');
+  assert.match(r.body.message, /no payment needed/i);
+});
+
+test('THE TOGGLE HAS NO EFFECT ON AN ADMIN — admins publish free regardless, per FREE_PUBLISHING_ROLES', async () => {
+  const jwt = require('jsonwebtoken');
+  const adminWithFlagOff = jwt.sign(
+    { id: 1, email: 'admin@test.com', role: 'admin', free_publishing_enabled: false },
+    process.env.JWT_SECRET
+  );
+  const r = await req('POST', '/articles', {
+    token: adminWithFlagOff,
+    body: { title: 'Admin Unaffected', body: 'The flag only means anything for a consultant.', bodyFormat: 'text' },
+  });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.article.status, 'approved', 'an admin is free regardless of this flag');
+});

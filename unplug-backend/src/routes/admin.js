@@ -48,7 +48,7 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
     const offsetParamIdx = searchParams.length + 2;
     const result = await pool.query(
       `SELECT u.id, u.email, u.phone, u.role, u.created_at, u.full_name, u.member_type,
-              u.is_suspended, u.suspended_reason,
+              u.is_suspended, u.suspended_reason, u.free_publishing_enabled,
               -- Credit is a SUM of the ledger, not a stored column, so it is
               -- computed here rather than trusted from anywhere else.
               (SELECT COALESCE(SUM(amount), 0) FROM account_credits ac WHERE ac.user_id = u.id)::numeric AS credit_balance,
@@ -151,23 +151,34 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     if (b.memberType !== undefined) put('member_type', b.memberType || null);
     if (b.isSuspended !== undefined) put('is_suspended', !!b.isSuspended);
     if (b.suspendedReason !== undefined) put('suspended_reason', String(b.suspendedReason).trim().slice(0, 300) || null);
+    // Only meaningful for role 'consultant' (see publishingRights.js) — stored
+    // and accepted unconditionally anyway, same as every other column here,
+    // since it does nothing for any other role.
+    if (b.freePublishingEnabled !== undefined) put('free_publishing_enabled', !!b.freePublishingEnabled);
     if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
     vals.push(id);
     const result = await pool.query(
       `UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason`,
+       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason, free_publishing_enabled`,
       vals
     );
 
     // Granting or removing admin is the change most worth being able to trace
     // later, so it is called out rather than folded into a generic message.
+    // Same reasoning for the free-publishing toggle — it is real money
+    // (or the deliberate lack of it), so it gets its own trail too.
     const roleChanged = b.role !== undefined && b.role !== target.rows[0].role;
     logActivity(
       req.user.id,
-      roleChanged ? 'user_role_changed' : b.isSuspended !== undefined ? (b.isSuspended ? 'user_suspended' : 'user_unsuspended') : 'user_edited',
+      roleChanged ? 'user_role_changed'
+        : b.isSuspended !== undefined ? (b.isSuspended ? 'user_suspended' : 'user_unsuspended')
+        : b.freePublishingEnabled !== undefined ? 'user_free_publishing_toggled'
+        : 'user_edited',
       roleChanged
         ? `${target.rows[0].email} (#${id}): ${target.rows[0].role} → ${b.role}`
+        : b.freePublishingEnabled !== undefined
+        ? `${target.rows[0].email} (#${id}): free publishing ${b.freePublishingEnabled ? 'enabled' : 'disabled'}`
         : `${target.rows[0].email} (#${id})`
     );
 

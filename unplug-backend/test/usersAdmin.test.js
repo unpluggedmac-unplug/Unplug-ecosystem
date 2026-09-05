@@ -235,6 +235,48 @@ test('a lookalike domain is refused, not just a missing @unplugnews.com suffix',
   assert.equal(r.status, 400);
 });
 
+// -------------------------------------------------- per-consultant toggle
+//
+// Free publishing used to be all-or-nothing for the whole 'consultant' role.
+// This lets an admin revoke it from one specific person without demoting
+// them out of the role entirely — see 176_consultant_free_publishing_toggle.sql.
+
+test('A NEW ACCOUNT DEFAULTS TO free_publishing_enabled = TRUE — nothing changes until an admin explicitly turns it off', async () => {
+  const row = await pool.query('SELECT free_publishing_enabled FROM users WHERE id = $1', [MEMBER_ID]);
+  assert.equal(row.rows[0].free_publishing_enabled, true);
+});
+
+test('AN ADMIN CAN TURN OFF FREE PUBLISHING FOR ONE CONSULTANT, WITHOUT TOUCHING THEIR ROLE', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (780, 'rep3@unplugnews.com', 'x', 'consultant') ON CONFLICT DO NOTHING`);
+  const r = await req('PATCH', '/admin/users/780', { token: adminToken, body: { freePublishingEnabled: false } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.user.free_publishing_enabled, false);
+  assert.equal(r.body.user.role, 'consultant', 'the role itself must be untouched by this toggle');
+
+  const row = await pool.query('SELECT role, free_publishing_enabled FROM users WHERE id = 780');
+  assert.equal(row.rows[0].role, 'consultant');
+  assert.equal(row.rows[0].free_publishing_enabled, false);
+});
+
+test('IT CAN BE TURNED BACK ON JUST AS EASILY', async () => {
+  await req('PATCH', '/admin/users/780', { token: adminToken, body: { freePublishingEnabled: false } });
+  const r = await req('PATCH', '/admin/users/780', { token: adminToken, body: { freePublishingEnabled: true } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.user.free_publishing_enabled, true);
+});
+
+test('A MEMBER CANNOT TOGGLE IT — same admin-only gate as every other field on this route', async () => {
+  const r = await req('PATCH', '/admin/users/780', { token: memberToken, body: { freePublishingEnabled: false } });
+  assert.equal(r.status, 403);
+});
+
+test('THE ACCOUNT LIST CARRIES THE FLAG, SO THE ADMIN UI CAN SHOW ITS REAL STATE WITHOUT A SEPARATE FETCH', async () => {
+  const r = await req('GET', '/admin/users?q=rep3@unplugnews.com', { token: adminToken });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.users[0].free_publishing_enabled, true, 'reflects the "turned back on" state from the test above');
+});
+
 test('the email address cannot be changed here', async () => {
   // It is how sign-in works and how guest edition purchases are reunited with
   // an account — changing it would detach someone from their own history.

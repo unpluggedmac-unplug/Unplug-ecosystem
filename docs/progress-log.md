@@ -2402,3 +2402,44 @@ profile pages, which were deliberately deferred as the spec itself frames them a
 (§22) — the `slug` column already exists on `impact_makers` so that page is addable later with no schema
 change, and the sitemap/SEO code both already have a marked spot to extend into when it is.
 
+## 2026-09-05 — Per-consultant free-publishing toggle
+
+Requested directly, and scoped down through two rounds of clarifying questions from "allow admin to link
+sales consultants and allow admin to choose what they may have access to" to the one concrete gate that
+actually made sense: whether a specific consultant publishes for free at all. Every other consultant
+permission either already existed or wasn't asked for.
+
+New migration `176_consultant_free_publishing_toggle.sql`: `users.free_publishing_enabled BOOLEAN NOT
+NULL DEFAULT true`. `publishingRights.js` gains `consultantFreePublishingAllowed(user)` (`!== false`, so an
+older token with no claim at all still reads as allowed — the default must fail open, not silently revoke
+every consultant the moment this shipped); `publishesFree` and `statusForNewSubmission` both consult it,
+but only for `role === 'consultant'` — an admin is free regardless of this flag, by design.
+
+The flag is embedded in the JWT at login (`auth.js`, both the password and magic-link routes), not
+re-checked against the database on every request — this matches the site's own existing precedent for
+`role` (`attachUser` only ever verifies and trusts the token payload), so a revoke takes effect at the
+consultant's next login, not instantly. That tradeoff is deliberate: introducing a live DB lookup here
+would be a new pattern nowhere else in the auth system uses, for one flag, and the alternative (force a
+logout on toggle) is a bigger behavioural change than what was actually asked for.
+
+`admin.js`'s `GET /users` and `PATCH /users/:id` carry the field through; the admin dashboard's member row
+gets a plain checkbox labelled "Free publishing enabled (consultants only — has no effect on any other
+role)", sent unconditionally on save (unlike Role, which is guarded) since setting it on a non-consultant
+account is a harmless no-op, not a risk.
+
+Four new tests in `freePublishing.test.js` (toggle-off is billed like a member; an old token with no claim
+at all still publishes free; an explicit `true` claim behaves identically to no claim; the flag has no
+effect on an admin) and five in `usersAdmin.test.js` (defaults to true; toggling off doesn't touch role;
+toggling back on; a member cannot toggle it; the list carries the flag). New
+`consultantFreePublishingLogin.test.js` (2 tests) proves the one link a hand-signed test token can't: a
+real `POST /auth/login` for a toggled-off consultant issues a JWT carrying `free_publishing_enabled:
+false`, and that token is genuinely billed end-to-end through `POST /articles`. New
+`consultantFreePublishingAdminUi.test.js` (4 static-source tests) on the admin dashboard checkbox and its
+unconditional save.
+
+Verified live in-browser against a mocked backend: the checkbox rendered checked for a consultant whose
+mock record had the flag on; unchecking it and saving sent `freePublishingEnabled: false` in the real PATCH
+body (confirmed via the network log), with the correct toast.
+
+Full suite: 2112 passing, 0 failing (up from 2097).
+
