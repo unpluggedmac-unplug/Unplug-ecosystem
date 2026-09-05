@@ -2443,3 +2443,53 @@ body (confirmed via the network log), with the correct toast.
 
 Full suite: 2112 passing, 0 failing (up from 2097).
 
+## 2026-09-05 — Admin can create and delete Directory listings directly
+
+Requested directly: "allow admin to add directory profiles manually. (admin must have full access to
+edit/delete/adjust)". Every Directory listing until now had to belong to a real member account —
+`profiles.user_id` was `NOT NULL` with a plain unique index, because every listing so far had come from a
+member's own submission. An admin publishing a listing for a sponsor or business with no account yet (and
+maybe none ever) had no path to do that at all.
+
+Asked first whether an admin-created listing needs a member account behind it — the answer was "can stand
+alone but option to link to member," which settled the one real design question: `profiles.user_id` must
+accept NULL, and multiple ownerless listings must be able to coexist without colliding.
+
+New migration `177_admin_created_profiles.sql`: drops the `NOT NULL` on `user_id` and replaces the plain
+unique index with a partial one (`UNIQUE ... WHERE user_id IS NOT NULL`) — a real member still cannot own
+two listings, but any number of ownerless ones can exist side by side. New `POST /admin/profiles`
+(admin.js) creates a listing standalone, `status = 'approved'` immediately — same free-and-instant
+treatment every other admin-authored submission gets, no approval queue, no payment — with just enough to
+exist (name, type, package tier, category); everything else (bio, contact details, feature image) is
+filled in through the exact same `PATCH /profiles/:id` every owner already uses, since `requireOwnerOrAdmin`
+already lets an admin through with no owner to compare against. New `DELETE /admin/profiles/:id` hard-
+deletes a listing — most of what references a profile cascades or SETs NULL on its own via real foreign
+keys, but `social_links` and `gallery_images` are polymorphic (owner_type/owner_id, no FK), so those are
+cleaned up explicitly first or they'd be silently orphaned rows nothing ever reads again.
+
+The existing "Link a listing to a member account" panel (`adminProfileLinks.js`) needed two real fixes to
+stay correct once ownerless listings could exist: its listings query was an `INNER JOIN users`, written
+back when every listing had an owner by definition — that silently excluded any admin-created listing from
+the panel meant to link it, so it's now a `LEFT JOIN`. And the "undo last link" route treated landing back
+on a NULL owner as "the account this listing came from has been deleted" (its only previous meaning) —
+now a real, legal outcome (a listing created standalone and linked to a member for the first time has "no
+owner" as its true previous state), so reverting to NULL now succeeds instead of erroring.
+
+Admin dashboard: a new "Add a new listing" panel above the existing per-profile editor (name, type,
+package tier, category) that creates the listing and jumps straight into the same editor used for every
+other listing; the editor gained a "Delete listing" button behind a `confirm()`, matching the phrasing
+style of every other destructive confirm on this site.
+
+New `adminCreatedProfiles.test.js` (14 tests, real HTTP + real Postgres): non-admin blocked from create and
+delete; required-field and package-tier validation; a standalone listing is created approved with
+`user_id: null` and is genuinely live on the public route; two ownerless listings coexist without a unique-
+index collision; a duplicate display name gets a different slug instead of a 500; an admin can edit an
+owner-less listing via the ordinary PATCH route, a member cannot; the linking panel now surfaces an
+ownerless listing; linking one to a member works starting from a null current owner; reverting that link
+correctly lands back on null instead of erroring; a real member still cannot end up owning two listings;
+delete removes the listing and cleans up its gallery images, and a second delete is a clean 404. New
+`adminCreatedProfilesUi.test.js` (3 static-source tests) on the create form and delete button wiring.
+
+Verified live in-browser against a mocked backend: creating a listing jumped straight into its editor;
+deleting it (with the confirm auto-accepted) hid the editor and removed it from the picker's list.
+

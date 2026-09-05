@@ -17,10 +17,12 @@ const router = express.Router();
 
 // GET /admin/links/directory?q= — listings, with who owns each one now.
 //
-// Returns ALL listings, not only unlinked ones: every listing has an owner
-// already (profiles.user_id is NOT NULL), so "unlinked" is not a state that
-// exists. What the admin is actually doing is moving one from a placeholder
-// account to the real person's account.
+// Returns ALL listings, including ones with no owner at all. That used to be
+// impossible (profiles.user_id was NOT NULL) but an admin can now create a
+// listing directly with nobody behind it yet (177_admin_created_profiles.sql)
+// — those show up here with owner_email null, and "Link to member…" is how
+// an admin gives one an owner for the first time, not just how they move it
+// from a placeholder account to the real one.
 router.get('/directory', requireRole('admin'), async (req, res, next) => {
   try {
     const q = String(req.query.q || '').trim();
@@ -35,7 +37,7 @@ router.get('/directory', requireRole('admin'), async (req, res, next) => {
               u.email AS owner_email, u.full_name AS owner_name,
               (SELECT COUNT(*) FROM profile_link_history h WHERE h.profile_id = p.id) AS link_changes
          FROM profiles p
-         JOIN users u ON u.id = p.user_id
+         LEFT JOIN users u ON u.id = p.user_id
          ${where}
         ORDER BY p.display_name
         LIMIT 300`,
@@ -186,9 +188,10 @@ router.post('/directory/:profileId', requireRole('admin'), async (req, res, next
 // POST /admin/links/directory/:profileId/revert { reason }
 //
 // Puts a listing back where the last link took it from. This is the "undo"
-// for picking the wrong account — deliberately not a free-form unlink,
-// because profiles.user_id cannot be empty and inventing an owner to park it
-// on would create exactly the orphan records this is meant to avoid.
+// for picking the wrong account. A revert that lands on NULL is a real,
+// legal outcome now: a listing an admin created standalone
+// (177_admin_created_profiles.sql) and then linked to a member for the first
+// time has "no owner" as its true previous state, not a deleted account.
 router.post('/directory/:profileId/revert', requireRole('admin'), async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -205,10 +208,6 @@ router.post('/directory/:profileId/revert', requireRole('admin'), async (req, re
       return res.status(404).json({ error: 'This listing has never been re-linked, so there is nothing to undo.' });
     }
     const previousOwner = last.rows[0].from_user_id;
-    if (!previousOwner) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'The account this listing came from has since been deleted, so it cannot be put back automatically. Link it to the correct account instead.' });
-    }
 
     const profile = await client.query(
       'SELECT id, user_id, display_name FROM profiles WHERE id = $1 FOR UPDATE', [profileId]
@@ -218,12 +217,14 @@ router.post('/directory/:profileId/revert', requireRole('admin'), async (req, re
       return res.status(404).json({ error: 'That Directory listing no longer exists.' });
     }
 
-    const clash = await client.query(
-      'SELECT display_name FROM profiles WHERE user_id = $1 AND id <> $2', [previousOwner, profileId]
-    );
-    if (clash.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ error: `The previous owner now holds the listing "${clash.rows[0].display_name}", so this one cannot go back to them.` });
+    if (previousOwner !== null) {
+      const clash = await client.query(
+        'SELECT display_name FROM profiles WHERE user_id = $1 AND id <> $2', [previousOwner, profileId]
+      );
+      if (clash.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: `The previous owner now holds the listing "${clash.rows[0].display_name}", so this one cannot go back to them.` });
+      }
     }
 
     await client.query('UPDATE profiles SET user_id = $1, updated_at = now() WHERE id = $2', [previousOwner, profileId]);

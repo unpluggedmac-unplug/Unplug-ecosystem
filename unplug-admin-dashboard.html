@@ -1035,6 +1035,28 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
       </div>
       <div class="panel">
+        <div class="panel-head"><h3>Add a new listing</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin:0 0 12px; line-height:1.6;">
+            For a business, sponsor or person who has no member account yet — the listing goes live immediately, with no owner. Finish it off below (bio, contact details, feature image) once it's created, or link it to a member account from the panel above.
+          </p>
+          <div class="form-row">
+            <div><label for="dpNewName">Display name</label><input id="dpNewName" maxlength="160"></div>
+            <div><label for="dpNewCategory">Category</label><select id="dpNewCategory"><option value="">— none —</option></select></div>
+          </div>
+          <div class="form-row" style="margin-top:10px;">
+            <div><label for="dpNewType">Type</label>
+              <select id="dpNewType"><option value="individual">Individual</option><option value="business">Business</option></select>
+            </div>
+            <div><label for="dpNewTier">Package</label>
+              <select id="dpNewTier"><option value="basic">Basic</option><option value="pro">Pro</option><option value="premium">Premium</option></select>
+            </div>
+          </div>
+          <button class="btn btn-solid" style="width:auto; margin-top:12px;" id="dpCreateBtn">Create listing</button>
+          <span id="dpCreateNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
+        </div>
+      </div>
+      <div class="panel">
         <div class="panel-head"><h3>Choose a profile</h3></div>
         <div class="panel-body">
           <div class="form-row">
@@ -1080,6 +1102,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
           <button class="btn btn-solid" style="width:auto; margin-top:14px;" id="dpSaveBtn">Save profile</button>
           <button class="btn btn-line" style="width:auto; margin-top:14px;" id="dpDiscardBtn">Discard changes</button>
+          <button class="btn btn-line" style="width:auto; margin-top:14px; color:var(--red); border-color:var(--red);" id="dpDeleteBtn">Delete listing</button>
           <span id="dpNote" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>
         </div>
       </div>
@@ -4980,8 +5003,45 @@ async function loadDirProfiles() {
     const cats = await api('/directory/categories');
     document.getElementById('dpCategory').innerHTML = '<option value="">— unchanged —</option>'
       + (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
+    document.getElementById('dpNewCategory').innerHTML = '<option value="">— none —</option>'
+      + (cats.categories || []).map((c) => `<option value="${c.id}">${escapeHtmlAdmin(c.name)}</option>`).join('');
   } catch (err) { /* leave the unchanged option */ }
 }
+
+document.getElementById('dpCreateBtn').addEventListener('click', async () => {
+  const note = document.getElementById('dpCreateNote');
+  const displayName = document.getElementById('dpNewName').value.trim();
+  if (!displayName) { note.textContent = 'A display name is required.'; return; }
+  const btn = document.getElementById('dpCreateBtn');
+  btn.disabled = true;
+  note.textContent = 'Creating…';
+  try {
+    const catVal = document.getElementById('dpNewCategory').value;
+    const data = await api('/admin/profiles', {
+      method: 'POST',
+      body: JSON.stringify({
+        displayName,
+        type: document.getElementById('dpNewType').value,
+        packageTier: document.getElementById('dpNewTier').value,
+        categoryId: catVal ? Number(catVal) : null,
+      }),
+    });
+    showToast(data.message || 'Listing created.');
+    document.getElementById('dpNewName').value = '';
+    document.getElementById('dpNewCategory').value = '';
+    note.textContent = '';
+    await loadDirProfiles();
+    // Jump straight into the editor for the listing just created, so the
+    // admin can add its bio/contact details/feature image right away.
+    const picker = document.getElementById('dpPicker');
+    picker.value = String(data.profile.id);
+    dpLoadProfile(data.profile.id, data.profile.slug);
+  } catch (err) {
+    note.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById('dpPicker').addEventListener('change', (e) => {
   const opt = e.target.selectedOptions[0];
@@ -5172,6 +5232,22 @@ document.getElementById('dpRemoveLocationBtn').addEventListener('click', async (
 
 document.getElementById('dpDiscardBtn').addEventListener('click', () => {
   if (DP_CURRENT) dpLoadProfile(DP_CURRENT.id, DP_CURRENT.slug);
+});
+
+document.getElementById('dpDeleteBtn').addEventListener('click', async () => {
+  if (!DP_CURRENT) return;
+  const name = document.getElementById('dpEditorTitle').textContent.replace(/^Edit — /, '');
+  if (!confirm(`Permanently delete the Directory listing "${name}"?\n\nThis removes its gallery images and social links too, and cannot be undone.`)) return;
+  try {
+    const data = await api(`/admin/profiles/${DP_CURRENT.id}`, { method: 'DELETE' });
+    showToast(data.message || 'Listing deleted.');
+    DP_CURRENT = null;
+    document.getElementById('dpEditorPanel').style.display = 'none';
+    document.getElementById('dpGalleryPanel').style.display = 'none';
+    loadDirProfiles();
+  } catch (err) {
+    showToast(err.message, true);
+  }
 });
 
 document.getElementById('dpAddGalleryBtn').addEventListener('click', async () => {

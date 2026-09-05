@@ -540,6 +540,104 @@ router.patch('/profiles/:id/feature', requireRole('admin'), async (req, res, nex
   }
 });
 
+function profileSlugify(name) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+// POST /admin/profiles — admin creates a Directory listing directly, for a
+// sponsor/business/person who has no member account (and may never get one)
+// — e.g. captured at an event, or a partner the site wants listed before
+// they sign up. Requested directly: "allow admin to add directory profiles
+// manually."
+//
+// Deliberately different from POST /profiles (the member's own submission
+// route) in two ways: no user_id at all (177_admin_created_profiles.sql made
+// that column nullable for exactly this), and status is 'approved' on the
+// spot — an admin publishing their own curated listing needs no approval
+// queue and no payment, the same free-and-instant treatment every other
+// admin-authored submission gets on this site.
+//
+// The listing starts minimal (name, type, tier, category) and is finished
+// off with the SAME editor every other listing uses (PATCH /profiles/:id)
+// — bio, contact details, location, feature image. If it should later
+// belong to a real member, the existing "Link a listing to a member
+// account" panel (adminProfileLinks.js) does that without recreating
+// anything.
+router.post('/profiles', requireRole('admin'), async (req, res, next) => {
+  try {
+    const { type, categoryId, packageTier, displayName } = req.body;
+    if (!displayName || !displayName.trim()) {
+      return res.status(400).json({ error: 'displayName is required.' });
+    }
+    const PACKAGE_TIERS = ['basic', 'pro', 'premium'];
+    if (!PACKAGE_TIERS.includes(packageTier)) {
+      return res.status(400).json({ error: `packageTier must be one of: ${PACKAGE_TIERS.join(', ')}` });
+    }
+    const profileType = type === 'business' ? 'business' : 'individual';
+
+    let slug = profileSlugify(displayName);
+    const slugTaken = await pool.query('SELECT id FROM profiles WHERE slug = $1', [slug]);
+    if (slugTaken.rows.length > 0) {
+      slug = `${slug}-${Date.now().toString(36)}`;
+    }
+
+    const result = await pool.query(
+      `INSERT INTO profiles (user_id, type, category_id, package_tier, slug, display_name, status)
+       VALUES (NULL, $1, $2, $3, $4, $5, 'approved')
+       RETURNING *`,
+      [profileType, categoryId || null, packageTier, slug, displayName.trim()]
+    );
+
+    await logActivity(req.user.id, 'directory_listing_created_by_admin',
+      `Created the Directory listing "${result.rows[0].display_name}" (#${result.rows[0].id}), live immediately with no owner`).catch(() => {});
+
+    res.status(201).json({
+      profile: result.rows[0],
+      message: 'Listing created and live. Add its bio, contact details and feature image below, or link it to a member account from the Profile Linking panel.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /admin/profiles/:id — permanently removes a Directory listing an
+// admin manages directly. Every FK from other tables (competition entries,
+// top10 archive, CRM, article backlinks…) already cascades or SETs NULL on
+// its own; social_links and gallery_images are polymorphic (owner_type/
+// owner_id, no real FK) so they are cleaned up here explicitly, or they
+// would be silently orphaned rows nothing ever reads again.
+router.delete('/profiles/:id', requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid profile id is required.' });
+
+    await client.query('BEGIN');
+    const profile = await client.query('SELECT display_name FROM profiles WHERE id = $1 FOR UPDATE', [id]);
+    if (profile.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'That listing no longer exists.' });
+    }
+    await client.query(`DELETE FROM social_links WHERE owner_type = 'profile' AND owner_id = $1`, [id]);
+    await client.query(`DELETE FROM gallery_images WHERE owner_type = 'profile' AND owner_id = $1`, [id]);
+    await client.query('DELETE FROM profiles WHERE id = $1', [id]);
+    await client.query('COMMIT');
+
+    await logActivity(req.user.id, 'directory_listing_deleted',
+      `Deleted the Directory listing "${profile.rows[0].display_name}" (#${id})`).catch(() => {});
+    res.json({ deleted: true, message: `"${profile.rows[0].display_name}" has been permanently removed.` });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // GET /admin/profiles/all — every Directory profile, for the per-profile
 // editor's picker. All statuses, newest first.
 router.get('/profiles/all', requireRole('admin'), async (req, res, next) => {
