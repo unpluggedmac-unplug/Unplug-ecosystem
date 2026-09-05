@@ -4807,7 +4807,7 @@ function dirCardHtml(profile) {
   // A feature image, when the profile has one, fills the card thumbnail;
   // otherwise the print-mark placeholder shows as before.
   const photo = profile.feature_image_url
-    ? `<div class="dir-photo" style="background-image:url('${escapeHtml(profile.feature_image_url)}'); background-size:cover; background-position:center;"></div>`
+    ? `<div class="dir-photo" ${coverAnimAttr(profile.cover_animation_effect)} style="background-image:url('${escapeHtml(profile.feature_image_url)}'); background-size:cover; background-position:center; ${coverAnimDurStyle(profile.cover_transition_duration_ms)}"></div>`
     : `<div class="dir-photo"><span class="print-mark tiny"></span></div>`;
   return `<div class="card-shell"><a class="dir-card" href="#" data-page="directoryprofile" data-slug="${slug}">${photo}<h4>${name}</h4><p>${category}${secondCategory ? ' + ' + secondCategory : ''}</p>${deafBadge}</a>${shareRow(absUrl('?p=profile&slug=' + encodeURIComponent(profile.slug || '')), profile.display_name)}</div>`;
 }
@@ -5179,7 +5179,7 @@ function newsCardHtml(article) {
   const thumbImg = coverImgTag(article.banner_image_url, article.title);
   // The share row sits OUTSIDE the card anchor — nesting links inside an <a>
   // is invalid and would also trigger the card's navigation handler.
-  return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb">${thumbImg}</div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}<div class="int-bar-compact" id="news-int-${article.id}"></div></div>`;
+  return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb" ${coverAnimAttr(article.cover_animation_effect)} style="${coverAnimDurStyle(article.cover_transition_duration_ms)}">${thumbImg}</div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}<div class="int-bar-compact" id="news-int-${article.id}"></div></div>`;
 }
 
 // Share buttons (WhatsApp / Facebook / X / native / copy) used on the article
@@ -7697,6 +7697,24 @@ function coverImgTag(url, alt) {
     `<img onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';" `);
 }
 
+// The hover/focus entrance effect on a cover — an admin's per-item choice,
+// same 8-value vocabulary as every other part of this feature. Split into
+// two small pieces (an attribute, and a style-declaration fragment) rather
+// than one combined `data-cover-anim="…" style="…"` string, since several
+// call sites already have their own `style="…"` (e.g. a background-image) —
+// a single element can only have ONE style attribute, so the duration has to
+// be appended into whatever style string already exists, not emitted
+// alongside it. Safe on any cover container regardless of whether it holds
+// a real <img> or paints the photo as its own background-image (see the CSS
+// comment for why both shapes are handled by one rule set).
+function coverAnimAttr(effect) {
+  return `data-cover-anim="${escapeAttr(effect || 'none')}"`;
+}
+function coverAnimDurStyle(durationMs) {
+  const d = Number(durationMs) > 0 ? Number(durationMs) : 400;
+  return `--anim-dur:${d}ms;`;
+}
+
 // The big picture at the top of an article — the one the reader is waiting
 // for, and on most article pages the Largest Contentful Paint element.
 //
@@ -7736,7 +7754,7 @@ function homeStoryCardHtml(article, idPrefix) {
         : '');
   const thumbImg = coverImgTag(article.banner_image_url, article.title);
   return `<article class="story-card" data-id="${article.id}" role="link" tabindex="0" style="cursor:pointer;">
-        <div class="story-thumb">${thumbImg}</div>
+        <div class="story-thumb" ${coverAnimAttr(article.cover_animation_effect)} style="${coverAnimDurStyle(article.cover_transition_duration_ms)}">${thumbImg}</div>
         <span class="story-tag">${category}</span>${article.requires_account ? '<span class="story-lock">Members</span>' : ''}
         <h3>${title}</h3>
         <p>${excerpt}</p>
@@ -7916,7 +7934,7 @@ function homeDirCardHtml(profile) {
     ? `<img src="${escapeHtml(profile.feature_image_url)}" alt="" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;">`
     : '<span class="print-mark tiny"></span>';
   return `<div class="dir-card-wrap">
-        <div class="dir-card"><div class="dir-photo">${photo}</div><h4>${name}</h4><p>${category}</p></div>
+        <div class="dir-card"><div class="dir-photo" ${coverAnimAttr(profile.cover_animation_effect)} style="${coverAnimDurStyle(profile.cover_transition_duration_ms)}">${photo}</div><h4>${name}</h4><p>${category}</p></div>
         ${shareRow(shareUrl, profile.display_name)}
       </div>`;
 }
@@ -8246,7 +8264,7 @@ function editionFeatureHtml(edition) {
 
 function editionCardHtml(edition) {
   return `<div class="edition-card">
-    <div class="edition-cover">
+    <div class="edition-cover" ${coverAnimAttr(edition.cover_animation_effect)} style="${coverAnimDurStyle(edition.cover_transition_duration_ms)}">
       ${edition.cover_image_url ? `<img src="${escapeHtml(edition.cover_image_url)}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">` : ''}
       <span class="edition-issue-tag" style="position:relative;">Issue No. ${escapeHtml(String(edition.issue_number))}</span>
     </div>

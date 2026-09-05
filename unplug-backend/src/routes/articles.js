@@ -115,6 +115,7 @@ router.get('/', async (req, res, next) => {
     const result = await pool.query(
       `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at,
               a.banner_image_url, a.subtitle, c.name AS category, a.requires_account,
+              a.cover_animation_effect, a.cover_transition_duration_ms,
               a.author_name, con.name AS contributor_name, con.slug AS contributor_slug,
               -- WHO IT IS PUBLISHED BY, decided once here rather than in each
               -- front end. A typed byline wins; failing that, the name on the

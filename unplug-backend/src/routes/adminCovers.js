@@ -29,6 +29,10 @@ const COVERS = {
     specKey: 'article_cover',
     table: 'articles', image: 'banner_image_url',
     titleSql: 'title', metaSql: "status", order: 'created_at DESC',
+    // Hover/focus entrance effect + speed — see 180_cover_animation.sql.
+    // Only article/directory/edition carry these; every other resource in
+    // this map is deliberately left alone (out of scope for this feature).
+    animCol: 'cover_animation_effect', durCol: 'cover_transition_duration_ms',
   },
   directory: {
     label: 'Directory Listings', group: 'Content',
@@ -41,6 +45,7 @@ const COVERS = {
     // .dir-photo is aspect-ratio 1/1 on the Directory card and in the members
     // grid, and .profile-photo-lg is a 110x110 circle on the listing page, so
     // a 16:9 upload is centre-cropped everywhere.
+    animCol: 'cover_animation_effect', durCol: 'cover_transition_duration_ms',
   },
   event: {
     label: 'Events', group: 'Content',
@@ -54,6 +59,7 @@ const COVERS = {
     table: 'editions', image: 'cover_image_url',
     titleSql: "COALESCE(NULLIF(TRIM(title), ''), 'Issue ' || issue_number)",
     metaSql: "'Issue ' || issue_number", order: 'issue_number DESC',
+    animCol: 'cover_animation_effect', durCol: 'cover_transition_duration_ms',
   },
   marketplace: {
     label: 'Marketplace Posters', group: 'Content',
@@ -158,10 +164,16 @@ router.get('/:type', requireRole('admin'), async (req, res, next) => {
     const c = COVERS[type];
     if (!c) return res.status(404).json({ error: 'Unknown kind of image.' });
 
+    // animCol/durCol only exist on article/directory/edition — every other
+    // resource here is unaffected and gets no extra columns selected.
+    const extraCols = c.animCol ? `, ${c.animCol} AS anim, ${c.durCol} AS anim_dur` : '';
     const r = await pool.query(
-      `SELECT id, ${c.titleSql} AS title, ${c.image} AS cover, ${c.metaSql} AS meta
+      `SELECT id, ${c.titleSql} AS title, ${c.image} AS cover, ${c.metaSql} AS meta${extraCols}
          FROM ${c.table} ORDER BY ${c.order}`);
-    res.json({ type, label: c.label, mode: 'upload', hint: c.hint || null, specKey: c.specKey || null, items: r.rows });
+    res.json({
+      type, label: c.label, mode: 'upload', hint: c.hint || null, specKey: c.specKey || null,
+      hasAnim: !!c.animCol, items: r.rows,
+    });
   } catch (err) {
     next(err);
   }
@@ -237,9 +249,35 @@ router.patch('/:type/:id', requireRole('admin'), async (req, res, next) => {
     const cleaned = cleanImageUrl(req.body && req.body.imageUrl);
     if (!cleaned.ok) return res.status(400).json({ error: cleaned.error });
 
+    // Same 8-value vocabulary every other part of this feature uses. Only
+    // applied when this resource actually declares animCol (article/
+    // directory/edition) — every other type ignores these two body fields
+    // entirely, same as it always has.
+    const sets = [`${c.image} = $1`];
+    const values = [cleaned.value];
+    if (c.animCol) {
+      const ALLOWED_ANIM = ['none', 'fade', 'fade-up', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'zoom'];
+      if (req.body.animationEffect !== undefined && req.body.animationEffect !== '') {
+        if (!ALLOWED_ANIM.includes(req.body.animationEffect)) {
+          return res.status(400).json({ error: 'animationEffect must be one of: ' + ALLOWED_ANIM.join(', ') });
+        }
+        values.push(req.body.animationEffect);
+        sets.push(`${c.animCol} = $${values.length}`);
+      }
+      if (req.body.transitionDurationMs !== undefined && req.body.transitionDurationMs !== '') {
+        const dur = Number(req.body.transitionDurationMs);
+        if (!(Number.isInteger(dur) && dur > 0 && dur <= 10000)) {
+          return res.status(400).json({ error: 'transitionDurationMs must be a positive whole number of milliseconds (up to 10000).' });
+        }
+        values.push(dur);
+        sets.push(`${c.durCol} = $${values.length}`);
+      }
+    }
+    values.push(id);
+
     const r = await pool.query(
-      `UPDATE ${c.table} SET ${c.image} = $1 WHERE id = $2 RETURNING id, ${c.image} AS cover`,
-      [cleaned.value, id]);
+      `UPDATE ${c.table} SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING id, ${c.image} AS cover`,
+      values);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found.' });
 
     await logActivity(req.user.id, 'cover_changed',

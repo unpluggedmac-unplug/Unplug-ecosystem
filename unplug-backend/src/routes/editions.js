@@ -78,7 +78,8 @@ router.get('/', async (req, res, next) => {
 
     const result = await pool.query(
       `SELECT id, issue_number, edition_number, title, month, year, description,
-              cover_image_url, pdf_url, download_price, publication_date, published_at
+              cover_image_url, pdf_url, download_price, publication_date, published_at,
+              cover_animation_effect, cover_transition_duration_ms
        FROM editions
        WHERE status = 'published'
        -- Newest first. display_order lets an admin pin a specific edition to

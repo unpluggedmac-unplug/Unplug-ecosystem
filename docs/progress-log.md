@@ -2673,3 +2673,63 @@ seeded ~1.5s pace, not the old fixed 4s.
 
 Full suite: 2184 passing, 0 failing (up from 2145, confirmed together with part 3 below).
 
+## 2026-09-05 — Animation controls, part 3: Article/Edition/Directory covers
+
+Part 3 of 6, and the one surface in this whole feature with no existing animation to extend — story cards,
+edition covers, and directory profile photos are all plain static boxes today. New migration
+`180_cover_animation.sql`: two columns each on `articles`, `profiles`, and `editions` —
+`cover_animation_effect`/`cover_transition_duration_ms`, defaulted to `'none'`/400 so nothing already
+published gains an effect the moment this runs; only a cover an admin actively opts in shows one. No
+display-duration column here, unlike parts 1-2: a hover effect has no "how long it stays up," it plays on
+hover-in and reverses on hover-out.
+
+Trigger mechanism is deliberately pure CSS (`:hover`/`:focus-within`), not a scroll-triggered entrance —
+the codebase has zero `IntersectionObserver` usage anywhere, and every existing "reveal" effect
+(`.related-card:hover`, `.cms-block-imglink:hover`) is already hover-only. Building a scroll-trigger system
+would be a materially bigger addition than what was asked for.
+
+One real markup wrinkle, found while wiring the public render, not assumed up front: article/edition
+covers hold a real `<img>` inside their container, but Directory's own card (`dirCardHtml`) paints the
+photo as the CONTAINER's own CSS `background-image` with no `<img>` at all — two different shapes for
+"a cover." Handled with one CSS rule set covering both: `[data-cover-anim] img, [data-cover-anim]:not(:has(> img))`
+targets whichever is actually there. `coverAnimAttr()`/`coverAnimDurStyle()` (new helpers next to
+`coverImgTag`) had to be two separate functions rather than one combined attribute string, since several
+call sites already have their own `style="…"` (the background-image itself) — an element can only carry one
+`style` attribute, so the duration has to be appended into whatever already exists, not emitted alongside
+it. Wired at every real cover-render call site: `newsCardHtml`/`homeStoryCardHtml` (articles),
+`dirCardHtml`/`homeDirCardHtml` (directory), `editionCardHtml` (editions). The Members-grid card
+(`memberCardHtml`) was deliberately left out of scope — its data comes from a stored Postgres function
+(`get_members()`), and widening a stored function is a bigger, separate change than this pass covers; since
+no `data-cover-anim` attribute at all renders identically to `data-cover-anim="none"` (no CSS rule matches
+either way), leaving it out changes nothing about what ships today.
+
+All three cover types are edited through the ONE shared "Cover Images" admin screen (`adminCovers.js`'s
+`COVERS` map), which already unifies 10 different resource kinds behind one editor — generalized rather
+than special-cased: `article`/`directory`/`edition` each gained `animCol`/`durCol` properties, and
+`GET`/`PATCH /admin/covers/:type[/:id]` read them conditionally (`if (c.animCol)`), so the other 7 resource
+kinds this screen manages (event/marketplace/competition/contributor/halloffame/birthday/passport) are
+completely unaffected — verified explicitly in the test file, not just assumed. The one shared
+`#coverAnimFields` block in the admin form shows or hides itself per the server's own `hasAnim` flag, so
+adding an animation-capable resource in the future needs no new admin markup, only a new `animCol`/`durCol`
+pair on that resource's map entry.
+
+New tests: `coverAnimation.test.js` (10, real HTTP + real Postgres) — the CHECK constraint rejects an
+invalid effect; a fresh row of each type defaults to `'none'`/400 (today's exact static look); `GET
+/admin/covers/article` declares `hasAnim:true` and returns each item's current effect/duration; `GET
+/admin/covers/event` declares `hasAnim:false` and returns neither field; a non-admin is blocked; an invalid
+effect and an out-of-range duration are both clean 400s; a valid edit round-trips through to both `GET
+/articles` and `GET /directory`; sending animation fields to an out-of-scope type (`event`) is silently
+ignored, confirmed by checking `information_schema.columns` directly — `events` never gained the columns
+at all. `coverAnimationUi.test.js` (5, static-source) — the fields block exists with the full enum, hides/
+shows correctly off `hasAnim`, populates from the current item, and only sends the two fields when the
+type actually has them; and the backend only declares `animCol` on exactly 3 of the 10 resource types.
+
+Verified live in-browser against a mocked backend: opening an article cover in the Cover Images editor
+showed the animation fields with its stored values; changing the effect and saving round-tripped correctly
+through `GET /admin/covers/article`; switching to the out-of-scope `event` type correctly hid the fields
+entirely; a card rendered via the real `newsCardHtml()` carried the correct `data-cover-anim`/`--anim-dur`
+attributes, with a computed rest-state transform of `none` (confirming no premature animation before any
+hover).
+
+Full suite: 2184 passing, 0 failing (up from 2145).
+
