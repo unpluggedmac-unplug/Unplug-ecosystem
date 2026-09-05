@@ -7773,7 +7773,13 @@ function featuredSlideHtml(a, index, total) {
   const href = '?p=article&id=' + encodeURIComponent(a.id);
   const category = escapeHtml(a.category || '');
   const by = a.contributor_name || a.published_by || a.author_name || a.kicker_supplied_by || '';
-  return `<div class="featured-slide" role="group" aria-roledescription="slide"
+  // This slider is manually swiped (wireFeaturedSlider toggles [hidden], not
+  // a timer), so the entrance effect plays once per reveal via the shared
+  // library's [hidden]-aware selector — the same mechanism used for
+  // carousels, just triggered by a swipe instead of an auto-advance.
+  const anim = escapeAttr(a.cover_animation_effect || 'none');
+  const dur = Number(a.cover_transition_duration_ms) > 0 ? Number(a.cover_transition_duration_ms) : 400;
+  return `<div class="featured-slide anim-target" data-anim="${anim}" style="--anim-dur:${dur}ms;" role="group" aria-roledescription="slide"
        aria-label="${index + 1} of ${total}"${index ? ' hidden' : ''}>
     <a class="featured-figure featured-link" href="${href}" data-article-id="${a.id}"
        tabindex="-1" aria-hidden="true">${coverImgTag(a.banner_image_url, a.title)}</a>
@@ -7803,6 +7809,14 @@ async function loadFeaturedSlider() {
           const art = d.article;
           // The admin's cover choice for this placement beats the article's own.
           if (art && h.admin_image_url) art.banner_image_url = h.admin_image_url;
+          // Same override relationship for the entrance effect: NULL on the
+          // highlight means "use the article's own cover_animation_effect/
+          // cover_transition_duration_ms" (already on `art` from GET
+          // /articles/:id), a real value overrides it for this placement only.
+          if (art) {
+            if (h.animation_effect) art.cover_animation_effect = h.animation_effect;
+            if (h.transition_duration_ms) art.cover_transition_duration_ms = h.transition_duration_ms;
+          }
           return art;
         })
         .catch(() => null)))).filter(Boolean);

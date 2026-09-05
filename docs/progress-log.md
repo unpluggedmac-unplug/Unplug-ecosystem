@@ -2733,3 +2733,51 @@ hover).
 
 Full suite: 2184 passing, 0 failing (up from 2145).
 
+## 2026-09-05 — Animation controls, part 4: Highlighted Articles override
+
+Part 4 of 6. The admin-curated homepage "Featured Stories" slider — a manually-swiped carousel, not
+auto-rotating, with no animation of any kind today. New migration `181_highlight_animation_override.sql`:
+two NULLABLE columns on `highlights` — `animation_effect`/`transition_duration_ms` — the only nullable
+columns in this whole feature, because the override itself needs "unset" as a real, meaningful state, not
+a default value. Mirrors the exact existing relationship `admin_image_url` already has to
+`articles.banner_image_url` on this same table (from `056_cover_images_highlights.sql`): NULL means "use
+the article's own `cover_animation_effect`/`cover_transition_duration_ms`" (part 3); a real value overrides
+it for that placement only. No `display_duration_ms` here either — the slider is swiped, not timed, so the
+effect plays once per reveal with nothing to schedule.
+
+`highlights.js` gained the same validation shape as every other part (`ALLOWED_ANIM` enum check, a positive-
+integer check on the duration), but with one real difference the others don't have: `PATCH /admin/:id`
+treats an empty string as "clear the override back to NULL," not as "invalid" — the same way clearing
+`admin_image_url` already falls back to the article's own image. `loadFeaturedSlider()`
+(`unplug-magazine.html`) applies the override the identical way it already applies `admin_image_url`: only
+when the highlight actually specifies a value, immediately after the existing image-override line, so the
+two overrides read as one pattern rather than two.
+
+The reveal mechanism reuses the same `.anim-target`/`data-anim` library parts 1-2 built for carousels —
+`wireFeaturedSlider`'s `show(n)` already toggles a slide's `hidden` PROPERTY directly (`el.hidden = k !==
+target`), which the shared CSS's `:not([hidden])` selector was already built to catch (see part 1's CSS
+comment, written in anticipation of this) — so no new CSS or JS mechanism was needed here at all, only
+wiring the existing one into a second, differently-triggered surface.
+
+New tests: `highlightAnimationOverride.test.js` (9, real HTTP + real Postgres) — the CHECK constraint
+rejects an invalid effect but explicitly allows NULL (the one part of this feature where NULL is correct by
+design, not just a default); a non-admin is blocked; an invalid effect on create/patch is a clean 400 that
+leaves any existing valid override untouched; a real override round-trips through `GET /highlights/active`;
+sending an empty string clears the override back to NULL. `highlightAnimationOverrideUi.test.js` (4,
+static-source) — the form's select includes an explicit "use the article/profile's own" option alongside
+the 8 real effects; saving always sends both fields as explicit `null` when left blank (never omitted, so a
+save can't accidentally leave a stale override in place); editing populates both from the stored highlight;
+resetting clears both.
+
+Verified live in-browser against a mocked backend with two highlighted articles — one with a `slide-left`/
+350ms override, one with no override at all: the overridden slide carried its own values exactly; the
+un-overridden slide correctly fell through to its article's own `fade`/500ms rather than showing no
+animation or a wrong default — proving the fallback chain actually resolves right, not just that both
+fields exist on the wire.
+
+Full suite: 2208 passing, 0 failing (up from 2184; also required fixing an unrelated-looking failure in
+`pageVisibility.test.js` — a pre-existing canary test that deliberately fails when a new key is exposed via
+`/public-settings` without updating its expected list, forcing exactly the "think about whether it should
+be public first" review its own comment asks for. Fixed by adding the two new Feature Edition keys to that
+list — the real fix belongs to part 5 below, since that's the change that triggered it.)
+

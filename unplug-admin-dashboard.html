@@ -2534,6 +2534,20 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div class="field"><label for="hlPriority">Order</label><input id="hlPriority" type="number" value="0" style="padding:8px; width:80px;"></div>
           </div>
           <div class="field"><label>Cover image override (optional)</label><div id="hlImageUpload"></div></div>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="field"><label for="hlAnim">Override entrance effect (optional)</label>
+              <select id="hlAnim" style="padding:8px;">
+                <option value="">— use the article/profile's own —</option>
+                <option value="none">None</option><option value="fade">Fade</option>
+                <option value="fade-up">Fade up</option><option value="slide-up">Slide up</option>
+                <option value="slide-down">Slide down</option><option value="slide-left">Slide left</option>
+                <option value="slide-right">Slide right</option><option value="zoom">Zoom</option>
+              </select>
+            </div>
+            <div class="field"><label for="hlAnimDur">Override speed, ms (optional)</label>
+              <input id="hlAnimDur" type="number" min="1" placeholder="e.g. 400" style="padding:8px; width:120px;">
+            </div>
+          </div>
           <div id="hlFormError" style="color:var(--red); margin-bottom:10px; display:none;"></div>
           <button class="approve" id="hlSaveBtn" style="padding:9px 16px;">Save Highlight</button>
           <button class="btn btn-line" id="hlCancelBtn" type="button" style="width:auto; display:none; margin-left:8px;">Cancel edit</button>
@@ -7334,6 +7348,10 @@ async function saveHighlight() {
     endDate: noEnd ? null : (document.getElementById('hlEnd').value || null),
     priority: Number(document.getElementById('hlPriority').value) || 0,
     imageUrl: UnplugUpload.valueOf(document.getElementById('hlImageUpload')) || '',
+    // Empty means "use the article/profile's own" — an explicit unset, not
+    // a default — so both are sent as null rather than omitted.
+    animationEffect: document.getElementById('hlAnim').value || null,
+    transitionDurationMs: document.getElementById('hlAnimDur').value ? Number(document.getElementById('hlAnimDur').value) : null,
   };
   if (!body.targetId) {
     err.textContent = body.targetType === 'directory' ? 'Choose a directory profile.' : 'Choose an article.';
@@ -7366,6 +7384,8 @@ function editHighlight(id) {
   document.getElementById('hlEnd').value = h.end_date ? h.end_date.slice(0, 10) : '';
   document.getElementById('hlPriority').value = h.priority || 0;
   document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', h.admin_image_url || '', '', imgSpecFull('article_cover'));
+  document.getElementById('hlAnim').value = h.animation_effect || '';
+  document.getElementById('hlAnimDur').value = h.transition_duration_ms || '';
   document.getElementById('hlFormTitle').textContent = 'Edit highlight';
   document.getElementById('hlCancelBtn').style.display = 'inline-block';
   document.getElementById('section-highlights').scrollIntoView({ behavior: 'smooth' });
@@ -7381,6 +7401,8 @@ function resetHighlightForm() {
   document.getElementById('hlNoEnd').checked = false;
   document.getElementById('hlPriority').value = 0;
   document.getElementById('hlImageUpload').innerHTML = UnplugUpload.fieldHtml('hlImage', '', '', imgSpecFull('article_cover'));
+  document.getElementById('hlAnim').value = '';
+  document.getElementById('hlAnimDur').value = '';
   document.getElementById('hlFormTitle').textContent = 'Add a highlight';
   document.getElementById('hlCancelBtn').style.display = 'none';
   document.getElementById('hlFormError').style.display = 'none';

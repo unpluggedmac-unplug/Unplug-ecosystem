@@ -13,7 +13,8 @@ const router = express.Router();
 router.get('/active', async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, target_type, target_id, start_date, end_date, admin_image_url, priority
+      `SELECT id, target_type, target_id, start_date, end_date, admin_image_url, priority,
+              animation_effect, transition_duration_ms
        FROM highlights
        WHERE status = 'approved'
          AND (start_date IS NULL OR start_date <= CURRENT_DATE)
@@ -39,6 +40,7 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
     const result = await pool.query(
       `SELECT h.id, h.target_type, h.target_id, h.status, h.start_date, h.end_date,
               h.priority, h.admin_image_url, h.is_admin, h.created_at,
+              h.animation_effect, h.transition_duration_ms,
               CASE WHEN h.target_type = 'article' THEN a.title ELSE p.display_name END AS target_title,
               CASE WHEN h.target_type = 'article' THEN a.banner_image_url ELSE p.feature_image_url END AS target_image
          FROM highlights h
@@ -52,6 +54,8 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+const ALLOWED_ANIM = ['none', 'fade', 'fade-up', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'zoom'];
+
 function parseHighlightBody(body) {
   const targetType = ['article', 'directory'].includes(body.targetType) ? body.targetType : null;
   const targetId = Number(body.targetId);
@@ -62,7 +66,16 @@ function parseHighlightBody(body) {
   const startDate = body.startDate ? String(body.startDate) : null;
   const endDate = body.endDate ? String(body.endDate) : null;
   const adminImageUrl = (body.imageUrl || body.adminImageUrl || '').trim() || null;
-  return { targetType, targetId, priority, startDate, endDate, adminImageUrl };
+  // Both NULL means "use the target's own cover_animation_effect/
+  // cover_transition_duration_ms" — an override, same relationship
+  // admin_image_url already has to the target's own banner_image_url.
+  if (body.animationEffect && !ALLOWED_ANIM.includes(body.animationEffect)) {
+    return { error: `animationEffect must be one of: ${ALLOWED_ANIM.join(', ')}` };
+  }
+  const animationEffect = body.animationEffect || null;
+  const durMs = Number(body.transitionDurationMs);
+  const transitionDurationMs = (Number.isInteger(durMs) && durMs > 0 && durMs <= 10000) ? durMs : null;
+  return { targetType, targetId, priority, startDate, endDate, adminImageUrl, animationEffect, transitionDurationMs };
 }
 
 // POST /highlights/admin — admin creates an approved highlight immediately
@@ -75,9 +88,10 @@ router.post('/admin', requireRole('admin'), async (req, res, next) => {
     const exists = await pool.query(`SELECT 1 FROM ${table} WHERE id = $1`, [v.targetId]);
     if (exists.rowCount === 0) return res.status(404).json({ error: `That ${v.targetType} does not exist.` });
     const result = await pool.query(
-      `INSERT INTO highlights (target_type, target_id, status, start_date, end_date, priority, admin_image_url, is_admin)
-       VALUES ($1, $2, 'approved', $3, $4, $5, $6, true) RETURNING *`,
-      [v.targetType, v.targetId, v.startDate, v.endDate, v.priority, v.adminImageUrl]
+      `INSERT INTO highlights (target_type, target_id, status, start_date, end_date, priority, admin_image_url, is_admin,
+                               animation_effect, transition_duration_ms)
+       VALUES ($1, $2, 'approved', $3, $4, $5, $6, true, $7, $8) RETURNING *`,
+      [v.targetType, v.targetId, v.startDate, v.endDate, v.priority, v.adminImageUrl, v.animationEffect, v.transitionDurationMs]
     );
     res.status(201).json({ highlight: result.rows[0], message: 'Highlight created and live within its dates.' });
   } catch (err) {
@@ -94,6 +108,7 @@ router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
     const map = {
       startDate: 'start_date', endDate: 'end_date', priority: 'priority',
       imageUrl: 'admin_image_url', status: 'status',
+      animationEffect: 'animation_effect', transitionDurationMs: 'transition_duration_ms',
     };
     const sets = [];
     const values = [];
@@ -101,7 +116,21 @@ router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
       if (req.body[bodyKey] === undefined) continue;
       let val = req.body[bodyKey];
       if (column === 'status' && !['approved', 'rejected', 'pending'].includes(val)) continue;
-      if ((column === 'start_date' || column === 'end_date' || column === 'admin_image_url') && val === '') val = null;
+      if ((column === 'start_date' || column === 'end_date' || column === 'admin_image_url'
+           || column === 'animation_effect' || column === 'transition_duration_ms') && val === '') val = null;
+      // An empty string clears the override back to null — "use the target's
+      // own setting" — same as clearing admin_image_url falls back to the
+      // target's own banner_image_url.
+      if (column === 'animation_effect' && val !== null && !ALLOWED_ANIM.includes(val)) {
+        return res.status(400).json({ error: `animationEffect must be one of: ${ALLOWED_ANIM.join(', ')}` });
+      }
+      if (column === 'transition_duration_ms' && val !== null) {
+        const n = Number(val);
+        if (!(Number.isInteger(n) && n > 0 && n <= 10000)) {
+          return res.status(400).json({ error: 'transitionDurationMs must be a positive whole number of milliseconds (up to 10000).' });
+        }
+        val = n;
+      }
       values.push(val);
       sets.push(`${column} = $${values.length}`);
     }
