@@ -30,7 +30,8 @@ router.get('/', async (req, res, next) => {
     // unset start/end means "no restriction" on that side). Ordered so the
     // frontend can just render them in sequence for the rotation.
     const ads = await pool.query(
-      `SELECT id, slot_key, image_url, link_url, name, cta_text, mobile_image_url
+      `SELECT id, slot_key, image_url, link_url, name, cta_text, mobile_image_url,
+              animation_effect, transition_duration_ms, display_duration_ms
          FROM ad_slots
         WHERE is_active = true
           AND (moderation_status IS NULL OR moderation_status = 'approved')
@@ -55,6 +56,9 @@ router.get('/', async (req, res, next) => {
       adSlots[a.slot_key].push({
         image_url: a.image_url, link_url: a.link_url,
         name: a.name, cta_text: a.cta_text, mobile_image_url: a.mobile_image_url,
+        animation_effect: a.animation_effect,
+        transition_duration_ms: a.transition_duration_ms,
+        display_duration_ms: a.display_duration_ms,
       });
     });
     res.json({ content: contentMap, blocks: blocksByPage, adSlots });
@@ -274,6 +278,7 @@ router.get('/admin/ad-slots', requireRole('admin'), async (req, res, next) => {
       `SELECT a.id, a.slot_key, a.image_url, a.link_url, a.name, a.cta_text, a.mobile_image_url,
               a.display_order, a.is_active, a.starts_at, a.ends_at, a.updated_at,
               a.owner_user_id, a.moderation_status, a.duration_days, a.payment_id,
+              a.animation_effect, a.transition_duration_ms, a.display_duration_ms,
               u.email AS owner_email
          FROM ad_slots a
          LEFT JOIN users u ON u.id = a.owner_user_id
@@ -290,6 +295,11 @@ router.get('/admin/ad-slots', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// Same 8-value vocabulary unplug-popups.js already validates for its own
+// entrance-animation dropdown (ALLOWED_ANIM) — one set of effect names
+// across the whole site rather than a second one invented here.
+const ALLOWED_ANIM = ['none', 'fade', 'fade-up', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'zoom'];
+
 function validateAdSlotInput(body) {
   const imageUrl = (body.imageUrl || '').trim();
   const linkUrl = (body.linkUrl || '').trim() || null;
@@ -305,7 +315,20 @@ function validateAdSlotInput(body) {
   const name = (body.name || '').trim().slice(0, 160) || null;
   const ctaText = (body.ctaText || '').trim().slice(0, 40) || null;
   const mobileImageUrl = (body.mobileImageUrl || '').trim() || null;
-  return { imageUrl, linkUrl, displayOrder, isActive, startsAt, endsAt, name, ctaText, mobileImageUrl };
+
+  if (body.animationEffect !== undefined && !ALLOWED_ANIM.includes(body.animationEffect)) {
+    return { error: `animationEffect must be one of: ${ALLOWED_ANIM.join(', ')}` };
+  }
+  const animationEffect = ALLOWED_ANIM.includes(body.animationEffect) ? body.animationEffect : 'fade';
+  const transitionMs = Number(body.transitionDurationMs);
+  const transitionDurationMs = Number.isInteger(transitionMs) && transitionMs > 0 && transitionMs <= 10000 ? transitionMs : 600;
+  const displayMs = Number(body.displayDurationMs);
+  const displayDurationMs = Number.isInteger(displayMs) && displayMs >= 1000 && displayMs <= 120000 ? displayMs : 5000;
+
+  return {
+    imageUrl, linkUrl, displayOrder, isActive, startsAt, endsAt, name, ctaText, mobileImageUrl,
+    animationEffect, transitionDurationMs, displayDurationMs,
+  };
 }
 
 // POST /page-cms/admin/ad-slots — admin adds a NEW banner to a slot. A slot
@@ -319,9 +342,11 @@ router.post('/admin/ad-slots', requireRole('admin'), async (req, res, next) => {
     if (v.error) return res.status(400).json({ error: v.error });
 
     const result = await pool.query(
-      `INSERT INTO ad_slots (slot_key, image_url, link_url, display_order, is_active, starts_at, ends_at, name, cta_text, mobile_image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [slotKey, v.imageUrl, v.linkUrl, v.displayOrder, v.isActive, v.startsAt, v.endsAt, v.name, v.ctaText, v.mobileImageUrl]
+      `INSERT INTO ad_slots (slot_key, image_url, link_url, display_order, is_active, starts_at, ends_at, name, cta_text, mobile_image_url,
+                             animation_effect, transition_duration_ms, display_duration_ms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      [slotKey, v.imageUrl, v.linkUrl, v.displayOrder, v.isActive, v.startsAt, v.endsAt, v.name, v.ctaText, v.mobileImageUrl,
+       v.animationEffect, v.transitionDurationMs, v.displayDurationMs]
     );
     logActivity(req.user.id, 'ad_slot_added', slotKey);
     res.status(201).json({ banner: result.rows[0], message: 'Banner added — it rotates in live if active and in-schedule.' });
@@ -343,9 +368,11 @@ router.patch('/admin/ad-slots/:id', requireRole('admin'), async (req, res, next)
       `UPDATE ad_slots
           SET image_url = $1, link_url = $2, display_order = $3, is_active = $4,
               starts_at = $5, ends_at = $6, name = $7, cta_text = $8, mobile_image_url = $9,
+              animation_effect = $10, transition_duration_ms = $11, display_duration_ms = $12,
               updated_at = now()
-        WHERE id = $10 RETURNING *`,
-      [v.imageUrl, v.linkUrl, v.displayOrder, v.isActive, v.startsAt, v.endsAt, v.name, v.ctaText, v.mobileImageUrl, id]
+        WHERE id = $13 RETURNING *`,
+      [v.imageUrl, v.linkUrl, v.displayOrder, v.isActive, v.startsAt, v.endsAt, v.name, v.ctaText, v.mobileImageUrl,
+       v.animationEffect, v.transitionDurationMs, v.displayDurationMs, id]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: 'That banner no longer exists.' });
     logActivity(req.user.id, 'ad_slot_edited', result.rows[0].slot_key);

@@ -5390,6 +5390,15 @@ function adBannerRowHtml(uid) {
       <div><label>Starts (optional)</label><input class="ad-starts" type="date"></div>
       <div><label>Ends (optional)</label><input class="ad-ends" type="date"></div>
     </div>
+    <div class="form-row">
+      <div><label>Entrance effect</label><select class="ad-anim" style="width:100%;">
+        <option value="fade">Fade</option><option value="none">None</option>
+        <option value="fade-up">Fade up</option><option value="slide-up">Slide up</option>
+        <option value="slide-down">Slide down</option><option value="slide-left">Slide left</option>
+        <option value="slide-right">Slide right</option><option value="zoom">Zoom</option>
+      </select></div>
+      <div><label>Shows for (seconds)</label><input class="ad-display-secs" type="number" min="1" value="5" style="width:100%;"></div>
+    </div>
     <button class="btn btn-solid ad-save" style="width:auto; margin-top:8px;">Save banner</button>
     <button class="btn btn-line ad-delete" style="width:auto; margin-top:8px;">Delete</button>
     <span class="ad-note" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>`;
@@ -5415,6 +5424,8 @@ function fillAdBannerRow(row, banner, slotKey) {
   row.querySelector('.ad-active').checked = banner.is_active !== false;
   row.querySelector('.ad-starts').value = banner.starts_at ? String(banner.starts_at).slice(0, 10) : '';
   row.querySelector('.ad-ends').value = banner.ends_at ? String(banner.ends_at).slice(0, 10) : '';
+  row.querySelector('.ad-anim').value = banner.animation_effect || 'fade';
+  row.querySelector('.ad-display-secs').value = Math.round((banner.display_duration_ms || 5000) / 1000);
 }
 
 function wireAdBannerRow(row, slotKey, bannerId) {
@@ -5434,6 +5445,8 @@ function wireAdBannerRow(row, slotKey, bannerId) {
       isActive: row.querySelector('.ad-active').checked,
       startsAt: row.querySelector('.ad-starts').value || null,
       endsAt: row.querySelector('.ad-ends').value || null,
+      animationEffect: row.querySelector('.ad-anim').value,
+      displayDurationMs: (Number(row.querySelector('.ad-display-secs').value) || 5) * 1000,
     };
     btn.disabled = true;
     try {

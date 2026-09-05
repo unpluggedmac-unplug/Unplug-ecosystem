@@ -617,9 +617,8 @@ section.home-section:last-of-type{ margin-bottom:0; }
   aspect-ratio:16/9; background:var(--paper);
 }
 .ad-slot-filled .ad-slide{
-  position:absolute; inset:0; opacity:0; transition:opacity 0.6s ease;
+  position:absolute; inset:0;
 }
-.ad-slot-filled .ad-slide.is-active{ opacity:1; }
 .ad-slot-filled .ad-nav{
   position:absolute; top:50%; transform:translateY(-50%); z-index:3;
   width:34px; height:34px; border:none; border-radius:50%; cursor:pointer;
@@ -633,6 +632,88 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .ad-slot-filled .ad-dot.is-active{ background:var(--red); }
 .ad-slot-filled .ad-cta{ position:absolute; right:14px; bottom:14px; z-index:2; background:var(--red); color:#fff; font-size:12px; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; padding:7px 14px; border-radius:4px; }
 @media(max-width:640px){ .ad-slot-filled .ad-nav{ opacity:1; width:28px; height:28px; font-size:17px; } }
+
+/* ---------------------------------------------------------------------------
+   Shared admin-controlled entrance effects — one vocabulary of effect names
+   (none/fade/fade-up/slide-up/slide-down/slide-left/slide-right/zoom),
+   identical to unplug-popups.js's own entrance-animation set, reused across
+   every rotating banner/carousel and every static cover on the site so an
+   admin picks from one consistent list everywhere rather than a different
+   one per feature.
+
+   Two trigger mechanisms share this one keyframe library:
+     - carousels (.anim-target): JS toggles .is-active (or removes [hidden]
+       for a manually-swiped slider) to play the entrance once per slide.
+     - static covers ([data-cover-anim], added in a later part): pure CSS
+       :hover/:focus-within, no JS at all.
+
+   --anim-dur is set inline per element from the admin's own stored value, so
+   speed is per-item while the effect curves themselves are shared and only
+   defined once. Confined to prefers-reduced-motion:no-preference, matching
+   the existing convention (.balloon-layer, .im-card-inner, and the Feature
+   Edition's own Ken Burns zoom all already do this). ---------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  [data-anim].anim-target { opacity:0; }
+  [data-anim="none"].anim-target { opacity:1; }
+
+  [data-anim].anim-target.is-active,
+  [data-anim].anim-target:not([hidden]) {
+    animation-duration: var(--anim-dur, 500ms);
+    animation-fill-mode: both;
+    animation-timing-function: ease-out;
+  }
+  [data-anim="fade"].anim-target.is-active,       [data-anim="fade"].anim-target:not([hidden])       { animation-name: unplug-anim-fade; }
+  [data-anim="fade-up"].anim-target.is-active,     [data-anim="fade-up"].anim-target:not([hidden])     { animation-name: unplug-anim-fade-up; }
+  [data-anim="slide-up"].anim-target.is-active,    [data-anim="slide-up"].anim-target:not([hidden])    { animation-name: unplug-anim-slide-up; }
+  [data-anim="slide-down"].anim-target.is-active,  [data-anim="slide-down"].anim-target:not([hidden])  { animation-name: unplug-anim-slide-down; }
+  [data-anim="slide-left"].anim-target.is-active,  [data-anim="slide-left"].anim-target:not([hidden])  { animation-name: unplug-anim-slide-left; }
+  [data-anim="slide-right"].anim-target.is-active, [data-anim="slide-right"].anim-target:not([hidden]) { animation-name: unplug-anim-slide-right; }
+  [data-anim="zoom"].anim-target.is-active,        [data-anim="zoom"].anim-target:not([hidden])        { animation-name: unplug-anim-zoom; }
+
+  @keyframes unplug-anim-fade       { from{ opacity:0; } to{ opacity:1; } }
+  @keyframes unplug-anim-fade-up    { from{ opacity:0; transform:translateY(16px); } to{ opacity:1; transform:none; } }
+  @keyframes unplug-anim-slide-up   { from{ opacity:0; transform:translateY(40px); } to{ opacity:1; transform:none; } }
+  @keyframes unplug-anim-slide-down { from{ opacity:0; transform:translateY(-40px); } to{ opacity:1; transform:none; } }
+  @keyframes unplug-anim-slide-left { from{ opacity:0; transform:translateX(40px); } to{ opacity:1; transform:none; } }
+  @keyframes unplug-anim-slide-right{ from{ opacity:0; transform:translateX(-40px); } to{ opacity:1; transform:none; } }
+  @keyframes unplug-anim-zoom       { from{ opacity:0; transform:scale(.92); } to{ opacity:1; transform:none; } }
+
+  /* ---- cover mode: [data-cover-anim], hover/focus only, no JS -----------
+     Article/edition covers put a real <img> inside the container; Directory
+     cards paint the photo as the CONTAINER's own background-image instead
+     (dirCardHtml/homeDirCardHtml build .dir-photo with no <img> child at
+     all) — so the transform target is "the img if there is one, otherwise
+     the container itself", covering both real markup shapes with one rule
+     set rather than writing it twice. overflow:hidden keeps a zoom/slide
+     from visually spilling past the card's own edges. -------------------- */
+  [data-cover-anim] { overflow:hidden; }
+  [data-cover-anim] img, [data-cover-anim]:not(:has(> img)) {
+    transition-duration: var(--anim-dur, 400ms);
+    transition-timing-function: ease-out;
+  }
+  [data-cover-anim="fade"] img,        [data-cover-anim="fade"]:not(:has(> img))        { transition-property:opacity; opacity:.82; }
+  [data-cover-anim="fade-up"] img,     [data-cover-anim="fade-up"]:not(:has(> img))     { transition-property:opacity, transform; opacity:.85; transform:translateY(6px); }
+  [data-cover-anim="slide-up"] img,    [data-cover-anim="slide-up"]:not(:has(> img))    { transition-property:transform; transform:translateY(6px); }
+  [data-cover-anim="slide-down"] img,  [data-cover-anim="slide-down"]:not(:has(> img))  { transition-property:transform; transform:translateY(-6px); }
+  [data-cover-anim="slide-left"] img,  [data-cover-anim="slide-left"]:not(:has(> img))  { transition-property:transform; transform:translateX(6px); }
+  [data-cover-anim="slide-right"] img, [data-cover-anim="slide-right"]:not(:has(> img)) { transition-property:transform; transform:translateX(-6px); }
+  [data-cover-anim="zoom"] img,        [data-cover-anim="zoom"]:not(:has(> img))        { transition-property:transform; transform:scale(1); }
+
+  [data-cover-anim="fade"]:hover img, [data-cover-anim="fade"]:focus-within img,
+  [data-cover-anim="fade"]:hover:not(:has(> img)), [data-cover-anim="fade"]:focus-within:not(:has(> img)) { opacity:1; }
+  [data-cover-anim="fade-up"]:hover img, [data-cover-anim="fade-up"]:focus-within img,
+  [data-cover-anim="fade-up"]:hover:not(:has(> img)), [data-cover-anim="fade-up"]:focus-within:not(:has(> img)) { opacity:1; transform:none; }
+  [data-cover-anim="slide-up"]:hover img, [data-cover-anim="slide-up"]:focus-within img,
+  [data-cover-anim="slide-up"]:hover:not(:has(> img)), [data-cover-anim="slide-up"]:focus-within:not(:has(> img)) { transform:none; }
+  [data-cover-anim="slide-down"]:hover img, [data-cover-anim="slide-down"]:focus-within img,
+  [data-cover-anim="slide-down"]:hover:not(:has(> img)), [data-cover-anim="slide-down"]:focus-within:not(:has(> img)) { transform:none; }
+  [data-cover-anim="slide-left"]:hover img, [data-cover-anim="slide-left"]:focus-within img,
+  [data-cover-anim="slide-left"]:hover:not(:has(> img)), [data-cover-anim="slide-left"]:focus-within:not(:has(> img)) { transform:none; }
+  [data-cover-anim="slide-right"]:hover img, [data-cover-anim="slide-right"]:focus-within img,
+  [data-cover-anim="slide-right"]:hover:not(:has(> img)), [data-cover-anim="slide-right"]:focus-within:not(:has(> img)) { transform:none; }
+  [data-cover-anim="zoom"]:hover img, [data-cover-anim="zoom"]:focus-within img,
+  [data-cover-anim="zoom"]:hover:not(:has(> img)), [data-cover-anim="zoom"]:focus-within:not(:has(> img)) { transform:scale(1.06); }
+}
 
 /* ---- top 10 ---- */
 .rank-list{ display:flex; flex-direction:column; }
@@ -5673,7 +5754,11 @@ async function applyPageCms() {
       const inner = b.link_url
         ? `<a href="${escapeHtml(b.link_url)}" target="_blank" rel="noopener sponsored" style="display:block;width:100%;height:100%;position:relative;">${picture}${cta}</a>`
         : picture;
-      return `<div class="ad-slide${i === 0 ? ' is-active' : ''}">${inner}</div>`;
+      // The entrance effect and its speed are per-banner (admin-controlled) —
+      // see the shared [data-anim] library in the stylesheet.
+      const anim = escapeAttr(b.animation_effect || 'fade');
+      const dur = Number(b.transition_duration_ms) > 0 ? Number(b.transition_duration_ms) : 600;
+      return `<div class="ad-slide anim-target${i === 0 ? ' is-active' : ''}" data-anim="${anim}" style="--anim-dur:${dur}ms;">${inner}</div>`;
     }).join('');
     const controls = banners.length > 1
       ? `<button class="ad-nav ad-prev" type="button" aria-label="Previous advert">‹</button>
@@ -5691,12 +5776,24 @@ async function applyPageCms() {
         i = (n + slides.length) % slides.length;
         slides[i].classList.add('is-active'); if (dots[i]) dots[i].classList.add('is-active');
       };
-      const start = () => { timer = setInterval(() => show(i + 1), 5000); };
-      const reset = () => { clearInterval(timer); start(); };
+      // Each banner decides how long IT stays up before the carousel advances
+      // — a per-slide duration, not one fixed rate for every banner alike.
+      // A setTimeout chain (rather than one setInterval) is what makes that
+      // possible: the delay is re-read from the newly-active banner every
+      // time the carousel steps forward.
+      const currentDisplayMs = () => {
+        const d = Number(banners[i] && banners[i].display_duration_ms);
+        return d >= 1000 ? d : 5000;
+      };
+      const scheduleNext = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { show(i + 1); scheduleNext(); }, currentDisplayMs());
+      };
+      const reset = () => scheduleNext();
       slot.querySelector('.ad-next').addEventListener('click', (e) => { e.preventDefault(); show(i + 1); reset(); });
       slot.querySelector('.ad-prev').addEventListener('click', (e) => { e.preventDefault(); show(i - 1); reset(); });
       dots.forEach((d, n) => d.addEventListener('click', (e) => { e.preventDefault(); show(n); reset(); }));
-      start();
+      scheduleNext();
     }
   });
 }

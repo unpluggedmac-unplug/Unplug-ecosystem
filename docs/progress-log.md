@@ -2575,3 +2575,57 @@ Verified live in-browser against a mocked backend: switching Type/Tier through a
 (Individual Basic, Business Basic, Business Premium, Individual Premium) showed exactly the right fields
 each time; a full submission with every field filled in created the listing correctly with a null owner.
 
+## 2026-09-05 — Animation controls, part 1: Ad Banners
+
+Requested directly: "give admin access and control on the animation effects on banners and covers across
+the site." Research first, since almost nothing here was configurable at all: across the whole site,
+exactly one admin-chosen animation exists today — Popups' 8-value entrance-effect dropdown
+(none/fade/fade-up/slide-up/slide-down/slide-left/slide-right/zoom). Everything else — the ad-banner
+crossfade, the marketplace poster's slide, the Feature Edition's Ken Burns zoom — is hardcoded, and article/
+edition/directory cover images have no animation of any kind. Scoped via two rounds of clarifying questions
+into six sequential parts (this is part 1 of 6); the full architecture (why per-item override on a shared
+carousel means per-slide effect *and* per-slide display duration, why covers are hover-triggered rather
+than scroll-triggered, why the Feature Edition keeps its own bespoke keyframe) is recorded in the plan file
+this session used, since it's long enough that repeating it per-part here would bury the part that changed.
+
+New migration `178_ad_banner_animation.sql`: three columns on `ad_slots` — `animation_effect` (reusing the
+exact 8-value enum Popups already validates, so there's one vocabulary of effect names site-wide, not a
+second one invented here), `transition_duration_ms` (how the crossfade itself looks), `display_duration_ms`
+(how long *this* banner stays up before the rotation advances). Defaults (`'fade'`/600/5000) reproduce
+today's exact hardcoded crossfade and 5-second rotation, so no existing banner changes appearance the
+moment this migration runs.
+
+`pageContent.js`'s public `GET /`, admin `GET /admin/ad-slots`, and `POST`/`PATCH /admin/ad-slots[/:id]` all
+carry the three fields through; `validateAdSlotInput` gained the same enum-CHECK validation server-side (a
+clean 400 for an invalid effect, not a raw database-constraint 500). The admin per-row form
+(`adBannerRowHtml`/`fillAdBannerRow`/`wireAdBannerRow`) exposes 2 of the 3 fields — Entrance effect and
+Shows-for-seconds — deliberately leaving `transition_duration_ms` server-defaulted; Popups itself never
+exposed a duration control either, and a 3rd raw-milliseconds field is more clutter than value on a form
+already this dense.
+
+The public rotation (`unplug-magazine.html`) needed a real mechanism change, not just new markup: the old
+`setInterval(() => show(i+1), 5000)` fired at one fixed rate for every banner alike. It's now a `setTimeout`
+chain that re-reads the *currently active* banner's own `display_duration_ms` every time it schedules the
+next advance — the concrete, buildable meaning of "per-item speed on a shared carousel," not a
+contradiction. Each slide also carries its own `data-anim`/`--anim-dur`, consumed by a new shared CSS
+"entrance effect" library (one `@keyframes` set per effect name, confined to
+`prefers-reduced-motion:no-preference`, matching the existing convention) — this library is introduced here
+and will be reused unchanged by the next four parts.
+
+New tests: `adBannerAnimation.test.js` (9, real HTTP + real Postgres) — the migration's CHECK constraints
+reject an invalid effect and a too-short display duration; a fresh row with nothing set reproduces today's
+exact defaults; a non-admin can't create a banner; an invalid effect is a clean 400; a full save round-trips
+through to the public route; omitting the animation fields on a later save resets to the same defaults
+(this route replaces the whole row, matching how every other field here already behaves — the admin form
+always resends everything, not just what changed); an out-of-range duration falls back rather than erroring;
+the admin list route also returns the new fields. `adBannerAnimationUi.test.js` (3, static-source) — the
+select offers all 8 values; loading a banner populates both fields; saving sends both, seconds converted to
+milliseconds.
+
+Verified live in-browser against a mocked backend serving two banners in one slot (one `zoom`/1.5s, one
+`slide-left`/1.5s): both slides carried the correct `data-anim`/`--anim-dur`; the rotation genuinely
+advanced after ~1.8s (not the old 5s) — confirming the per-slide duration actually drives the timer, not
+just decorates the markup.
+
+Full suite: 2157 passing, 0 failing (up from 2145).
+
