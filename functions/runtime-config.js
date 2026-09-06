@@ -8,11 +8,36 @@ export async function onRequest({ env }) {
   const staging = environment === 'staging' || environment === 'preview';
   const api = configured || (staging ? 'https://staging-api-not-configured.invalid' : PRODUCTION_API);
   const badStaging = staging && (!configured || configured === PRODUCTION_API);
-  const body = [
+
+  const lines = [
     'window.UNPLUG_ENV=' + JSON.stringify(environment) + ';',
     'window.UNPLUG_RUNTIME_API=' + JSON.stringify(api) + ';',
     'window.UNPLUG_RUNTIME_CONFIG_ERROR=' + JSON.stringify(badStaging ? 'Staging frontend is not connected to an isolated staging API.' : '') + ';'
-  ].join('\n');
+  ];
+
+  // Staging must never let a legacy hidden API input or stale localStorage
+  // value switch the browser back to production. Several older dashboard
+  // login handlers still read #apiBaseInput when the button is clicked.
+  // Force those compatibility fields to the isolated staging API before the
+  // user can interact with the page. Production behaviour is untouched.
+  if (staging) {
+    lines.push(
+      '(function(){',
+      '  var api=window.UNPLUG_RUNTIME_API;',
+      '  try { localStorage.setItem("unplug_api_base", api); } catch (_) {}',
+      '  function apply(){',
+      '    ["apiBaseInput","forgotApiBaseInput"].forEach(function(id){',
+      '      var el=document.getElementById(id);',
+      '      if (el) el.value=api;',
+      '    });',
+      '  }',
+      '  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once:true });',
+      '  else apply();',
+      '})();'
+    );
+  }
+
+  const body = lines.join('\n');
   return new Response(body, {
     status: 200,
     headers: {
