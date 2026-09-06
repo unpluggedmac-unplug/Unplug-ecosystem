@@ -14,6 +14,8 @@
   let top10Promise = null;
   let highlightedPromise = null;
   const repairing = new WeakSet();
+  const backgroundRepairing = new WeakSet();
+  const backgroundsSeen = new WeakSet();
   const emptyFramesSeen = new WeakSet();
 
   function apiBase() {
@@ -58,6 +60,12 @@
   function sameUrl(a, b) {
     const aa = cleanUrl(a); const bb = cleanUrl(b);
     return !!aa && !!bb && aa === bb;
+  }
+
+  function extractBackgroundUrl(value) {
+    if (!value || value === 'none') return '';
+    const match = String(value).match(/url\((?:\"|')?(.*?)(?:\"|')?\)/i);
+    return match ? match[1] : '';
   }
 
   function slugFromHref(href) {
@@ -199,6 +207,71 @@
     img.removeAttribute('srcset');
   }
 
+  function setBackgroundCandidate(el, candidate) {
+    return new Promise(function (resolve) {
+      const url = cleanUrl(candidate);
+      if (!url) return resolve(false);
+      const probe = new Image();
+      probe.onload = function () {
+        delete el.dataset.unplugPlaceholder;
+        delete el.dataset.unplugOriginalBgSrc;
+        delete el.dataset.unplugBgChecked;
+        delete el.dataset.unplugBgMedia;
+        delete el.dataset.unplugBgSrc;
+        el.classList.remove('unplug-img-broken');
+        el.style.backgroundImage = 'url("' + url.replace(/"/g, '%22') + '")';
+        el.style.backgroundSize = 'contain';
+        el.style.backgroundRepeat = 'no-repeat';
+        el.style.backgroundPosition = 'center';
+        if (window.UnplugImageViewer && typeof window.UnplugImageViewer.scan === 'function') {
+          window.UnplugImageViewer.scan();
+        }
+        resolve(true);
+      };
+      probe.onerror = function () { resolve(false); };
+      probe.src = url;
+    });
+  }
+
+  async function repairBackground(el, failedSource) {
+    if (!el || backgroundRepairing.has(el) || el.closest('.unplug-lightbox')) return;
+    backgroundRepairing.add(el);
+    try {
+      const failed = cleanUrl(failedSource || el.dataset.unplugOriginalBgSrc || el.dataset.unplugBgSrc || '');
+      const contextual = cleanUrl(await contextualCandidate(el, failed));
+      if (contextual && !sameUrl(contextual, failed)) {
+        await setBackgroundCandidate(el, contextual);
+      }
+      // If there is no genuine same-profile alternate, leave the viewer's
+      // branded placeholder. We never invent or borrow another person's image.
+    } finally {
+      backgroundRepairing.delete(el);
+    }
+  }
+
+  function inspectBackground(el) {
+    if (!el || backgroundsSeen.has(el) || el.closest('.unplug-lightbox')) return;
+    const computed = getComputedStyle(el).backgroundImage || '';
+    const src = extractBackgroundUrl(computed);
+    if (!src) return;
+    backgroundsSeen.add(el);
+
+    if (src.indexOf('data:image/svg+xml') === 0 || el.dataset.unplugPlaceholder === 'true') {
+      repairBackground(el, el.dataset.unplugOriginalBgSrc || '');
+      return;
+    }
+
+    const original = cleanUrl(src);
+    if (!original) return;
+    const probe = new Image();
+    probe.onload = function () {};
+    probe.onerror = function () {
+      el.dataset.unplugOriginalBgSrc = original;
+      repairBackground(el, original);
+    };
+    probe.src = original;
+  }
+
   function setCandidate(img, candidate) {
     return new Promise(function (resolve) {
       const url = cleanUrl(candidate);
@@ -278,6 +351,13 @@
     await setCandidate(img, candidates[0]);
   }
 
+  function scanBackgrounds(root) {
+    const scope = root && root.querySelectorAll ? root : document;
+    const selectors = '.dir-photo,.profile-photo-lg,.profile-gallery-item,[data-ad-slot],[class*="banner"],[class*="poster"],[class*="maker"],[class*="cover"]';
+    if (scope.matches && scope.matches(selectors)) inspectBackground(scope);
+    if (scope.querySelectorAll) scope.querySelectorAll(selectors).forEach(inspectBackground);
+  }
+
   function scanEmptyFrames(root) {
     const scope = root && root.querySelectorAll ? root : document;
     const frames = [];
@@ -298,6 +378,7 @@
         repairImage(img);
       }
     });
+    scanBackgrounds(scope);
     scanEmptyFrames(scope);
   }
 
@@ -314,8 +395,14 @@
       mutation.addedNodes.forEach(function (node) {
         if (node.nodeType === 1) scanBroken(node);
       });
-      if (mutation.type === 'attributes' && mutation.target && mutation.target.tagName === 'IMG') {
-        scanBroken(mutation.target);
+      if (mutation.type === 'attributes' && mutation.target) {
+        if (mutation.target.tagName === 'IMG') {
+          scanBroken(mutation.target);
+        } else if (mutation.attributeName === 'style') {
+          // A SPA renderer may reuse a frame with a new background URL.
+          backgroundsSeen.delete(mutation.target);
+          inspectBackground(mutation.target);
+        }
       }
     });
   });
