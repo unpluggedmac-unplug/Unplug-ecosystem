@@ -37,7 +37,7 @@ export async function onRequest({ env }) {
       '',
       '// Phase 13 staging image system: full-image lightbox, non-destructive',
       '// display fitting, orientation-aware page banners, broken-image',
-      '// fallbacks and same-profile source repair. Loaded only in staging.',
+      '// fallbacks, source repair and capture-safe image/card interactions.',
       '(function(){',
       '  if (window.__unplugImageViewerRequested) return;',
       '  window.__unplugImageViewerRequested=true;',
@@ -51,6 +51,7 @@ export async function onRequest({ env }) {
       '  add("/media/scripts/unplug-image-viewer.js?v=20260906-2");',
       '  add("/media/scripts/unplug-image-viewer-guard.js?v=20260906-2");',
       '  add("/media/scripts/unplug-image-repair.js?v=20260906-3");',
+      '  add("/media/scripts/unplug-image-interactions.js?v=20260906-1");',
       '})();'
     );
   }
