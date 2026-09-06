@@ -51,7 +51,7 @@ export async function onRequest({ env }) {
       '  add("/media/scripts/unplug-image-viewer.js?v=20260906-2");',
       '  add("/media/scripts/unplug-image-viewer-guard.js?v=20260906-2");',
       '  add("/media/scripts/unplug-image-repair.js?v=20260906-3");',
-      '  add("/media/scripts/unplug-image-interactions.js?v=20260906-1");',
+      '  add("/media/scripts/unplug-image-interactions.js?v=20260906-2");',
       '})();'
     );
   }
