@@ -41,11 +41,15 @@ export async function onRequest({ env }) {
       '(function(){',
       '  if (window.__unplugImageViewerRequested) return;',
       '  window.__unplugImageViewerRequested=true;',
-      '  var s=document.createElement("script");',
-      '  s.src="/media/scripts/unplug-image-viewer.js?v=20260906-1";',
-      '  s.async=false;',
-      '  s.setAttribute("data-unplug-no-lightbox","true");',
-      '  (document.head||document.documentElement).appendChild(s);',
+      '  function add(src){',
+      '    var s=document.createElement("script");',
+      '    s.src=src;',
+      '    s.async=false;',
+      '    s.setAttribute("data-unplug-no-lightbox","true");',
+      '    (document.head||document.documentElement).appendChild(s);',
+      '  }',
+      '  add("/media/scripts/unplug-image-viewer.js?v=20260906-1");',
+      '  add("/media/scripts/unplug-image-viewer-guard.js?v=20260906-1");',
       '})();'
     );
   }
