@@ -1,17 +1,17 @@
-name: Apply Phase 13 staging patch
+name: Install Phase 13 staging release
 
 on:
   push:
     branches:
       - staging-control-centre
     paths:
-      - '.phase13/READY'
+      - 'phase13-release.zip'
 
 permissions:
   contents: write
 
 jobs:
-  apply-phase13:
+  install-phase13:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -21,14 +21,20 @@ jobs:
           ref: staging-control-centre
           fetch-depth: 0
 
-      - name: Reconstruct and apply Phase 13 patch
+      - name: Validate and install Phase 13 release
         shell: bash
         run: |
           set -euo pipefail
-          cat .phase13/part-* > /tmp/phase13.patch
-          git apply --check /tmp/phase13.patch
-          git apply /tmp/phase13.patch
+          rm -rf /tmp/unplug-phase13
+          mkdir -p /tmp/unplug-phase13
+          unzip -q phase13-release.zip -d /tmp/unplug-phase13
+          test -f /tmp/unplug-phase13/phase12work/CONTROL-CENTRE-PHASE13.md
+          test -f /tmp/unplug-phase13/phase12work/unplug-admin-dashboard.html
+          test -f /tmp/unplug-phase13/phase12work/functions/_middleware.js
+          test -f /tmp/unplug-phase13/phase12work/unplug-backend/db/migrations/187_payment_fulfilment_tracking.sql
+          cp -a /tmp/unplug-phase13/phase12work/. ./
           rm -rf .phase13
+          rm -f phase13-release.zip
           rm -f .github/workflows/apply-phase13-staging.yml
 
       - name: Commit Phase 13 source changes
