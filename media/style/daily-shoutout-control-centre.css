@@ -1,0 +1,80 @@
+/* Daily Shout-Out Studio — staging Control Centre enhancement.
+   Scoped so it cannot change any other admin module. */
+#dailyShoutoutStudio{--dso-ink:#000001;--dso-paper:#ebe9e9;--dso-red:#ff2f00;--dso-line:rgba(0,0,1,.14);--dso-muted:#686462;margin:0 0 22px;font-family:'Inter',system-ui,sans-serif}
+#dailyShoutoutStudio *{box-sizing:border-box}
+#dailyShoutoutStudio .dso-shell{background:#fff;border:1px solid var(--dso-line);box-shadow:0 10px 30px rgba(0,0,1,.05)}
+#dailyShoutoutStudio .dso-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px;background:var(--dso-ink);color:#fff}
+#dailyShoutoutStudio .dso-kicker{margin:0 0 5px;color:var(--dso-red);font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+#dailyShoutoutStudio .dso-head h2{margin:0;font:700 24px/1.08 'Playfair Display',serif;color:#fff}
+#dailyShoutoutStudio .dso-head p{margin:7px 0 0;max-width:720px;color:#d6d2cf;font-size:12.5px;line-height:1.5}
+#dailyShoutoutStudio .dso-env{flex:0 0 auto;border:1px solid rgba(255,255,255,.26);padding:6px 9px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff}
+#dailyShoutoutStudio .dso-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:0}
+#dailyShoutoutStudio .dso-editor{padding:20px 22px;border-right:1px solid var(--dso-line)}
+#dailyShoutoutStudio .dso-preview-wrap{padding:20px 22px;background:var(--dso-paper)}
+#dailyShoutoutStudio .dso-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+#dailyShoutoutStudio .dso-field{display:flex;flex-direction:column;gap:6px}
+#dailyShoutoutStudio .dso-field.dso-span{grid-column:1/-1}
+#dailyShoutoutStudio label{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#4f4c4a}
+#dailyShoutoutStudio input,#dailyShoutoutStudio select,#dailyShoutoutStudio textarea{width:100%;border:1px solid #cbc8c5;background:#fff;color:var(--dso-ink);padding:10px 11px;font:500 13px/1.4 'Inter',system-ui,sans-serif;border-radius:0;outline:none}
+#dailyShoutoutStudio input:focus,#dailyShoutoutStudio select:focus,#dailyShoutoutStudio textarea:focus{border-color:var(--dso-red);box-shadow:0 0 0 2px rgba(255,47,0,.09)}
+#dailyShoutoutStudio textarea{min-height:86px;resize:vertical}
+#dailyShoutoutStudio .dso-hint{font-size:11px;color:var(--dso-muted);line-height:1.45}
+#dailyShoutoutStudio .dso-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding-top:16px;border-top:1px solid var(--dso-line)}
+#dailyShoutoutStudio button,#dailyShoutoutStudio .dso-linkbtn{appearance:none;border:1px solid var(--dso-ink);background:#fff;color:var(--dso-ink);min-height:38px;padding:8px 12px;font:800 10px/1 'Inter',system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+#dailyShoutoutStudio button:hover,#dailyShoutoutStudio .dso-linkbtn:hover{background:var(--dso-ink);color:#fff}
+#dailyShoutoutStudio button.dso-primary{background:var(--dso-red);border-color:var(--dso-red);color:#fff}
+#dailyShoutoutStudio button.dso-primary:hover{filter:brightness(.92)}
+#dailyShoutoutStudio button.dso-dark{background:var(--dso-ink);color:#fff}
+#dailyShoutoutStudio button.dso-danger{border-color:#a61d00;color:#a61d00}
+#dailyShoutoutStudio button:disabled{opacity:.45;cursor:not-allowed;filter:none}
+#dailyShoutoutStudio .dso-status{min-height:18px;margin-top:10px;font-size:11.5px;color:var(--dso-muted)}
+#dailyShoutoutStudio .dso-status.is-error{color:#a61d00;font-weight:700}
+#dailyShoutoutStudio .dso-status.is-ok{color:#246b32;font-weight:700}
+#dailyShoutoutStudio .dso-preview-label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#4d4946}
+#dailyShoutoutStudio .dso-preview-card{position:relative;overflow:hidden;aspect-ratio:4/5;background:linear-gradient(145deg,#f7f4ef 0%,#ebe9e9 56%,#dedad5 100%);border:1px solid rgba(0,0,1,.16);padding:24px;display:flex;flex-direction:column;justify-content:space-between;isolation:isolate}
+#dailyShoutoutStudio .dso-preview-card:before{content:'';position:absolute;right:-14%;top:11%;width:66%;height:15%;background:var(--dso-red);transform:rotate(-11deg);z-index:-1}
+#dailyShoutoutStudio .dso-preview-card:after{content:'';position:absolute;left:-10%;bottom:14%;width:72%;height:18%;border:18px solid var(--dso-ink);transform:rotate(9deg);z-index:-1;opacity:.96}
+#dailyShoutoutStudio .dso-card-brand{display:flex;justify-content:space-between;align-items:center;font-size:9px;font-weight:900;letter-spacing:.09em;text-transform:uppercase}
+#dailyShoutoutStudio .dso-card-brand strong{color:var(--dso-red)}
+#dailyShoutoutStudio .dso-card-copy{max-width:90%;background:rgba(247,244,239,.92);padding:12px 14px;border-left:6px solid var(--dso-red)}
+#dailyShoutoutStudio .dso-card-copy .dso-card-kicker{font-size:9px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;margin-bottom:6px}
+#dailyShoutoutStudio .dso-card-name{margin:0;font:900 clamp(28px,4vw,52px)/.94 'Playfair Display',serif;letter-spacing:-.035em;overflow-wrap:anywhere;color:var(--dso-ink)}
+#dailyShoutoutStudio .dso-card-line{margin-top:8px;font-size:12px;font-weight:700;line-height:1.35}
+#dailyShoutoutStudio .dso-power{font:900 clamp(26px,4vw,48px)/.95 'Inter',system-ui,sans-serif;text-transform:uppercase;letter-spacing:-.045em;color:var(--dso-red)}
+#dailyShoutoutStudio .dso-card-foot{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;font-size:9px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+#dailyShoutoutStudio .dso-card-foot span:last-child{text-transform:none;letter-spacing:0}
+#dailyShoutoutStudio .dso-pose-pill{display:inline-flex;margin-top:10px;padding:4px 7px;background:var(--dso-ink);color:#fff;font-size:9px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+#dailyShoutoutStudio .dso-subgrid{display:grid;grid-template-columns:1fr 1.3fr;gap:16px;padding:18px 22px;border-top:1px solid var(--dso-line);background:#fafafa}
+#dailyShoutoutStudio .dso-box{border:1px solid var(--dso-line);background:#fff;min-width:0}
+#dailyShoutoutStudio .dso-box-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-bottom:1px solid var(--dso-line)}
+#dailyShoutoutStudio .dso-box-head h3{margin:0;font:700 14px/1.2 'Playfair Display',serif}
+#dailyShoutoutStudio .dso-mini{font-size:10px;color:var(--dso-muted)}
+#dailyShoutoutStudio .dso-list{max-height:330px;overflow:auto}
+#dailyShoutoutStudio .dso-item{padding:11px 13px;border-bottom:1px solid var(--dso-line);display:grid;gap:7px}
+#dailyShoutoutStudio .dso-item:last-child{border-bottom:0}
+#dailyShoutoutStudio .dso-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+#dailyShoutoutStudio .dso-item strong{font-size:12.5px}
+#dailyShoutoutStudio .dso-meta{font-size:10.5px;color:var(--dso-muted);line-height:1.4}
+#dailyShoutoutStudio .dso-item-actions{display:flex;flex-wrap:wrap;gap:5px}
+#dailyShoutoutStudio .dso-item-actions button,#dailyShoutoutStudio .dso-item-actions .dso-linkbtn{min-height:30px;padding:6px 8px;font-size:9px}
+#dailyShoutoutStudio .dso-pill{display:inline-flex;align-items:center;padding:3px 7px;border-radius:999px;background:#eee;color:#474442;font-size:8.5px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+#dailyShoutoutStudio .dso-pill.published,#dailyShoutoutStudio .dso-pill.ready{background:#e4f3e7;color:#246b32}
+#dailyShoutoutStudio .dso-pill.scheduled{background:#fff0d7;color:#875300}
+#dailyShoutoutStudio .dso-pill.failed{background:#ffe4df;color:#9b260d}
+#dailyShoutoutStudio .dso-empty{padding:22px 14px;text-align:center;color:var(--dso-muted);font-size:11.5px}
+#dailyShoutoutStudio .dso-assets{display:flex;flex-wrap:wrap;gap:5px}
+#dailyShoutoutStudio .dso-assets a{font-size:9.5px;font-weight:800;color:var(--dso-red);text-decoration:underline}
+#dailyShoutoutStudio .dso-analytics{display:none;margin:0 22px 18px;border:1px solid var(--dso-line);background:#fff}
+#dailyShoutoutStudio .dso-analytics.is-open{display:block}
+#dailyShoutoutStudio .dso-analytics-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--dso-line)}
+#dailyShoutoutStudio .dso-analytics-head h3{font:700 14px/1.2 'Playfair Display',serif;margin:0}
+#dailyShoutoutStudio .dso-metrics{display:grid;grid-template-columns:repeat(6,minmax(90px,1fr));gap:8px;padding:12px 14px}
+#dailyShoutoutStudio .dso-metric{padding:9px;background:var(--dso-paper);min-width:0}
+#dailyShoutoutStudio .dso-metric b{display:block;font:800 20px/1 'Playfair Display',serif}
+#dailyShoutoutStudio .dso-metric span{display:block;margin-top:4px;font-size:8.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--dso-muted)}
+#dailyShoutoutStudio .dso-platforms{padding:0 14px 12px;font-size:10.5px;color:var(--dso-muted)}
+#dailyShoutoutStudio .dso-toast{position:fixed;right:20px;bottom:20px;z-index:2500;max-width:360px;padding:11px 14px;background:var(--dso-ink);color:#fff;font-size:12px;box-shadow:0 12px 32px rgba(0,0,0,.25);display:none}
+#dailyShoutoutStudio .dso-toast.is-show{display:block}
+#dailyShoutoutStudio .dso-toast.is-error{background:#8c210b}
+@media(max-width:980px){#dailyShoutoutStudio .dso-grid{grid-template-columns:1fr}#dailyShoutoutStudio .dso-editor{border-right:0;border-bottom:1px solid var(--dso-line)}#dailyShoutoutStudio .dso-preview-card{max-width:520px;margin:auto}#dailyShoutoutStudio .dso-subgrid{grid-template-columns:1fr}#dailyShoutoutStudio .dso-metrics{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:640px){#dailyShoutoutStudio .dso-head{padding:16px;flex-direction:column}#dailyShoutoutStudio .dso-editor,#dailyShoutoutStudio .dso-preview-wrap{padding:16px}#dailyShoutoutStudio .dso-form-grid{grid-template-columns:1fr}#dailyShoutoutStudio .dso-field.dso-span{grid-column:auto}#dailyShoutoutStudio .dso-subgrid{padding:14px}#dailyShoutoutStudio .dso-analytics{margin:0 14px 14px}#dailyShoutoutStudio .dso-metrics{grid-template-columns:repeat(2,1fr)}#dailyShoutoutStudio button,#dailyShoutoutStudio .dso-linkbtn{min-height:44px}#dailyShoutoutStudio .dso-item-actions button,#dailyShoutoutStudio .dso-item-actions .dso-linkbtn{min-height:38px}}
