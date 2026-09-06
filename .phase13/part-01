@@ -1,0 +1,778 @@
++- Existing live `page_content` and `page_blocks` remain the publication source of truth.
++- Site-image rows are included in the page draft snapshot so publication does not drop them accidentally.
++- If a live site image/content/block is changed outside the workspace after a draft starts, conflict protection blocks stale publication.
++
++## Validation performed
++- `node --check unplug-backend/src/routes/pageContent.js` — passed.
++- `node --check unplug-backend/src/app.js` — passed.
++- Extracted admin inline JavaScript and `node --check` — passed.
++- Full frontend build could not execute because the extracted repository has an incomplete `node_modules` tree: `require('esbuild')` fails even though package directory placeholders exist.
++- Backend integration tests remain unavailable until backend dependencies are installed.
++
++## Deployment requirement
++Run migration `184_page_cms_drafts.sql` before using the new Pages & Layout draft workspace.
++
++Do not deploy this phase blindly to production without a database backup and a staging/smoke-test cycle.
+diff -ruN originalrepo/Unplug-ecosystem-main/CONTROL-CENTRE-PHASE7.md phase13push/phase12work/CONTROL-CENTRE-PHASE7.md
+--- originalrepo/Unplug-ecosystem-main/CONTROL-CENTRE-PHASE7.md	1970-01-01 00:00:00.000000000 +0000
++++ phase13push/phase12work/CONTROL-CENTRE-PHASE7.md	2026-09-06 11:31:56.000000000 +0000
+@@ -0,0 +1,105 @@
++# Unplug Control Centre — Phase 7: Staff Roles & Permissions
++
++## Purpose
++Phase 7 introduces capability-based staff access without replacing the hundreds of existing `requireRole('admin')` guards one-by-one.
++
++## Security model
++- `users.role = 'admin'` is the unrestricted **Super Admin** role.
++- `users.role = 'staff'` is restricted and must have one row in `staff_assignments`.
++- Staff access is decided by the capability required for the current request.
++- Unknown admin-only routes default to `system.manage`, so new routes do not accidentally become available to staff.
++- Staff/role management endpoints use `requireSuperAdmin` and cannot be delegated through a capability.
++- A staff member with member-management access cannot promote anyone to Super Admin.
++- Staff accounts cannot be deleted from the ordinary Members screen; remove staff access first.
++- Universal Admin Search filters result groups by the signed-in staff member's permissions.
++- Dashboard totals omit finance/member/content figures a staff member is not permitted to see.
++- User-list financial fields are removed unless the requester has finance access.
++
++## Built-in staff roles
++The migration seeds these editable templates:
++- Editor
++- Marketing
++- Finance
++- Support
++- Events Manager
++- Competition Manager
++- Sales
++
++Super Admin is intentionally not a staff template.
++
++## Core capabilities
++- `dashboard.view`
++- `content.view`, `content.manage`
++- `approvals.view`, `approvals.manage`
++- `pages.manage`
++- `media.manage`
++- `members.view`, `members.manage`
++- `events.manage`
++- `competitions.manage`
++- `directory.manage`
++- `advertising.manage`
++- `finance.view`, `finance.manage`
++- `marketing.manage`
++- `crm.manage`
++- `analytics.view`
++- `reports.export`
++- `system.manage`
++
++`*.manage` implies the corresponding `*.view` for content, approvals, members and finance.
++
++## Database migration
++Run migration:
++
++`unplug-backend/db/migrations/185_staff_roles_permissions.sql`
++
++It:
++1. adds `staff` to the users role constraint;
++2. creates `staff_roles`;
++3. creates `staff_role_permissions`;
++4. creates `staff_assignments` while preserving the account's original non-staff role;
++5. seeds the built-in role templates and permissions;
++6. allows `actor_role='staff'` in the existing audit log.
++
++## Backend files
++New:
++- `unplug-backend/src/utils/staffPermissions.js`
++- `unplug-backend/src/routes/adminStaff.js`
++
++Changed:
++- `unplug-backend/src/middleware/auth.js`
++- `unplug-backend/src/routes/admin.js`
++- `unplug-backend/src/routes/adminSearch.js`
++- `unplug-backend/src/routes/activityLog.js`
++- `unplug-backend/src/app.js`
++
++## Dashboard changes
++`unplug-admin-dashboard.html` now:
++- accepts `admin` and authorised `staff` accounts;
++- reads `/admin/staff/access` after sign-in;
++- hides sections the staff member cannot use;
++- adds **Staff & Permissions** for Super Admin;
++- lets Super Admin assign an existing account to a staff role;
++- lets Super Admin change/revoke staff access;
++- lets Super Admin edit built-in role permissions;
++- lets Super Admin create/delete custom staff roles;
++- makes Members & Users read-only when the role has view-only member access;
++- hides account-credit controls unless finance-management access is present.
++
++## Session behaviour
++After staff access is granted or the staff role changes, that person should sign out and sign in again so their JWT contains `role='staff'`. Removing a staff assignment takes effect at the server capability check even if an old staff token still exists.
++
++## Validation completed
++- `node --check` passed for all modified/new backend JavaScript files.
++- The dashboard's ~14.6k-line inline JavaScript passed `node --check` after extraction.
++- A static permission-route mapping check passed for representative content, approvals, finance, members, media, pages, security, staff and search routes.
++
++## Not yet claimed
++A full PostgreSQL-backed integration test was not run because the downloaded repository still lacks the installed backend dependencies (`pg`, `embedded-postgres`, etc.). Do not treat static validation as a production integration test.
++
++## Recommended production order later
++1. Take a database backup.
++2. Deploy backend code and run migration 185.
++3. Confirm the existing Super Admin can sign in and access every section.
++4. Create one low-risk test staff account (Editor is a good first test).
++5. Sign in as that staff account in a separate/private browser and verify allowed + denied areas.
++6. Only then deploy the updated dashboard broadly.
+diff -ruN originalrepo/Unplug-ecosystem-main/CONTROL-CENTRE-PHASE8.md phase13push/phase12work/CONTROL-CENTRE-PHASE8.md
+--- originalrepo/Unplug-ecosystem-main/CONTROL-CENTRE-PHASE8.md	1970-01-01 00:00:00.000000000 +0000
++++ phase13push/phase12work/CONTROL-CENTRE-PHASE8.md	2026-09-06 11:31:56.000000000 +0000
+@@ -0,0 +1,74 @@
++# Unplug Control Centre — Phase 8
++
++## Analytics, Business Reporting & Export
++
++Phase 8 adds a unified business report to the existing Analytics area. It is read-only and uses the existing source-of-truth tables rather than copying business data into a second reporting database.
++
++### New backend route
++
++`src/routes/adminBusinessReports.js`, mounted at `/admin/business-reports`.
++
++Endpoints:
++- `GET /admin/business-reports/summary?from=&to=` — unified KPI/report payload.
++- `GET /admin/business-reports/export.csv?from=&to=` — UTF-8 CSV suitable for Google Sheets/Excel.
++- `GET /admin/business-reports/export.xls?from=&to=` — dependency-free Excel-compatible workbook download.
++
++### Report coverage
++
++The report currently includes:
++- confirmed revenue and payment count;
++- current pending payment count/value;
++- failed payments;
++- new members;
++- submissions across articles, events, Directory profiles, Gallery, competition entries, forms and banner advertising;
++- pending approval workload;
++- page views/visitors;
++- competition votes;
++- inquiries/forms;
++- active advertising banners;
++- admin/audit activity;
++- revenue split by purchased service;
++- daily history for revenue, members, payments, articles, page views and votes;
++- comparison against the immediately preceding equal-length period.
++
++Optional newer tables are checked before querying so an environment missing a later optional feature does not make the entire report fail.
++
++### Admin UI
++
++The Site Analytics screen now begins with **Unplug Business Report**.
++
++Ranges:
++- Today
++- 7 Days
++- 30 Days
++- This Month
++- This Year
++- Custom date range
++
++Exports are visible only when the signed-in account has `reports.export`.
++
++### Permissions
++
++`analytics.view` grants read access to the business report.
++
++`reports.export` grants CSV/Excel download access.
++
++Super Admin automatically has both.
++
++### Database migration
++
++No Phase 8 migration is required. Reporting reads existing operational/analytics tables so historical data already present remains available.
++
++### Validation completed
++
++- `node --check src/routes/adminBusinessReports.js`
++- `node --check src/app.js`
++- `node --check src/utils/staffPermissions.js`
++- extracted main admin inline JavaScript passes `node --check`
++- representative permission routing verified:
++  - summary -> `analytics.view`
++  - CSV/XLS export -> `reports.export`
++
++### Known environment limitation
++
++The downloaded repository still has an incomplete frontend dependency installation: `node_modules/esbuild/bin/esbuild` is absent. Full build/integration testing therefore remains a staging/deployment prerequisite and is not represented as complete here.
+diff -ruN originalrepo/Unplug-ecosystem-main/CONTROL-CENTRE-PHASE9.md phase13push/phase12work/CONTROL-CENTRE-PHASE9.md
+--- originalrepo/Unplug-ecosystem-main/CONTROL-CENTRE-PHASE9.md	1970-01-01 00:00:00.000000000 +0000
++++ phase13push/phase12work/CONTROL-CENTRE-PHASE9.md	2026-09-06 11:31:56.000000000 +0000
+@@ -0,0 +1,65 @@
++# Unplug Control Centre — Phase 9: Advertising & Banner Campaign Manager
++
++## Purpose
++Turn the existing rotating `ad_slots` banner feature into an operational advertising campaign manager without replacing the public banner renderer or mixing it with the separate Participation Engine sponsor-campaign product.
++
++## Database migration
++Run `unplug-backend/db/migrations/186_ad_banner_campaign_manager.sql` before starting the new backend.
++
++The migration adds campaign/advertiser metadata, recorded value/payment state, safe archive state, and daily aggregate banner analytics (`ad_banner_analytics`). Existing paid banners inherit payment value/status where possible.
++
++## Admin changes
++Advertising → **Banner Campaigns** now includes:
++- summary cards for live/scheduled/pending/value/impressions/clicks/CTR;
++- campaign/advertiser/contact search;
++- All / Live / Scheduled / Paused / Expired / Pending / Archived filters;
++- full campaign editor with placement-specific creative requirements;
++- desktop + optional mobile creative;
++- campaign dates, rotation/effect/duration, target URL and CTA;
++- recorded value + payment status (Finance Manage / Super Admin only);
++- impressions, clicks and CTR per campaign;
++- Archive / Restore instead of normal destructive deletion.
++
++Existing **Paid Banner Submissions Awaiting Approval** remains connected to the member checkout and approval/refund-to-credit workflow.
++
++## Public tracking
++The public `/page-cms` response now exposes the public campaign id (`id`) for banner slots.
++
++New anonymous endpoints:
++- `POST /ad-banners/:id/impression`
++- `GET /ad-banners/:id/click`
++
++No viewer id, member id, fingerprint or visitor IP is stored in `ad_banner_analytics`; the table stores aggregate daily counts by campaign.
++
++The public carousel records an impression when a real banner becomes visible and de-duplicates that banner for the current page-CMS render in the browser. Clicks use the first-party tracking endpoint, which increments and validates the destination before redirecting.
++
++## Permissions / finance boundary
++Campaign creative/schedule/advertiser management requires `advertising.manage`.
++
++Reading or changing `amount_paid` / `payment_status` requires finance access:
++- read: `finance.view`
++- edit: `finance.manage`
++
++The server strips finance fields from advertising-only staff and preserves current financial values when such a user saves the rest of a campaign.
++
++`/page-cms/admin/ad-slots*` is explicitly mapped to advertising permission rather than Pages/Layout permission.
++
++## Reporting/search integration
++Phase 8 Business Reports now includes:
++- banner impressions;
++- banner clicks;
++- banner CTR;
++- export rows for those metrics.
++
++Universal Search banner results now search campaign name, advertiser, contact name/email, placement/link and return the real numeric slot id for navigation.
++
++## Compatibility
++- The public banner renderer still reads the same `ad_slots` table.
++- The existing `GET /ad-banners` remains available for public reads.
++- The existing DELETE route remains for backwards compatibility but the new Control Centre uses Archive/Restore.
++- Participation Engine Sponsor Campaigns remain a separate product for larger sponsored missions/rankings/"presented by" partnerships.
++
++## Validation completed
++- `node --check` passed for all changed/new backend JS files.
++- Admin Dashboard main script passed `node --check` after extraction.
++- Public Magazine main script passed `node --check` after extraction.
++- Permission smoke mapping confirms `/page-cms/admin/ad-slots` → `advertising.manage` while genuine page CMS management → `pages.manage`.
++
++## Not claimed
++A full PostgreSQL-backed integration test was not run because this downloaded repository still lacks the installed backend development dependencies/environment. Run migrations and full staging tests before production deployment.
+diff -ruN originalrepo/Unplug-ecosystem-main/PHASE12-RELEASE-MANIFEST.md phase13push/phase12work/PHASE12-RELEASE-MANIFEST.md
+--- originalrepo/Unplug-ecosystem-main/PHASE12-RELEASE-MANIFEST.md	1970-01-01 00:00:00.000000000 +0000
++++ phase13push/phase12work/PHASE12-RELEASE-MANIFEST.md	2026-09-06 11:31:55.000000000 +0000
+@@ -0,0 +1,28 @@
++# Phase 12 Release Manifest
++
++## Candidate
++`Unplug Control Centre — Phase 12 Staging Candidate`
++
++## Required new migrations
++- `176_admin_content_trash.sql`
++- `183_media_library.sql`
++- `184_page_cms_drafts.sql`
++- `185_staff_roles_permissions.sql`
++- `186_ad_banner_campaign_manager.sql`
++- `187_payment_fulfilment_tracking.sql`
++
++## Staging-only deployment order
++1. Push the candidate to branch `staging-control-centre` (or another staging-only branch).
++2. Create an empty/non-production staging PostgreSQL database.
++3. Deploy a separate Render staging service from that branch.
++4. Set all staging environment variables and run `npm run preflight:staging`.
++5. Confirm `/health` and `/health/ready`.
++6. Deploy a separate Cloudflare Pages staging project from the same branch.
++7. Set Pages `UNPLUG_ENV=staging` and `UNPLUG_API=<staging Render URL>`.
++8. Add the Pages staging origin to backend `CORS_ORIGINS`.
++9. Verify the **UNPLUG STAGING** ribbon and run the smoke-test matrix.
++10. Do not touch production until the critical matrix is PASS.
++
++## Rollback reference
++Use `PRODUCTION-ROLLBACK-PLAN.md` only after production approval. Application rollback is preferred over schema deletion.
+diff -ruN originalrepo/Unplug-ecosystem-main/PRODUCTION-ROLLBACK-PLAN.md phase13push/phase12work/PRODUCTION-ROLLBACK-PLAN.md
+--- originalrepo/Unplug-ecosystem-main/PRODUCTION-ROLLBACK-PLAN.md	1970-01-01 00:00:00.000000000 +0000
++++ phase13push/phase12work/PRODUCTION-ROLLBACK-PLAN.md	2026-09-06 11:31:55.000000000 +0000
+@@ -0,0 +1,40 @@
++# Unplug Control Centre — Production Rollback Plan
++
++Use only after staging approval and a production deploy decision.
++
++## Before production deploy
++Record:
++- Git commit/branch that is currently live on Cloudflare.
++- Render deployment id/commit currently live.
++- Timestamped PostgreSQL backup reference.
++- Current `/health` and `/health/ready` responses.
++- Current revenue/payment reconciliation totals.
++
++## Rollback triggers
++Rollback application code if any of the following appears after deploy:
++- Admin cannot sign in.
++- Member sign-in/verification is broadly broken.
++- `/health/ready` fails after previously being healthy.
++- Confirmed payments fail to fulfil broadly.
++- Public content becomes unavailable.
++- CSP/CORS prevents normal frontend/API communication.
++- Staff can access unauthorized Finance/System functions.
++- Unexpected destructive content/media behaviour occurs.
++
++## Application rollback order
++1. Pause production code changes.
++2. Roll Render back to the recorded previous healthy deployment/commit.
++3. Roll Cloudflare Pages back to the recorded previous healthy deployment.
++4. Verify `/health`, `/health/ready`, Admin, public site and member login.
++5. Reconcile payments made during the deploy window before changing any payment/service statuses.
++
++## Database rule
++Do **not** automatically delete the Control Centre's additive tables/columns during an application rollback. Older code can normally ignore them and keeping the schema avoids destructive rollback risk.
++
++Restore the production database only if there is verified data corruption that cannot be corrected safely. A database restore can erase valid registrations, payments, votes, submissions and edits created after the backup.
++
++## Payment rule
++Never mass-change confirmed payments back to pending as part of rollback. Preserve payment evidence and use Checkout Health/manual reconciliation for affected fulfilment.
++
++## Audit rule
++Preserve `activity_log`, payment rows and fulfilment errors for the incident investigation.
++
++## Resume
++Fix in staging, repeat the failed smoke test plus adjacent journeys, and create a new deployment candidate. Do not "fix forward" directly on production without testing.
+diff -ruN originalrepo/Unplug-ecosystem-main/STAGING-DEPLOYMENT-CHECKLIST.md phase13push/phase12work/STAGING-DEPLOYMENT-CHECKLIST.md
+--- originalrepo/Unplug-ecosystem-main/STAGING-DEPLOYMENT-CHECKLIST.md	1970-01-01 00:00:00.000000000 +0000
++++ phase13push/phase12work/STAGING-DEPLOYMENT-CHECKLIST.md	2026-09-06 11:31:56.000000000 +0000
+@@ -0,0 +1,125 @@
++# Unplug Control Centre — Staging & Production Checklist
++
++## Current release status
++- [x] Phases 1–10 consolidated in one working copy.
++- [x] Critical modified/new backend JavaScript syntax checked.
++- [x] Admin / Member / Magazine / Checkout main browser scripts syntax checked.
++- [x] Phase 10 commercial guard tests: 5/5 pass.
++- [x] Phase 11 readiness/security static tests: 3/3 pass.
++- [x] Startup validation activated for `DATABASE_URL` / `JWT_SECRET`.
++- [x] Production CORS defaults fail closed.
++- [x] Database-aware `/health/ready` added.
++- [x] PayFast/Ozow callbacks fail closed if verification secret is absent.
++- [x] Staff permission migration no longer overwrites later Control Centre permission edits.
++- [ ] Fresh frontend dependency install + `npm run build` in a network-enabled environment.
++- [ ] Backend dependency install + PostgreSQL-backed test suite.
++- [ ] Staging PostgreSQL migration run.
++- [ ] Real Render staging environment preflight.
++- [ ] Staging browser smoke tests.
++- [ ] Production approval.
++
++## 1. Preserve a rollback point
++- [ ] Record current production Git commit.
++- [ ] Confirm latest Render production deployment id/commit.
++- [ ] Take and verify a PostgreSQL production backup before production migration.
++- [ ] Record current Cloudflare Pages deployment for rollback.
++
++## 2. Create isolated staging
++- [ ] Use a separate/staging PostgreSQL database (prefer empty fake-data environment first).
++- [ ] Use a separate Render staging service/URL.
++- [ ] Use a staging/preview Cloudflare deployment.
++- [ ] Never enter production member/payment data merely to test UI.
++
++## 3. Install/build
++From repository root:
++```bash
++npm ci
++npm run build
++```
++
++From backend:
++```bash
++cd unplug-backend
++npm ci
++npm test
++npm run preflight
++```
++
++- [ ] Frontend build passes.
++- [ ] Backend tests pass.
++- [ ] Production-readiness preflight has no failures.
++
++## 4. Staging migrations
++Run via the backend's normal migration runner/startup.
++
++- [ ] `176_admin_content_trash.sql`
++- [ ] `183_media_library.sql`
++- [ ] `184_page_cms_drafts.sql`
++- [ ] `185_staff_roles_permissions.sql`
++- [ ] `186_ad_banner_campaign_manager.sql`
++- [ ] `187_payment_fulfilment_tracking.sql`
++- [ ] migration runner completes with no errors.
++- [ ] restarting/rerunning migration runner makes no destructive/resetting changes.
++
++## 5. Backend environment
++- [ ] `NODE_ENV=production`
++- [ ] `DATABASE_URL` points to staging DB.
++- [ ] `JWT_SECRET` configured.
++- [ ] `CORS_ORIGINS` contains exact staging frontend origin(s).
++- [ ] `SITE_URL` is staging URL.
++- [ ] `PUBLIC_API_URL` is staging backend URL.
++- [ ] `ADMIN_PASSWORD_RESET` is false/empty.
++- [ ] rate limiting enabled.
++- [ ] `RESEND_API_KEY`, sender email/name configured if email will be tested.
++- [ ] R2 or Supabase Storage staging-safe configuration present.
++- [ ] payment callback secrets present only if callbacks will be tested.
++
++Run:
++```bash
++cd unplug-backend
++npm run preflight
++```
++
++## 6. Health/readiness
++- [ ] `GET /health` -> HTTP 200.
++- [ ] `GET /health/ready` -> HTTP 200 and `database: ok`.
++- [ ] no Render restart loop.
++- [ ] no failed migration in logs.
++
++## 7. Admin / Staff
++- [ ] Super Admin signs in and sees all modules.
++- [ ] Control Centre dashboard loads.
++- [ ] Universal Search returns permitted data.
++- [ ] All Content edit/preview/publish/trash/restore works.
++- [ ] Approval Centre Approve / Request Changes / Reject works.
++- [ ] Page Layout draft/save/preview/publish/discard works.
++- [ ] Media Library upload/index/reuse works.
++- [ ] In-use image cannot be trashed.
++- [ ] Create test Editor staff account.
++- [ ] Editor can reach editorial tools.
++- [ ] Editor cannot reach Finance/System through direct URLs.
++- [ ] Finance-only account cannot edit editorial modules without capability.
++
++## 8. Reporting / advertising
++- [ ] Business Report ranges load.
++- [ ] CSV opens and matches on-screen figures.
++- [ ] Excel-compatible export opens and matches.
++- [ ] Banner campaign save/schedule works.
++- [ ] Advertising-only staff cannot change Rand/payment fields.
++- [ ] Public banner impression increments.
++- [ ] Click tracker redirects safely and increments clicks.
++- [ ] Banner CTR appears in Business Report.
++
++## 9. Commercial journeys
++- [ ] Register + verify new fake staging member.
++- [ ] Paid Article -> EFT -> confirm -> fulfil -> Approval Centre -> publish.
++- [ ] Directory package -> EFT -> confirm -> Approval Centre.
++- [ ] Event -> EFT -> confirm -> Approval Centre.
++- [ ] Page Banner 21-day package -> R785 quote (unless live Admin package price intentionally changed).
++- [ ] Multi-service cart totals correctly.
++- [ ] Duplicate resource in cart rejected.
++- [ ] Member A cannot buy Member B's resource.
++- [ ] service-restricted voucher only discounts matching services.
++- [ ] account credit changes totals correctly.
++- [ ] deliberate fulfilment failure appears in Checkout Health.
++- [ ] Retry succeeds after test cause is corrected.
++- [ ] manual EFT appears in revenue analytics.
++
++## 10. Email / Resend
++- [ ] verification email delivery test.
++- [ ] approval/change-request notification test.
++- [ ] no accidental email to real production customers from staging.
++
++## 11. Production gate
++Only after all critical staging tests pass:
++- [ ] production DB backup verified.
++- [ ] production `npm run preflight` passes.
++- [ ] deploy backend/migrations first.
++- [ ] `/health` + `/health/ready` healthy.
++- [ ] Admin login healthy.
++- [ ] deploy Cloudflare frontend.
++- [ ] public site + member login healthy.
++- [ ] one low-risk checkout smoke test.
++- [ ] Checkout Health / Business Report / Activity Log checked.
++
++## Emergency rule
++If a production deploy fails, rollback application code first. Do not drop additive migrations and do not mass-reverse confirmed payment statuses.
+diff -ruN originalrepo/Unplug-ecosystem-main/STAGING-DEPLOYMENT-RUNBOOK.md phase13push/phase12work/STAGING-DEPLOYMENT-RUNBOOK.md
+--- originalrepo/Unplug-ecosystem-main/STAGING-DEPLOYMENT-RUNBOOK.md	1970-01-01 00:00:00.000000000 +0000
++++ phase13push/phase12work/STAGING-DEPLOYMENT-RUNBOOK.md	2026-09-06 11:43:06.000000000 +0000
+@@ -0,0 +1,165 @@
++# Unplug Control Centre — Staging Deployment Runbook
++
++## Non-negotiable rule
++**Do not change the `main`/production branch, production Render service, production database, or www.unplugnews.com while following this runbook.**
++
++---
++
++## A. GitHub — create the staging branch
++
++Start from the exact production/main commit that was used to create the Phase 12 package.
++
++Recommended branch:
++
++`staging-control-centre`
++
++Upload/commit the complete Phase 12 candidate to that branch only.
++
++After committing, verify:
++- `main` has not changed.
++- staging branch contains migrations 176 (trash), 183, 184, 185, 186 and 187.
++- staging branch contains `/functions/runtime-config.js`.
++- staging branch contains the Phase 12 runbook/test matrix.
++
++---
++
++## B. Render — create a staging database
++
++Use a **different database from production**. An empty database is preferred initially.
++
++Do not restore/import production user/member/payment data just to test the new Control Centre.
++
++Record the staging database connection URL. The Phase 12 staging preflight requires both:
++
++- `DATABASE_URL=<staging DB URL>`
++- `STAGING_DATABASE_URL=<same staging DB URL>`
++
++This duplicate entry is deliberate: it is a safety assertion so the app can refuse a staging boot if those values differ.
++
++---
++
++## C. Render — create a staging Web Service
++
++Create a **new** Render Web Service from the GitHub repository.
++
++Use:
++- **Branch:** `staging-control-centre`
++- **Root directory:** `unplug-backend`
++- **Runtime:** Node
++- **Build command:** `npm ci`
++- **Start command:** `npm start`
++
++Recommended service name:
++
++`unplug-ecosystem-staging`
++
++### Environment variables
++Set in the Render staging service (do not commit secrets to GitHub):
++
++```text
++NODE_ENV=production
++UNPLUG_ENV=staging
++DATABASE_URL=<staging PostgreSQL URL>
++STAGING_DATABASE_URL=<same staging PostgreSQL URL>
++JWT_SECRET=<new staging-only random secret>
++SITE_URL=<staging Cloudflare URL when known>
++PUBLIC_API_URL=<this staging Render URL>
++CORS_ORIGINS=<staging Cloudflare origin when known>
++ADMIN_EMAIL=<your staging admin email>
++ADMIN_PASSWORD=<staging-only admin password>
++ADMIN_PASSWORD_RESET=false
++```
++
++Add Resend/storage configuration only when you are ready to test those features. Never copy production secrets into a public file or commit them.
++
++### Pre-deploy safety check
++From Render Shell (or an equivalent staging environment), run:
++
++```bash
++cd unplug-backend
++npm run preflight:staging
++```
++
++Do not proceed until it reports **PASS**.
++
++### First boot
++`npm start` runs the database migration runner before `src/app.js`.
++
++On an empty staging database, temporary Super Admin bootstrap can be performed with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Leave `ADMIN_PASSWORD_RESET=false`; bootstrap logic creates the admin only when no admin exists and only updates a password when `ADMIN_PASSWORD_RESET` is deliberately enabled while `ADMIN_PASSWORD` is present.
++
++### Backend acceptance checks
++Open:
++- `<staging-api>/health` — must be 200
++- `<staging-api>/health/ready` — must be 200 and confirm database readiness
++
++If `/health` works but `/health/ready` fails, stop. The Node app is alive but PostgreSQL is not ready.
++
++---
++
++## D. Cloudflare Pages — create a staging frontend
++
++Recommended: create a **separate Pages project** rather than changing production Pages settings.
++
++Cloudflare → **Workers & Pages → Create → Pages → Import existing Git repository**.
++
++Use:
++- **Project name:** `unplug-staging` (or another clearly staging-only name)
++- **Production branch for this staging project:** `staging-control-centre`
++- **Root directory:** repository root
++- **Build command:** `npm ci && npm run build`
++- **Build output directory:** `dist`
++
++### Pages environment variables
++Set these for the staging Pages project:
++- `UNPLUG_ENV=staging`
++- `UNPLUG_API=https://<your-staging-render-service>.onrender.com`
++
++The `/runtime-config` Pages Function converts these into browser-safe runtime values. No secret is exposed.
++
++### What you must see
++Every staging page using `unplug-shared.js` should display a fixed:
++
++**UNPLUG STAGING**
++
++ribbon at the top.
++
++If it displays:
++
++**STAGING — API NOT CONFIGURED**
++
++stop testing. The staging frontend is deliberately prevented from falling back to production.
++
++---
++
++## E. CORS finalisation
++Once the staging Pages URL exists, copy its exact origin into the staging Render service:
++
++`CORS_ORIGINS=https://unplug-staging.pages.dev`
++
++Then redeploy/restart the staging backend if required.
++
++Do not use `*` for CORS.
++
++---
++
++## F. First staging login
++1. Open the staging Admin Dashboard.
++2. Confirm **UNPLUG STAGING** is visible.
++3. Sign in with the staging `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
++4. Open Advanced/System → health/status areas.
++5. Confirm Universal Search loads without CORS errors.
++6. Confirm production members/payments are **not** present.
++
++If real production data appears, stop immediately: the staging DB/API connection is wrong.
++
++---
++
++## G. Run smoke tests
++Use `STAGING-SMOKE-TEST-MATRIX.md` in order. Do not skip straight to checkout.
++
++The minimum release gate is:
++- Auth works
++- Approval workflow works
++- Content trash/restore works
++- Page draft/preview/publish works
++- Staff permissions block unauthorized areas
++- Media Library works
++- Reports export
++- Banner analytics record
++- EFT payment confirmation applies fulfilment
++- Checkout Health has no unexplained failures
++
++---
++
++## H. Production gate
++Production remains untouched until all critical smoke tests are PASS and a production backup has been verified.
++
++When that happens, create a pull request from `staging-control-centre` to the production branch, review the exact diff, and follow `PRODUCTION-ROLLBACK-PLAN.md` during rollout.
++
++## CSP / security headers (Phase 13)
++
++Cloudflare Pages now sets CSP dynamically in `functions/_middleware.js`. Do **not** add another CSP in `_headers` or HTML meta tags.
++
++Set `UNPLUG_API` to the exact staging Render API origin. If you use a custom R2/media host, optionally set `UNPLUG_MEDIA_ORIGINS` to a comma-separated list of HTTPS origins.
++
++Before deployment run:
++
++```bash
++npm run security:check
++```
++
++A staging deployment with a missing or production `UNPLUG_API` fails closed and does not receive production API permission in CSP.
+diff -ruN originalrepo/Unplug-ecosystem-main/STAGING-SMOKE-TEST-MATRIX.md phase13push/phase12work/STAGING-SMOKE-TEST-MATRIX.md
+--- originalrepo/Unplug-ecosystem-main/STAGING-SMOKE-TEST-MATRIX.md	1970-01-01 00:00:00.000000000 +0000
++++ phase13push/phase12work/STAGING-SMOKE-TEST-MATRIX.md	2026-09-06 11:31:53.000000000 +0000
+@@ -0,0 +1,54 @@
++# Unplug Phase 12 — Staging Smoke Test Matrix
++
++Use only fake/test data. Record PASS / FAIL / BLOCKED plus notes.
++
++| # | Area | Test | Expected result | Status |
++|---:|---|---|---|---|
++| 1 | Environment | Open staging homepage | `UNPLUG STAGING` ribbon visible | |
++| 2 | Environment | Inspect browser network/API calls | Calls go only to staging Render API | |
++| 3 | Environment | `/health/ready` | HTTP 200; DB ready | |
++| 4 | Auth | Register fake member | Account created | |
++| 5 | Auth | Verification flow | Verification succeeds/test email path works | |
++| 6 | Auth | Login/logout | Session works and clears correctly | |
++| 7 | Auth | Password reset | Reset works in staging | |
++| 8 | Admin | Super Admin login | Full Control Centre visible | |
++| 9 | Search | Search fake member/content | Correct grouped results | |
++| 10 | Content | Create/edit content | Changes persist | |
++| 11 | Content | Trash item | Item taken offline, not destroyed | |
++| 12 | Content | Restore item | Original status restored | |
++| 13 | Approval | Submit article | Appears in Approval Centre | |
++| 14 | Approval | Request Changes | Member gets change state/notification | |
++| 15 | Approval | Resubmit | Returns to queue | |
++| 16 | Approval | Approve | Becomes live/active | |
++| 17 | Media | Upload test image | Indexed in Media Library | |
++| 18 | Media | Reuse image | Existing URL selectable/reusable | |
++| 19 | Media | Trash in-use image | Action blocked with usage explanation | |
++| 20 | Pages | Create page draft | Live page unchanged | |
++| 21 | Pages | Reorder/hide block | Draft preview reflects changes | |
++| 22 | Pages | Publish draft | Live staging page updates atomically | |
++| 23 | Roles | Assign Editor | Editor sees only allowed modules | |
++| 24 | Roles | Editor opens Finance URL directly | Backend denies access | |
++| 25 | Roles | Finance opens editorial write URL | Backend denies if capability absent | |
++| 26 | Reports | This Month report | KPIs load | |
++| 27 | Reports | CSV export | File opens with same figures | |
++| 28 | Reports | Excel export | File opens with same figures | |
++| 29 | Ads | Create scheduled banner | Status and placement correct | |
++| 30 | Ads | View banner | Impression increments | |
++| 31 | Ads | Click banner | Click increments; CTR recalculates | |
++| 32 | Pricing | Page banner packages | 7/14/21/28-day options match server quote | |
++| 33 | Checkout | Article EFT quote | Server amount matches displayed amount | |
++| 34 | Checkout | Cross-account resource attempt | Server blocks purchase | |
++| 35 | Checkout | Multi-service cart | Correct totals; no duplicate resource | |
++| 36 | Voucher | Service-specific voucher | Discounts matching service only | |
++| 37 | Payment | Confirm fake EFT in Admin | Payment becomes confirmed | |
++| 38 | Fulfilment | Confirmed EFT applies service | Service advances from awaiting payment | |
++| 39 | Fulfilment | Create controlled failure | Checkout Health shows failure | |
++| 40 | Fulfilment | Retry controlled failure | Retry applies after cause is corrected | |
++| 41 | Analytics | Confirm EFT | Revenue appears in report | |
++| 42 | Audit | Perform admin changes | Staff/admin actions appear in activity log | |
++| 43 | Resend | Trigger safe test email | Staging/test recipient receives it | |
++| 44 | Security | Staging API without allowed Origin | CORS refuses browser request | |
++| 45 | Security | Staff searches finance without permission | Finance result not returned | |
++
++## Release gate
++No production merge while any of #1–3, #8, #13–16, #20–24, #32–42 or #44–45 is FAIL.
+diff -ruN originalrepo/Unplug-ecosystem-main/_headers phase13push/phase12work/_headers
+--- originalrepo/Unplug-ecosystem-main/_headers	2026-09-05 19:04:36.000000000 +0000
++++ phase13push/phase12work/_headers	2026-09-06 11:38:44.000000000 +0000
+@@ -145,5 +145,5 @@
+   X-Frame-Options: DENY
+   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+   Strict-Transport-Security: max-age=31536000; includeSubDomains
+-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.supabase.co https://ui-avatars.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://www.googletagmanager.com https://i.ytimg.com; connect-src 'self' https://unplug-ecosystem.onrender.com https://*.supabase.co https://www.google-analytics.com https://region1.google-analytics.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org; frame-src https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.tiktok.com https://www.instagram.com https://drive.google.com; media-src 'self' https://*.supabase.co blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://www.googletagmanager.com; style-src 'self' https://fonts.googleapis.com https://unpkg.com; report-uri https://unplug-ecosystem.onrender.com/security/csp-report
++  # CSP is intentionally set by functions/_middleware.js so staging and production
++  # can allow only their exact API origin. Do not add a second CSP here.
+diff -ruN originalrepo/Unplug-ecosystem-main/build.js phase13push/phase12work/build.js
+--- originalrepo/Unplug-ecosystem-main/build.js	2026-09-05 19:04:36.000000000 +0000
++++ phase13push/phase12work/build.js	2026-09-06 11:26:08.000000000 +0000
+@@ -72,7 +72,10 @@
+ // rewritten is the undefined-token bug all over again, one layer down.
+ const STATIC = ['sw.js', 'manifest.webmanifest', 'robots.txt', '_headers',
+                 '_redirects', 'unplug-tokens.css', 'unplug-popups.js', 'unplug-form-render.js'];
+-const STATIC_DIRS = ['icons', 'media', 'functions'];
++// Pages Functions must stay in /functions at the project root. Cloudflare
++// compiles them separately; copying them into dist would publish their source
++// as static files.
