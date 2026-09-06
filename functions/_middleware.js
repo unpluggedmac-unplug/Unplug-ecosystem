@@ -60,29 +60,44 @@ function csp(env, reportOnly = false) {
     'https://www.youtube.com',
   ];
 
-  const imageHosts = unique([
-    "'self'", 'data:', 'blob:',
+  const sharedMediaHosts = [
     'https://*.supabase.co',
     'https://*.r2.dev',
     'https://*.r2.cloudflarestorage.com',
     'https://*.unplugnews.com',
+    ...media,
+  ];
+
+  const imageHosts = unique([
+    "'self'", 'data:', 'blob:',
+    ...sharedMediaHosts,
     'https://ui-avatars.com',
     'https://tile.openstreetmap.org',
     'https://*.tile.openstreetmap.org',
     'https://www.googletagmanager.com',
     'https://i.ytimg.com',
-    ...media,
   ]);
 
+  // Images that are only displayed need img-src. Images that are downloaded,
+  // converted to Blob/File objects or passed to navigator.share() are fetched
+  // by JavaScript and therefore ALSO need connect-src. Daily Shout-Out social
+  // assets use that path, as do several Media Library interactions. Keeping the
+  // same storage allow-list in both directives prevents a valid public image
+  // from rendering while its Download/Share button is mysteriously CSP-blocked.
   const connectHosts = unique([
     "'self'",
     api,
-    'https://*.supabase.co',
+    ...sharedMediaHosts,
     'https://www.google-analytics.com',
     'https://*.google-analytics.com',
     'https://region1.google-analytics.com',
     'https://tile.openstreetmap.org',
     'https://*.tile.openstreetmap.org',
+  ]);
+
+  const mediaHosts = unique([
+    "'self'", 'blob:',
+    ...sharedMediaHosts,
   ]);
 
   const directives = [
@@ -98,7 +113,7 @@ function csp(env, reportOnly = false) {
     `img-src ${imageHosts.join(' ')}`,
     `connect-src ${connectHosts.join(' ')}`,
     "frame-src https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.instagram.com https://www.tiktok.com https://drive.google.com https://w.soundcloud.com",
-    "media-src 'self' blob: https://*.supabase.co https://*.r2.dev https://*.r2.cloudflarestorage.com https://*.unplugnews.com",
+    `media-src ${mediaHosts.join(' ')}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     "object-src 'none'",
