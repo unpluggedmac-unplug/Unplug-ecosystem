@@ -36,8 +36,8 @@ export async function onRequest({ env }) {
       '})();',
       '',
       '// Phase 13 staging image system: full-image lightbox, non-destructive',
-      '// display fitting, orientation-aware page banners and broken-image',
-      '// fallbacks. Loaded only in Preview/Staging while it is being smoke-tested.',
+      '// display fitting, orientation-aware page banners, broken-image',
+      '// fallbacks and same-profile source repair. Loaded only in staging.',
       '(function(){',
       '  if (window.__unplugImageViewerRequested) return;',
       '  window.__unplugImageViewerRequested=true;',
@@ -48,8 +48,9 @@ export async function onRequest({ env }) {
       '    s.setAttribute("data-unplug-no-lightbox","true");',
       '    (document.head||document.documentElement).appendChild(s);',
       '  }',
-      '  add("/media/scripts/unplug-image-viewer.js?v=20260906-1");',
-      '  add("/media/scripts/unplug-image-viewer-guard.js?v=20260906-1");',
+      '  add("/media/scripts/unplug-image-viewer.js?v=20260906-2");',
+      '  add("/media/scripts/unplug-image-viewer-guard.js?v=20260906-2");',
+      '  add("/media/scripts/unplug-image-repair.js?v=20260906-2");',
       '})();'
     );
   }
