@@ -35,9 +35,11 @@ window.UnplugImg = (function () {
   function apiBase() {
     try {
       return (window.UnplugAPI && UnplugAPI.getApiBase && UnplugAPI.getApiBase())
+        || window.UNPLUG_RUNTIME_API
         || 'https://unplug-ecosystem.onrender.com';
     } catch (e) {
-      return 'https://unplug-ecosystem.onrender.com';
+      return window.UNPLUG_RUNTIME_API || window.UNPLUG_RUNTIME_API
+        || 'https://unplug-ecosystem.onrender.com';
     }
   }
 

@@ -18,6 +18,7 @@ const { requireRole } = require('../middleware/auth');
 const { findPaidPayment, balanceFor, RESOURCE_PAYMENT_TYPES } = require('../utils/accountCredit');
 const { isLiveFor } = require('../utils/submissionStatus');
 const { referenceFor } = require('../utils/submissionReference');
+const { logActivity } = require('./activityLog');
 
 const router = express.Router();
 
@@ -138,23 +139,52 @@ router.get('/:resource', requireRole('admin'), async (req, res, next) => {
     if (!spec) return;
 
     const params = [];
-    let where = '';
-    if (spec.hasStatus !== false && req.query.status) {
+    const clauses = [];
+    const trashRequested = req.query.trash === '1' || req.query.trash === 'true';
+
+    if (trashRequested && spec.hasStatus === false) {
+      return res.status(400).json({ error: 'Trash is not available for this legacy content type yet.' });
+    }
+
+    if (spec.hasStatus !== false && req.query.status && !trashRequested) {
       // Compared against a fixed set rather than passed through, so an unknown
       // status is a clear 400 instead of a silently empty list.
-      const allowed = ['awaiting_payment', 'pending', 'approved', 'rejected'];
+      const allowed = ['awaiting_payment', 'pending', 'approved', 'rejected', 'draft',
+        'changes_requested', 'resubmitted', 'credit_issued', 'expired'];
       if (!allowed.includes(req.query.status)) {
         return res.status(400).json({ error: 'Unknown status filter.' });
       }
       params.push(req.query.status);
-      where = 'WHERE status = $1';
+      clauses.push(`c.status = $${params.length}`);
     }
 
+    // Active trash is tracked in a compatibility ledger. Normal lists exclude
+    // those rows; Trash shows only those rows and includes when/who trashed it.
+    let trashJoin = '';
+    let selectExtra = '';
+    if (spec.hasStatus !== false) {
+      if (trashRequested) {
+        params.push(req.params.resource);
+        trashJoin = ` JOIN admin_content_trash t ON t.item_id = c.id
+          AND t.resource = $${params.length}
+          AND t.restored_at IS NULL AND t.permanently_deleted_at IS NULL`;
+        selectExtra = ', t.previous_status AS _previous_status, t.trashed_at AS _trashed_at, t.trashed_by AS _trashed_by';
+      } else {
+        params.push(req.params.resource);
+        clauses.push(`NOT EXISTS (SELECT 1 FROM admin_content_trash t
+          WHERE t.resource = $${params.length} AND t.item_id = c.id
+            AND t.restored_at IS NULL AND t.permanently_deleted_at IS NULL)`);
+      }
+    }
+
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const orderColumn = spec.table === 'edition_calendar' ? 'event_date' : 'created_at';
     const result = await pool.query(
-      `SELECT * FROM ${spec.table} ${where} ORDER BY created_at DESC LIMIT 300`,
+      `SELECT c.*${selectExtra} FROM ${spec.table} c${trashJoin} ${where}
+       ORDER BY c.${orderColumn} DESC LIMIT 300`,
       params
     );
-    res.json({ items: result.rows, editable: spec.editable, selectFields: spec.selectFields || {} });
+    res.json({ items: result.rows, editable: spec.editable, selectFields: spec.selectFields || {}, trash: trashRequested, trashSupported: spec.hasStatus !== false });
   } catch (err) {
     next(err);
   }
@@ -290,31 +320,167 @@ router.patch('/:resource/:id', requireRole('admin'), async (req, res, next) => {
   }
 });
 
-// DELETE /admin/content/:resource/:id
+// POST /admin/content/:resource/:id/trash
 //
-// A real delete, not a status change — rejecting hides something, and there
-// are things (a submission sent by mistake, an image that shouldn't be stored
-// at all) that should not be kept hidden. Irreversible, so the admin UI
-// confirms first.
-//
-// Dependent rows (sections, comments, saves, votes) cascade. The payment does
-// NOT: payments.linked_id is a plain integer with no foreign key, so deleting
-// a paid-for item leaves its payment record standing. That is the right way
-// round — the money changed hands and the books should say so — but it means
-// deleting something someone paid for does not refund them.
-router.delete('/:resource/:id', requireRole('admin'), async (req, res, next) => {
+// Reversible delete. The public tables already understand `status = rejected`
+// as offline, so we use that existing behaviour and remember the exact prior
+// status in admin_content_trash. This avoids a risky site-wide deleted_at
+// retrofit while still giving admins WordPress-style Trash / Restore.
+router.post('/:resource/:id/trash', requireRole('admin'), async (req, res, next) => {
+  const spec = resourceFor(req, res);
+  if (!spec) return;
+  const id = idFor(req, res);
+  if (id === null) return;
+  if (spec.hasStatus === false) {
+    return res.status(400).json({ error: 'Trash is not available for this legacy content type yet.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(`SELECT id, status FROM ${spec.table} WHERE id = $1 FOR UPDATE`, [id]);
+    if (!found.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'That item no longer exists.' });
+    }
+    const active = await client.query(
+      `SELECT id FROM admin_content_trash
+       WHERE resource = $1 AND item_id = $2
+         AND restored_at IS NULL AND permanently_deleted_at IS NULL`,
+      [req.params.resource, id]
+    );
+    if (active.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'That item is already in Trash.' });
+    }
+    const previous = found.rows[0].status;
+    await client.query(
+      `INSERT INTO admin_content_trash(resource, item_id, previous_status, trashed_by)
+       VALUES ($1, $2, $3, $4)`,
+      [req.params.resource, id, previous, req.user.id]
+    );
+    await client.query(`UPDATE ${spec.table} SET status = 'rejected' WHERE id = $1`, [id]);
+    await client.query('COMMIT');
+    await logActivity(req.user.id, 'content_trashed', `${req.params.resource} #${id}; previous status=${previous}`);
+    res.json({ trashed: true, previousStatus: previous });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// POST /admin/content/:resource/:id/restore
+router.post('/:resource/:id/restore', requireRole('admin'), async (req, res, next) => {
+  const spec = resourceFor(req, res);
+  if (!spec) return;
+  const id = idFor(req, res);
+  if (id === null) return;
+  if (spec.hasStatus === false) {
+    return res.status(400).json({ error: 'Restore is not available for this legacy content type yet.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const trash = await client.query(
+      `SELECT id, previous_status FROM admin_content_trash
+       WHERE resource = $1 AND item_id = $2
+         AND restored_at IS NULL AND permanently_deleted_at IS NULL
+       FOR UPDATE`,
+      [req.params.resource, id]
+    );
+    if (!trash.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'That item is not in Trash.' });
+    }
+    const previous = trash.rows[0].previous_status;
+    const updated = await client.query(`UPDATE ${spec.table} SET status = $1 WHERE id = $2 RETURNING id`, [previous, id]);
+    if (!updated.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'The original item no longer exists.' });
+    }
+    await client.query(
+      `UPDATE admin_content_trash SET restored_at = now(), restored_by = $1 WHERE id = $2`,
+      [req.user.id, trash.rows[0].id]
+    );
+    await client.query('COMMIT');
+    await logActivity(req.user.id, 'content_restored', `${req.params.resource} #${id}; restored status=${previous}`);
+    res.json({ restored: true, status: previous });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// POST /admin/content/:resource/:id/publication
+// Generic publish/take-offline control for reviewable content. `approved` is
+// the public state used throughout the existing site; `rejected` keeps the
+// item offline without deleting it. Trash remains a separate ledger state.
+router.post('/:resource/:id/publication', requireRole('admin'), async (req, res, next) => {
   try {
     const spec = resourceFor(req, res);
     if (!spec) return;
     const id = idFor(req, res);
     if (id === null) return;
+    if (spec.hasStatus === false) return res.status(400).json({ error: 'This content type has no publication status.' });
+    const publish = req.body && req.body.published === true;
+    const target = publish ? 'approved' : 'rejected';
+    const activeTrash = await pool.query(
+      `SELECT 1 FROM admin_content_trash WHERE resource = $1 AND item_id = $2
+       AND restored_at IS NULL AND permanently_deleted_at IS NULL`,
+      [req.params.resource, id]
+    );
+    if (activeTrash.rowCount) return res.status(409).json({ error: 'Restore this item from Trash before changing publication.' });
+    const result = await pool.query(`UPDATE ${spec.table} SET status = $1 WHERE id = $2 RETURNING *`, [target, id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'That item no longer exists.' });
+    await logActivity(req.user.id, publish ? 'content_published' : 'content_unpublished', `${req.params.resource} #${id}`);
+    res.json({ item: result.rows[0] });
+  } catch (err) { next(err); }
+});
 
-    const result = await pool.query(`DELETE FROM ${spec.table} WHERE id = $1 RETURNING id`, [id]);
-    if (result.rowCount === 0) return res.status(404).json({ error: 'That item no longer exists.' });
+// DELETE /admin/content/:resource/:id
+// Permanent deletion is now permitted only for an item already in Trash.
+router.delete('/:resource/:id', requireRole('admin'), async (req, res, next) => {
+  const spec = resourceFor(req, res);
+  if (!spec) return;
+  const id = idFor(req, res);
+  if (id === null) return;
+  if (spec.hasStatus === false) {
+    return res.status(400).json({ error: 'Use the dedicated manager for permanent deletion of this legacy content type.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const trash = await client.query(
+      `SELECT id FROM admin_content_trash
+       WHERE resource = $1 AND item_id = $2
+         AND restored_at IS NULL AND permanently_deleted_at IS NULL FOR UPDATE`,
+      [req.params.resource, id]
+    );
+    if (!trash.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Move this item to Trash before deleting it permanently.' });
+    }
+    const result = await client.query(`DELETE FROM ${spec.table} WHERE id = $1 RETURNING id`, [id]);
+    if (!result.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'That item no longer exists.' });
+    }
+    await client.query(
+      `UPDATE admin_content_trash SET permanently_deleted_at = now(), permanently_deleted_by = $1 WHERE id = $2`,
+      [req.user.id, trash.rows[0].id]
+    );
+    await client.query('COMMIT');
+    await logActivity(req.user.id, 'content_permanently_deleted', `${req.params.resource} #${id}`);
     res.json({ deleted: true });
   } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
     next(err);
-  }
+  } finally { client.release(); }
 });
 
 // GET /admin/content/:resource/:id/payment — what would happen if this were

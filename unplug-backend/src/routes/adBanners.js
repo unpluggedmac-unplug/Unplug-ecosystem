@@ -3,6 +3,7 @@ const pool = require('../db');
 const { logSubmission } = require('./activityLog');
 const { requireAuth } = require('../middleware/auth');
 const { packagesFor } = require('../utils/servicePackages');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
@@ -82,13 +83,16 @@ router.post('/', requireAuth, async (req, res, next) => {
       `INSERT INTO ad_slots
          (slot_key, image_url, mobile_image_url, link_url, name, cta_text,
           display_order, is_active, starts_at, ends_at,
-          owner_user_id, moderation_status, duration_days)
-       VALUES ($1, $2, $3, $4, $5, $6, 0, false, $7, $8, $9, 'pending_payment', $10)
+          owner_user_id, moderation_status, duration_days,
+          campaign_name, advertiser_name, payment_status)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, false, $7, $8, $9, 'pending_payment', $10, $11, $12, 'pending')
        RETURNING id`,
       [
         slotKey, imageUrl, (b.mobileImageUrl || '').trim() || null, linkUrl,
         (b.name || '').trim().slice(0, 160) || null, (b.ctaText || '').trim().slice(0, 40) || null,
         startsAt, endsAt, req.user.id, durationDays,
+        (b.campaignName || b.name || '').trim().slice(0, 180) || null,
+        (b.advertiserName || b.name || '').trim().slice(0, 180) || null,
       ]
     );
 
@@ -115,6 +119,49 @@ router.get('/mine', requireAuth, async (req, res, next) => {
       [req.user.id]
     );
     res.json({ banners: result.rows });
+  } catch (err) { next(err); }
+});
+
+
+// Banner analytics is intentionally anonymous and first-party: only aggregate
+// impression/click counters are stored. The generous limiter blocks obvious
+// event flooding without interfering with normal browsing across several ads.
+const bannerEventLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.UNPLUG_DISABLE_RATE_LIMITS === '1',
+  message: { error: 'Too many advertising events.' },
+});
+
+// POST /ad-banners/:id/event — public aggregate analytics for a rendered ad.
+// `impression` is sent once per banner per page load by the website; `click`
+// is sent when its outbound advert link is used. No visitor id/IP is stored.
+router.post('/:id/event', bannerEventLimiter, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const eventType = String(req.body && req.body.eventType || '').trim();
+    if (!Number.isInteger(id) || !['impression', 'click'].includes(eventType)) {
+      return res.status(400).json({ error: 'A valid banner and eventType are required.' });
+    }
+    const live = await pool.query(
+      `SELECT id FROM ad_slots
+        WHERE id = $1 AND archived_at IS NULL AND is_active = true
+          AND (moderation_status IS NULL OR moderation_status = 'approved')
+          AND (starts_at IS NULL OR starts_at <= CURRENT_DATE)
+          AND (ends_at IS NULL OR ends_at >= CURRENT_DATE)`, [id]
+    );
+    if (!live.rowCount) return res.status(204).end();
+    const column = eventType === 'click' ? 'clicks' : 'impressions';
+    await pool.query(
+      `INSERT INTO ad_banner_analytics (ad_slot_id, event_date, ${column})
+       VALUES ($1, CURRENT_DATE, 1)
+       ON CONFLICT (ad_slot_id, event_date)
+       DO UPDATE SET ${column} = ad_banner_analytics.${column} + 1, updated_at = now()`,
+      [id]
+    );
+    res.status(204).end();
   } catch (err) { next(err); }
 });
 

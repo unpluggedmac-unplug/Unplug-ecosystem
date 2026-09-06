@@ -35,6 +35,7 @@ const IGNORED = /\.(?:png|jpe?g|gif|webp|svg|ico|css|js|map|woff2?|ttf|eot|txt|x
 const NOT_THE_SITE = [
   /^\/docs\//i,                    // the spec, the pricing analysis, the progress log
   /^\/unplug-backend\//i,          // the backend; it is deployed to Render, not here
+  /^\/functions\//i,               // Pages Function source is never public content
   /^\/node_modules\//i,
   /^\/\.github\//i,
   /^\/\.claude\//i,

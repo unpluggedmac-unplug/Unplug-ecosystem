@@ -18,10 +18,11 @@
 
   var API = (function () {
     try {
-      return (localStorage.getItem('unplug_api_base') || 'https://unplug-ecosystem.onrender.com')
+      return (localStorage.getItem('unplug_api_base') || window.UNPLUG_RUNTIME_API || 'https://unplug-ecosystem.onrender.com')
         .replace(/\/$/, '');
     } catch (e) {
-      return 'https://unplug-ecosystem.onrender.com';
+      return window.UNPLUG_RUNTIME_API || window.UNPLUG_RUNTIME_API
+        || 'https://unplug-ecosystem.onrender.com';
     }
   })();
 

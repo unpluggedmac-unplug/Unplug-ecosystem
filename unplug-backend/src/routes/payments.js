@@ -8,6 +8,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor, historyFor } = require('../utils/accountCredit');
 const { priceFor, packagesFor, highlightServiceKey } = require('../utils/servicePackages');
 const { logActivity } = require('./activityLog');
+const { assertPurchasableByUser } = require('../utils/purchaseOwnership');
 const { eftInstructions } = require('../utils/eftDetails');
 const { attributeConsultant } = require('../utils/consultantAttribution');
 
@@ -32,8 +33,8 @@ const urlencodedParser = express.urlencoded({ extended: false });
 function verifyPayfastSignature(body) {
   const passphrase = process.env.PAYFAST_PASSPHRASE;
   if (!passphrase) {
-    console.warn('[payments] PAYFAST_PASSPHRASE is not set — skipping ITN signature verification. Do not accept real payments like this.');
-    return true;
+    console.error('[payments] PAYFAST_PASSPHRASE is not set — refusing unverifiable ITN callback.');
+    return false;
   }
 
   const receivedSignature = body.signature;
@@ -63,8 +64,8 @@ function verifyPayfastSignature(body) {
 function verifyOzowHash(body) {
   const privateKey = process.env.OZOW_PRIVATE_KEY;
   if (!privateKey) {
-    console.warn('[payments] OZOW_PRIVATE_KEY is not set — skipping HashCheck verification. Do not accept real payments like this.');
-    return true;
+    console.error('[payments] OZOW_PRIVATE_KEY is not set — refusing unverifiable Ozow callback.');
+    return false;
   }
 
   const receivedHash = body.HashCheck;
@@ -84,15 +85,18 @@ function verifyOzowHash(body) {
 // reachable by devtools (removing a `disabled` attribute) or a direct API
 // call, bypassing the frontend entirely.
 //
-// Gated on the same env vars the webhook verifiers above already require for
-// a real merchant account (PAYFAST_PASSPHRASE, OZOW_PRIVATE_KEY) — not a
-// separate flag to keep in sync. The moment real credentials are configured,
-// this starts accepting that method with no further code change; until then,
-// requesting it is refused with the same "coming soon" message the UI shows.
+// A real redirect/session builder is not implemented yet. The webhook secrets
+// only prove that callbacks can be verified; they do not magically create a
+// hosted checkout session. Keep PayFast/Ozow closed server-side until that
+// initiation code exists, matching the disabled frontend options.
 function gatewayIsLive(method) {
-  if (method === 'payfast') return Boolean(process.env.PAYFAST_PASSPHRASE);
-  if (method === 'ozow') return Boolean(process.env.OZOW_PRIVATE_KEY);
-  return true; // eft needs no merchant account
+  // Receiving/verifying gateway callbacks is implemented, but creating a REAL
+  // hosted checkout session is not. Merchant secrets alone must therefore
+  // never flip a fake sandbox.example.com redirect into production. EFT is the
+  // only live payment-initiation method until a real PayFast/Ozow session
+  // builder replaces initiateResponseFor()'s stub branch.
+  if (method === 'eft') return true;
+  return false;
 }
 
 const PACKAGE_PRICES = {
@@ -117,6 +121,7 @@ const PACKAGE_PRICES = {
 
 // Marketplace: flat R500 for a fixed 30-day duration (replaces the old
 // tiered 7/14/21/28-day Business Banner pricing).
+const UPGRADE_FEE = 250.00; // last-known fallback; actual upgrade row stores the quoted fee
 const MARKETPLACE_LISTING_PRICE = 500.00;
 // Self-serve advertising banners, priced by campaign length.
 const MARKETPLACE_LISTING_DAYS = 30;
@@ -201,7 +206,7 @@ async function resolveAmount(linkedType, linkedId) {
   if (linkedType === 'profile_upgrade') {
     const result = await pool.query('SELECT fee_paid FROM profile_upgrades WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Upgrade request not found.');
-    return Number(result.rows[0].fee_paid) || UPGRADE_FEE;
+    { const fee = Number(result.rows[0].fee_paid); return Number.isFinite(fee) ? fee : UPGRADE_FEE; }
   }
   if (linkedType === 'competition_entry') {
     // Each competition sets its own entry fee (e.g. The Arena = R250) —
@@ -851,6 +856,7 @@ router.post('/quote', requireAuth, async (req, res, next) => {
     // quote and the real charge can never disagree.
     let orderTotal;
     if (linkedId) {
+      await assertPurchasableByUser(linkedType, linkedId, req.user.id);
       orderTotal = await resolveAmount(linkedType, linkedId);
     } else {
       orderTotal = await priceForNewOrder(linkedType, { durationDays, targetType });
@@ -895,6 +901,8 @@ router.post('/quote', requireAuth, async (req, res, next) => {
       settledWithoutPayment: amountToPay === 0,
     });
   } catch (err) {
+    if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
+    if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
     next(err);
   }
 });
@@ -928,6 +936,8 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
         return res.status(400).json({ error: 'salesConsultantId does not match an active consultant.' });
       }
     }
+
+    await assertPurchasableByUser(linkedType, linkedId, req.user.id);
 
     // A self-serve banner can only be paid for by the member who submitted it,
     // and only while it's still awaiting payment.
@@ -1053,7 +1063,7 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
         [payment.id]
       );
       const confirmed = await pool.query('SELECT * FROM payments WHERE id = $1', [payment.id]);
-      await applyPaymentEffect(confirmed.rows[0]);
+      await applyPaymentEffectTracked(confirmed.rows[0]);
       return res.status(201).json({
         payment: confirmed.rows[0],
         creditUsed,
@@ -1073,6 +1083,8 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       ...initiateResponseFor(payment),
     });
   } catch (err) {
+    if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
+    if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
     if (err.message.includes('not found') || err.message.includes('not implemented')) {
       return res.status(400).json({ error: err.message });
     }
@@ -1119,6 +1131,27 @@ router.post('/ozow/webhook', async (req, res, next) => {
   }
 });
 
+async function applyPaymentEffectTracked(payment) {
+  try {
+    await applyPaymentEffect(payment);
+    if (payment && payment.id) {
+      await pool.query(
+        `UPDATE payments SET fulfillment_status = 'applied', fulfillment_error = NULL, fulfilled_at = now() WHERE id = $1`,
+        [payment.id]
+      );
+    }
+    return true;
+  } catch (err) {
+    if (payment && payment.id) {
+      await pool.query(
+        `UPDATE payments SET fulfillment_status = 'failed', fulfillment_error = $2, fulfilled_at = NULL WHERE id = $1`,
+        [payment.id, String(err && err.message || err).slice(0, 2000)]
+      ).catch(() => {});
+    }
+    throw err;
+  }
+}
+
 // EVERY confirmed payment is announced, not only the consultant-linked ones.
 // Money arriving is the single thing an owner most wants to be told about, and
 // until now it was silent unless a consultant happened to be attached.
@@ -1154,13 +1187,20 @@ async function handleGatewayCallback(reference, status) {
   const result = await pool.query('SELECT * FROM payments WHERE gateway_reference = $1', [reference]);
   if (result.rows.length === 0) return; // unknown reference — ignore silently, log in production
   const payment = result.rows[0];
-  if (payment.status !== 'pending') return; // already processed — webhooks can arrive more than once
+  // Gateways may retry a callback. If money was already marked confirmed but
+  // service fulfilment failed afterwards, use that retry as a safe chance to
+  // finish the service rather than discarding it as an already-processed hit.
+  if (payment.status === 'confirmed' && payment.fulfillment_status === 'failed') {
+    await applyPaymentEffectTracked(payment);
+    return;
+  }
+  if (payment.status !== 'pending') return; // already processed successfully
 
   const newStatus = status === 'success' || status === 'COMPLETE' ? 'confirmed' : 'failed';
   await pool.query('UPDATE payments SET status = $1, confirmed_at = now() WHERE id = $2', [newStatus, payment.id]);
 
   if (newStatus === 'confirmed') {
-    await applyPaymentEffect({ ...payment, status: newStatus });
+    await applyPaymentEffectTracked({ ...payment, status: newStatus });
     notifyPaymentConfirmed(payment);
     await notifySalesConsultantPayment(payment);
   }
@@ -1186,8 +1226,8 @@ router.patch('/:id/confirm-eft', requireRole('admin'), async (req, res, next) =>
     }
 
     await pool.query('UPDATE payments SET status = $1, confirmed_at = now() WHERE id = $2', ['confirmed', payment.id]);
-    await applyPaymentEffect(payment);
-    notifyPaymentConfirmed(payment);
+    await applyPaymentEffectTracked({ ...payment, status: 'confirmed' });
+    notifyPaymentConfirmed({ ...payment, status: 'confirmed' });
     await notifySalesConsultantPayment(payment);
 
     res.json({ message: 'EFT payment confirmed and applied.' });
@@ -1223,6 +1263,8 @@ router.resolveAmount = resolveAmount;
 router.applyVoucher = applyVoucher;
 router.recordVoucherRedemption = recordVoucherRedemption;
 router.applyPaymentEffect = applyPaymentEffect;
+router.applyPaymentEffectTracked = applyPaymentEffectTracked;
 router.TERMS_VERSION = TERMS_VERSION;
+router.gatewayIsLive = gatewayIsLive;
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const pool = require('../db');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const {
@@ -70,6 +71,31 @@ const SUPABASE_PRIVATE_BUCKET = process.env.SUPABASE_PRIVATE_BUCKET || 'edition-
 const supabaseOnlyPrivateConfigured = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY);
 // Same widened meaning as supabaseConfigured above.
 const supabasePrivateConfigured = r2PrivateConfigured || supabaseOnlyPrivateConfigured;
+
+
+// Best-effort catalogue entry for the Admin Media Library. Upload success must
+// never be turned into upload failure merely because a migration has not yet
+// run on an environment, so indexing errors are logged and swallowed.
+async function indexPublicUpload({ url, filename, storage, mimetype, sizeBytes, uploadedBy, width, height }) {
+  try {
+    await pool.query(`INSERT INTO media_assets
+      (url, filename, storage, mime_type, size_bytes, width, height, uploaded_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (url) DO UPDATE SET
+        filename=COALESCE(EXCLUDED.filename, media_assets.filename),
+        storage=COALESCE(EXCLUDED.storage, media_assets.storage),
+        mime_type=COALESCE(EXCLUDED.mime_type, media_assets.mime_type),
+        size_bytes=COALESCE(EXCLUDED.size_bytes, media_assets.size_bytes),
+        width=COALESCE(EXCLUDED.width, media_assets.width),
+        height=COALESCE(EXCLUDED.height, media_assets.height),
+        uploaded_by=COALESCE(media_assets.uploaded_by, EXCLUDED.uploaded_by),
+        updated_at=now()`,
+      [url, filename || null, storage || null, mimetype || null, sizeBytes || null,
+       width || null, height || null, uploadedBy || null]);
+  } catch (err) {
+    console.warn('[media library] upload was saved but could not be indexed:', err.message);
+  }
+}
 
 // Uploads the just-saved multer file to whichever public object storage is
 // configured (see putPublicObject) and returns its public URL, then removes
@@ -413,8 +439,22 @@ router.post('/', requireAuth, (req, res) => {
 
     if (supabaseConfigured) {
       try {
-        const { url } = await uploadToSupabase(req.file);
-        return res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: r2Configured ? 'r2' : 'supabase' });
+        const { url, key, buffer } = await uploadToSupabase(req.file);
+        const storage = r2Configured ? 'r2' : 'supabase';
+        let derivatives = null;
+        try {
+          derivatives = await storeDerivatives({ key, buffer, putObject: putPublicObject });
+        } catch (derr) {
+          console.error('[uploads] derivatives failed for', key, '-', derr.message);
+        }
+        await indexPublicUpload({
+          url, filename: req.file.filename, storage, mimetype: req.file.mimetype,
+          sizeBytes: req.file.size, uploadedBy: req.user && req.user.id,
+          width: derivatives && derivatives.meta && derivatives.meta.width,
+          height: derivatives && derivatives.meta && derivatives.meta.height,
+        });
+        return res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage,
+          responsive: derivatives && derivatives.made > 0 ? { widths: derivatives.widths, formats: derivatives.formats } : null });
       } catch (e) {
         // Do NOT silently fall back to local disk in production: Render's disk is
         // ephemeral, so a locally-stored image looks fine now but vanishes on the
@@ -433,6 +473,8 @@ router.post('/', requireAuth, (req, res) => {
     // otherwise we'd save an http:// URL that the https site blocks as mixed content.
     const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
     const url = `${proto}://${req.get('host')}/uploads/${req.file.filename}`;
+    await indexPublicUpload({ url, filename: req.file.filename, storage: 'local',
+      mimetype: req.file.mimetype, sizeBytes: req.file.size, uploadedBy: req.user && req.user.id });
     res.status(201).json({
       url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'local',
       warning: 'Saved to temporary local storage — this file will be lost on the next server restart. Configure Supabase Storage for permanent uploads.',

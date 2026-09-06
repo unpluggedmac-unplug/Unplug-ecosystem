@@ -15,7 +15,9 @@
     "backup": "node -e \"require('./src/utils/backupRunner').run().then(r=>console.log(r)).catch(e=>{console.error(e.message);process.exit(1)})\"",
     "backup:list": "node scripts/restore-backup.js --list",
     "restore": "node scripts/restore-backup.js",
-    "clone:staging": "node scripts/clone-to-staging.js"
+    "clone:staging": "node scripts/clone-to-staging.js",
+    "preflight": "node scripts/production-readiness.js",
+    "preflight:staging": "node scripts/staging-readiness.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",
