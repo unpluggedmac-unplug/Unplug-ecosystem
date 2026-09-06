@@ -33,6 +33,19 @@ export async function onRequest({ env }) {
       '  }',
       '  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once:true });',
       '  else apply();',
+      '})();',
+      '',
+      '// Phase 13 staging image system: full-image lightbox, non-destructive',
+      '// display fitting, orientation-aware page banners and broken-image',
+      '// fallbacks. Loaded only in Preview/Staging while it is being smoke-tested.',
+      '(function(){',
+      '  if (window.__unplugImageViewerRequested) return;',
+      '  window.__unplugImageViewerRequested=true;',
+      '  var s=document.createElement("script");',
+      '  s.src="/media/scripts/unplug-image-viewer.js?v=20260906-1";',
+      '  s.async=false;',
+      '  s.setAttribute("data-unplug-no-lightbox","true");',
+      '  (document.head||document.documentElement).appendChild(s);',
       '})();'
     );
   }
