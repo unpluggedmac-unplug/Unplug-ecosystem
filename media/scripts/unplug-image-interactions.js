@@ -186,18 +186,14 @@
     const base = apiBase();
     if (!base || !id) return;
     const url = base + '/ad-banners/' + encodeURIComponent(id) + '/event';
-    const body = JSON.stringify({ eventType: 'click' });
-    try {
-      if (navigator.sendBeacon) {
-        const blob = new Blob([body], { type: 'application/json' });
-        if (navigator.sendBeacon(url, blob)) return;
-      }
-    } catch (_) {}
+    // Mirror the site's existing first-party tracker. Using fetch + keepalive
+    // avoids cross-origin sendBeacon/content-type ambiguity while still
+    // allowing navigation to continue immediately after the CTA is clicked.
     try {
       fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: body,
+        body: JSON.stringify({ eventType: 'click' }),
         keepalive: true
       }).catch(function () {});
     } catch (_) {}
