@@ -5,8 +5,7 @@ on:
     branches:
       - staging-control-centre
     paths:
-      - '.phase13/phase13.patch.gz'
-      - '.github/workflows/apply-phase13-staging.yml'
+      - '.phase13/READY'
 
 permissions:
   contents: write
@@ -22,11 +21,11 @@ jobs:
           ref: staging-control-centre
           fetch-depth: 0
 
-      - name: Apply Phase 13 patch
+      - name: Reconstruct and apply Phase 13 patch
         shell: bash
         run: |
           set -euo pipefail
-          gzip -dc .phase13/phase13.patch.gz > /tmp/phase13.patch
+          cat .phase13/part-* > /tmp/phase13.patch
           git apply --check /tmp/phase13.patch
           git apply /tmp/phase13.patch
           rm -rf .phase13
