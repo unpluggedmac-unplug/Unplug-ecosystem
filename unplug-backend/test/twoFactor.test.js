@@ -34,6 +34,8 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-2fa-'));
 const port = 38400 + (process.pid % 300); // bases are 400 apart so ranges cannot overlap
 
 const ADMIN_ID = 441001;
+const realDateNow = Date.now;
+let fakeNowMs;
 
 async function login(email, password, twoFactorCode) {
   const res = await fetch(baseUrl + '/auth/login', {
@@ -44,6 +46,13 @@ async function login(email, password, twoFactorCode) {
 }
 
 before(async () => {
+  // Keep TOTP tests deterministic and fast. otplib uses Date.now() when no
+  // explicit epoch is supplied, so advancing this test-only clock below gives
+  // us a genuinely new 30-second token without sleeping or erasing replay
+  // state from the database.
+  fakeNowMs = realDateNow();
+  Date.now = () => fakeNowMs;
+
   pg = new EmbeddedPostgres({
     databaseDir: dataDir, user: 'postgres', password: 'postgres', port,
     persistent: false, initdbFlags: ['--encoding=UTF8', '--locale=C'],
@@ -78,6 +87,7 @@ before(async () => {
 });
 
 after(async () => {
+  Date.now = realDateNow;
   if (server) await new Promise((resolve) => server.close(resolve));
   if (pool) await pool.end();
   // stopPostgres, not pg.stop() directly: on Windows the library's stop
@@ -153,13 +163,12 @@ test('THE PASSWORD IS CHECKED BEFORE THE CODE IS ASKED FOR', async () => {
   assert.equal(right.body.twoFactorRequired, true);
 });
 
-// Every test below signs in within seconds of the last one, so they share a
-// thirty-second TOTP window and would otherwise all present the same code.
-// This clears the replay marker to stand for "a later sign-in", which is what
-// actually happens in life. Where the replay guard itself is under test, the
-// marker is deliberately left alone.
+// Every test below executes within seconds, but a real later sign-in receives
+// a fresh TOTP from a later 30-second time step. Advance the test-only JS clock
+// instead of clearing two_factor_last_token: replay state must remain intact,
+// and each successful sign-in must prove that a genuinely new token works.
 async function asIfLater() {
-  await pool.query('UPDATE users SET two_factor_last_token = NULL WHERE id = $1', [ADMIN_ID]);
+  fakeNowMs += 31_000;
 }
 
 async function currentCode() {
