@@ -7,7 +7,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const PROMOTE = path.join(ROOT, 'unplug-promote-existing.js');
 const BUILD = path.join(ROOT, 'build.js');
 const HIGHLIGHTS = path.join(__dirname, '..', 'src', 'routes', 'highlights.js');
-const MIGRATION = path.join(__dirname, '..', 'db', 'migrations', '188_highlight_published_targets_only.sql');
+const MIGRATION = path.join(__dirname, '..', 'db', 'migrations', '190_highlight_published_targets_only.sql');
 
 function read(file) {
   assert.ok(fs.existsSync(file), `${path.basename(file)} should exist`);
