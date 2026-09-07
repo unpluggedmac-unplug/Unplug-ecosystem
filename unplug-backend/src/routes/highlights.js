@@ -183,6 +183,59 @@ router.get('/packages', async (req, res, next) => {
   }
 });
 
+// GET /highlights/eligible — one server-authoritative source for the member's
+// "Promote Existing Content" screen.
+//
+// The browser used to combine /articles/mine and /profiles/me, then decide
+// locally whether an approved article was already live. That created a second
+// clock and, more importantly, meant the UI was the only thing stopping a
+// direct POST from buying promotion for draft or future-scheduled content.
+// This endpoint uses the database's CURRENT_DATE — the same clock the public
+// site uses — and only returns content that can actually be promoted now.
+router.get('/eligible', requireAuth, async (req, res, next) => {
+  try {
+    const [articles, futureArticles, profile, today] = await Promise.all([
+      pool.query(
+        `SELECT id, title, banner_image_url, scheduled_for
+           FROM articles
+          WHERE author_user_id = $1
+            AND status = 'approved'
+            AND (scheduled_for IS NULL OR scheduled_for::date <= CURRENT_DATE)
+          ORDER BY id DESC`,
+        [req.user.id]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS n
+           FROM articles
+          WHERE author_user_id = $1
+            AND status = 'approved'
+            AND scheduled_for IS NOT NULL
+            AND scheduled_for::date > CURRENT_DATE`,
+        [req.user.id]
+      ),
+      pool.query(
+        `SELECT id, display_name, feature_image_url
+           FROM profiles
+          WHERE user_id = $1 AND status = 'approved'
+          ORDER BY id DESC
+          LIMIT 1`,
+        [req.user.id]
+      ),
+      pool.query(`SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS d`),
+    ]);
+
+    res.json({
+      supportedTypes: ['article', 'directory'],
+      serverToday: today.rows[0].d,
+      articles: articles.rows,
+      futureScheduledArticles: futureArticles.rows[0].n,
+      directoryProfile: profile.rows[0] || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /highlights/mine — the member's own highlight promotions, at any status,
 // so their dashboard can show what's pending payment / scheduled / live / done.
 router.get('/mine', requireAuth, async (req, res, next) => {
@@ -248,44 +301,82 @@ router.get('/mine', requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+function validIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(value + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
 // POST /highlights — member requests a highlight on their own article or
-// Directory profile. Ownership of the target is checked inline below.
+// Directory profile. Ownership AND public eligibility are checked here. The
+// UI is only a convenience; a direct API request cannot promote hidden content.
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { targetType, targetId, durationDays, requestedStartDate } = req.body;
+    const targetType = req.body.targetType;
+    const targetId = Number(req.body.targetId);
+    const durationDays = Number(req.body.durationDays);
+    const requestedStartDate = req.body.requestedStartDate;
+
     if (!['article', 'directory'].includes(targetType)) {
       return res.status(400).json({ error: 'targetType must be "article" or "directory".' });
     }
-    if (![7, 14, 21, 28].includes(durationDays)) {
-      return res.status(400).json({ error: 'durationDays must be one of: 7, 14, 21, 28.' });
+    if (!Number.isInteger(targetId)) {
+      return res.status(400).json({ error: 'A valid targetId is required.' });
     }
+    if (!Number.isInteger(durationDays)) {
+      return res.status(400).json({ error: 'A valid promotion period is required.' });
+    }
+
+    // Only sell a package that is actually active in the same admin-managed
+    // package table the form and checkout use. Switching a duration off must
+    // remove it from both the UI AND the API purchase path.
+    const serviceKey = targetType === 'article' ? 'highlight_article' : 'highlight_directory';
+    const availablePackages = await packagesFor(serviceKey);
+    if (!availablePackages.some((p) => Number(p.durationDays) === durationDays)) {
+      return res.status(400).json({ error: 'That promotion period is not currently available.' });
+    }
+
     // Optional future start date. The END date is always derived from the paid
     // duration (see applyPaymentEffect), so a member can pick when the run
     // begins but can never buy 7 days and get 30.
     let startDate = null;
     if (requestedStartDate) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedStartDate)) {
-        return res.status(400).json({ error: 'requestedStartDate must be a date in YYYY-MM-DD format.' });
+      const wanted = String(requestedStartDate);
+      if (!validIsoDate(wanted)) {
+        return res.status(400).json({ error: 'requestedStartDate must be a valid date in YYYY-MM-DD format.' });
       }
-      const today = new Date(); today.setUTCHours(0, 0, 0, 0);
-      const wanted = new Date(requestedStartDate + 'T00:00:00Z');
-      if (Number.isNaN(wanted.getTime())) {
-        return res.status(400).json({ error: 'That start date is not a valid date.' });
-      }
-      if (wanted < today) {
+      const past = await pool.query('SELECT $1::date < CURRENT_DATE AS is_past', [wanted]);
+      if (past.rows[0].is_past) {
         return res.status(400).json({ error: 'The start date cannot be in the past.' });
       }
-      startDate = requestedStartDate;
+      startDate = wanted;
     }
 
-    const ownerTable = targetType === 'article' ? 'articles' : 'profiles';
-    const ownerColumn = targetType === 'article' ? 'author_user_id' : 'user_id';
-    const ownerCheck = await pool.query(`SELECT ${ownerColumn} AS owner_id FROM ${ownerTable} WHERE id = $1`, [targetId]);
+    const ownerCheck = targetType === 'article'
+      ? await pool.query(
+        `SELECT author_user_id AS owner_id, status,
+                (scheduled_for IS NULL OR scheduled_for::date <= CURRENT_DATE) AS is_live
+           FROM articles WHERE id = $1`,
+        [targetId]
+      )
+      : await pool.query(
+        `SELECT user_id AS owner_id, status, true AS is_live
+           FROM profiles WHERE id = $1`,
+        [targetId]
+      );
+
     if (ownerCheck.rows.length === 0) {
       return res.status(404).json({ error: `${targetType} not found.` });
     }
-    if (ownerCheck.rows[0].owner_id !== req.user.id && req.user.role !== 'admin') {
+    const target = ownerCheck.rows[0];
+    if (target.owner_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'You can only highlight your own content.' });
+    }
+    if (target.status !== 'approved') {
+      return res.status(409).json({ error: 'Only content that is approved and publicly live can be promoted.' });
+    }
+    if (!target.is_live) {
+      return res.status(409).json({ error: 'This article is approved but scheduled for later. It can be promoted once it is live.' });
     }
 
     const result = await pool.query(
