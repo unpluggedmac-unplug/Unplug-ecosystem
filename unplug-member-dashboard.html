@@ -1493,10 +1493,12 @@ document.getElementById('registerBtn').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Creating account...';
 
   try {
-    await api('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, phone, fullName, memberType: SELECTED_MEMBER_TYPE }) });
+    const registration = await api('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, phone, fullName, memberType: SELECTED_MEMBER_TYPE }) });
     localStorage.setItem('unplug_api_base', API_BASE);
     PENDING_VERIFY_EMAIL = email;
-    document.getElementById('verifySub').textContent = `We sent a 6-digit code to ${email}. Enter it below to activate your free account.`;
+    document.getElementById('verifySub').textContent = registration.emailSent === false
+      ? `Your account was created, but the verification email could not be delivered to ${email} right now. Use “Resend Code” in a moment, or contact us if it keeps failing.`
+      : `We sent a 6-digit code to ${email}. Enter it below to activate your free account.`;
     showCard('verifyCard');
   } catch (err) {
     errorBanner.textContent = err.message;
