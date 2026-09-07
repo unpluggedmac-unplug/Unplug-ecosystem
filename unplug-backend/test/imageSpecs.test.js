@@ -216,13 +216,14 @@ test('every upload field states a size, or is one whose size is not fixed', () =
   // These fields legitimately cannot name a size in the source, because it
   // depends on the row: the ad banner an admin edits (the SLOT decides), the
   // Cover Images screen (the TYPE decides), the swappable site pictures (the
-  // server sends each one's own), and the article cover image and each
+  // server sends each one's own), the free-form Media Library upload (the
+  // eventual use decides its shape), and the article cover image and each
   // section's own picture (the chosen landscape/portrait ORIENTATION decides
   // — see artCoverSpecFor/artSectionImageSpecFor and their matching
   // artCoverOrientation/artWireSectionOrientation wiring in both dashboard
   // files, all of which still call imgSpecFull() themselves, just one layer
   // removed from this literal scan). Everything else must name a key.
-  const dynamic = ['adImage_', 'coverImg', 'siteImg-', 'abImage', 'cover', 'bannerImage', 'sectionImage'];
+  const dynamic = ['adImage_', 'coverImg', 'siteImg-', 'abImage', 'cover', 'bannerImage', 'sectionImage', 'mediaLibraryUpload'];
   const silent = [];
   DASHBOARDS.forEach((f) => {
     const src = fs.readFileSync(path.join(siteRoot, f), 'utf8');
