@@ -140,14 +140,25 @@
     const select = document.getElementById('svcArtPick');
     try {
       const data = await api('/articles/mine');
-      const approved = (data.articles || []).filter((article) => article.status === 'approved');
+      // status='approved' is not quite enough: an approved article can still
+      // be scheduled for a future date, and the public article route hides it
+      // until that date. Do not sell highlight days on something readers cannot
+      // open yet. It will appear here automatically on its publication date.
+      const approved = (data.articles || []).filter((article) =>
+        article.status === 'approved'
+        && (!article.scheduled_for || String(article.scheduled_for).slice(0, 10) <= today));
+      const futureScheduled = (data.articles || []).filter((article) =>
+        article.status === 'approved'
+        && article.scheduled_for
+        && String(article.scheduled_for).slice(0, 10) > today).length;
       select.innerHTML = approved.length
         ? approved.map((article) => `<option value="${article.id}">${escapeAttrM(article.title || `Article #${article.id}`)}</option>`).join('')
         : '<option value="">No published articles available</option>';
       document.getElementById('svcArtBtn').disabled = !approved.length;
+      const scheduledNote = futureScheduled ? ` ${futureScheduled} approved article${futureScheduled === 1 ? ' is' : 's are'} scheduled for later and will appear here once live.` : '';
       setEligibility('article', approved.length
-        ? `${approved.length} published article${approved.length === 1 ? '' : 's'} available to promote.`
-        : 'You do not have a published article available to promote yet. Once an article is approved and live, it will automatically appear here.', !approved.length);
+        ? `${approved.length} published article${approved.length === 1 ? '' : 's'} available to promote.${scheduledNote}`
+        : `You do not have an article that is live and available to promote yet. Once an article is published, it will automatically appear here.${scheduledNote}`, !approved.length);
     } catch (err) {
       select.innerHTML = '<option value="">Could not load your articles</option>';
       document.getElementById('svcArtBtn').disabled = true;
