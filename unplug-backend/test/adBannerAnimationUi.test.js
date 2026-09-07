@@ -18,7 +18,7 @@ function readAdmin() {
 
 test('EVERY BANNER ROW HAS AN ENTRANCE-EFFECT SELECT WITH THE FULL 8-VALUE VOCABULARY', () => {
   const src = readAdmin();
-  const idx = src.indexOf('function adBannerRowHtml(uid)');
+  const idx = src.indexOf('function adBannerRowHtml()');
   assert.ok(idx > -1);
   const body = src.slice(idx, src.indexOf('function adSlotSpec', idx));
   assert.match(body, /class="ad-anim"/);
