@@ -32,10 +32,13 @@ test('Promote Existing Content is a first-class return journey for article or Di
   assert.match(src, /id="svcProfPick"/);
 });
 
-test('only already-approved member content is eligible for the promotion picker', () => {
+test('only content already approved and live is eligible for the promotion picker', () => {
   const src = read(PROMOTE);
   assert.match(src, /api\('\/articles\/mine'\)/);
-  assert.match(src, /filter\(\(article\) => article\.status === 'approved'\)/);
+  assert.match(src, /article\.status === 'approved'/);
+  assert.match(src, /article\.scheduled_for/);
+  assert.match(src, /String\(article\.scheduled_for\)\.slice\(0, 10\) <= today/);
+  assert.match(src, /will appear here once live/i);
   assert.match(src, /api\('\/profiles\/me'\)/);
   assert.match(src, /profile\.status === 'approved'/);
   assert.match(src, /must be approved and live before it can be promoted/i);
@@ -75,10 +78,11 @@ test('promotion module waits for the restored authenticated session before prote
   assert.match(src, /if \(!sessionReady\(\)\) return false/);
 });
 
-test('database backstop refuses paid highlights for unpublished content', () => {
+test('database backstop refuses unpublished and future-scheduled paid highlight targets', () => {
   const sql = read(MIGRATION);
   assert.match(sql, /target_status <> 'approved'/);
-  assert.match(sql, /Only published content can be highlighted/);
+  assert.match(sql, /target_scheduled_for > CURRENT_DATE/);
+  assert.match(sql, /Only content already published and live can be highlighted/);
   assert.match(sql, /IF COALESCE\(NEW\.is_admin, false\) THEN/);
   assert.match(sql, /BEFORE INSERT OR UPDATE OF target_type, target_id, is_admin/);
 });
