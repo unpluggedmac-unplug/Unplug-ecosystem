@@ -1,0 +1,113 @@
+name: One-time staging email delivery fix
+
+on:
+  push:
+    branches:
+      - staging-control-centre
+
+permissions:
+  contents: write
+
+jobs:
+  patch-email-delivery:
+    if: github.ref == 'refs/heads/staging-control-centre'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: staging-control-centre
+
+      - name: Apply exact staging-only patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          auth_path = Path('unplug-backend/src/routes/auth.js')
+          auth = auth_path.read_text()
+          old = """    let emailSent = true;
+              try {
+                await sendEmail({
+                  to: email,
+                  subject: 'Verify your Unplug account',
+                  text: `Welcome to Unplug! Your verification code is: ${code}\\n\\nThis code expires in 15 minutes.`,
+                });
+              } catch (mailErr) {
+          """
+          new = """    let emailSent = true;
+              try {
+                const delivery = await sendEmail({
+                  to: email,
+                  subject: 'Verify your Unplug account',
+                  text: `Welcome to Unplug! Your verification code is: ${code}\\n\\nThis code expires in 15 minutes.`,
+                });
+                // sendEmail deliberately returns { simulated: true } when no real
+                // provider exists. Logging a code is useful in development/staging,
+                // but it is not an email delivery and must never be reported as one.
+                emailSent = !(delivery && delivery.simulated);
+              } catch (mailErr) {
+          """
+          # The triple-quoted literals above are indented by the workflow Python
+          # block. Normalize that incidental indentation before matching source.
+          import textwrap
+          old = textwrap.dedent(old)
+          new = textwrap.dedent(new)
+          if old in auth:
+              if auth.count(old) != 1:
+                  raise SystemExit('Refusing patch: signup mail block matched more than once')
+              auth_path.write_text(auth.replace(old, new, 1))
+          elif 'emailSent = !(delivery && delivery.simulated);' not in auth:
+              raise SystemExit('Refusing patch: expected signup mail block was not found')
+
+          signup_path = Path('unplug-backend/test/signup.test.js')
+          signup = signup_path.read_text()
+          old_test = """  assert.equal(status, 201);
+            assert.ok(body.user.id);
+          """
+          new_test = """  assert.equal(status, 201);
+            assert.ok(body.user.id);
+            assert.equal(body.emailSent, false,
+              'a simulated/logged verification message must not be reported as sent');
+          """
+          old_test = textwrap.dedent(old_test)
+          new_test = textwrap.dedent(new_test)
+          if old_test in signup:
+              if signup.count(old_test) != 1:
+                  raise SystemExit('Refusing patch: signup assertion block matched more than once')
+              signup_path.write_text(signup.replace(old_test, new_test, 1))
+          elif 'a simulated/logged verification message must not be reported as sent' not in signup:
+              raise SystemExit('Refusing patch: expected signup assertion block was not found')
+
+      - name: Check patch formatting
+        run: git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: unplug-backend
+        run: npm ci
+
+      - name: Run signup regression suite
+        working-directory: unplug-backend
+        run: node --test --test-concurrency=1 test/signup.test.js
+
+      - name: Commit tested fix to staging only
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- unplug-backend/src/routes/auth.js unplug-backend/test/signup.test.js; then
+            echo 'Patch is already present; nothing to commit.'
+            exit 0
+          fi
+          git config user.name 'unplug-staging-safety'
+          git config user.email 'actions@users.noreply.github.com'
+          git add unplug-backend/src/routes/auth.js unplug-backend/test/signup.test.js
+          git commit -m 'Report simulated signup email as not sent'
+          git push origin HEAD:staging-control-centre
