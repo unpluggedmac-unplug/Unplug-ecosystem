@@ -62,7 +62,7 @@ const MODULES = [
   'unplug-shared.js', 'unplug-seo-schema.js', 'unplug-responsive-images.js',
   'unplug-components.js', 'unplug-spam-forms.js',
   'unplug-participation-sdk.js', 'i18n.js', 'accessibility.js',
-  'chatbot.js', 'image-upload.js',
+  'chatbot.js', 'image-upload.js', 'unplug-promote-existing.js',
 ];
 
 // Copied through untouched.
@@ -165,6 +165,17 @@ async function buildPage(file, report) {
   // --- Rewrite the shared module <script src> to the hashed copies -----------
   for (const [from, to] of Object.entries(report.moduleMap)) {
     html = html.split(`src="${from}"`).join(`src="${to}"`);
+  }
+
+  // Promote Existing Content is intentionally injected only into the member
+  // dashboard. Keeping it out of the raw source page means Phase 13's build is
+  // still the single authority that decides which executable assets reach the
+  // deployed site, while the hashed module remains cache-safe under the CSP.
+  if (file === 'unplug-member-dashboard.html' && report.moduleMap['unplug-promote-existing.js']) {
+    html = html.replace(
+      '</body>',
+      `  <script src="${report.moduleMap['unplug-promote-existing.js']}" defer></script>\n</body>`
+    );
   }
 
   fs.writeFileSync(path.join(OUT, file), html);
