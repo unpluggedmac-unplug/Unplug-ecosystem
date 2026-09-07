@@ -147,6 +147,8 @@ test('STEP ONE creates an unverified account and a code', async () => {
   const { status, body } = await api('POST', '/auth/register', { email, ...GOOD });
   assert.equal(status, 201);
   assert.ok(body.user.id);
+  assert.equal(body.emailSent, false,
+    'a simulated/logged verification message must not be reported as sent');
 
   const u = await pool.query('SELECT email_verified FROM users WHERE email = $1', [email]);
   assert.notEqual(u.rows[0].email_verified, true, 'not usable yet');

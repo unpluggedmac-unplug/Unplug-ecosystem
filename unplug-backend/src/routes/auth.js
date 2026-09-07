@@ -104,11 +104,15 @@ router.post('/register', registerLimiter, async (req, res, next) => {
     // verify. Report it honestly in the message instead.
     let emailSent = true;
     try {
-      await sendEmail({
+      const delivery = await sendEmail({
         to: email,
         subject: 'Verify your Unplug account',
         text: `Welcome to Unplug! Your verification code is: ${code}\n\nThis code expires in 15 minutes.`,
       });
+      // sendEmail deliberately returns { simulated: true } when no real
+      // provider exists. Logging a code is useful in development/staging,
+      // but it is not an email delivery and must never be reported as one.
+      emailSent = !(delivery && delivery.simulated);
     } catch (mailErr) {
       emailSent = false;
       console.error('[auth] signup verification email failed to send:', mailErr.message);
