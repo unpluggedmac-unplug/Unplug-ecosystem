@@ -80,11 +80,6 @@ before(async () => {
 
   process.env.DATABASE_URL = `postgres://postgres:postgres@localhost:${port}/unplug_test`;
   process.env.JWT_SECRET = 'test-secret-for-paydupe';
-  // This file's own PayFast test is about the duplicate-order guard applying
-  // to gateway methods too, not about gatewayIsLive() itself (that has its
-  // own dedicated test file) — so PayFast is set "live" here to keep that
-  // test isolated to what it actually checks.
-  process.env.PAYFAST_PASSPHRASE = 'test-passphrase';
 
   const { Pool } = require('pg');
   pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -193,32 +188,35 @@ test('BUYING TWO DIFFERENT THINGS IS NOT MISTAKEN FOR A DUPLICATE', async () => 
   assert.notEqual(a.body.payment.gateway_reference, b.body.payment.gateway_reference);
 });
 
-test("THE GUARD IS PER USER — SOMEONE ELSE'S PENDING ORDER NEVER BLOCKS YOURS", async () => {
-  // Not a realistic path (linkedId ownership is enforced elsewhere for
-  // owned resources), but the query itself is scoped by user_id and that
-  // scoping is what this proves directly.
+test("OWNERSHIP IS CHECKED BEFORE THE DUPLICATE GUARD — SOMEONE ELSE CANNOT PAY FOR YOUR RESOURCE", async () => {
   const buyer = await makeUser();
   const otherUser = await makeUser();
   const eventId = await makeAwaitingEvent(buyer);
 
-  await req('POST', '/payments/initiate', { token: tokenFor(buyer), body: initiateBody(eventId) });
+  const first = await req('POST', '/payments/initiate', { token: tokenFor(buyer), body: initiateBody(eventId) });
+  assert.equal(first.status, 201);
+
   const attempt = await req('POST', '/payments/initiate', { token: tokenFor(otherUser), body: initiateBody(eventId) });
-  assert.equal(attempt.status, 201, "a different user's request for the same linkedId is not treated as their duplicate");
+  assert.equal(attempt.status, 403, 'another member cannot create a payment against somebody else\'s event');
+  assert.match(attempt.body.error, /own account/i);
+
+  const rows = await pool.query(
+    `SELECT count(*)::int AS n FROM payments WHERE linked_type = 'event_listing' AND linked_id = $1`, [eventId]);
+  assert.equal(rows.rows[0].n, 1, 'the blocked cross-account attempt creates no extra payment row');
 });
 
-test('PayFast/Ozow resubmits are also caught — the guard is not EFT-only', async () => {
+test('PayFast/Ozow stay closed when a caller tries them directly', async () => {
   const user = await makeUser();
   const eventId = await makeAwaitingEvent(user);
   const token = tokenFor(user);
 
-  const first = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method: 'payfast' }) });
-  assert.equal(first.status, 201);
-  const second = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method: 'payfast' }) });
-  assert.equal(second.status, 200);
-  assert.equal(second.body.alreadyPending, true);
-  assert.ok(second.body.redirectUrl, 'still gets a redirect URL, not just an error');
+  for (const method of ['payfast', 'ozow']) {
+    const attempt = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method }) });
+    assert.equal(attempt.status, 400, `${method} must remain unavailable until a real hosted checkout exists`);
+    assert.match(attempt.body.error, /coming soon/i);
+  }
 
   const rows = await pool.query(
     `SELECT count(*)::int AS n FROM payments WHERE linked_type = 'event_listing' AND linked_id = $1`, [eventId]);
-  assert.equal(rows.rows[0].n, 1);
+  assert.equal(rows.rows[0].n, 0, 'disabled gateways cannot create a payment row');
 });
