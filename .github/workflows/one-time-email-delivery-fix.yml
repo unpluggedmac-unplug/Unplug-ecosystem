@@ -49,11 +49,6 @@ jobs:
                 emailSent = !(delivery && delivery.simulated);
               } catch (mailErr) {
           """
-          # The triple-quoted literals above are indented by the workflow Python
-          # block. Normalize that incidental indentation before matching source.
-          import textwrap
-          old = textwrap.dedent(old)
-          new = textwrap.dedent(new)
           if old in auth:
               if auth.count(old) != 1:
                   raise SystemExit('Refusing patch: signup mail block matched more than once')
@@ -71,8 +66,6 @@ jobs:
             assert.equal(body.emailSent, false,
               'a simulated/logged verification message must not be reported as sent');
           """
-          old_test = textwrap.dedent(old_test)
-          new_test = textwrap.dedent(new_test)
           if old_test in signup:
               if signup.count(old_test) != 1:
                   raise SystemExit('Refusing patch: signup assertion block matched more than once')
