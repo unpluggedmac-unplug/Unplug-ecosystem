@@ -49,6 +49,10 @@ jobs:
         working-directory: unplug-backend
         run: npm ci
 
+      - name: Verify later highlight purchase pathway
+        working-directory: unplug-backend
+        run: node --test test/postPublishHighlightPath.test.js
+
       - name: Run backend test suite
         working-directory: unplug-backend
         run: npm test
