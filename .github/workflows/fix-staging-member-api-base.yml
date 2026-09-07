@@ -1,0 +1,66 @@
+name: One-time staging member auth API routing repair
+
+on:
+  push:
+    branches:
+      - staging-control-centre
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging-control-centre
+          fetch-depth: 0
+
+      - name: Route hidden auth controls through runtime API
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('unplug-member-dashboard.html')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = {
+              '<input id="registerApiBaseInput" value="https://unplug-ecosystem.onrender.com">': '<input id="registerApiBaseInput" value="">',
+              '<input id="apiBaseInput" value="https://unplug-ecosystem.onrender.com">': '<input id="apiBaseInput" value="">',
+              '<input id="forgotApiBaseInput" value="https://unplug-ecosystem.onrender.com">': '<input id="forgotApiBaseInput" value="">',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'Expected auth API control not found: {old}')
+              text = text.replace(old, new, 1)
+
+          old = 'let API_BASE = localStorage.getItem("unplug_api_base") || LIVE_API_BASE;'
+          new = '''const RUNTIME_API_BASE = (window.UNPLUG_RUNTIME_API || "").replace(/\\/$/, "");
+let API_BASE = RUNTIME_API_BASE || localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
+
+// Hidden auth API controls are retained for local/debug use, but they must
+// inherit the environment runtime base. This prevents staging signup, login,
+// and password reset from ever falling back to the production API.
+for (const id of ['apiBaseInput', 'registerApiBaseInput', 'forgotApiBaseInput']) {
+  const el = document.getElementById(id);
+  if (el) el.value = API_BASE;
+}'''
+          if old not in text:
+              raise SystemExit('Expected API_BASE assignment not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Run signup UI regression test
+        run: node --test unplug-backend/test/signupUiEmailDelivery.test.js
+
+      - name: Commit repair and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-staging-member-api-base.yml
+          git add unplug-member-dashboard.html
+          git diff --cached --check
+          git commit -m "Route member auth through runtime staging API"
+          git push origin HEAD:staging-control-centre
