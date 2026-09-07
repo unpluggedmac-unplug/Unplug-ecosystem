@@ -1,0 +1,54 @@
+name: Staging Safety Check
+
+on:
+  push:
+    branches:
+      - staging-control-centre
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-safety-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staging-safety:
+    name: Frontend security + backend tests
+    if: github.ref == 'refs/heads/staging-control-centre'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out staging branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            unplug-backend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run staging frontend guard
+        run: npm run staging:check
+
+      - name: Run CSP and security header checks
+        run: npm run security:check
+
+      - name: Build staging frontend
+        run: npm run build
+
+      - name: Install backend dependencies
+        working-directory: unplug-backend
+        run: npm ci
+
+      - name: Run backend test suite
+        working-directory: unplug-backend
+        run: npm test
