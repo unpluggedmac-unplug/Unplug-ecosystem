@@ -17,7 +17,8 @@
     "restore": "node scripts/restore-backup.js",
     "clone:staging": "node scripts/clone-to-staging.js",
     "preflight": "node scripts/production-readiness.js",
-    "preflight:staging": "node scripts/staging-readiness.js"
+    "preflight:staging": "node scripts/staging-readiness.js",
+    "preflight:members": "node scripts/verify-production-members.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",
