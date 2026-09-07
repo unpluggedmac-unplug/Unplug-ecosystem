@@ -1,6 +1,10 @@
-// Promote Existing Content — member return journey.
-// Reuses already-published Article / Directory IDs; it never recreates the
-// underlying content. New rows are only the promotion and its payment.
+// Promote Existing Content — one member return journey for promotion services.
+//
+// The member chooses content they already own and that is already public. This
+// module never recreates an article or Directory profile; the new row is only
+// the paid promotion request. Eligibility is server-authoritative through
+// GET /highlights/eligible, so the browser is not trusted to decide whether a
+// draft, pending item, or future-scheduled article can be promoted.
 (function installPromoteExistingContent() {
   'use strict';
 
@@ -8,72 +12,382 @@
   if (!card) return;
 
   const policy = "A minimum of 7 working days' notice is required to cancel before a service starts. If eligible, 100% of the amount paid will be credited to your account (no cash refund) — credit never expires. Once a service has started, no refund or unused-period credit will be provided, subject to applicable law.";
+  const TYPE_LABELS = { article: 'Published Article', directory: 'Published Directory Profile' };
+  const PREFIX_LABELS = { article: 'article', directory: 'Directory profile' };
 
-  function terms(id) {
-    return `<div class="field" style="border-top:1px solid var(--paper-line); padding-top:10px;">
+  function esc(value) {
+    const d = document.createElement('div');
+    d.textContent = value == null ? '' : String(value);
+    return d.innerHTML;
+  }
+  const money = (value) => `R${(Number(value) || 0).toFixed(2)}`;
+  const sessionReady = () => typeof AUTH_TOKEN !== 'undefined' && !!AUTH_TOKEN;
+
+  card.setAttribute('data-promote-existing-content', 'true');
+  card.innerHTML = `
+    <h2>Promote Existing Content</h2>
+    <p class="sub">Come back at any time and boost something you have already published. You do not need to submit it again.</p>
+    <div class="instructions-box" style="margin-bottom:16px;">
+      <strong>How it works:</strong> choose the published item, choose how long you want the promotion to run, review the price, then continue to payment. Only content that is already approved and publicly live can be promoted.
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="promoteExistingType">What would you like to promote?</label>
+        <select id="promoteExistingType">
+          <option value="article">Published Article</option>
+          <option value="directory">Published Directory Profile</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="promoteExistingItem">Choose your published item</label>
+        <select id="promoteExistingItem"><option value="">Loading eligible content…</option></select>
+      </div>
+    </div>
+
+    <div id="promoteExistingEligibility" class="instructions-box" style="margin-bottom:14px;">Checking what is ready to promote…</div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="promoteExistingDuration">Promotion period</label>
+        <select id="promoteExistingDuration"><option value="">Loading packages…</option></select>
+      </div>
+      <div class="field">
+        <label for="promoteExistingStart">Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label>
+        <input id="promoteExistingStart" type="date">
+      </div>
+    </div>
+
+    <div class="field" style="border-top:1px solid var(--paper-line); padding-top:10px;">
+      <label for="promoteExistingVoucher">Voucher code <span style="font-weight:400; color:var(--slate);">— optional</span></label>
+      <div style="display:flex; gap:8px; align-items:flex-start;">
+        <input id="promoteExistingVoucher" placeholder="e.g. UNPLUG2026" style="flex:1; min-width:0;">
+        <button class="btn btn-line" type="button" id="promoteExistingVoucherBtn" style="width:auto; white-space:nowrap;">Apply</button>
+      </div>
+    </div>
+
+    <div class="field section-hidden" id="promoteExistingCreditWrap" style="background:#faf7f2; border:1px solid var(--paper-line); padding:10px; border-radius:6px;">
+      <label style="margin-bottom:4px;">Your Unplug Credit</label>
+      <div style="font-size:13.5px;">Available: <b id="promoteExistingCreditBalance">R0.00</b></div>
+      <label class="tc-row" style="margin-top:6px;"><input type="checkbox" id="promoteExistingUseCredit"> <span>Use my Unplug Credit toward this promotion</span></label>
+    </div>
+
+    <div class="instructions-box" id="promoteExistingQuote" style="margin-bottom:12px;">Choose a promotion period to see your total.</div>
+
+    <div class="field">
+      <label for="promoteExistingPayMethod">Payment Method</label>
+      <select id="promoteExistingPayMethod"><option value="eft" selected>Manual EFT</option></select>
+      <p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all cash payments are handled by manual EFT.</p>
+    </div>
+
+    <div id="promoteExistingError" class="error-banner" style="display:none;"></div>
+
+    <div class="field" style="border-top:1px solid var(--paper-line); padding-top:10px;">
       <p style="font-size:12.5px; margin-bottom:6px;"><strong>Cancellation &amp; Credit Policy:</strong> ${policy}</p>
       <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline; margin-right:14px;">VIEW TERMS &amp; CONDITIONS</a>
       <a href="unplug-magazine.html?p=refunds" target="_blank" rel="noopener" style="font-weight:600; text-decoration:underline;">VIEW CANCELLATION, REFUND &amp; ACCOUNT CREDIT POLICY</a>
-      <label class="tc-row" style="margin-top:8px;"><input type="checkbox" id="${id}"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
-    </div>`;
+      <label class="tc-row" style="margin-top:8px;"><input type="checkbox" id="promoteExistingTermsChk"> <span>I have read, understood and accept the Terms and Conditions, Privacy Policy, Refund Policy and Cancellation Policy of Unplug Magazine.</span></label>
+    </div>
+
+    <button class="btn btn-solid" id="promoteExistingBtn" style="width:auto;" disabled>Continue to Payment</button>
+    <div class="instructions-box section-hidden" id="promoteExistingResult" style="margin-top:12px;"></div>
+  `;
+
+  const typeSelect = document.getElementById('promoteExistingType');
+  const itemSelect = document.getElementById('promoteExistingItem');
+  const durationSelect = document.getElementById('promoteExistingDuration');
+  const startInput = document.getElementById('promoteExistingStart');
+  const eligibilityBox = document.getElementById('promoteExistingEligibility');
+  const quoteBox = document.getElementById('promoteExistingQuote');
+  const errorBox = document.getElementById('promoteExistingError');
+  const resultBox = document.getElementById('promoteExistingResult');
+  const buyBtn = document.getElementById('promoteExistingBtn');
+
+  let eligibility = null;
+  let packages = null;
+  let creditBalance = 0;
+  let loadInFlight = null;
+  let latestQuote = null;
+
+  function showError(message) {
+    errorBox.textContent = message || '';
+    errorBox.style.display = message ? 'block' : 'none';
   }
 
-  function extras(prefix) {
-    return `<div class="field" style="border-top:1px solid var(--paper-line); padding-top:10px;">
-      <label for="svc${prefix}Voucher">Voucher code <span style="font-weight:400; color:var(--slate);">— optional</span></label>
-      <div style="display:flex; gap:8px; align-items:flex-start;">
-        <input id="svc${prefix}Voucher" placeholder="e.g. UNPLUG2026" style="flex:1; min-width:0;">
-        <button class="btn btn-line" type="button" id="svc${prefix}VoucherBtn" style="width:auto; white-space:nowrap;">Apply</button>
-      </div>
-    </div>
-    <div class="field section-hidden" id="svc${prefix}CreditWrap" style="background:#faf7f2; border:1px solid var(--paper-line); padding:10px; border-radius:6px;">
-      <label style="margin-bottom:4px;">Your Unplug Credit</label>
-      <div style="font-size:13.5px;">Available: <b id="svc${prefix}CreditBalance">R0.00</b></div>
-      <label class="tc-row" style="margin-top:6px;"><input type="checkbox" id="svc${prefix}UseCredit"> <span>Use my Unplug Credit toward this promotion</span></label>
-    </div>
-    <div class="instructions-box" id="svc${prefix}Quote" style="margin-bottom:12px;">Choose a promotion period to see your total.</div>`;
+  function itemsFor(type) {
+    if (!eligibility) return [];
+    if (type === 'article') return (eligibility.articles || []).map((a) => ({ id: a.id, label: a.title || `Article #${a.id}` }));
+    if (type === 'directory' && eligibility.directoryProfile) {
+      const p = eligibility.directoryProfile;
+      return [{ id: p.id, label: p.display_name || `Directory Profile #${p.id}` }];
+    }
+    return [];
   }
 
-  card.setAttribute('data-promote-existing-content', 'true');
-  card.innerHTML = `<h2>Promote Existing Content</h2>
-    <p class="sub">Come back at any time and boost something you have already published. You do not need to submit it again.</p>
-    <div class="instructions-box" style="margin-bottom:16px;"><strong>How it works:</strong> choose the published item, choose how long you want the promotion to run, review the price, then continue to checkout. Only content that is already approved and live can be promoted.</div>
-    <div class="field">
-      <label for="promoteExistingType">What would you like to promote?</label>
-      <select id="promoteExistingType"><option value="article">Published Article</option><option value="directory">Published Directory Profile</option></select>
-      <p style="font-size:12px; color:var(--slate); margin-top:6px;">More content types can be added here whenever Unplug introduces a promotion service for them.</p>
-    </div>
-    <div id="promoteExistingEligibility" class="instructions-box section-hidden" style="margin-bottom:12px;"></div>
+  function packagesForType(type) {
+    return packages && Array.isArray(packages[type]) ? packages[type] : [];
+  }
 
-    <div id="promoteExistingArticlePanel">
-      <div class="field-row">
-        <div class="field"><label for="svcArtPick">Choose your published article</label><select id="svcArtPick"><option value="">Loading your published articles…</option></select></div>
-        <div class="field"><label for="svcArtDuration">Promotion period</label><select id="svcArtDuration"><option value="">Loading packages…</option></select></div>
-      </div>
-      <div class="field"><label for="svcArtStart">Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="svcArtStart" type="date"></div>
-      ${extras('Art')}
-      <div class="field"><label for="svcArtPayMethod">Payment Method</label><select id="svcArtPayMethod"><option value="eft" selected>Manual EFT</option></select><p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all cash payments are handled by manual EFT.</p></div>
-      <div id="svcArtError" class="error-banner" style="display:none;"></div>
-      ${terms('svcArtTermsChk')}
-      <button class="btn btn-solid" id="svcArtBtn" style="width:auto;">Continue to Checkout</button>
-      <div class="instructions-box section-hidden" id="svcArtResult" style="margin-top:12px;"></div>
-    </div>
+  function renderEligibility() {
+    const type = typeSelect.value;
+    const items = itemsFor(type);
+    const rows = packagesForType(type);
 
-    <div id="promoteExistingDirectoryPanel" class="section-hidden">
-      <div class="field-row">
-        <div class="field"><label for="svcProfPick">Choose your published Directory profile</label><select id="svcProfPick"><option value="">Loading your Directory profile…</option></select></div>
-        <div class="field"><label for="svcProfDuration">Promotion period</label><select id="svcProfDuration"><option value="">Loading packages…</option></select></div>
-      </div>
-      <div class="field"><label for="svcProfStart">Start date <span style="font-weight:400; color:var(--slate);">— today or later</span></label><input id="svcProfStart" type="date"></div>
-      ${extras('Prof')}
-      <div class="field"><label for="svcProfPayMethod">Payment Method</label><select id="svcProfPayMethod"><option value="eft" selected>Manual EFT</option></select><p style="font-size:12px; color:var(--slate); margin-top:6px;">Card and Instant EFT payments via PayFast and Ozow will be available soon. For now, all cash payments are handled by manual EFT.</p></div>
-      <div id="svcProfError" class="error-banner" style="display:none;"></div>
-      ${terms('svcProfTermsChk')}
-      <button class="btn btn-solid" id="svcProfBtn" style="width:auto;">Continue to Checkout</button>
-      <div class="instructions-box section-hidden" id="svcProfResult" style="margin-top:12px;"></div>
-    </div>`;
+    itemSelect.innerHTML = items.length
+      ? items.map((item) => `<option value="${Number(item.id)}">${esc(item.label)}</option>`).join('')
+      : `<option value="">No ${type === 'article' ? 'published articles' : 'published Directory profile'} available</option>`;
 
-  // A first-class sidebar route back to the promotion card.
+    durationSelect.innerHTML = rows.length
+      ? rows.map((p) => `<option value="${Number(p.durationDays)}">${Number(p.durationDays)} days — ${money(p.price)}</option>`).join('')
+      : '<option value="">No promotion packages available</option>';
+
+    let message = '';
+    let problem = false;
+    if (!eligibility) {
+      message = 'We could not confirm which content is ready to promote. Please try again.';
+      problem = true;
+    } else if (type === 'article') {
+      const future = Number(eligibility.futureScheduledArticles) || 0;
+      const scheduledNote = future
+        ? ` ${future} approved article${future === 1 ? ' is' : 's are'} scheduled for later and will appear here automatically once live.`
+        : '';
+      if (items.length) {
+        message = `${items.length} published article${items.length === 1 ? '' : 's'} available to promote.${scheduledNote}`;
+      } else {
+        message = `You do not have an article that is approved and publicly live yet. Once an article is live, it will automatically appear here.${scheduledNote}`;
+        problem = true;
+      }
+    } else if (items.length) {
+      message = 'Your published Directory profile is ready to promote.';
+    } else {
+      message = 'Your Directory profile must be approved and publicly live before it can be promoted. You do not need to resubmit it — it will appear here automatically once approved.';
+      problem = true;
+    }
+
+    if (!rows.length) {
+      message += ' No promotion package is currently available for this content type.';
+      problem = true;
+    }
+
+    eligibilityBox.textContent = message;
+    eligibilityBox.style.borderColor = problem ? 'var(--red)' : '';
+    buyBtn.disabled = !items.length || !rows.length;
+
+    const serverToday = eligibility && eligibility.serverToday;
+    if (serverToday) {
+      startInput.min = serverToday;
+      if (!startInput.value || startInput.value < serverToday) startInput.value = serverToday;
+    }
+
+    latestQuote = null;
+    refreshQuote();
+  }
+
+  async function loadPackages() {
+    try {
+      const data = await api('/highlights/packages');
+      packages = data.packages || { article: [], directory: [] };
+    } catch (err) {
+      packages = { article: [], directory: [] };
+      throw err;
+    }
+  }
+
+  async function loadEligibility() {
+    try {
+      eligibility = await api('/highlights/eligible');
+    } catch (err) {
+      eligibility = null;
+      throw err;
+    }
+  }
+
+  async function loadCredit() {
+    try {
+      creditBalance = Number((await api('/payments/credit')).balance) || 0;
+    } catch (err) {
+      creditBalance = 0;
+    }
+    document.getElementById('promoteExistingCreditBalance').textContent = money(creditBalance);
+    document.getElementById('promoteExistingCreditWrap').classList.toggle('section-hidden', creditBalance <= 0);
+    if (creditBalance <= 0) document.getElementById('promoteExistingUseCredit').checked = false;
+  }
+
+  async function loadData() {
+    if (!sessionReady()) return false;
+    if (loadInFlight) return loadInFlight;
+
+    loadInFlight = (async () => {
+      const results = await Promise.allSettled([loadPackages(), loadEligibility(), loadCredit()]);
+      renderEligibility();
+      const failed = results.filter((r) => r.status === 'rejected');
+      if (failed.length) {
+        showError('Some promotion details could not be loaded. Please try again before paying.');
+      } else {
+        showError('');
+      }
+      return true;
+    })().finally(() => { loadInFlight = null; });
+
+    return loadInFlight;
+  }
+
+  async function refreshQuote() {
+    if (!sessionReady()) {
+      quoteBox.textContent = 'Sign in to see your promotion total.';
+      latestQuote = null;
+      return null;
+    }
+    const durationDays = Number(durationSelect.value);
+    const targetType = typeSelect.value;
+    if (!durationDays || !itemSelect.value) {
+      quoteBox.textContent = 'Choose eligible content and a promotion period to see your total.';
+      latestQuote = null;
+      return null;
+    }
+
+    try {
+      const voucherCode = document.getElementById('promoteExistingVoucher').value.trim();
+      const quote = await api('/payments/quote', {
+        method: 'POST',
+        body: JSON.stringify({
+          linkedType: 'highlight',
+          durationDays,
+          targetType,
+          voucherCode: voucherCode || undefined,
+          useCredit: document.getElementById('promoteExistingUseCredit').checked,
+        }),
+      });
+
+      latestQuote = quote;
+      const lines = [`Promotion price: <strong>${money(quote.orderTotal)}</strong>`];
+      if (quote.voucherDiscount > 0) lines.push(`Voucher discount: <strong>−${money(quote.voucherDiscount)}</strong>`);
+      if (quote.creditApplied > 0) lines.push(`Unplug Credit: <strong>−${money(quote.creditApplied)}</strong>`);
+      lines.push(`Amount to pay: <strong>${money(quote.amountToPay)}</strong>`);
+      if (quote.voucherError) lines.push(`<span style="color:var(--red);">${esc(quote.voucherError)}</span>`);
+      if (quote.settledWithoutPayment) lines.push('<strong>Your voucher / Unplug Credit covers this promotion in full.</strong>');
+      quoteBox.innerHTML = lines.join('<br>');
+      return quote;
+    } catch (err) {
+      latestQuote = null;
+      quoteBox.textContent = err.message || 'Could not calculate this total.';
+      return null;
+    }
+  }
+
+  function paymentReferenceNotice(reference) {
+    if (typeof refNotice === 'function') return refNotice(reference);
+    return reference ? `<div style="margin-top:12px;"><strong>Reference:</strong> ${esc(reference)}</div>` : '';
+  }
+
+  function uploadProofBlock(paymentId) {
+    return (paymentId && typeof popUploadBlock === 'function') ? popUploadBlock('payments', paymentId) : '';
+  }
+
+  async function purchasePromotion() {
+    showError('');
+    resultBox.classList.add('section-hidden');
+
+    const targetType = typeSelect.value;
+    const targetId = Number(itemSelect.value);
+    const durationDays = Number(durationSelect.value);
+    if (!targetId) return showError('Choose published content to promote.');
+    if (!durationDays) return showError('Choose a promotion period.');
+    if (!document.getElementById('promoteExistingTermsChk').checked) {
+      return showError('You must accept the Terms and Conditions before you can proceed with payment.');
+    }
+
+    const quote = latestQuote || await refreshQuote();
+    if (!quote) return showError('We could not confirm the promotion price. Please try again.');
+    if (quote.voucherError) return showError(quote.voucherError);
+
+    buyBtn.disabled = true;
+    buyBtn.textContent = 'Processing…';
+    let createdHighlightId = null;
+
+    try {
+      const created = await api('/highlights', {
+        method: 'POST',
+        body: JSON.stringify({
+          targetType,
+          targetId,
+          durationDays,
+          requestedStartDate: startInput.value || undefined,
+        }),
+      });
+      createdHighlightId = created.highlight && created.highlight.id;
+
+      const pay = await api('/payments/initiate', {
+        method: 'POST',
+        body: JSON.stringify({
+          linkedType: 'highlight',
+          linkedId: createdHighlightId,
+          method: document.getElementById('promoteExistingPayMethod').value || 'eft',
+          termsAccepted: true,
+          termsVersion: (typeof SUBMIT_TERMS_VERSION !== 'undefined' ? SUBMIT_TERMS_VERSION : undefined),
+          useCredit: document.getElementById('promoteExistingUseCredit').checked,
+          voucherCode: document.getElementById('promoteExistingVoucher').value.trim() || undefined,
+        }),
+      });
+
+      resultBox.classList.remove('section-hidden');
+      if (pay.paidInFull) {
+        resultBox.innerHTML = `<strong>Promotion booked — paid in full by your voucher / Unplug Credit.</strong><br><br>${esc(pay.message || '')}`
+          + (pay.payment && pay.payment.gateway_reference ? paymentReferenceNotice(pay.payment.gateway_reference) : '');
+      } else if (pay.instructions) {
+        const i = pay.instructions;
+        resultBox.innerHTML = `<strong>Promotion reserved.</strong> Pay via EFT using the details below — it starts for the paid period once payment clears and our team approves it.<br><br>
+          <b>Bank:</b> ${esc(i.bank)}<br><b>Account Name:</b> ${esc(i.accountName)}<br>
+          ${i.accountType ? `<b>Account Type:</b> ${esc(i.accountType)}<br>` : ''}
+          <b>Account Number:</b> ${esc(i.accountNumber)}<br><b>Branch Code:</b> ${esc(i.branchCode)}<br><br>${esc(i.note || '')}`
+          + paymentReferenceNotice(i.reference)
+          + (pay.payment && pay.payment.id ? uploadProofBlock(pay.payment.id) : '');
+      } else {
+        resultBox.innerHTML = `<strong>Promotion reserved.</strong> ${esc(pay.note || '')}`;
+      }
+
+      if (typeof showToast === 'function') showToast('Promotion reserved — it now appears under My Services.');
+      if (typeof loadPaymentHistory === 'function') loadPaymentHistory();
+      if (typeof loadMyServices === 'function') loadMyServices();
+      await loadCredit();
+      await refreshQuote();
+    } catch (err) {
+      const base = err.message || 'Could not start that promotion.';
+      if (createdHighlightId) {
+        showError(`${base} A promotion request was created before payment failed. Check My Services before trying again so you do not create a duplicate request.`);
+      } else {
+        showError(base);
+        // Eligibility may have changed between page load and click — for
+        // example an article was unpublished. Refresh the authoritative list.
+        await loadData();
+      }
+    } finally {
+      buyBtn.textContent = 'Continue to Payment';
+      buyBtn.disabled = !itemsFor(typeSelect.value).length || !packagesForType(typeSelect.value).length;
+    }
+  }
+
+  typeSelect.addEventListener('change', renderEligibility);
+  itemSelect.addEventListener('change', refreshQuote);
+  durationSelect.addEventListener('change', refreshQuote);
+  document.getElementById('promoteExistingUseCredit').addEventListener('change', refreshQuote);
+  document.getElementById('promoteExistingVoucherBtn').addEventListener('click', refreshQuote);
+  document.getElementById('promoteExistingVoucher').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); refreshQuote(); }
+  });
+  buyBtn.addEventListener('click', purchasePromotion);
+
+  // A first-class route to this return journey. The shortcut is created after
+  // the original member navigation was wired, so it deliberately clicks the
+  // already-wired Browse Services button first; merely adding data-ms="services"
+  // here would leave the Services section hidden when the member came from
+  // Profile / My Unplug / Payments.
+  function openPromoteExisting() {
+    const browse = document.querySelector('#msSidebar .ms-navlink[data-ms="services"]');
+    if (browse) browse.click();
+    setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  }
+
   const sidebar = document.getElementById('msSidebar');
   if (sidebar && !document.getElementById('promoteExistingNav')) {
     const browse = sidebar.querySelector('.ms-navlink[data-ms="services"]');
@@ -81,243 +395,65 @@
       const shortcut = document.createElement('button');
       shortcut.id = 'promoteExistingNav';
       shortcut.className = 'ms-navlink';
-      shortcut.setAttribute('data-ms', 'services');
+      shortcut.type = 'button';
       shortcut.innerHTML = '<span>📣</span> Promote Existing Content';
-      shortcut.addEventListener('click', () => setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80));
+      shortcut.addEventListener('click', openPromoteExisting);
       browse.insertAdjacentElement('afterend', shortcut);
     }
   }
 
-  const typeSelect = document.getElementById('promoteExistingType');
-  const articlePanel = document.getElementById('promoteExistingArticlePanel');
-  const directoryPanel = document.getElementById('promoteExistingDirectoryPanel');
-  const eligibility = document.getElementById('promoteExistingEligibility');
-  const eligibilityState = { article: { message: '', problem: false }, directory: { message: '', problem: false } };
-  let creditBalance = 0;
-  const today = new Date().toISOString().slice(0, 10);
-  ['svcArtStart', 'svcProfStart'].forEach((id) => { const el = document.getElementById(id); el.min = today; el.value = today; });
-
-  const sessionReady = () => typeof AUTH_TOKEN !== 'undefined' && !!AUTH_TOKEN;
-  const money = (v) => `R${(Number(v) || 0).toFixed(2)}`;
-
-  function setEligibility(type, message, problem) {
-    eligibilityState[type] = { message: message || '', problem: !!problem };
-    if (typeSelect.value === type) renderEligibility();
-  }
-  function renderEligibility() {
-    const s = eligibilityState[typeSelect.value];
-    eligibility.textContent = s.message;
-    eligibility.classList.toggle('section-hidden', !s.message);
-    eligibility.style.borderColor = s.problem ? 'var(--red)' : '';
-  }
-  function showType(type) {
-    const isArticle = type === 'article';
-    articlePanel.classList.toggle('section-hidden', !isArticle);
-    directoryPanel.classList.toggle('section-hidden', isArticle);
-    renderEligibility();
-    // Do not call an authenticated endpoint during the page's sign-in restore.
-    // api() treats a 401 as an expired session, so quoting before AUTH_TOKEN is
-    // ready would incorrectly kick a returning member back to sign-in.
-    if (sessionReady()) refreshQuote(isArticle ? 'Art' : 'Prof', isArticle ? 'article' : 'directory');
-  }
-  typeSelect.addEventListener('change', () => showType(typeSelect.value));
-
-  function fillPackages(id, rows) {
-    const el = document.getElementById(id);
-    rows = Array.isArray(rows) ? rows : [];
-    el.innerHTML = rows.length
-      ? rows.map((p) => `<option value="${Number(p.durationDays)}">${Number(p.durationDays)} days — ${money(p.price)}</option>`).join('')
-      : '<option value="">No promotion packages available</option>';
+  // Also surface the return journey in the service catalogue itself, so a
+  // member browsing what Unplug offers can immediately distinguish "submit
+  // something new" from "promote something I already have".
+  function addCatalogueShortcut() {
+    const grid = document.getElementById('msServicesGrid');
+    if (!grid || document.getElementById('promoteExistingServiceTile')) return;
+    const tile = document.createElement('button');
+    tile.id = 'promoteExistingServiceTile';
+    tile.type = 'button';
+    tile.className = 'ms-service';
+    tile.innerHTML = '<span class="t">Promote Existing Content</span><span class="d">Boost an article or Directory profile already published</span>';
+    tile.addEventListener('click', openPromoteExisting);
+    grid.insertAdjacentElement('afterbegin', tile);
   }
 
-  async function loadPackages() {
-    const data = await api('/highlights/packages');
-    fillPackages('svcArtDuration', data.packages && data.packages.article);
-    fillPackages('svcProfDuration', data.packages && data.packages.directory);
+  const originalRenderServices = window.msRenderServices;
+  if (typeof originalRenderServices === 'function' && !originalRenderServices.__promoteExistingWrapped) {
+    const wrappedRenderServices = function wrappedRenderServices() {
+      const result = originalRenderServices.apply(this, arguments);
+      addCatalogueShortcut();
+      return result;
+    };
+    wrappedRenderServices.__promoteExistingWrapped = true;
+    window.msRenderServices = wrappedRenderServices;
+  }
+  addCatalogueShortcut();
+
+  // Retire the old split Highlight Article / Highlight Profile loader on this
+  // card. enterMemberDashboard still calls loadHighlightServices() for legacy
+  // compatibility; once this module is installed that call must refresh the
+  // unified, server-authoritative journey rather than rewriting its pickers.
+  const legacyLoadHighlightServices = window.loadHighlightServices;
+  if (typeof legacyLoadHighlightServices === 'function' && !legacyLoadHighlightServices.__promoteExistingWrapped) {
+    const wrappedLoadHighlightServices = async function wrappedLoadHighlightServices() {
+      if (card.getAttribute('data-promote-existing-content') === 'true') return loadData();
+      return legacyLoadHighlightServices.apply(this, arguments);
+    };
+    wrappedLoadHighlightServices.__promoteExistingWrapped = true;
+    window.loadHighlightServices = wrappedLoadHighlightServices;
   }
 
-  async function loadPublishedArticles() {
-    const select = document.getElementById('svcArtPick');
-    try {
-      const data = await api('/articles/mine');
-      // status='approved' is not quite enough: an approved article can still
-      // be scheduled for a future date, and the public article route hides it
-      // until that date. Do not sell highlight days on something readers cannot
-      // open yet. It will appear here automatically on its publication date.
-      const approved = (data.articles || []).filter((article) =>
-        article.status === 'approved'
-        && (!article.scheduled_for || String(article.scheduled_for).slice(0, 10) <= today));
-      const futureScheduled = (data.articles || []).filter((article) =>
-        article.status === 'approved'
-        && article.scheduled_for
-        && String(article.scheduled_for).slice(0, 10) > today).length;
-      select.innerHTML = approved.length
-        ? approved.map((article) => `<option value="${article.id}">${escapeAttrM(article.title || `Article #${article.id}`)}</option>`).join('')
-        : '<option value="">No published articles available</option>';
-      document.getElementById('svcArtBtn').disabled = !approved.length;
-      const scheduledNote = futureScheduled ? ` ${futureScheduled} approved article${futureScheduled === 1 ? ' is' : 's are'} scheduled for later and will appear here once live.` : '';
-      setEligibility('article', approved.length
-        ? `${approved.length} published article${approved.length === 1 ? '' : 's'} available to promote.${scheduledNote}`
-        : `You do not have an article that is live and available to promote yet. Once an article is published, it will automatically appear here.${scheduledNote}`, !approved.length);
-    } catch (err) {
-      select.innerHTML = '<option value="">Could not load your articles</option>';
-      document.getElementById('svcArtBtn').disabled = true;
-      setEligibility('article', 'We could not load your published articles just now. Please try again.', true);
-    }
-  }
-
-  async function refreshDirectoryEligibility() {
-    const select = document.getElementById('svcProfPick');
-    try {
-      const data = await api('/profiles/me');
-      const profile = data.profile;
-      if (profile && profile.status === 'approved') {
-        select.innerHTML = `<option value="${profile.id}">${escapeAttrM(profile.display_name || `Directory Profile #${profile.id}`)}</option>`;
-        document.getElementById('svcProfBtn').disabled = false;
-        setEligibility('directory', 'Your published Directory profile is ready to promote.', false);
-      } else {
-        select.innerHTML = '<option value="">No published Directory profile available</option>';
-        document.getElementById('svcProfBtn').disabled = true;
-        setEligibility('directory', 'Your Directory profile must be approved and live before it can be promoted. You do not need to resubmit it — it will appear here automatically once approved.', true);
-      }
-    } catch (err) {
-      select.innerHTML = '<option value="">No published Directory profile available</option>';
-      document.getElementById('svcProfBtn').disabled = true;
-      setEligibility('directory', 'Create and publish your Directory profile first. Once it is approved, you can return here and promote that same profile without submitting it again.', true);
-    }
-  }
-
-  async function loadCredit() {
-    try { creditBalance = Number((await api('/payments/credit')).balance) || 0; } catch (err) { creditBalance = 0; }
-    ['Art', 'Prof'].forEach((prefix) => {
-      document.getElementById(`svc${prefix}CreditBalance`).textContent = money(creditBalance);
-      document.getElementById(`svc${prefix}CreditWrap`).classList.toggle('section-hidden', creditBalance <= 0);
-      if (creditBalance <= 0) document.getElementById(`svc${prefix}UseCredit`).checked = false;
-    });
-  }
-
-  async function refreshQuote(prefix, targetType) {
-    const out = document.getElementById(`svc${prefix}Quote`);
-    if (!sessionReady()) { out.textContent = 'Sign in to see your promotion total.'; return null; }
-    const durationDays = Number(document.getElementById(`svc${prefix}Duration`).value);
-    if (!durationDays) { out.textContent = 'Choose a promotion period to see your total.'; return null; }
-    try {
-      const voucherCode = document.getElementById(`svc${prefix}Voucher`).value.trim();
-      const quote = await api('/payments/quote', { method: 'POST', body: JSON.stringify({
-        linkedType: 'highlight', durationDays, targetType,
-        voucherCode: voucherCode || undefined,
-        useCredit: document.getElementById(`svc${prefix}UseCredit`).checked,
-      }) });
-      const lines = [`Promotion price: <strong>${money(quote.orderTotal)}</strong>`];
-      if (quote.voucherDiscount > 0) lines.push(`Voucher discount: <strong>−${money(quote.voucherDiscount)}</strong>`);
-      if (quote.creditApplied > 0) lines.push(`Unplug Credit: <strong>−${money(quote.creditApplied)}</strong>`);
-      lines.push(`Amount to pay: <strong>${money(quote.amountToPay)}</strong>`);
-      if (quote.voucherError) lines.push(`<span style="color:var(--red);">${escapeAttrM(quote.voucherError)}</span>`);
-      if (quote.settledWithoutPayment) lines.push('<strong>Your voucher / Unplug Credit covers this promotion in full.</strong>');
-      out.innerHTML = lines.join('<br>');
-      return quote;
-    } catch (err) {
-      out.textContent = err.message || 'Could not calculate this total.';
-      return null;
-    }
-  }
-
-  async function purchasePromotion(c) {
-    const err = document.getElementById(c.errorEl);
-    const box = document.getElementById(c.resultEl);
-    err.style.display = 'none';
-    if (!c.targetId) { err.textContent = 'Choose published content to promote.'; err.style.display = 'block'; return; }
-    if (!c.durationDays) { err.textContent = 'Choose a promotion period.'; err.style.display = 'block'; return; }
-    if (!document.getElementById(c.termsChkId).checked) { err.textContent = 'You must accept the Terms and Conditions before you can proceed with payment.'; err.style.display = 'block'; return; }
-
-    // Validate voucher / credit and price BEFORE creating the promotion row, so
-    // an invalid voucher cannot leave an abandoned awaiting-payment highlight.
-    const quote = await refreshQuote(c.prefix, c.targetType);
-    if (!quote) { err.textContent = 'We could not confirm the promotion price. Please try again.'; err.style.display = 'block'; return; }
-    if (quote.voucherError) { err.textContent = quote.voucherError; err.style.display = 'block'; return; }
-
-    const button = document.getElementById(c.btnId);
-    button.disabled = true; button.textContent = 'Processing…';
-    try {
-      const created = await api('/highlights', { method: 'POST', body: JSON.stringify({
-        targetType: c.targetType, targetId: c.targetId, durationDays: c.durationDays,
-        requestedStartDate: c.requestedStartDate,
-      }) });
-      const pay = await api('/payments/initiate', { method: 'POST', body: JSON.stringify({
-        linkedType: 'highlight', linkedId: created.highlight.id,
-        method: document.getElementById(c.payMethodId).value || 'eft',
-        termsAccepted: true,
-        termsVersion: (typeof SUBMIT_TERMS_VERSION !== 'undefined' ? SUBMIT_TERMS_VERSION : undefined),
-        useCredit: document.getElementById(`svc${c.prefix}UseCredit`).checked,
-        voucherCode: document.getElementById(`svc${c.prefix}Voucher`).value.trim() || undefined,
-      }) });
-
-      box.classList.remove('section-hidden');
-      if (pay.paidInFull) {
-        box.innerHTML = `<strong>Promotion booked — paid in full by your voucher / Unplug Credit.</strong><br><br>${escapeAttrM(pay.message || '')}`
-          + (pay.payment && pay.payment.gateway_reference ? refNotice(pay.payment.gateway_reference) : '');
-      } else if (pay.instructions) {
-        const i = pay.instructions;
-        box.innerHTML = `<strong>Promotion reserved.</strong> Pay via EFT using the details below — it starts for the paid period once payment clears and our team approves it.<br><br>
-          <b>Bank:</b> ${escapeAttrM(i.bank)}<br><b>Account Name:</b> ${escapeAttrM(i.accountName)}<br>
-          ${i.accountType ? `<b>Account Type:</b> ${escapeAttrM(i.accountType)}<br>` : ''}
-          <b>Account Number:</b> ${escapeAttrM(i.accountNumber)}<br><b>Branch Code:</b> ${escapeAttrM(i.branchCode)}<br><br>${escapeAttrM(i.note || '')}`
-          + refNotice(i.reference) + (pay.payment && pay.payment.id ? popUploadBlock('payments', pay.payment.id) : '');
-      } else {
-        box.innerHTML = `<strong>Promotion reserved.</strong> ${escapeAttrM(pay.note || '')}`;
-      }
-      showToast('Promotion reserved — it now appears under My Services.');
-      if (typeof loadPaymentHistory === 'function') loadPaymentHistory();
-      if (typeof loadMyServices === 'function') loadMyServices();
-      await loadCredit();
-      await refreshQuote(c.prefix, c.targetType);
-    } catch (e) {
-      err.textContent = e.message || 'Could not start that promotion.';
-      err.style.display = 'block';
-    } finally {
-      button.disabled = false; button.textContent = 'Continue to Checkout';
-    }
-  }
-
-  function wireQuote(prefix, targetType) {
-    document.getElementById(`svc${prefix}Duration`).addEventListener('change', () => refreshQuote(prefix, targetType));
-    document.getElementById(`svc${prefix}UseCredit`).addEventListener('change', () => refreshQuote(prefix, targetType));
-    document.getElementById(`svc${prefix}VoucherBtn`).addEventListener('click', () => refreshQuote(prefix, targetType));
-    document.getElementById(`svc${prefix}Voucher`).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); refreshQuote(prefix, targetType); } });
-  }
-  wireQuote('Art', 'article');
-  wireQuote('Prof', 'directory');
-
-  const artBtn = document.getElementById('svcArtBtn');
-  artBtn.dataset.wired = '1';
-  artBtn.addEventListener('click', () => purchasePromotion({
-    prefix: 'Art', targetType: 'article', targetId: Number(document.getElementById('svcArtPick').value),
-    durationDays: Number(document.getElementById('svcArtDuration').value), requestedStartDate: document.getElementById('svcArtStart').value || undefined,
-    errorEl: 'svcArtError', resultEl: 'svcArtResult', btnId: 'svcArtBtn', termsChkId: 'svcArtTermsChk', payMethodId: 'svcArtPayMethod',
-  }));
-
-  const profBtn = document.getElementById('svcProfBtn');
-  profBtn.dataset.wired = '1';
-  profBtn.addEventListener('click', () => purchasePromotion({
-    prefix: 'Prof', targetType: 'directory', targetId: Number(document.getElementById('svcProfPick').value),
-    durationDays: Number(document.getElementById('svcProfDuration').value), requestedStartDate: document.getElementById('svcProfStart').value || undefined,
-    errorEl: 'svcProfError', resultEl: 'svcProfResult', btnId: 'svcProfBtn', termsChkId: 'svcProfTermsChk', payMethodId: 'svcProfPayMethod',
-  }));
-
-  async function loadEligibleContent() {
-    if (!sessionReady()) return false;
-    await Promise.all([loadPackages(), loadPublishedArticles(), refreshDirectoryEligibility(), loadCredit()]);
-    await Promise.all([refreshQuote('Art', 'article'), refreshQuote('Prof', 'directory')]);
-    renderEligibility();
-    return true;
-  }
-
+  // Authentication restoration is async and this module is deferred. The
+  // dashboard may therefore be installed a fraction of a second before the
+  // token is restored. Poll briefly for the token, then load exactly once.
   let attempts = 0;
   const readyTimer = setInterval(async () => {
     attempts += 1;
-    if (await loadEligibleContent()) { clearInterval(readyTimer); return; }
+    if (sessionReady()) {
+      clearInterval(readyTimer);
+      await loadData();
+      return;
+    }
     if (attempts >= 120) clearInterval(readyTimer);
   }, 500);
-
-  showType('article');
 })();
