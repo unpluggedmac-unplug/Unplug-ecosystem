@@ -24,7 +24,7 @@ test('Promote Existing Content is a first-class return journey for article or Di
   const src = read(PROMOTE);
   assert.match(src, /Promote Existing Content/);
   assert.match(src, /you have already published/i);
-  assert.match(src, /id="promoteExistingNav"/);
+  assert.match(src, /shortcut\.id = 'promoteExistingNav'/);
   assert.match(src, /id="promoteExistingType"/);
   assert.match(src, /value="article">Published Article/);
   assert.match(src, /value="directory">Published Directory Profile/);
