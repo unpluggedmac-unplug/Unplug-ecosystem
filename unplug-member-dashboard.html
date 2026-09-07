@@ -256,7 +256,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2 id="registerTitle">Create your account</h2>
     <p class="sub" id="registerSub">Completely free. This just creates your account — you'll only pay later, and only if you choose a paid service.</p>
     <div class="error-banner" id="registerError"></div>
-    <div class="field" style="display:none;"><label for="registerApiBaseInput">API Base URL</label><input id="registerApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
+    <div class="field" style="display:none;"><label for="registerApiBaseInput">API Base URL</label><input id="registerApiBaseInput" value=""></div>
     <div class="field"><label id="registerNameLabel">Full Name</label><input id="registerName" autocomplete="name"></div>
     <div class="field-row">
       <div class="field"><label for="registerEmail">Email Address</label><input id="registerEmail" type="email" autocomplete="email"></div>
@@ -290,7 +290,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Sign In</h2>
     <p class="sub">Sign in to manage your Directory profile, submissions, and entries.</p>
     <div class="error-banner" id="loginError"></div>
-    <div class="field" style="display:none;"><label for="apiBaseInput">API Base URL</label><input id="apiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
+    <div class="field" style="display:none;"><label for="apiBaseInput">API Base URL</label><input id="apiBaseInput" value=""></div>
     <div class="field-row">
       <div class="field"><label for="loginEmail">Email</label><input id="loginEmail" type="email"></div>
       <div class="field"><label for="loginPassword">Password</label><input id="loginPassword" type="password"></div>
@@ -307,7 +307,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <h2>Reset Your Password</h2>
     <p class="sub" id="forgotSub">Enter your email — we'll send a reset code you can use to set a new password.</p>
     <div class="error-banner" id="forgotError"></div>
-    <div class="field" style="display:none;"><label for="forgotApiBaseInput">API Base URL</label><input id="forgotApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
+    <div class="field" style="display:none;"><label for="forgotApiBaseInput">API Base URL</label><input id="forgotApiBaseInput" value=""></div>
     <div class="field"><label for="forgotEmail">Email</label><input id="forgotEmail" type="email"></div>
     <button class="btn btn-solid" id="requestResetBtn">Send Reset Code</button>
 
@@ -1277,7 +1277,16 @@ const LIVE_API_BASE = (window.UNPLUG_RUNTIME_API || "https://unplug-ecosystem.on
     localStorage.removeItem("unplug_api_base");
   }
 })();
-let API_BASE = localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
+const RUNTIME_API_BASE = (window.UNPLUG_RUNTIME_API || "").replace(/\/$/, "");
+let API_BASE = RUNTIME_API_BASE || localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
+
+// Hidden auth API controls are retained for local/debug use, but they must
+// inherit the environment runtime base. This prevents staging signup, login,
+// and password reset from ever falling back to the production API.
+for (const id of ['apiBaseInput', 'registerApiBaseInput', 'forgotApiBaseInput']) {
+  const el = document.getElementById(id);
+  if (el) el.value = API_BASE;
+}
 
 // The upload widget needs the API base and the signed-in session.
 UnplugUpload.init({ getApiBase: () => API_BASE, getToken: () => AUTH_TOKEN });
