@@ -6,6 +6,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const PROMOTE = path.join(ROOT, 'unplug-promote-existing.js');
 const BUILD = path.join(ROOT, 'build.js');
+const HIGHLIGHTS = path.join(__dirname, '..', 'src', 'routes', 'highlights.js');
 const MIGRATION = path.join(__dirname, '..', 'db', 'migrations', '188_highlight_published_targets_only.sql');
 
 function read(file) {
@@ -20,7 +21,7 @@ test('member build injects the central Promote Existing Content module only into
   assert.match(build, /report\.moduleMap\['unplug-promote-existing\.js'\]/);
 });
 
-test('Promote Existing Content is a first-class return journey for article or Directory content', () => {
+test('Promote Existing Content is a first-class unified return journey for article or Directory content', () => {
   const src = read(PROMOTE);
   assert.match(src, /Promote Existing Content/);
   assert.match(src, /you have already published/i);
@@ -28,33 +29,41 @@ test('Promote Existing Content is a first-class return journey for article or Di
   assert.match(src, /id="promoteExistingType"/);
   assert.match(src, /value="article">Published Article/);
   assert.match(src, /value="directory">Published Directory Profile/);
-  assert.match(src, /id="svcArtPick"/);
-  assert.match(src, /id="svcProfPick"/);
+  assert.match(src, /id="promoteExistingItem"/);
+  assert.match(src, /id="promoteExistingDuration"/);
+  assert.doesNotMatch(src, /id="svcArtPick"/);
+  assert.doesNotMatch(src, /id="svcProfPick"/);
 });
 
-test('only content already approved and live is eligible for the promotion picker', () => {
-  const src = read(PROMOTE);
-  assert.match(src, /api\('\/articles\/mine'\)/);
-  assert.match(src, /article\.status === 'approved'/);
-  assert.match(src, /article\.scheduled_for/);
-  assert.match(src, /String\(article\.scheduled_for\)\.slice\(0, 10\) <= today/);
-  assert.match(src, /will appear here once live/i);
-  assert.match(src, /api\('\/profiles\/me'\)/);
-  assert.match(src, /profile\.status === 'approved'/);
-  assert.match(src, /must be approved and live before it can be promoted/i);
+test('only server-confirmed approved and live content is eligible for the promotion picker', () => {
+  const ui = read(PROMOTE);
+  const api = read(HIGHLIGHTS);
+
+  // The browser consumes one authoritative eligibility response rather than
+  // reconstructing publish/schedule rules from /articles/mine + /profiles/me.
+  assert.match(ui, /api\('\/highlights\/eligible'\)/);
+  assert.doesNotMatch(ui, /api\('\/articles\/mine'\)/);
+  assert.doesNotMatch(ui, /api\('\/profiles\/me'\)/);
+  assert.match(ui, /futureScheduledArticles/);
+  assert.match(ui, /will appear here automatically once live/i);
+  assert.match(ui, /must be approved and publicly live before it can be promoted/i);
+
+  assert.match(api, /router\.get\('\/eligible', requireAuth/);
+  assert.match(api, /status = 'approved'/);
+  assert.match(api, /scheduled_for::date <= CURRENT_DATE/);
+  assert.match(api, /directoryProfile: profile\.rows\[0\] \|\| null/);
 });
 
-test('promotion checkout reuses selected existing ids and never resubmits original content', () => {
+test('promotion checkout reuses the selected existing id and never resubmits original content', () => {
   const src = read(PROMOTE);
-  assert.match(src, /targetType:\s*'article'/);
-  assert.match(src, /targetId:\s*Number\(document\.getElementById\('svcArtPick'\)\.value\)/);
-  assert.match(src, /targetType:\s*'directory'/);
-  assert.match(src, /targetId:\s*Number\(document\.getElementById\('svcProfPick'\)\.value\)/);
+  assert.match(src, /const targetType = typeSelect\.value/);
+  assert.match(src, /const targetId = Number\(itemSelect\.value\)/);
   assert.match(src, /async function purchasePromotion\(/);
   assert.match(src, /api\('\/highlights',\s*\{\s*method:\s*'POST'/);
+  assert.match(src, /targetType,\s*targetId,\s*durationDays/);
   assert.match(src, /api\('\/payments\/initiate',\s*\{\s*method:\s*'POST'/);
   assert.match(src, /linkedType:\s*'highlight'/);
-  assert.match(src, /linkedId:\s*created\.highlight\.id/);
+  assert.match(src, /linkedId:\s*createdHighlightId/);
   assert.ok(!/api\('\/articles',\s*\{\s*method:\s*'POST'/.test(src));
   assert.ok(!/api\('\/profiles',\s*\{\s*method:\s*'POST'/.test(src));
 });
@@ -74,8 +83,11 @@ test('promotion checkout has normal Unplug voucher, account credit and server-si
 test('promotion module waits for the restored authenticated session before protected API calls', () => {
   const src = read(PROMOTE);
   assert.match(src, /const sessionReady = \(\) => typeof AUTH_TOKEN !== 'undefined' && !!AUTH_TOKEN/);
-  assert.match(src, /if \(sessionReady\(\)\) refreshQuote/);
   assert.match(src, /if \(!sessionReady\(\)\) return false/);
+  assert.match(src, /if \(!sessionReady\(\)\) \{/);
+  assert.match(src, /const readyTimer = setInterval/);
+  assert.match(src, /if \(sessionReady\(\)\) \{/);
+  assert.match(src, /await loadData\(\)/);
 });
 
 test('database backstop refuses unpublished and future-scheduled paid highlight targets', () => {
