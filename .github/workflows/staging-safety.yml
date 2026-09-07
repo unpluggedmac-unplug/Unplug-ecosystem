@@ -33,6 +33,35 @@ jobs:
             package-lock.json
             unplug-backend/package-lock.json
 
+      # Network-level staging gate. This checks the service that is actually
+      # deployed on Render, not merely the source tree. The readiness endpoint
+      # performs SELECT 1 against PostgreSQL, so a 200 here proves both the
+      # Node process and its isolated staging database are reachable.
+      - name: Probe deployed staging backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://unplug-ecosystem-staging.onrender.com'
+
+          health="$(curl --fail --silent --show-error --retry 2 --retry-delay 2 "$BASE/health")"
+          echo "$health" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'
+
+          ready="$(curl --fail --silent --show-error --retry 2 --retry-delay 2 "$BASE/health/ready")"
+          echo "$ready" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ready"'
+          echo "$ready" | grep -Eq '"database"[[:space:]]*:[[:space:]]*"ok"'
+
+          # A hostile/unknown browser origin must never be reflected as an
+          # allowed CORS origin. Express may still return the resource to curl;
+          # what matters for browser isolation is the absence of ACAO.
+          headers="$(curl --silent --show-error --dump-header - --output /dev/null \
+            -H 'Origin: https://staging-probe.invalid' "$BASE/directory/categories")"
+          if echo "$headers" | grep -qi '^access-control-allow-origin:'; then
+            echo 'Unexpected Access-Control-Allow-Origin for unknown origin' >&2
+            exit 1
+          fi
+
+          echo 'Deployed staging backend probe passed.'
+
       - name: Install frontend dependencies
         run: npm ci
 
