@@ -63,5 +63,9 @@ test('backend highlight purchase requires authentication and enforces ownership'
   const src = read(HIGHLIGHTS_ROUTE);
   assert.match(src, /router\.post\('\/',\s*requireAuth/);
   assert.match(src, /You can only highlight your own content\./);
-  assert.match(src, /ownerCheck\.rows\[0\]\.owner_id\s*!==\s*req\.user\.id/);
+  // The hardened route now assigns ownerCheck.rows[0] to `target` because the
+  // same row also carries approval/live eligibility. Keep the guard semantic:
+  // an ownership comparison against req.user.id must still be present.
+  assert.match(src, /const\s+target\s*=\s*ownerCheck\.rows\[0\]/);
+  assert.match(src, /target\.owner_id\s*!==\s*req\.user\.id/);
 });
