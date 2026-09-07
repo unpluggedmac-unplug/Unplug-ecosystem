@@ -30,22 +30,23 @@ jobs:
               '<input id="apiBaseInput" value="https://unplug-ecosystem.onrender.com">': '<input id="apiBaseInput" value="">',
               '<input id="forgotApiBaseInput" value="https://unplug-ecosystem.onrender.com">': '<input id="forgotApiBaseInput" value="">',
           }
-          for old, new in replacements.items():
+          for old, replacement in replacements.items():
               if old not in text:
-                  raise SystemExit(f'Expected auth API control not found: {old}')
-              text = text.replace(old, new, 1)
+                  raise SystemExit('Expected auth API control not found')
+              text = text.replace(old, replacement, 1)
 
           old = 'let API_BASE = localStorage.getItem("unplug_api_base") || LIVE_API_BASE;'
-          new = '''const RUNTIME_API_BASE = (window.UNPLUG_RUNTIME_API || "").replace(/\\/$/, "");
-let API_BASE = RUNTIME_API_BASE || localStorage.getItem("unplug_api_base") || LIVE_API_BASE;
-
-// Hidden auth API controls are retained for local/debug use, but they must
-// inherit the environment runtime base. This prevents staging signup, login,
-// and password reset from ever falling back to the production API.
-for (const id of ['apiBaseInput', 'registerApiBaseInput', 'forgotApiBaseInput']) {
-  const el = document.getElementById(id);
-  if (el) el.value = API_BASE;
-}'''
+          new = (
+              'const RUNTIME_API_BASE = (window.UNPLUG_RUNTIME_API || "").replace(/\\/$/, "");\n'
+              'let API_BASE = RUNTIME_API_BASE || localStorage.getItem("unplug_api_base") || LIVE_API_BASE;\n\n'
+              '// Hidden auth API controls are retained for local/debug use, but they must\n'
+              '// inherit the environment runtime base. This prevents staging signup, login,\n'
+              '// and password reset from ever falling back to the production API.\n'
+              "for (const id of ['apiBaseInput', 'registerApiBaseInput', 'forgotApiBaseInput']) {\n"
+              '  const el = document.getElementById(id);\n'
+              '  if (el) el.value = API_BASE;\n'
+              '}'
+          )
           if old not in text:
               raise SystemExit('Expected API_BASE assignment not found')
           text = text.replace(old, new, 1)
