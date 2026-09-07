@@ -17,16 +17,16 @@ export async function onRequest({ env }) {
 
   // Staging must never let a legacy hidden API input or stale localStorage
   // value switch the browser back to production. Several older dashboard
-  // login handlers still read #apiBaseInput when the button is clicked.
-  // Force those compatibility fields to the isolated staging API before the
-  // user can interact with the page. Production behaviour is untouched.
+  // login handlers still read hidden API-base inputs when buttons are clicked.
+  // Force every auth compatibility field to the isolated staging API before
+  // the user can interact with the page. Production behaviour is untouched.
   if (staging) {
     lines.push(
       '(function(){',
       '  var api=window.UNPLUG_RUNTIME_API;',
       '  try { localStorage.setItem("unplug_api_base", api); } catch (_) {}',
       '  function apply(){',
-      '    ["apiBaseInput","forgotApiBaseInput"].forEach(function(id){',
+      '    ["apiBaseInput","registerApiBaseInput","forgotApiBaseInput"].forEach(function(id){',
       '      var el=document.getElementById(id);',
       '      if (el) el.value=api;',
       '    });',
