@@ -76,6 +76,10 @@ export async function onRequest({ env }) {
       '  // Daily Shout-Out Studio in the existing Control Centre section.',
       '  addStyle("/media/style/daily-shoutout-control-centre.css?v=20260906-1");',
       '  addScript("/media/scripts/daily-shoutout-control-centre.js?v=20260906-1");',
+      '',
+      '  // Staging-only member change-request editor. This closes the smoke-test',
+      '  // gap where a member could see a requested change but had no edit action.',
+      '  addScript("/media/scripts/staging-member-change-editor.js?v=20260908-1");',
       '})();'
     );
   }
