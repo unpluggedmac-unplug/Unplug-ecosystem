@@ -1,0 +1,86 @@
+name: One-time staging admin ribbon fix
+
+on:
+  push:
+    branches: [staging-control-centre]
+    paths:
+      - '.github/workflows/staging-admin-ribbon-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: staging-control-centre
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Add explicit staging marker to admin dashboard
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          page = Path('unplug-admin-dashboard.html')
+          test = Path('unplug-backend/test/adminStagingRibbon.test.js')
+          text = page.read_text()
+
+          needle = '  <script src="/runtime-config"></script>\n'
+          assert text.count(needle) == 1, 'runtime-config include changed unexpectedly'
+
+          ribbon = '''  <script src="/runtime-config"></script>\n  <script>\n  // The admin dashboard deliberately keeps its own auth/session helper instead\n  // of loading unplug-shared.js, so it must mount the staging ribbon itself.\n  // This prevents a Super Admin from mistaking the isolated staging Control\n  // Centre for the live production dashboard.\n  (function mountAdminEnvironmentRibbon() {\n    if (!/^(staging|preview)$/i.test(String(window.UNPLUG_ENV || ''))) return;\n    function mount() {\n      if (document.getElementById('unplugEnvironmentRibbon')) return;\n      const el = document.createElement('div');\n      el.id = 'unplugEnvironmentRibbon';\n      el.setAttribute('role', 'status');\n      el.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:2147483647;background:#111;color:#fff;padding:5px 12px;border-radius:0 0 8px 8px;font:700 11px/1.2 system-ui;letter-spacing:.08em;box-shadow:0 2px 8px rgba(0,0,0,.25)';\n      el.textContent = window.UNPLUG_RUNTIME_CONFIG_ERROR ? 'STAGING — API NOT CONFIGURED' : 'UNPLUG STAGING';\n      document.body.appendChild(el);\n    }\n    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);\n    else mount();\n  })();\n  </script>\n'''
+          text = text.replace(needle, ribbon)
+          page.write_text(text)
+
+          test.write_text(r'''const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.join(__dirname, '..', '..');
+const admin = fs.readFileSync(path.join(ROOT, 'unplug-admin-dashboard.html'), 'utf8');
+
+test('admin dashboard visibly marks staging and preview environments', () => {
+  assert.match(admin, /<script src="\/runtime-config"><\/script>/);
+  assert.match(admin, /\^\(staging\|preview\)\$/i);
+  assert.match(admin, /id = 'unplugEnvironmentRibbon'/);
+  assert.match(admin, /UNPLUG STAGING/);
+  assert.match(admin, /STAGING — API NOT CONFIGURED/);
+});
+''')
+          PY
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run staging frontend guard
+        run: npm run staging:check
+
+      - name: Run CSP and security header checks
+        run: npm run security:check
+
+      - name: Build staging frontend
+        run: npm run build
+
+      - name: Run admin ribbon regression test
+        working-directory: unplug-backend
+        run: node --test test/adminStagingRibbon.test.js test/passwordResetAndLogoutUiGuard.test.js
+
+      - name: Commit tested staging fix and remove one-time workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/staging-admin-ribbon-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add unplug-admin-dashboard.html unplug-backend/test/adminStagingRibbon.test.js .github/workflows/staging-admin-ribbon-fix.yml
+          git commit -m 'Show staging marker in Admin Control Centre'
+          git push origin HEAD:staging-control-centre
