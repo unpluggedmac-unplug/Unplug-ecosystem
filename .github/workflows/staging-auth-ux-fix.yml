@@ -12,6 +12,7 @@ permissions:
 jobs:
   patch-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check out staging branch
         uses: actions/checkout@v4
@@ -22,14 +23,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '22'
 
       - name: Apply logout and reset-code fixes
         run: python3 scripts/staging-auth-ux-fix.py
 
       - name: Install backend dependencies
         working-directory: unplug-backend
-        run: npm ci --omit=dev
+        run: npm ci
 
       - name: Run targeted auth UX guards
         working-directory: unplug-backend
@@ -37,7 +38,10 @@ jobs:
 
       - name: Run complete backend test suite
         working-directory: unplug-backend
-        run: npm test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee backend-test-output.log
 
       - name: Commit tested staging fix and remove one-time helpers
         shell: bash
