@@ -8,8 +8,14 @@
 -- filters to status = 'approved', so a draft is invisible with no other
 -- change). Adding it to the CHECK constraint is all the database needs.
 ALTER TABLE articles DROP CONSTRAINT IF EXISTS articles_status_check;
+-- Migrations re-run on deploy, so preserve the complete later submission
+-- lifecycle here as well; otherwise a valid changes_requested/resubmitted row
+-- makes this older migration fail before migration 160 can run.
 ALTER TABLE articles ADD CONSTRAINT articles_status_check
-  CHECK (status IN ('draft', 'awaiting_payment', 'pending', 'approved', 'rejected'));
+  CHECK (status IN (
+    'draft', 'awaiting_payment', 'pending', 'approved', 'rejected',
+    'changes_requested', 'resubmitted', 'credit_issued'
+  ));
 
 -- 2. When approving a member's submission, an admin may want it to go live on a
 -- particular day rather than the instant it's approved. scheduled_for records
