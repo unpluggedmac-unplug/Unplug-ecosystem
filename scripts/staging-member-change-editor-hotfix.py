@@ -3,35 +3,37 @@ from pathlib import Path
 p = Path('unplug-member-dashboard.html')
 s = p.read_text()
 
-# The member change-request API intentionally returns the public member shape:
-#   { type, submissionId, fields: [{ col, label }, ...] }
-# The first staging UI patch accidentally looked for the admin/database names
-# submission_type/submission_id and treated fields as strings. Correct the UI
-# to consume the route's real contract.
-old_match = """    const request = (changes.changeRequests || []).find((r) =>\n      r.submission_type === 'article' && Number(r.submission_id) === Number(articleId));"""
-new_match = """    const request = (changes.changeRequests || []).find((r) =>\n      r.type === 'article' && Number(r.submissionId) === Number(articleId));"""
-if old_match in s:
-    s = s.replace(old_match, new_match)
-elif new_match not in s:
-    raise SystemExit('change-request matcher not found')
+old = """    const request = (changes.changeRequests || []).find((r) =>
+      r.type === 'article' && Number(r.submissionId) === Number(articleId));
+    if (!request) throw new Error('No open change request was found for this article.');"""
+new = """    const requests = Array.isArray(changes && changes.changeRequests)
+      ? changes.changeRequests
+      : (Array.isArray(changes && changes.change_requests) ? changes.change_requests : []);
+    const articleRequests = requests.filter((r) =>
+      String((r && (r.type || r.submission_type)) || '') === 'article');
+    let request = articleRequests.find((r) =>
+      Number(r.submissionId != null ? r.submissionId : r.submission_id) === Number(articleId));
+    // Defensive fallback for older/newer response shapes: this button only
+    // appears on an article already marked changes_requested. If there is one
+    // and only one open article request for this member, it is unambiguous.
+    if (!request && articleRequests.length === 1) request = articleRequests[0];
+    if (!request) throw new Error('No open change request was found for this article.');"""
+if old in s:
+    s = s.replace(old, new, 1)
+elif new not in s:
+    raise SystemExit('current change-request matcher not found')
 
-old_fields = "    const fields = Array.isArray(request.fields) ? request.fields : [];"
-new_fields = """    const fields = Array.isArray(request.fields)\n      ? request.fields.map((field) => typeof field === 'string' ? field : (field && field.col)).filter(Boolean)\n      : [];"""
+# Keep field handling tolerant too: the API returns [{col,label}] today, while
+# an older response shape used plain strings.
+old_fields = """    const fields = Array.isArray(request.fields)
+      ? request.fields.map((field) => typeof field === 'string' ? field : (field && field.col)).filter(Boolean)
+      : [];"""
+new_fields = """    const fields = Array.isArray(request.fields)
+      ? request.fields.map((field) => typeof field === 'string' ? field : (field && (field.col || field.field))).filter(Boolean)
+      : [];"""
 if old_fields in s:
-    s = s.replace(old_fields, new_fields)
+    s = s.replace(old_fields, new_fields, 1)
 elif new_fields not in s:
-    raise SystemExit('change-request field normalizer not found')
-
-# A previous staging hotfix could render the same edit action twice. Mark the
-# action on the row and suppress any second copy defensively.
-old_cond = "if (s.type === 'article' && s.status === 'changes_requested') {"
-new_cond = "if (s.type === 'article' && s.status === 'changes_requested' && !row.querySelector('[data-ms-change-edit]')) {"
-if old_cond in s:
-    s = s.replace(old_cond, new_cond)
-
-old_type = "    editBtn.type = 'button';\n    editBtn.className = 'btn btn-line';"
-new_type = "    editBtn.type = 'button';\n    editBtn.setAttribute('data-ms-change-edit', '1');\n    editBtn.className = 'btn btn-line';"
-if old_type in s:
-    s = s.replace(old_type, new_type)
+    raise SystemExit('current field normalizer not found')
 
 p.write_text(s)
