@@ -1,0 +1,77 @@
+from pathlib import Path
+
+p = Path('unplug-member-dashboard.html')
+s = p.read_text()
+
+if 'async function msEditRequestedArticle(articleId)' not in s:
+    anchor = 'function subsRow(s){\n'
+    helper = '''async function msEditRequestedArticle(articleId) {
+  try {
+    const [mine, changes] = await Promise.all([
+      api('/articles/mine'),
+      api('/change-requests/mine'),
+    ]);
+    const article = (mine.articles || []).find((a) => Number(a.id) === Number(articleId));
+    if (!article) throw new Error('Could not load this article.');
+    const request = (changes.changeRequests || []).find((r) =>
+      r.submission_type === 'article' && Number(r.submission_id) === Number(articleId));
+    if (!request) throw new Error('No open change request was found for this article.');
+
+    const FIELD_MAP = {
+      title:              { prop: 'title',              body: 'title',              label: 'Headline' },
+      subtitle:           { prop: 'subtitle',           body: 'subtitle',           label: 'Standfirst' },
+      kicker_supplied_by: { prop: 'kicker_supplied_by', body: 'kickerSuppliedBy',  label: 'Supplied by' },
+      author_name:        { prop: 'author_name',        body: 'authorName',         label: 'Written by' },
+      meta_description:   { prop: 'meta_description',   body: 'metaDescription',    label: 'Search summary' },
+      body:               { prop: 'body',               body: 'body',               label: 'Body' },
+      conclusion:         { prop: 'conclusion',         body: 'conclusion',         label: 'Closing' },
+      cta_label:          { prop: 'cta_label',          body: 'ctaLabel',           label: 'Button label' },
+      cta_url:            { prop: 'cta_url',            body: 'ctaUrl',             label: 'Button link' },
+      banner_image_url:   { prop: 'banner_image_url',   body: 'bannerImageUrl',     label: 'Cover image URL' },
+    };
+
+    const payload = {};
+    const fields = Array.isArray(request.fields) ? request.fields : [];
+    for (const field of fields) {
+      const cfg = FIELD_MAP[field];
+      if (!cfg) continue;
+      const current = article[cfg.prop] == null ? '' : String(article[cfg.prop]);
+      const next = window.prompt(`Update ${cfg.label}:`, current);
+      if (next === null) return;
+      if (field === 'title' && !next.trim()) {
+        showToast('Headline cannot be blank.', true);
+        return;
+      }
+      payload[cfg.body] = next.trim();
+    }
+
+    if (!Object.keys(payload).length) {
+      showToast('There are no editable fields in this change request.', true);
+      return;
+    }
+    await api('/articles/' + articleId, { method: 'PATCH', body: JSON.stringify(payload) });
+    showToast('Requested article changes saved. Return to My Profile and click “I have made these changes”.');
+    loadMemberContent();
+  } catch (e) {
+    showToast(e.message || 'Could not save the requested changes.', true);
+  }
+}
+
+'''
+    if anchor not in s:
+        raise SystemExit('subsRow anchor not found')
+    s = s.replace(anchor, helper + anchor, 1)
+
+start = s.find('function subsRow(s){')
+if start < 0:
+    raise SystemExit('subsRow function not found')
+
+tail = "  row.appendChild(main);\n  row.appendChild(pill);\n  return row;\n}"
+pos = s.find(tail, start)
+if pos >= 0:
+    replacement = """  row.appendChild(main);\n\n  var side = document.createElement('div');\n  side.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;';\n  side.appendChild(pill);\n  if (s.type === 'article' && s.status === 'changes_requested') {\n    var editBtn = document.createElement('button');\n    editBtn.type = 'button';\n    editBtn.className = 'btn btn-line';\n    editBtn.style.cssText = 'width:auto; padding:6px 10px; font-size:11px;';\n    editBtn.textContent = 'Edit requested fields';\n    editBtn.addEventListener('click', function(){ msEditRequestedArticle(s.id); });\n    side.appendChild(editBtn);\n  }\n  row.appendChild(side);\n  return row;\n}"""
+    s = s[:pos] + replacement + s[pos + len(tail):]
+elif 'Edit requested fields' not in s[start:start + 5000]:
+    raise SystemExit('subsRow tail not found')
+
+p.write_text(s)
