@@ -1686,19 +1686,11 @@ function memberLogoutToSignIn() {
   AUTH_TOKEN = null;
   CURRENT_USER = null;
   localStorage.removeItem('unplug_auth_token');
-  const dash = document.getElementById('dashboard');
-  if (dash) dash.classList.add('section-hidden');
-  const sidebar = document.getElementById('msSidebar');
-  if (sidebar) sidebar.classList.remove('open');
-  const password = document.getElementById('loginPassword');
-  if (password) password.value = '';
-  const banner = document.getElementById('loginError');
-  if (banner) {
-    banner.textContent = '';
-    banner.classList.remove('show');
-  }
-  document.getElementById('topRight').textContent = '';
-  showCard('loginCard');
+
+  // A full navigation makes logout a clean boundary even if dashboard work is
+  // still running. The next load consumes the flag and paints Sign In first.
+  const target = location.pathname + '?signin=1';
+  location.replace(target);
 }
 function showWelcome(user){
   CURRENT_USER = user || CURRENT_USER;
@@ -1933,6 +1925,16 @@ function enterMemberDashboard(user){
   // choosing which account to use, which may not be the one already saved
   // in this browser.
   if (await consumeMagicLinkIfPresent()) return;
+
+  // Logout reloads through ?signin=1 so Sign In is rendered on a clean page.
+  // Consume and remove the flag immediately so refreshes/bookmarks stay tidy.
+  const startupParams = new URLSearchParams(location.search);
+  if (startupParams.get('signin') === '1') {
+    history.replaceState({}, '', location.pathname);
+    showCard('loginCard');
+    return;
+  }
+
   const savedToken = localStorage.getItem('unplug_auth_token');
   if (!savedToken) return;
   AUTH_TOKEN = savedToken;

@@ -23,7 +23,10 @@ test('password reset uses a short six-digit code with guessing protection', () =
 test('member logout clears the session and returns directly to Sign In', () => {
   assert.match(ui, /function memberLogoutToSignIn\(\)/);
   assert.match(ui, /AUTH_TOKEN = null;/);
-  assert.match(ui, /showCard\('loginCard'\);/);
+  assert.match(ui, /localStorage\.removeItem\('unplug_auth_token'\);[\s\S]{0,500}location\.replace\(target\)/);
+  assert.match(ui, /location\.pathname \+ '\?signin=1'/);
+  assert.match(ui, /startupParams\.get\('signin'\) === '1'/);
+  assert.match(ui, /history\.replaceState\(\{\}, '', location\.pathname\);[\s\S]{0,120}showCard\('loginCard'\)/);
   assert.doesNotMatch(ui, /removeItem\('unplug_auth_token'\);\s*location\.reload\(\)/);
   assert.match(ui, /logoutBtnTop[\s\S]{0,300}memberLogoutToSignIn/);
   assert.match(ui, /logoutBtn'\)\.addEventListener\('click', memberLogoutToSignIn\)/);
