@@ -24,6 +24,8 @@ jobs:
         with:
           node-version: '22'
 
+      # One-time tested repair: the Admin dashboard intentionally does not load
+      # unplug-shared.js, so it needs its own environment marker.
       - name: Add explicit staging marker to admin dashboard
         shell: bash
         run: |
