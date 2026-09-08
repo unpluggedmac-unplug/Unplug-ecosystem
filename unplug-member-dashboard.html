@@ -5083,8 +5083,17 @@ async function msEditRequestedArticle(articleId) {
     ]);
     const article = (mine.articles || []).find((a) => Number(a.id) === Number(articleId));
     if (!article) throw new Error('Could not load this article.');
-    const request = (changes.changeRequests || []).find((r) =>
-      r.type === 'article' && Number(r.submissionId) === Number(articleId));
+    const requests = Array.isArray(changes && changes.changeRequests)
+      ? changes.changeRequests
+      : (Array.isArray(changes && changes.change_requests) ? changes.change_requests : []);
+    const articleRequests = requests.filter((r) =>
+      String((r && (r.type || r.submission_type)) || '') === 'article');
+    let request = articleRequests.find((r) =>
+      Number(r.submissionId != null ? r.submissionId : r.submission_id) === Number(articleId));
+    // Defensive fallback for older/newer response shapes: this button only
+    // appears on an article already marked changes_requested. If there is one
+    // and only one open article request for this member, it is unambiguous.
+    if (!request && articleRequests.length === 1) request = articleRequests[0];
     if (!request) throw new Error('No open change request was found for this article.');
 
     const FIELD_MAP = {
@@ -5102,7 +5111,7 @@ async function msEditRequestedArticle(articleId) {
 
     const payload = {};
     const fields = Array.isArray(request.fields)
-      ? request.fields.map((field) => typeof field === 'string' ? field : (field && field.col)).filter(Boolean)
+      ? request.fields.map((field) => typeof field === 'string' ? field : (field && (field.col || field.field))).filter(Boolean)
       : [];
     for (const field of fields) {
       const cfg = FIELD_MAP[field];
