@@ -24,88 +24,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Make logout return through a fresh Sign In route
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          page = Path('unplug-member-dashboard.html')
-          test = Path('unplug-backend/test/passwordResetAndLogoutUiGuard.test.js')
-          text = page.read_text()
-
-          old_logout = """function memberLogoutToSignIn() {
-  AUTH_TOKEN = null;
-  CURRENT_USER = null;
-  localStorage.removeItem('unplug_auth_token');
-  const dash = document.getElementById('dashboard');
-  if (dash) dash.classList.add('section-hidden');
-  const sidebar = document.getElementById('msSidebar');
-  if (sidebar) sidebar.classList.remove('open');
-  const password = document.getElementById('loginPassword');
-  if (password) password.value = '';
-  const banner = document.getElementById('loginError');
-  if (banner) {
-    banner.textContent = '';
-    banner.classList.remove('show');
-  }
-  document.getElementById('topRight').textContent = '';
-  showCard('loginCard');
-}
-"""
-          new_logout = """function memberLogoutToSignIn() {
-  AUTH_TOKEN = null;
-  CURRENT_USER = null;
-  localStorage.removeItem('unplug_auth_token');
-
-  // Use a real navigation rather than only swapping cards in the current DOM.
-  // That gives logout a clean boundary even if dashboard work is still running
-  // in the background. The query flag is consumed immediately on the next load
-  // and removed from the address bar.
-  const target = location.pathname + '?signin=1';
-  location.replace(target);
-}
-"""
-          assert text.count(old_logout) == 1, 'logout function changed unexpectedly'
-          text = text.replace(old_logout, new_logout)
-
-          old_restore = """  if (await consumeMagicLinkIfPresent()) return;
-  const savedToken = localStorage.getItem('unplug_auth_token');
-  if (!savedToken) return;
-"""
-          new_restore = """  if (await consumeMagicLinkIfPresent()) return;
-
-  // Logout deliberately reloads through ?signin=1 so Sign In is the first
-  // state painted on a clean page rather than relying on an in-place DOM swap.
-  // Remove the flag once consumed so refreshes/bookmarks stay tidy.
-  const startupParams = new URLSearchParams(location.search);
-  if (startupParams.get('signin') === '1') {
-    history.replaceState({}, '', location.pathname);
-    showCard('loginCard');
-    return;
-  }
-
-  const savedToken = localStorage.getItem('unplug_auth_token');
-  if (!savedToken) return;
-"""
-          assert text.count(old_restore) == 1, 'restore-session block changed unexpectedly'
-          text = text.replace(old_restore, new_restore)
-          page.write_text(text)
-
-          t = test.read_text()
-          old_test = """  assert.match(ui, /showCard\\('loginCard'\\);/);
-  assert.doesNotMatch(ui, /removeItem\\('unplug_auth_token'\\);\\s*location\\.reload\\(\\)/);
-"""
-          new_test = """  assert.match(ui, /localStorage\\.removeItem\\('unplug_auth_token'\\);[\\s\\S]{0,500}location\\.replace\\(target\\)/);
-  assert.match(ui, /location\\.pathname \\+ '\\?signin=1'/);
-  assert.match(ui, /startupParams\\.get\\('signin'\\) === '1'/);
-  assert.match(ui, /history\\.replaceState\\(\\{\\}, '', location\\.pathname\\);[\\s\\S]{0,120}showCard\\('loginCard'\\)/);
-  assert.doesNotMatch(ui, /removeItem\\('unplug_auth_token'\\);\\s*location\\.reload\\(\\)/);
-"""
-          assert t.count(old_test) == 1, 'logout regression assertions changed unexpectedly'
-          t = t.replace(old_test, new_test)
-          test.write_text(t)
-          PY
+      - name: Apply deterministic member logout patch
+        run: node .github/scripts/patch-member-logout.js
 
       - name: Install frontend dependencies
         run: npm ci
@@ -120,12 +40,11 @@ jobs:
         working-directory: unplug-backend
         run: node --test test/passwordResetAndLogoutUiGuard.test.js
 
-      - name: Commit tested fix and remove one-time workflow
-        shell: bash
+      - name: Commit tested fix
         run: |
-          rm -f .github/workflows/staging-member-logout-fix.yml
+          rm -f .github/workflows/staging-member-logout-fix.yml .github/scripts/patch-member-logout.js
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add unplug-member-dashboard.html unplug-backend/test/passwordResetAndLogoutUiGuard.test.js .github/workflows/staging-member-logout-fix.yml
+          git add unplug-member-dashboard.html unplug-backend/test/passwordResetAndLogoutUiGuard.test.js .github/workflows/staging-member-logout-fix.yml .github/scripts/patch-member-logout.js
           git commit -m 'Make member logout return deterministically to Sign In'
           git push origin HEAD:staging-control-centre
