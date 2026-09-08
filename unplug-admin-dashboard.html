@@ -13565,7 +13565,7 @@ function mlCardHtml(a) {
   const more = refs.length > 3 ? `<br>+ ${refs.length - 3} more` : '';
   const action = a.trashed_at
     ? `<button class="btn btn-line" style="width:auto;" onclick="mlRestore(${a.id})">Restore</button>`
-    : `<button class="btn btn-line" style="width:auto;" onclick="mlCopyUrl(${JSON.stringify(a.url)})">Copy URL</button>
+    : `<button class="btn btn-line" style="width:auto;" onclick="mlCopyUrlById(${a.id})">Copy URL</button>
        <button class="btn btn-line" style="width:auto;" onclick="mlOpenMeta(${a.id})">Details</button>
        ${used ? '' : `<button class="btn btn-line" style="width:auto; color:var(--red);" onclick="mlTrash(${a.id})">Trash</button>`}`;
   return `<div style="border:1px solid var(--paper-line); background:#fff; border-radius:6px; overflow:hidden;">
@@ -13582,6 +13582,12 @@ function mlCardHtml(a) {
       <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:8px;">${action}</div>
     </div>
   </div>`;
+}
+
+function mlCopyUrlById(id) {
+  const a = _mlItems.find((x) => Number(x.id) === Number(id));
+  if (!a || !a.url) { showToast('Image URL is unavailable.', true); return; }
+  return mlCopyUrl(a.url);
 }
 
 async function mlCopyUrl(url) {
