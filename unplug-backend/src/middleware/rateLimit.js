@@ -42,6 +42,18 @@ const emailActionLimiter = rateLimit({
   message: { error: 'Too many requests. Please wait a few minutes before trying again.' },
 });
 
+// Six-digit password reset codes need their own guessing limit. This is
+// separate from the email-sending limiter so requesting a code does not
+// consume most of the attempts available to type it correctly.
+const resetCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipWhenDisabled,
+  message: { error: 'Too many reset-code attempts. Please wait 15 minutes and request a new code.' },
+});
+
 // Public, unauthenticated submissions (shout-out nominations, job/passport
 // posts, birthday submissions, passport comments, newsletter, contact form).
 // Caps how many an IP can send in a window so the moderation queues can't be
@@ -55,4 +67,4 @@ const publicSubmitLimiter = rateLimit({
   message: { error: 'You\'re doing that too often. Please wait a few minutes and try again.' },
 });
 
-module.exports = { loginLimiter, registerLimiter, emailActionLimiter, publicSubmitLimiter };
+module.exports = { loginLimiter, registerLimiter, emailActionLimiter, resetCodeLimiter, publicSubmitLimiter };

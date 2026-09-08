@@ -7,7 +7,7 @@ const pool = require('../db');
 const { notifyAdminAsync, NOTIFY } = require('../utils/adminNotify');
 const { requireAuth } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
-const { loginLimiter, registerLimiter, emailActionLimiter } = require('../middleware/rateLimit');
+const { loginLimiter, registerLimiter, emailActionLimiter, resetCodeLimiter } = require('../middleware/rateLimit');
 const loginAttempts = require('../utils/loginAttempts');
 const twoFactor = require('../utils/twoFactor');
 
@@ -37,7 +37,7 @@ function isValidEmail(email) {
 }
 
 function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+  return String(crypto.randomInt(100000, 1000000)); // cryptographically strong 6 digits
 }
 
 // POST /auth/register
@@ -422,10 +422,10 @@ router.post('/magic-link/consume', async (req, res, next) => {
 });
 
 // POST /auth/forgot-password
-// Public — sends a reset link/token to the account's primary email OR
-// alternative email, whichever the requester specifies via `useAltEmail`.
-// Always returns the same generic message, whether or not the account
-// exists, so this can't be used to enumerate registered emails.
+// Public — sends a short-lived 6-digit reset code to the account's primary
+// email OR alternative email, whichever the requester specifies via
+// `useAltEmail`. The response stays generic so registered addresses cannot be
+// discovered through this endpoint.
 router.post('/forgot-password', emailActionLimiter, async (req, res, next) => {
   try {
     const { email, useAltEmail } = req.body;
@@ -438,53 +438,83 @@ router.post('/forgot-password', emailActionLimiter, async (req, res, next) => {
       const user = userResult.rows[0];
       const destination = useAltEmail && user.alt_email ? user.alt_email : user.email;
 
-      const token = crypto.randomBytes(32).toString('hex');
+      const code = generateCode();
       await pool.query(
         `INSERT INTO password_reset_tokens (user_id, token, expires_at)
-         VALUES ($1, $2, now() + interval '1 hour')`,
-        [user.id, token]
+         VALUES ($1, $2, now() + interval '15 minutes')`,
+        [user.id, code]
       );
-      // Best-effort, for the same reason as the magic link above: if a send
-      // failure bubbled up, real accounts would 500 while unknown ones got a
-      // cheerful success, revealing which addresses are registered.
       try {
         await sendEmail({
           to: destination,
           subject: 'Reset your Unplug password',
-          text: `Someone requested a password reset for your Unplug account.\n\nYour reset code is: ${token}\n\nThis expires in 1 hour. If you didn't request this, you can ignore this email.`,
+          text: `Someone requested a password reset for your Unplug account.\n\nYour 6-digit reset code is: ${code}\n\nThis code expires in 15 minutes. If you didn't request this, you can ignore this email.`,
         });
       } catch (mailErr) {
         console.error('[auth] password reset email failed to send:', mailErr.message);
       }
     }
 
-    res.json({ message: 'If that account exists, a reset link has been sent.' });
+    res.json({ message: 'If that account exists, a 6-digit reset code has been sent.' });
   } catch (err) {
     next(err);
   }
 });
 
 // POST /auth/reset-password
-// Public — completes a reset using the token emailed above.
-router.post('/reset-password', async (req, res, next) => {
+// Public — completes a reset using the 6-digit code emailed above. The code
+// is matched together with the account email, so the one-million-value code
+// space is never treated as a globally unique credential. A rate limiter caps
+// guessing attempts. Existing 64-character reset tokens remain valid for
+// their original lifetime so an in-flight reset is not stranded by deploy.
+router.post('/reset-password', resetCodeLimiter, async (req, res, next) => {
   try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword || newPassword.length < 8) {
-      return res.status(400).json({ error: 'token and a newPassword of at least 8 characters are required.' });
+    const { email, code, token, newPassword } = req.body;
+    const submittedCode = String(code || '').trim();
+    const legacyToken = String(token || '').trim();
+    const isSixDigitCode = /^\d{6}$/.test(submittedCode);
+    const isLegacyToken = /^[a-f0-9]{64}$/i.test(legacyToken);
+
+    if (!newPassword || newPassword.length < 8 || (!isSixDigitCode && !isLegacyToken)) {
+      return res.status(400).json({ error: 'A valid 6-digit reset code and a new password of at least 8 characters are required.' });
     }
 
-    const tokenResult = await pool.query(
-      `SELECT * FROM password_reset_tokens WHERE token = $1 AND used_at IS NULL AND expires_at > now()`,
-      [token]
-    );
+    let tokenResult;
+    if (isSixDigitCode) {
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ error: 'Your email and 6-digit reset code are required.' });
+      }
+      tokenResult = await pool.query(
+        `SELECT prt.*
+           FROM password_reset_tokens prt
+           JOIN users u ON u.id = prt.user_id
+          WHERE prt.token = $1
+            AND lower(u.email) = lower($2)
+            AND prt.used_at IS NULL
+            AND prt.expires_at > now()
+          ORDER BY prt.expires_at DESC
+          LIMIT 1`,
+        [submittedCode, email.trim()]
+      );
+    } else {
+      tokenResult = await pool.query(
+        `SELECT * FROM password_reset_tokens
+          WHERE token = $1 AND used_at IS NULL AND expires_at > now()`,
+        [legacyToken]
+      );
+    }
+
     if (tokenResult.rows.length === 0) {
-      return res.status(400).json({ error: 'That reset link is invalid or has expired.' });
+      return res.status(400).json({ error: 'That reset code is invalid or has expired.' });
     }
     const resetRow = tokenResult.rows[0];
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, resetRow.user_id]);
-    await pool.query('UPDATE password_reset_tokens SET used_at = now() WHERE id = $1', [resetRow.id]);
+    await pool.query(
+      'UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL',
+      [resetRow.user_id]
+    );
 
     res.json({ message: 'Password updated — you can now log in with your new password.' });
   } catch (err) {
