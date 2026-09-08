@@ -110,3 +110,5 @@ jobs:
             git commit -m 'Allow members to edit requested article changes'
             git push origin HEAD:staging-control-centre
           fi
+
+# retrigger 2026-09-08
