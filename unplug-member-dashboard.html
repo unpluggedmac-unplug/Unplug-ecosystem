@@ -5084,7 +5084,7 @@ async function msEditRequestedArticle(articleId) {
     const article = (mine.articles || []).find((a) => Number(a.id) === Number(articleId));
     if (!article) throw new Error('Could not load this article.');
     const request = (changes.changeRequests || []).find((r) =>
-      r.submission_type === 'article' && Number(r.submission_id) === Number(articleId));
+      r.type === 'article' && Number(r.submissionId) === Number(articleId));
     if (!request) throw new Error('No open change request was found for this article.');
 
     const FIELD_MAP = {
@@ -5101,7 +5101,9 @@ async function msEditRequestedArticle(articleId) {
     };
 
     const payload = {};
-    const fields = Array.isArray(request.fields) ? request.fields : [];
+    const fields = Array.isArray(request.fields)
+      ? request.fields.map((field) => typeof field === 'string' ? field : (field && field.col)).filter(Boolean)
+      : [];
     for (const field of fields) {
       const cfg = FIELD_MAP[field];
       if (!cfg) continue;
@@ -5159,9 +5161,10 @@ function subsRow(s){
   var side = document.createElement('div');
   side.style.cssText = 'display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;';
   side.appendChild(pill);
-  if (s.type === 'article' && s.status === 'changes_requested') {
+  if (s.type === 'article' && s.status === 'changes_requested' && !row.querySelector('[data-ms-change-edit]')) {
     var editBtn = document.createElement('button');
     editBtn.type = 'button';
+    editBtn.setAttribute('data-ms-change-edit', '1');
     editBtn.className = 'btn btn-line';
     editBtn.style.cssText = 'width:auto; padding:6px 10px; font-size:11px;';
     editBtn.textContent = 'Edit requested fields';
