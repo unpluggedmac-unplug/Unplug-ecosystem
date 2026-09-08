@@ -7310,8 +7310,13 @@ document.getElementById('artDiscardBtn').addEventListener('click', () => {
   document.getElementById('artLoadBtn').click();
 });
 
-async function artLoadPickList() {
+async function artLoadPickList(keepId) {
   const sel = document.getElementById('artPick');
+  // Rebuilding the options used to jump the picker back to ‘new article’
+  // immediately after a successful save, even though the editor was still
+  // editing the saved article. Preserve that selection so Save → Load is
+  // deterministic and the screen tells the truth about what is open.
+  const selected = keepId != null ? String(keepId) : sel.value;
   try {
     // Admin endpoint: every article at every status, so published, pending,
     // draft and rejected pieces can all be opened for editing — not only the
@@ -7322,6 +7327,7 @@ async function artLoadPickList() {
           const tag = a.status && a.status !== 'approved' ? ` [${a.status}]` : '';
           return `<option value="${a.id}">${escapeHtmlAdmin(a.title)}${tag}</option>`;
         }).join('');
+    if (selected && [...sel.options].some((o) => o.value === selected)) sel.value = selected;
   } catch (err) { /* leave the "new article" option in place */ }
 }
 
@@ -7466,7 +7472,7 @@ async function artSave(asDraft) {
       ? `Live — <a href="unplug-magazine.html?p=article&id=${a.id}" target="_blank" rel="noopener">view it on the site</a>.`
       : `Saved as ${a.status} — not visible on the public site yet.`;
     showToast(res.message || 'Saved.');
-    artLoadPickList();
+    await artLoadPickList(ART_EDITING_ID);
     loadApprovalQueue();
   } catch (err) {
     note.textContent = '';
