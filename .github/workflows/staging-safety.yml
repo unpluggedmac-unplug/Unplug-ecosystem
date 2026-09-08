@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
+    # Final source gate also covers the member logout, six-digit reset and
+    # visible Admin Control Centre staging marker regressions.
     steps:
       - name: Check out staging branch
         uses: actions/checkout@v4
