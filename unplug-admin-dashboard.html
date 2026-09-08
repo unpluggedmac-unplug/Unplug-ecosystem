@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
   <script src="/runtime-config"></script>
+  <script>
+  // The admin dashboard keeps its own auth/session helper instead of loading
+  // unplug-shared.js, so mount the staging marker here as a safety guard.
+  (function mountAdminEnvironmentRibbon() {
+    if (!/^(staging|preview)$/i.test(String(window.UNPLUG_ENV || ''))) return;
+    function mount() {
+      if (document.getElementById('unplugEnvironmentRibbon')) return;
+      const el = document.createElement('div');
+      el.id = 'unplugEnvironmentRibbon';
+      el.setAttribute('role', 'status');
+      el.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:2147483647;background:#111;color:#fff;padding:5px 12px;border-radius:0 0 8px 8px;font:700 11px/1.2 system-ui;letter-spacing:.08em;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+      el.textContent = window.UNPLUG_RUNTIME_CONFIG_ERROR ? 'STAGING — API NOT CONFIGURED' : 'UNPLUG STAGING';
+      document.body.appendChild(el);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+    else mount();
+  })();
+  </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Unplug Admin Dashboard</title>
