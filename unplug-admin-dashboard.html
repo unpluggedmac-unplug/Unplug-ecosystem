@@ -8117,6 +8117,14 @@ function openManageEditor(resource, item) {
   const body = document.getElementById('manageEditBody');
   document.getElementById('manageEditTitle').textContent = `Edit #${item.id}`;
   panel.style.display = 'block';
+  panel.style.border = '2px solid var(--red)';
+  // The editor lives after the potentially very wide/long content table.
+  // Bring it into view immediately so clicking Edit never appears to do nothing.
+  setTimeout(() => {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    panel.setAttribute('tabindex', '-1');
+    panel.focus({ preventScroll: true });
+  }, 0);
 
   body.innerHTML = '';
   const inputs = {};
