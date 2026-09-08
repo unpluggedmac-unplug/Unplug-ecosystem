@@ -1,5 +1,6 @@
 name: One-time staging CMS base-state fix
 
+# One-time staging repair; this comment intentionally triggers the path-filtered workflow.
 on:
   push:
     branches:
