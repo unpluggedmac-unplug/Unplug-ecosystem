@@ -6,6 +6,7 @@ on:
       - staging-control-centre
     paths:
       - .github/workflows/staging-member-change-editor-hotfix.yml
+      - scripts/staging-member-change-editor-hotfix.py
 
 permissions:
   contents: write
@@ -31,6 +32,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No change needed."
           else
-            git commit -m "Allow members to edit requested article changes"
+            git commit -m "Fix member article change-request editor"
             git push origin HEAD:staging-control-centre
           fi
