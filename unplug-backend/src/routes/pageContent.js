@@ -105,7 +105,16 @@ async function livePageState(pageKey, client = pool) {
 }
 
 function sameBaseState(a, b) {
-  return JSON.stringify(a || {}) === JSON.stringify(b || {});
+  // page_cms_drafts.base_state is PostgreSQL JSONB, which does not preserve
+  // object key order. Stringifying the JSONB object can therefore report a
+  // false conflict even when every concurrency-guard value still matches.
+  const left = a || {};
+  const right = b || {};
+  const stamp = (value) => value ? new Date(value).toISOString() : null;
+  return stamp(left.contentUpdatedAt) === stamp(right.contentUpdatedAt)
+    && stamp(left.blocksUpdatedAt) === stamp(right.blocksUpdatedAt)
+    && Number(left.contentCount || 0) === Number(right.contentCount || 0)
+    && Number(left.blockCount || 0) === Number(right.blockCount || 0);
 }
 
 // GET /page-cms — public. One call returns every override and every visible
