@@ -97,7 +97,8 @@ ALTER TABLE sales_consultants ALTER COLUMN commission_pct SET DEFAULT 50.00;
 -- type='business') so campaigns can target one group or the other.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bulk_email_campaigns (
-  id            INTEGER NOT NULL REFERENCES users(id),
+  id            SERIAL PRIMARY KEY,
+  sent_by       INTEGER NOT NULL REFERENCES users(id),
   segment       VARCHAR(20) NOT NULL CHECK (segment IN ('individuals', 'businesses', 'all')),
   subject       VARCHAR(255) NOT NULL,
   body          TEXT NOT NULL,
