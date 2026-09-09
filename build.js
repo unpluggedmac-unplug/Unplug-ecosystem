@@ -65,6 +65,14 @@ const MODULES = [
   'chatbot.js', 'image-upload.js', 'unplug-promote-existing.js',
 ];
 
+// image-upload.js deliberately stays readable in the built asset. The current
+// esbuild minification step can corrupt the cropper callback on deployed Pages
+// (observed as `TypeError: Q is not a function` before any /uploads request is
+// sent). Hashing still gives it the same cache-busting behaviour; we simply
+// skip minification for this one shared module until the minifier interaction
+// is isolated and covered by a browser regression test.
+const NO_MINIFY_MODULES = new Set(['image-upload.js']);
+
 // Copied through untouched.
 // unplug-tokens.css is listed here rather than being minified into a hashed
 // asset because every page LINKS it by name. Hashing it would mean rewriting
@@ -194,10 +202,10 @@ async function main() {
     const p = path.join(ROOT, m);
     if (!fs.existsSync(p)) continue;
     const src = fs.readFileSync(p, 'utf8');
-    const min = await minifyJs(src, m);
-    const url = writeAsset(m.replace(/\.js$/, ''), 'js', min);
+    const built = NO_MINIFY_MODULES.has(m) ? src : await minifyJs(src, m);
+    const url = writeAsset(m.replace(/\.js$/, ''), 'js', built);
     report.moduleMap[m] = url;
-    report.modules.push({ m, before: Buffer.byteLength(src), after: Buffer.byteLength(min) });
+    report.modules.push({ m, before: Buffer.byteLength(src), after: Buffer.byteLength(built) });
   }
 
   for (const page of PAGES) await buildPage(page, report);
