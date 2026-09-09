@@ -138,6 +138,23 @@ async function buildPage(file, report) {
   const srcPath = path.join(ROOT, file);
   if (!fs.existsSync(srcPath)) return;
   let html = fs.readFileSync(srcPath, 'utf8');
+
+  // Phase 12 staging regression guard: Page Banner's special-case branch in
+  // updateSubmitOrderDetails() returned before refreshSubmitQuote(), leaving
+  // the checkout summary on the previously selected service (often Article
+  // Submission R95) even while the banner form correctly showed R300/R550/etc.
+  // Keep this build-time patch narrow and fail loudly if the source anchor
+  // changes, so it cannot silently mask a later refactor. The source HTML
+  // should receive the same one-line fix before the final production merge.
+  if (file === 'unplug-member-dashboard.html') {
+    const staleBannerQuote = "    priceEl.textContent = price != null ? 'R' + Number(price).toFixed(0) : '—';\n    return;";
+    const syncedBannerQuote = "    priceEl.textContent = price != null ? 'R' + Number(price).toFixed(0) : '—';\n    refreshSubmitQuote();\n    return;";
+    if (!html.includes(staleBannerQuote)) {
+      throw new Error('Page Banner quote-sync build anchor is missing from unplug-member-dashboard.html');
+    }
+    html = html.replace(staleBannerQuote, syncedBannerQuote);
+  }
+
   const before = Buffer.byteLength(html);
   const base = file.replace(/\.html$/, '');
 
