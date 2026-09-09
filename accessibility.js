@@ -247,3 +247,59 @@
 
   applyAll();
 })();
+
+/*
+ * Member-dashboard checkout success guard.
+ *
+ * After a cart order succeeds, the member dashboard deliberately clears CART.
+ * Its original finally-block then sees the Pay button still saying
+ * "Processing…" and calls refreshCartQuote() once more. That second quote has
+ * an empty items array, so the backend correctly rejects it and the member is
+ * shown a false red error even though the order was already created.
+ *
+ * accessibility.js is loaded after the member dashboard's inline script, so a
+ * small guarded wrapper here can stop that post-success empty-cart re-quote
+ * without affecting ordinary quoting, failed checkouts or any other page.
+ */
+(function () {
+  'use strict';
+
+  function installCheckoutSuccessGuard() {
+    if (window.__unplugCheckoutSuccessGuardInstalled) return;
+    if (!document.getElementById('cartPayBtn')) return;
+    if (typeof refreshCartQuote !== 'function' || typeof CART === 'undefined') return;
+
+    window.__unplugCheckoutSuccessGuardInstalled = true;
+    var originalRefreshCartQuote = refreshCartQuote;
+
+    refreshCartQuote = async function () {
+      var resultBox = document.getElementById('cartResultBox');
+      var orderSucceeded = resultBox &&
+        !resultBox.classList.contains('section-hidden') &&
+        /Order\s+(created|complete)/i.test(resultBox.textContent || '');
+
+      if (Array.isArray(CART) && CART.length === 0 && orderSucceeded) {
+        var errorBox = document.getElementById('cartCheckoutError');
+        if (errorBox) {
+          errorBox.textContent = '';
+          errorBox.style.display = 'none';
+        }
+
+        var btn = document.getElementById('cartPayBtn');
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'ORDER CREATED';
+        }
+        return;
+      }
+
+      return originalRefreshCartQuote.apply(this, arguments);
+    };
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installCheckoutSuccessGuard, { once: true });
+  } else {
+    installCheckoutSuccessGuard();
+  }
+})();
