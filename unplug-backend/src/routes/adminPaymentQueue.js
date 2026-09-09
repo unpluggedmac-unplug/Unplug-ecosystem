@@ -21,7 +21,7 @@ const { requireRole } = require('../middleware/auth');
 const { generateDocument } = require('../utils/pdfDocs');
 const { sendEmail } = require('../utils/email');
 const uploadsRouter = require('./uploads');
-const { fetchFromSupabasePrivate, uploadBufferToSupabase, supabaseConfigured } = uploadsRouter;
+const { fetchPrivateObject, uploadPublicBuffer, r2Configured } = uploadsRouter;
 
 const router = express.Router();
 
@@ -286,7 +286,7 @@ router.get('/:source/:id/proof', requireRole('admin'), async (req, res, next) =>
     const table = TABLE_BY_SOURCE[source];
     const r = await pool.query(`SELECT pop_url FROM ${table} WHERE id = $1`, [Number(id)]);
     if (r.rowCount === 0 || !r.rows[0].pop_url) return res.status(404).json({ error: 'No proof of payment on file for this item.' });
-    const upstream = await fetchFromSupabasePrivate(r.rows[0].pop_url);
+    const upstream = await fetchPrivateObject(r.rows[0].pop_url);
     if (!upstream.ok || !upstream.body) return res.status(502).json({ error: 'Could not fetch that file right now.' });
     const contentType = upstream.headers.get('content-type');
     if (contentType) res.setHeader('Content-Type', contentType);
@@ -300,7 +300,7 @@ router.get('/:source/:id/proof', requireRole('admin'), async (req, res, next) =>
 async function generateAndStore(req, res, kind) {
   const { source, id } = req.params;
   if (!assertValidSource(source, res)) return;
-  if (!supabaseConfigured) {
+  if (!r2Configured) {
     return res.status(400).json({ error: 'File storage is not configured on this server, so the generated document has nowhere to be saved.' });
   }
   const record = await loadRecord(source, Number(id));
@@ -321,7 +321,7 @@ async function generateAndStore(req, res, kind) {
     date: new Date(record.createdAt).toLocaleDateString('en-ZA'),
   });
   const filename = `${kind}-${record.reference}.pdf`;
-  const url = await uploadBufferToSupabase(buffer, filename, 'application/pdf');
+  const url = await uploadPublicBuffer(buffer, filename, 'application/pdf');
 
   const table = TABLE_BY_SOURCE[source];
   const column = kind === 'receipt' ? 'receipt_url' : 'invoice_url';

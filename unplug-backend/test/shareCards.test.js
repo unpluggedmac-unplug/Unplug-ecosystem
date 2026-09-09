@@ -91,6 +91,7 @@ before(async () => {
   process.env.DATABASE_URL = `postgres://postgres:postgres@localhost:${port}/unplug_test`;
   process.env.JWT_SECRET = 'test-secret-for-share-cards';
   process.env.UNPLUG_DISABLE_RATE_LIMITS = '1';
+  process.env.R2_PUBLIC_URL = 'https://pub-fake.r2.dev';
 
   const { Pool } = require('pg');
   pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -315,7 +316,7 @@ test('re-running every migration is idempotent', async () => {
 // file is free image hosting for whoever finds the endpoint, and there is no
 // account to suspend when it is abused. The card itself stays open.
 
-const STORED = 'https://x.supabase.co/storage/v1/object/public/uploads/a.png';
+const STORED = 'https://pub-fake.r2.dev/a.png';
 
 test('A PHOTO NEEDS AN ACCOUNT; the card itself does not', async () => {
   const anonymous = await req('POST', '/share-cards', {

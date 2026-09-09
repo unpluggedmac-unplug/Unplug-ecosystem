@@ -2873,3 +2873,71 @@ slide-right/zoom`) already established by Popups before this feature existed —
 for an admin to learn, across every surface on the site that now animates on purpose rather than by
 accident of hardcoded CSS.
 
+## 2026-09-09 — Remove Supabase Storage entirely
+
+The image previews that broke the Approval Queue (Gallery images showing no preview) traced back to two
+separate problems: R2 — built as the preferred storage backend earlier this engagement — was never actually
+configured on the live Render service (every image URL in production, including the newest, still pointed
+at Supabase), and the specific Supabase project actually serving those files had separately hit its own
+`exceed_cached_egress_quota` and is refusing every Storage request, public or authenticated. R2 is now
+correctly configured on Render (confirmed with a real test upload landing on a `https://pub-...` URL); the
+Supabase quota block is a billing decision only the account owner can make, and remains unresolved. Once R2
+was confirmed live, Supabase Storage code was removed from the backend entirely, at the user's explicit
+request — R2 is now the only object storage mechanism, with no fallback and no ambiguity about which one a
+given upload used.
+
+**What changed.** `uploads.js` — the module every storage caller goes through — dropped
+`SUPABASE_URL`/`SUPABASE_SERVICE_KEY`/`SUPABASE_BUCKET`/`SUPABASE_PRIVATE_BUCKET` and every branch reading
+them, along with the `supabaseConfigured`/`supabasePrivateConfigured` flags (callers now read
+`r2Configured`/`r2PrivateConfigured` directly — post-removal they were always identical anyway). Every
+Supabase-labeled function was renamed to describe what it actually does now: `uploadToSupabase` →
+`uploadPublicFile`, `uploadToSupabasePrivate` → `uploadPrivateFile`, `uploadBufferToSupabase` →
+`uploadPublicBuffer`, `uploadBufferToSupabasePrivate` → `uploadPrivateBuffer`, `fetchFromSupabasePrivate` →
+`fetchPrivateObject` (now R2-only — its legacy "assume a Supabase URL" fallback is gone, safe because a
+direct production query confirmed zero rows in any private/payment-proof-shaped column still referenced
+Supabase). Every caller (`adminPaymentQueue.js`, `editions.js`) was updated to the new names in the same
+commit.
+
+**Two real, pre-existing bugs got fixed in passing, not as new scope:**
+1. `editions.js`'s paid-download streaming endpoint (`GET /editions/download/:token`) did its own raw
+   `fetch()` with manually-built Supabase headers, entirely independent of `uploads.js` — meaning a private
+   R2 file would have silently failed here (no signing). It now branches on `isPublicStorageUrl`: a public
+   file is fetched directly, a private one goes through the same signed-GET `fetchPrivateObject` every other
+   private read already uses.
+2. `imageDerivativeStore.js`'s `keyFromPublicUrl()` only recognized the Supabase URL shape
+   (`/storage/v1/object/public/.../`), so `scripts/optimise-existing-images.js` was silently treating every
+   already-migrated-to-R2 image as "hosted elsewhere" and skipping it. It now recognizes the R2 shape
+   (`url.startsWith(R2_PUBLIC_URL)`) instead.
+
+`scripts/migrate-supabase-to-r2.js` (written earlier this engagement, not yet run — still blocked by
+Supabase's quota restriction) had its column-discovery widened to include `%pdf_url%`, so `editions.pdf_url`
+(the one edition still on Supabase, confirmed 1 row) isn't silently skipped once the block lifts.
+`scripts/optimise-existing-images.js` and `backups.js`'s comments were updated to match. Left deliberately
+untouched: `admin.js`'s `GET /admin/storage-audit` (a data-hygiene tool for finding stale Supabase
+references in the data — still useful, arguably more useful, after this removal), `restore-backup.js`'s
+`PROD_MARKER` guard (protects the Postgres connection string, which stays on Supabase — only Storage moved),
+and a handful of comments in `analytics.js`/`participation.js`/`imagePipeline.js`/`participationScheduler.js`
+that mention Supabase only as accurate history.
+
+**Tests.** `objectStorageR2.test.js` lost the 3 tests that existed to prove the old fallback/preference
+behavior (Supabase fallback, R2-preferred-over-Supabase, legacy-Supabase-URL fetch) and gained 1 new one
+(`fetchPrivateObject` rejects a URL that isn't a recognised private object) — net 11 tests, down from 13.
+Five other test files (`editionOrderConfirmation`, `imageDerivatives`, `forms`, `shareCards`,
+`paymentQueuePhase6`) had Supabase-shaped fixture URLs or comments swapped for R2-shaped equivalents, three
+of which (`editionOrderConfirmation`, `imageDerivatives`, `shareCards`) needed `R2_PUBLIC_URL` set in their
+test env so `isPublicStorageUrl`/`keyFromPublicUrl` — which read it at call time or module-load time — kept
+recognizing the fixtures as "ours." `editionDownloads.test.js` needed the most care: roughly a third of its
+33 tests exercised the private-file download path via a plain local HTTP server standing in for Supabase,
+which no longer works now that `fetchPrivateObject` is R2-only (a signed GET via the R2 SDK). Rather than
+another local server, `global.fetch` is now wrapped for the whole file — requests to the fake R2 account
+host are served from an in-memory `Map` of object key → bytes, everything else passes through untouched —
+plus `S3Client.prototype.send` stubbed so the best-effort order-confirmation PDF upload (also now a real R2
+write attempt) never makes a real network call. `storageAudit.test.js`, `paymentQueuePhase6.test.js` (aside
+from the one comment), and `credit.test.js` needed no changes — their Supabase mentions are either the
+out-of-scope audit tool or the still-Supabase-hosted database, not Storage.
+
+Full suite: **2206 passing, 0 failing** (down from 2208 by exactly the 2 net tests removed from
+`objectStorageR2.test.js` — nothing else was lost). Grepped `unplug-backend/src` and `unplug-backend/scripts`
+for `SUPABASE_`/`supabase` afterward: every remaining hit is one of the four deliberately-kept categories
+above.
+

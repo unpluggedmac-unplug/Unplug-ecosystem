@@ -61,8 +61,8 @@ async function makeUser(role = 'member') {
   return id;
 }
 
-const PUBLIC_URL = 'https://x.supabase.co/storage/v1/object/public/uploads/edition.pdf';
-const PRIVATE_URL = 'https://x.supabase.co/storage/v1/object/edition-downloads/edition.pdf';
+const PUBLIC_URL = 'https://pub-fake.r2.dev/edition.pdf';
+const PRIVATE_URL = 'https://acct123.r2.cloudflarestorage.com/edition-downloads/edition.pdf';
 
 let adminToken;
 let editionId;
@@ -79,11 +79,16 @@ before(async () => {
   process.env.DATABASE_URL = `postgres://postgres:postgres@localhost:${port}/unplug_test`;
   process.env.JWT_SECRET = 'test-secret-for-edition-confirmation';
   process.env.UNPLUG_DISABLE_RATE_LIMITS = '1';
-  // Storage deliberately NOT configured for this file: it proves the
+  // Full storage deliberately NOT configured for this file: it proves the
   // best-effort path, i.e. that a purchase still completes with the Reference
-  // Code intact when the document cannot be stored.
-  delete process.env.SUPABASE_URL;
-  delete process.env.SUPABASE_SERVICE_KEY;
+  // Code intact when the document cannot be stored. R2_PUBLIC_URL alone is
+  // set so isPublicStorageUrl (which only needs that one var) can still be
+  // exercised against a realistic R2-shaped fixture URL.
+  delete process.env.R2_ACCOUNT_ID;
+  delete process.env.R2_ACCESS_KEY_ID;
+  delete process.env.R2_SECRET_ACCESS_KEY;
+  delete process.env.R2_BUCKET;
+  process.env.R2_PUBLIC_URL = 'https://pub-fake.r2.dev';
 
   const { Pool } = require('pg');
   pool = new Pool({ connectionString: process.env.DATABASE_URL });

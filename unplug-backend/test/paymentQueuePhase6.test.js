@@ -443,7 +443,7 @@ test('generateDocument produces a real PDF with the order breakdown on it', asyn
 });
 
 test('an invoice cannot be generated when file storage is not configured — and says so instead of failing silently', async () => {
-  // No SUPABASE_* env vars are set in the test environment, which is exactly
+  // No R2_* env vars are set in the test environment, which is exactly
   // the "storage not configured" case a fresh deployment starts in.
   const admin = await makeUser('admin');
   const user = await makeUser();

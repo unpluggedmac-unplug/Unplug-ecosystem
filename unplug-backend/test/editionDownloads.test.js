@@ -18,6 +18,7 @@ const path = require('path');
 const os = require('os');
 const http = require('http');
 const EmbeddedPostgres = require('embedded-postgres').default;
+const { S3Client } = require('@aws-sdk/client-s3');
 const { stopPostgres } = require('./helpers/stopPostgres');
 
 let pg;
@@ -28,9 +29,24 @@ let baseUrl;
 let pdfUrl;
 let adminToken;
 let editionId;
+let originalFetch;
+let originalS3Send;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-dltest-'));
 const port = 7600 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 const PDF_BODY = '%PDF-1.4\n' + 'x'.repeat(4096) + '\n%%EOF';
+
+// The PRIVATE bucket, faked. A real download_pdf_url is fetched by
+// fetchPrivateObject (uploads.js) via a signed GET — real HMAC computation,
+// no network call — against a URL shaped like
+// https://<account>.r2.cloudflarestorage.com/edition-downloads/<key>. Rather
+// than standing up a second real HTTP server and somehow making the R2 SDK
+// sign a URL that points at it, fetch itself is wrapped: any request whose
+// host is this fake R2 account is served from `privateObjects` below;
+// everything else (the Express app under test, the plain-http pdfServer
+// standing in for the PUBLIC bucket) goes through untouched.
+const R2_ACCOUNT_ID = 'acct123';
+const R2_HOST = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+const privateObjects = new Map(); // object key -> Buffer
 
 async function req(method, urlPath, { token, body } = {}) {
   const res = await fetch(baseUrl + urlPath, {
@@ -82,13 +98,46 @@ before(async () => {
   await pool.query(`INSERT INTO users (id, email, password_hash, role)
                     VALUES (1, 'admin@test', 'x', 'admin') ON CONFLICT DO NOTHING`);
 
-  // Stands in for Supabase Storage — a plain origin serving the PDF bytes.
+  // Stands in for the PUBLIC bucket — a plain origin serving the PDF bytes.
   pdfServer = http.createServer((_r, res) => {
     res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': Buffer.byteLength(PDF_BODY) });
     res.end(PDF_BODY);
   });
   await new Promise((r) => pdfServer.listen(0, r));
   pdfUrl = `http://127.0.0.1:${pdfServer.address().port}/edition.pdf`;
+
+  // R2 must be configured before uploads.js (required transitively via
+  // editions.js below) computes its "is X configured" flags — those are
+  // read once at module load. R2_PUBLIC_URL is pdfServer's own origin, so
+  // isPublicStorageUrl treats pdfUrl exactly as it would a real public R2
+  // URL, and the download route fetches it directly rather than trying
+  // (and failing) to sign it as a private object.
+  process.env.R2_ACCOUNT_ID = R2_ACCOUNT_ID;
+  process.env.R2_ACCESS_KEY_ID = 'AKIA_FAKE';
+  process.env.R2_SECRET_ACCESS_KEY = 'secret_fake';
+  process.env.R2_PUBLIC_URL = `http://127.0.0.1:${pdfServer.address().port}`;
+
+  originalFetch = global.fetch;
+  global.fetch = async (url, init) => {
+    const s = typeof url === 'string' ? url : url.toString();
+    if (s.includes(R2_HOST)) {
+      const key = decodeURIComponent(s.split('?')[0].split(`${R2_HOST}/edition-downloads/`)[1] || '');
+      const body = privateObjects.get(key);
+      if (!body) return new Response(null, { status: 404 });
+      return new Response(body, {
+        status: 200,
+        headers: { 'content-type': 'application/pdf', 'content-length': String(body.length) },
+      });
+    }
+    return originalFetch(url, init);
+  };
+
+  // The order-confirmation PDF (best-effort — see editions.js) also writes
+  // to the fake private bucket via a real S3Client.send PUT; stubbed for the
+  // same reason as the fetch wrapper above, so these fake credentials never
+  // attempt a real network call.
+  originalS3Send = S3Client.prototype.send;
+  S3Client.prototype.send = async () => ({});
 
   const express = require('express');
   const { attachUser } = require('../src/middleware/auth');
@@ -108,9 +157,10 @@ before(async () => {
 }, { timeout: 120000 });
 
 after(async () => {
+  if (originalFetch) global.fetch = originalFetch;
+  if (originalS3Send) S3Client.prototype.send = originalS3Send;
   if (server) await new Promise((r) => server.close(r));
   if (pdfServer) await new Promise((r) => pdfServer.close(r));
-  if (privateServer) await new Promise((r) => privateServer.close(r));
   if (viewServer2) await new Promise((r) => viewServer2.close(r));
   if (pool) await pool.end();
   // stopPostgres, not pg.stop() directly: on Windows the library's stop
@@ -433,11 +483,11 @@ test('replacing an edition PDF records the file it replaced', async () => {
 // ---------------------------------------------------------------------------
 // download_pdf_url (094_edition_download_pdf.sql) — the private file behind
 // the paid single-use download, separate from the free "View Online" pdf_url.
-// A second local origin stands in for the private Supabase bucket, with
-// different bytes, so "the download served the PRIVATE file, not the free
+// The private file is served from `privateObjects` (a faked PRIVATE bucket —
+// see the fetch wrapper installed in before()), with different bytes than
+// the free file, so "the download served the PRIVATE file, not the free
 // one" is something these tests can actually prove rather than assume.
 // ---------------------------------------------------------------------------
-let privateServer;
 let viewServer2;
 let privatePdfUrl;
 let viewOnlyPdfUrl;
@@ -445,12 +495,9 @@ let dualFileEditionId;
 const PRIVATE_PDF_BODY = '%PDF-1.4\n' + 'PRIVATE-DOWNLOAD-COPY-'.repeat(50) + '\n%%EOF';
 
 test('setup: a second edition with separate view/download files', async () => {
-  privateServer = http.createServer((_r, res) => {
-    res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': Buffer.byteLength(PRIVATE_PDF_BODY) });
-    res.end(PRIVATE_PDF_BODY);
-  });
-  await new Promise((r) => privateServer.listen(0, r));
-  privatePdfUrl = `http://127.0.0.1:${privateServer.address().port}/private.pdf`;
+  const privateKey = 'private-download.pdf';
+  privateObjects.set(privateKey, Buffer.from(PRIVATE_PDF_BODY));
+  privatePdfUrl = `https://${R2_HOST}/edition-downloads/${privateKey}`;
 
   viewServer2 = http.createServer((_r, res) => {
     res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': Buffer.byteLength(PDF_BODY) });

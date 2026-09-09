@@ -90,8 +90,8 @@ async function alreadyDone() {
 }
 
 async function main() {
-  if (!uploads.supabaseConfigured) {
-    console.error('Supabase Storage is not configured (SUPABASE_URL / SUPABASE_SERVICE_KEY / SUPABASE_BUCKET).');
+  if (!uploads.r2Configured) {
+    console.error('R2 is not configured (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET / R2_PUBLIC_URL).');
     console.error('Without it there is nowhere to put the derivatives. Nothing was changed.');
     process.exit(1);
   }
@@ -171,14 +171,14 @@ async function main() {
   }
 
   // The Cache-Control actually observed on a derivative, checked rather than
-  // assumed: Supabase serves uploads with "no-cache" unless told otherwise,
-  // and getting that wrong silently undoes much of this work.
+  // assumed — getting the upload's cache-control header wrong would silently
+  // undo much of this work.
   if (processed > 0) {
     const sample = await pool.query(
       `SELECT object_key FROM image_derivatives WHERE skipped_reason IS NULL ORDER BY updated_at DESC LIMIT 1`);
     if (sample.rowCount) {
       const key = sample.rows[0].object_key;
-      const probe = `${process.env.SUPABASE_URL}/storage/v1/object/public/${process.env.SUPABASE_BUCKET}/derivatives/${key.replace(/\.[^./]+$/, '')}-400.webp`;
+      const probe = `${process.env.R2_PUBLIC_URL}/derivatives/${key.replace(/\.[^./]+$/, '')}-400.webp`;
       try {
         const head = await fetch(probe, { method: 'HEAD' });
         const cc = head.headers.get('cache-control');

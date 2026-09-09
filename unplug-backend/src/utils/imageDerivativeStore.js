@@ -13,8 +13,8 @@
 //
 // putObject IS INJECTED rather than imported. The uploader lives on the uploads
 // route, which needs this module; importing it back would make a require cycle,
-// and passing the one function in keeps this testable without a network or a
-// Supabase key.
+// and passing the one function in keeps this testable without a network or R2
+// credentials.
 
 const pool = require('../db');
 const { buildDerivatives } = require('./imagePipeline');
@@ -105,15 +105,17 @@ async function storeDerivatives({ key, buffer, putObject }) {
   };
 }
 
-// The object key inside a Supabase public URL, or null if it is not one.
+// The object key inside our R2 public bucket's URL, or null if the URL isn't
+// one of ours (an external image, or something hosted elsewhere).
 //
 // Used to turn the URLs already stored in a dozen different content columns
 // into manifest keys without touching any of those columns.
 function keyFromPublicUrl(url) {
-  const m = String(url || '').match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/);
-  if (!m) return null;
+  const base = process.env.R2_PUBLIC_URL;
+  const s = String(url || '');
+  if (!base || !s.startsWith(`${base}/`)) return null;
   // A query string on an image URL is a cache-buster, not part of the key.
-  return decodeURIComponent(m[1].split('?')[0]);
+  return decodeURIComponent(s.slice(base.length + 1).split('?')[0]);
 }
 
 module.exports = { storeDerivatives, recordSkip, keyFromPublicUrl };

@@ -11,12 +11,14 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Persistent object storage. Cloudflare R2 is tried FIRST when configured,
-// then Supabase Storage, then (public uploads only) local disk. R2 is
-// preferred because it has NO egress fees — Supabase's does, and exceeding
-// it is exactly what took production uploads down (see the storage-audit
-// admin tool, N-3). Files already stored on Supabase keep working exactly
-// as before; this only changes where NEW uploads land.
+// Persistent object storage — Cloudflare R2, the only backend this project
+// uses. It used to also support Supabase Storage as a fallback (kept working
+// automatically while both were configured, so nothing broke mid-migration);
+// that was removed once every new upload was confirmed landing on R2 and no
+// PRIVATE file (a paid edition PDF, a proof-of-payment) was still on
+// Supabase. Anything still referencing an old Supabase URL is legacy data —
+// see scripts/migrate-supabase-to-r2.js and the admin "Storage audit" tool
+// (routes/admin.js) for moving/finding what's left.
 //   R2_ACCOUNT_ID          Cloudflare account ID
 //   R2_ACCESS_KEY_ID       from an R2 API token (S3-compatible credentials)
 //   R2_SECRET_ACCESS_KEY   from that same token
@@ -25,12 +27,6 @@ const router = express.Router();
 //                          a custom domain) — R2 has no built-in public URL
 //                          the way Supabase does, so this must be set by hand
 //   R2_PRIVATE_BUCKET      a PRIVATE bucket name (defaults to "edition-downloads")
-//
-// Supabase Storage — kept working automatically for as long as it stays
-// configured, so nothing breaks mid-migration or for files it already holds:
-//   SUPABASE_URL          e.g. https://xxxx.supabase.co
-//   SUPABASE_SERVICE_KEY  the service_role key (server-side only, never public)
-//   SUPABASE_BUCKET       a PUBLIC storage bucket name, e.g. "uploads"
 const { storeDerivatives } = require('../utils/imageDerivativeStore');
 
 const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_URL } = process.env;
@@ -52,13 +48,6 @@ const r2Client = (r2Configured || r2PrivateConfigured)
     })
   : null;
 
-const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET } = process.env;
-const supabaseOnlyConfigured = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY && SUPABASE_BUCKET);
-// Kept under its original name so every existing caller (adminPaymentQueue.js,
-// editions.js) needs no change at all: it now means "some persistent public
-// object storage is configured" — R2 or Supabase — not Supabase specifically.
-const supabaseConfigured = r2Configured || supabaseOnlyConfigured;
-
 // A second, PRIVATE bucket — used only for the full-quality edition PDF
 // behind the paid single-use download (094_edition_download_pdf.sql) and for
 // EFT proof-of-payment uploads. Deliberately not the same bucket as the
@@ -66,16 +55,10 @@ const supabaseConfigured = r2Configured || supabaseOnlyConfigured;
 // other image on the site), and a public bucket can't be made to enforce
 // the single-use gate — the raw URL is fetchable by anyone who has it, app
 // logic notwithstanding.
-const SUPABASE_PRIVATE_BUCKET = process.env.SUPABASE_PRIVATE_BUCKET || 'edition-downloads';
-const supabaseOnlyPrivateConfigured = Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY);
-// Same widened meaning as supabaseConfigured above.
-const supabasePrivateConfigured = r2PrivateConfigured || supabaseOnlyPrivateConfigured;
 
-// Uploads the just-saved multer file to whichever public object storage is
-// configured (see putPublicObject) and returns its public URL, then removes
-// the local temp copy. Named uploadToSupabase for history — it now goes to
-// R2 first when configured, Supabase only as the fallback.
-async function uploadToSupabase(file) {
+// Uploads the just-saved multer file to the PUBLIC bucket and returns its
+// public URL, then removes the local temp copy.
+async function uploadPublicFile(file) {
   const buffer = fs.readFileSync(file.path);
   const objectPath = `${Date.now()}-${file.filename}`;
   const url = await putPublicObject(objectPath, buffer, file.mimetype);
@@ -89,45 +72,27 @@ async function uploadToSupabase(file) {
 
 // Puts bytes in the PRIVATE bucket at an exact key and returns its object
 // URL. That URL is NOT directly fetchable by a browser (the bucket is
-// private) — reading it back later always goes through fetchFromSupabasePrivate
-// below, which knows which credentials/signing a given URL needs.
+// private) — reading it back later always goes through fetchPrivateObject
+// below, which signs a short-lived GET.
 async function putPrivateObject(objectPath, buffer, mimetype) {
-  if (r2Configured || r2PrivateConfigured) {
-    await r2Client.send(new PutObjectCommand({
-      Bucket: R2_PRIVATE_BUCKET,
-      Key: objectPath,
-      Body: buffer,
-      ContentType: mimetype || 'application/octet-stream',
-    }));
-    // The real R2/S3 object path, not a signed URL — signing happens only at
-    // READ time (see fetchFromSupabasePrivate), the same way a Supabase
-    // private URL below is a real path that still needs the service key.
-    return `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_PRIVATE_BUCKET}/${objectPath}`;
+  if (!(r2Configured || r2PrivateConfigured)) {
+    throw new Error('No private object storage is configured.');
   }
-  if (supabaseOnlyPrivateConfigured) {
-    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_PRIVATE_BUCKET}/${objectPath}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-        apikey: SUPABASE_SERVICE_KEY,
-        'Content-Type': mimetype || 'application/octet-stream',
-        'x-upsert': 'true',
-      },
-      body: buffer,
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`Supabase Storage upload failed (${res.status}): ${detail}`);
-    }
-    return `${SUPABASE_URL}/storage/v1/object/${SUPABASE_PRIVATE_BUCKET}/${objectPath}`;
-  }
-  throw new Error('No private object storage is configured.');
+  await r2Client.send(new PutObjectCommand({
+    Bucket: R2_PRIVATE_BUCKET,
+    Key: objectPath,
+    Body: buffer,
+    ContentType: mimetype || 'application/octet-stream',
+  }));
+  // The real R2 object path, not a signed URL — signing happens only at READ
+  // time (see fetchPrivateObject).
+  return `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_PRIVATE_BUCKET}/${objectPath}`;
 }
 
-// Same upload mechanics as uploadToSupabase above, but targets the PRIVATE
-// bucket — fetching the result back later requires the same credentials
-// used to put it there (see GET /editions/download/:token).
-async function uploadToSupabasePrivate(file) {
+// Same upload mechanics as uploadPublicFile above, but targets the PRIVATE
+// bucket — fetching the result back later requires a signed GET (see
+// GET /editions/download/:token).
+async function uploadPrivateFile(file) {
   const buffer = fs.readFileSync(file.path);
   const objectPath = `${Date.now()}-${file.filename}`;
   const url = await putPrivateObject(objectPath, buffer, file.mimetype);
@@ -135,21 +100,17 @@ async function uploadToSupabasePrivate(file) {
   return url;
 }
 
-// Uploads an already-in-memory Buffer (as opposed to uploadToSupabase above,
+// Uploads an already-in-memory Buffer (as opposed to uploadPublicFile above,
 // which reads a multer-saved temp file) straight to the PUBLIC bucket, and
 // returns its public URL. Written for the invoice/receipt PDFs the admin
 // payment queue generates on the fly (routes/adminPaymentQueue.js) — there's
-// no local file for those, just bytes already held in memory, and unlike a
-// proof-of-payment upload an invoice/receipt is fine to be a plain public
-// link (it's what WE billed, not a bank statement).
+// no local file for those, just bytes already held in memory.
 // HOW LONG A STORED FILE MAY BE CACHED.
 //
-// Supabase serves uploads with "Cache-Control: no-cache" unless told otherwise,
-// which is why every image on the site is revalidated on every single page
-// view — including the 1.9 MB one. Every object here is written under a key
-// containing a timestamp and a random name, and is never rewritten, so the
-// bytes at a given URL can never change. That is the definition of immutable,
-// and a year is the longest max-age browsers respect.
+// Every object here is written under a key containing a timestamp and a
+// random name, and is never rewritten, so the bytes at a given URL can never
+// change. That is the definition of immutable, and a year is the longest
+// max-age browsers respect.
 const STORAGE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 // Puts bytes in the PUBLIC bucket at an exact key and returns the public URL.
@@ -157,72 +118,43 @@ const STORAGE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 // The key is passed in rather than invented here, because responsive
 // derivatives have to land at names the frontend can work out for itself
 // ("derivatives/<original>-800.avif"). Callers that just want a unique name
-// use uploadBufferToSupabase below, which is this function plus a timestamp.
+// use uploadPublicBuffer below, which is this function plus a timestamp.
 async function putPublicObject(objectPath, buffer, mimetype) {
-  if (r2Configured) {
-    await r2Client.send(new PutObjectCommand({
-      Bucket: R2_BUCKET,
-      Key: objectPath,
-      Body: buffer,
-      ContentType: mimetype || 'application/octet-stream',
-      CacheControl: STORAGE_CACHE_CONTROL,
-    }));
-    return `${R2_PUBLIC_URL}/${objectPath}`;
+  if (!r2Configured) {
+    throw new Error('No public object storage is configured.');
   }
-  if (supabaseOnlyConfigured) {
-    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${objectPath}`, {
-      method: 'POST',
-      headers: {
-        // Works with both the legacy service_role JWT and the new sb_secret_*
-        // keys. The Storage API gateway expects the key in the `apikey` header
-        // as well as the Bearer token, so we send both.
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-        apikey: SUPABASE_SERVICE_KEY,
-        'Content-Type': mimetype || 'application/octet-stream',
-        'cache-control': STORAGE_CACHE_CONTROL,
-        'x-upsert': 'true',
-      },
-      body: buffer,
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`Supabase Storage upload failed (${res.status}): ${detail}`);
-    }
-    return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${objectPath}`;
-  }
-  throw new Error('No public object storage is configured.');
+  await r2Client.send(new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: objectPath,
+    Body: buffer,
+    ContentType: mimetype || 'application/octet-stream',
+    CacheControl: STORAGE_CACHE_CONTROL,
+  }));
+  return `${R2_PUBLIC_URL}/${objectPath}`;
 }
 
-async function uploadBufferToSupabase(buffer, filename, mimetype) {
+async function uploadPublicBuffer(buffer, filename, mimetype) {
   return putPublicObject(`${Date.now()}-${filename}`, buffer, mimetype);
 }
 
-// Fetches a file back out of whichever private bucket it was put in — the
-// same credentials putPrivateObject used to store it. Reused by GET
-// /admin/payment-queue/:source/:id/proof (see routes/adminPaymentQueue.js) so
-// an admin can actually view a proof-of-payment upload; exported the same way
-// notifyProfileOwner is in interactions.js, so it doesn't need its own file.
-async function fetchFromSupabasePrivate(url) {
+// Fetches a file back out of the PRIVATE bucket — signs a short-lived GET,
+// then fetches that. Reused by GET /admin/payment-queue/:source/:id/proof
+// (see routes/adminPaymentQueue.js) so an admin can actually view a
+// proof-of-payment upload, and by GET /editions/download/:token.
+async function fetchPrivateObject(url) {
   const R2_MARKER = '.r2.cloudflarestorage.com/';
-  if (typeof url === 'string' && url.includes(R2_MARKER)) {
-    // An R2 private object has no directly-fetchable URL (see
-    // putPrivateObject) — sign a short-lived GET instead, then fetch that
-    // exactly like any other URL. This keeps the same Response shape every
-    // caller here already expects (.ok / .body / .headers.get(...)).
-    const path = url.slice(url.indexOf(R2_MARKER) + R2_MARKER.length);
-    const [bucket, ...keyParts] = path.split('/');
-    const signedUrl = await getSignedUrl(
-      r2Client,
-      new GetObjectCommand({ Bucket: bucket, Key: keyParts.join('/') }),
-      { expiresIn: 60 }
-    );
-    return fetch(signedUrl);
+  const idx = typeof url === 'string' ? url.indexOf(R2_MARKER) : -1;
+  if (idx === -1) {
+    throw new Error('Not a recognised private object URL.');
   }
-  // A Supabase URL — the original mechanism, kept working for files that
-  // were already stored there before R2 was configured.
-  return fetch(url, {
-    headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, apikey: SUPABASE_SERVICE_KEY },
-  });
+  const path = url.slice(idx + R2_MARKER.length);
+  const [bucket, ...keyParts] = path.split('/');
+  const signedUrl = await getSignedUrl(
+    r2Client,
+    new GetObjectCommand({ Bucket: bucket, Key: keyParts.join('/') }),
+    { expiresIn: 60 }
+  );
+  return fetch(signedUrl);
 }
 
 // POST /uploads/proof — proof of payment for an EFT. Deliberately NOT behind
@@ -239,7 +171,7 @@ async function fetchFromSupabasePrivate(url) {
 // download PDF (094_edition_download_pdf.sql), reusing that existing bucket
 // and upload function rather than inventing a second private-storage path.
 router.post('/proof', (req, res) => {
-  if (!supabasePrivateConfigured) {
+  if (!r2PrivateConfigured) {
     return res.status(400).json({ error: 'File storage is not configured on this server yet — proof of payment cannot be uploaded right now. Please contact us instead.' });
   }
   uploadProof.single('file')(req, res, async (err) => {
@@ -262,10 +194,10 @@ router.post('/proof', (req, res) => {
       return res.status(400).json({ error: signature.reason });
     }
     try {
-      const url = await uploadToSupabasePrivate(req.file);
+      const url = await uploadPrivateFile(req.file);
       res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size });
     } catch (e) {
-      console.error('Supabase Storage proof upload failed:', e.message);
+      console.error('Object storage proof upload failed:', e.message);
       res.status(502).json({ error: 'Could not save that file. Please try again.' });
     }
   });
@@ -302,9 +234,9 @@ router.post('/pdf', requireRole('admin'), (req, res) => {
       return res.status(400).json({ error: signature.reason });
     }
 
-    if (supabaseConfigured) {
+    if (r2Configured) {
       try {
-        const { url, key, buffer } = await uploadToSupabase(req.file);
+        const { url, key, buffer } = await uploadPublicFile(req.file);
 
         // Responsive derivatives, built now so a reader never waits for them.
         //
@@ -326,7 +258,7 @@ router.post('/pdf', requireRole('admin'), (req, res) => {
         }
 
         return res.status(201).json({
-          url, filename: req.file.filename, sizeBytes: req.file.size, storage: r2Configured ? 'r2' : 'supabase',
+          url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'r2',
           // Reported so an admin screen can say what happened, and so the
           // response is honest about whether the responsive versions exist.
           responsive: derivatives && derivatives.made > 0
@@ -340,7 +272,7 @@ router.post('/pdf', requireRole('admin'), (req, res) => {
         // and paying customers are left with a dead download.
         console.error('Object storage PDF upload failed:', e.message);
         return res.status(502).json({
-          error: 'PDF storage is misconfigured, so the upload was not saved. Please try again — if it keeps failing, check your R2/Supabase Storage settings.',
+          error: 'PDF storage is misconfigured, so the upload was not saved. Please try again — if it keeps failing, check your R2 settings.',
         });
       }
     }
@@ -358,11 +290,11 @@ router.post('/pdf', requireRole('admin'), (req, res) => {
 // POST /uploads/edition-download-pdf — admin uploads the full-quality file
 // behind a paid edition's single-use download, kept separate from the free
 // "View Online" PDF above. Never returns a fetchable URL to the browser —
-// only GET /editions/download/:token (with the server's own service-role
-// key) can ever retrieve it.
+// only GET /editions/download/:token (with server-side signing) can ever
+// retrieve it.
 router.post('/edition-download-pdf', requireRole('admin'), (req, res) => {
-  if (!supabasePrivateConfigured) {
-    return res.status(400).json({ error: 'Object storage is not configured (set R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY, or SUPABASE_URL/SUPABASE_SERVICE_KEY), so there is nowhere private to put this file.' });
+  if (!r2PrivateConfigured) {
+    return res.status(400).json({ error: 'Object storage is not configured (set R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY), so there is nowhere private to put this file.' });
   }
   uploadPdf.single('file')(req, res, async (err) => {
     if (err) {
@@ -384,10 +316,10 @@ router.post('/edition-download-pdf', requireRole('admin'), (req, res) => {
       return res.status(400).json({ error: signature.reason });
     }
     try {
-      const url = await uploadToSupabasePrivate(req.file);
-      res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'supabase-private' });
+      const url = await uploadPrivateFile(req.file);
+      res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'r2-private' });
     } catch (e) {
-      console.error('Supabase Storage private PDF upload failed:', e.message);
+      console.error('Object storage private PDF upload failed:', e.message);
       res.status(502).json({ error: 'The download file could not be saved. Please try again.' });
     }
   });
@@ -411,10 +343,10 @@ router.post('/', requireAuth, (req, res) => {
       return res.status(400).json({ error: signature.reason });
     }
 
-    if (supabaseConfigured) {
+    if (r2Configured) {
       try {
-        const { url } = await uploadToSupabase(req.file);
-        return res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: r2Configured ? 'r2' : 'supabase' });
+        const { url } = await uploadPublicFile(req.file);
+        return res.status(201).json({ url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'r2' });
       } catch (e) {
         // Do NOT silently fall back to local disk in production: Render's disk is
         // ephemeral, so a locally-stored image looks fine now but vanishes on the
@@ -422,7 +354,7 @@ router.post('/', requireAuth, (req, res) => {
         // instead of shipping an image that will 404 later.
         console.error('Object storage upload failed:', e.message);
         return res.status(502).json({
-          error: 'Image storage is misconfigured, so the upload was not saved. Please try again — if it keeps failing, check your R2/Supabase Storage settings.',
+          error: 'Image storage is misconfigured, so the upload was not saved. Please try again — if it keeps failing, check your R2 settings.',
         });
       }
     }
@@ -435,41 +367,37 @@ router.post('/', requireAuth, (req, res) => {
     const url = `${proto}://${req.get('host')}/uploads/${req.file.filename}`;
     res.status(201).json({
       url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'local',
-      warning: 'Saved to temporary local storage — this file will be lost on the next server restart. Configure Supabase Storage for permanent uploads.',
+      warning: 'Saved to temporary local storage — this file will be lost on the next server restart. Configure R2 for permanent uploads.',
     });
   });
 });
 
 // Reused by routes/adminPaymentQueue.js: viewing a proof-of-payment upload
-// (fetchFromSupabasePrivate), storing a generated invoice/receipt PDF
-// (uploadBufferToSupabase), and knowing whether that's even possible right
-// now (supabaseConfigured) — all without duplicating this file's storage logic.
-// The private-bucket twin of uploadBufferToSupabase, for bytes that are
+// (fetchPrivateObject), storing a generated invoice/receipt PDF
+// (uploadPublicBuffer), and knowing whether that's even possible right
+// now (r2Configured) — all without duplicating this file's storage logic.
+// The private-bucket twin of uploadPublicBuffer, for bytes that are
 // nobody's business but the customer's — an edition order confirmation
 // carries their name, email and what they paid, so it must not sit on a
 // public URL the way an invoice PDF harmlessly can.
-async function uploadBufferToSupabasePrivate(buffer, filename, mimetype) {
+async function uploadPrivateBuffer(buffer, filename, mimetype) {
   return putPrivateObject(`${Date.now()}-${filename}`, buffer, mimetype);
 }
 
-// True when a URL points at a PUBLIC bucket — i.e. anyone holding the link
+// True when a URL points at the PUBLIC bucket — i.e. anyone holding the link
 // can read the file without going through this backend at all. Used to tell
 // an admin, in plain words, which paid editions are still being served from a
 // link that needs no purchase.
 function isPublicStorageUrl(url) {
-  if (typeof url !== 'string') return false;
-  if (url.includes('/storage/v1/object/public/')) return true; // Supabase
-  return Boolean(R2_PUBLIC_URL) && url.startsWith(R2_PUBLIC_URL); // R2
+  return typeof url === 'string' && Boolean(R2_PUBLIC_URL) && url.startsWith(R2_PUBLIC_URL);
 }
 
-router.fetchFromSupabasePrivate = fetchFromSupabasePrivate;
-router.uploadBufferToSupabase = uploadBufferToSupabase;
+router.fetchPrivateObject = fetchPrivateObject;
+router.uploadPublicBuffer = uploadPublicBuffer;
 router.putPublicObject = putPublicObject;
 router.STORAGE_CACHE_CONTROL = STORAGE_CACHE_CONTROL;
-router.uploadBufferToSupabasePrivate = uploadBufferToSupabasePrivate;
+router.uploadPrivateBuffer = uploadPrivateBuffer;
 router.isPublicStorageUrl = isPublicStorageUrl;
-router.supabaseConfigured = supabaseConfigured;
-router.supabasePrivateConfigured = supabasePrivateConfigured;
 router.r2Configured = r2Configured;
 router.r2PrivateConfigured = r2PrivateConfigured;
 

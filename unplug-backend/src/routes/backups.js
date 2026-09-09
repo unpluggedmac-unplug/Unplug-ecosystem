@@ -89,7 +89,7 @@ router.get('/:key/download', requireRole('admin'), async (req, res, next) => {
 //   ?parts=config     just the settings table and the like
 //
 // The "media" part of a full export is deliberately absent: images live in
-// Supabase Storage, they are already off this server, and streaming several
+// Cloudflare R2, they are already off this server, and streaming several
 // gigabytes of them through a 512 MB instance to produce one archive is how
 // an export request becomes an outage. OPERATIONS.md says how to copy the
 // bucket directly instead.

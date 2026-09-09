@@ -199,7 +199,7 @@ test('the email is lifted out so the CRM and the export can use it', async () =>
 test('A FILE NEEDS AN ACCOUNT', async () => {
   const form = await makeForm([{ label: 'Your CV', kind: 'file' }]);
   const res = await api('POST', '/forms/' + form.slug, {
-    answers: { your_cv: 'https://x.supabase.co/storage/v1/object/public/uploads/cv.png' },
+    answers: { your_cv: 'https://pub-fake.r2.dev/cv.png' },
   });
   assert.equal(res.status, 401);
 });

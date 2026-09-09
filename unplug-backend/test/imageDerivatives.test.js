@@ -47,7 +47,7 @@ async function photo(width, height) {
 }
 
 // A putObject that records what it was asked to store instead of talking to
-// Supabase. The store takes this as a parameter precisely so this is possible.
+// R2. The store takes this as a parameter precisely so this is possible.
 function fakeStorage() {
   const put = async (key, buffer, mime) => { put.written.push({ key, bytes: buffer.length, mime }); };
   put.written = [];
@@ -68,6 +68,7 @@ before(async () => {
   process.env.DATABASE_URL = `postgres://postgres:postgres@localhost:${port}/unplug_test`;
   process.env.JWT_SECRET = 'test-secret-for-images';
   process.env.UNPLUG_DISABLE_RATE_LIMITS = '1';
+  process.env.R2_PUBLIC_URL = 'https://pub-fake.r2.dev';
 
   const { Pool } = require('pg');
   pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -175,7 +176,7 @@ test('RE-RUNNING CLEARS A PREVIOUS SKIP', async () => {
 });
 
 test('the object key is recovered from a public storage URL', async () => {
-  const url = 'https://abc.supabase.co/storage/v1/object/public/uploads/1785-photo.png';
+  const url = 'https://pub-fake.r2.dev/1785-photo.png';
   assert.equal(store.keyFromPublicUrl(url), '1785-photo.png');
   // A cache-busting query is not part of the key.
   assert.equal(store.keyFromPublicUrl(url + '?v=2'), '1785-photo.png');

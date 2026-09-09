@@ -242,8 +242,8 @@ router.post('/:id/purchase', publicSubmitLimiter, async (req, res, next) => {
     let confirmationAvailable = false;
     try {
       const pdf = await buildConfirmationPdf(result.rows[0], edition.rows[0]);
-      if (uploadsRouter.supabasePrivateConfigured) {
-        const url = await uploadsRouter.uploadBufferToSupabasePrivate(
+      if (uploadsRouter.r2PrivateConfigured) {
+        const url = await uploadsRouter.uploadPrivateBuffer(
           pdf, `edition-order-${result.rows[0].download_reference}.pdf`, 'application/pdf');
         await pool.query('UPDATE edition_purchases SET confirmation_url = $1 WHERE id = $2',
           [url, result.rows[0].id]);
@@ -417,13 +417,14 @@ router.get('/download/:token', async (req, res, next) => {
     }
     claimed = p;
 
-    // The service-role key is included unconditionally — required for the
-    // private download_pdf_url, and harmless on the public pdf_url
-    // fallback (a public bucket object ignores auth headers it doesn't need).
-    const { SUPABASE_SERVICE_KEY } = process.env;
-    const upstream = await fetch(fileUrl, SUPABASE_SERVICE_KEY
-      ? { headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, apikey: SUPABASE_SERVICE_KEY } }
-      : undefined);
+    // The private download_pdf_url needs a signed GET (see
+    // uploadsRouter.fetchPrivateObject); the public pdf_url fallback is
+    // already fetchable as-is — signing an already-public URL would just be
+    // extra work fetchPrivateObject isn't built to do (it only recognises
+    // the private bucket's URL shape).
+    const upstream = uploadsRouter.isPublicStorageUrl(fileUrl)
+      ? await fetch(fileUrl)
+      : await uploadsRouter.fetchPrivateObject(fileUrl);
     if (!upstream.ok || !upstream.body) throw new Error(`Could not fetch the edition file (${upstream.status})`);
 
     const safeName = (p.title || 'unplug-edition').replace(/[^a-z0-9\- ]/gi, '').trim() || 'unplug-edition';
@@ -564,7 +565,7 @@ router.post('/purchases/confirmation', publicSubmitLimiter, async (req, res, nex
       return res.status(404).json({ error: 'No confirmation document was stored for this order. Your Reference Code is ' + p.download_reference + '.' });
     }
 
-    const upstream = await uploadsRouter.fetchFromSupabasePrivate(p.confirmation_url);
+    const upstream = await uploadsRouter.fetchPrivateObject(p.confirmation_url);
     if (!upstream || !upstream.ok) return res.status(502).json({ error: 'The confirmation could not be fetched. Please try again.' });
     const buffer = Buffer.from(await upstream.arrayBuffer());
     res.setHeader('Content-Type', 'application/pdf');
@@ -583,8 +584,8 @@ router.post('/purchases/confirmation', publicSubmitLimiter, async (req, res, nex
 // where it is — that one is meant to be free.
 router.post('/admin/:id/secure-download', requireRole('admin'), async (req, res, next) => {
   try {
-    if (!uploadsRouter.supabasePrivateConfigured) {
-      return res.status(400).json({ error: 'Supabase Storage is not configured, so there is nowhere private to put the file.' });
+    if (!uploadsRouter.r2PrivateConfigured) {
+      return res.status(400).json({ error: 'Object storage is not configured, so there is nowhere private to put the file.' });
     }
     const id = Number(req.params.id);
     const found = await pool.query('SELECT id, title, pdf_url, download_pdf_url FROM editions WHERE id = $1', [id]);
@@ -601,7 +602,7 @@ router.post('/admin/:id/secure-download', requireRole('admin'), async (req, res,
     if (!upstream.ok) return res.status(502).json({ error: `Could not read the current file (${upstream.status}).` });
     const buffer = Buffer.from(await upstream.arrayBuffer());
 
-    const url = await uploadsRouter.uploadBufferToSupabasePrivate(
+    const url = await uploadsRouter.uploadPrivateBuffer(
       buffer, `edition-${id}-download.pdf`, 'application/pdf');
 
     await pool.query(
