@@ -5,11 +5,13 @@
 // patches the build workspace only. It does not rewrite the checked-in member
 // dashboard source, and production/main is untouched.
 //
-// Phase 12 smoke test #35 exposed two regressions:
+// Phase 12 smoke test #35 exposed three regressions:
 //   1. renderCart() referenced escapeHtmlM from another script block, which is
 //      not guaranteed to exist in the extracted/minified Pages build.
 //   2. clicking Add to Cart twice on an unchanged submission created a second
 //      backend record before the cart had any chance to recognise the repeat.
+//   3. the cart could render before the saved member token was restored, so its
+//      first /orders/quote request returned 401 and left the subtotal as a dash.
 //
 // The fixes below are deliberately narrow and fail loudly if their anchors
 // disappear, so a later refactor cannot silently leave staging unprotected.
@@ -26,6 +28,16 @@ function mustReplace(anchor, replacement, label) {
   }
   html = html.replace(anchor, replacement);
 }
+
+// Start authenticated member requests with the saved token immediately.
+// The normal session validation still runs afterwards; an invalid token will
+// still receive 401 and be cleared by handleMemberSessionExpired(). This only
+// removes the page-load race where renderCart()/member panels run first.
+mustReplace(
+  'let AUTH_TOKEN = null;',
+  "let AUTH_TOKEN = localStorage.getItem('unplug_auth_token') || null;",
+  'saved member token bootstrap'
+);
 
 // Keep the cart's HTML escaping inside the same script block as renderCart(),
 // so the production-style script extraction cannot leave the helper behind.
