@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Unplug Magazine frontend — static pages plus a production build step.",
   "scripts": {
-    "build": "node build.js",
+    "build": "node scripts/staging-cart-smoke-hotfix.js && node build.js",
     "serve:src": "python -m http.server 4173",
     "serve:dist": "cd dist && python -m http.server 4174",
     "staging:check": "node scripts/staging-frontend-check.js",
