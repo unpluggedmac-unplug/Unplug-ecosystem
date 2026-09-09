@@ -6,10 +6,14 @@
 -- everything else that costs money.
 -- ---------------------------------------------------------------------------
 ALTER TABLE articles DROP CONSTRAINT IF EXISTS articles_status_check;
--- 'draft' is added later (049) but this re-runs every deploy, so include it here
--- too — otherwise a redeploy fails validation once a draft article exists.
+-- Later migrations add draft/change-request lifecycle states, but migrations
+-- re-run on every deploy. Keep the complete final vocabulary here so an older
+-- migration never invalidates rows created by the newer workflow.
 ALTER TABLE articles ADD CONSTRAINT articles_status_check
-  CHECK (status IN ('draft', 'awaiting_payment', 'pending', 'approved', 'rejected'));
+  CHECK (status IN (
+    'draft', 'awaiting_payment', 'pending', 'approved', 'rejected',
+    'changes_requested', 'resubmitted', 'credit_issued'
+  ));
 
 -- ---------------------------------------------------------------------------
 -- Events now cost R300 (once-off) to list on the calendar.
@@ -93,8 +97,7 @@ ALTER TABLE sales_consultants ALTER COLUMN commission_pct SET DEFAULT 50.00;
 -- type='business') so campaigns can target one group or the other.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bulk_email_campaigns (
-  id            SERIAL PRIMARY KEY,
-  sent_by       INTEGER NOT NULL REFERENCES users(id),
+  id            INTEGER NOT NULL REFERENCES users(id),
   segment       VARCHAR(20) NOT NULL CHECK (segment IN ('individuals', 'businesses', 'all')),
   subject       VARCHAR(255) NOT NULL,
   body          TEXT NOT NULL,
