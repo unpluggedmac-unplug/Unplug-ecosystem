@@ -24,6 +24,7 @@ jobs:
           node --check scripts/production-readiness.js
           node --check src/phase11Bootstrap.js
           node --check src/utils/phase11AuthenticatedStaging.js
+          node --check src/utils/phase11PricingStaging.js
       - name: Install backend dependencies
         working-directory: unplug-backend
         run: npm ci
