@@ -5048,9 +5048,22 @@ function subsRow(s){
   row.className = 'subs-row';
 
   var main = document.createElement('div');
-  var title = document.createElement('div');
+  // Approved articles are public, so their titles take the member back to
+  // the article they submitted. Unpublished items stay plain text because
+  // the public article route deliberately refuses non-approved content.
+  var title = document.createElement(
+    s.type === 'article' && s.status === 'approved' && s.id ? 'a' : 'div'
+  );
   title.className = 'subs-title';
   title.textContent = s.title || '(untitled)';
+  if (title.tagName === 'A') {
+    title.href = 'unplug-magazine.html?p=article&id=' + encodeURIComponent(s.id);
+    title.target = '_blank';
+    title.rel = 'noopener';
+    title.style.color = 'inherit';
+    title.style.textDecoration = 'underline';
+    title.style.textUnderlineOffset = '2px';
+  }
   main.appendChild(title);
 
   // Type, date, reference and money on one quiet line. Reference is what the
