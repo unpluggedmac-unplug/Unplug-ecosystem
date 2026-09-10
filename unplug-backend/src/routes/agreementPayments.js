@@ -91,21 +91,28 @@ async function paymentForSubmission(submissionId, client = pool) {
   return r.rows[0] || null;
 }
 
+function paymentSnapshotRequest(body) {
+  const submissionId = Number(body && body.submissionId);
+  const signingToken = String((body && body.signingToken) || '').trim();
+  return {
+    submissionId: Number.isInteger(submissionId) ? submissionId : null,
+    signingToken: signingToken || null,
+    hasCredential: Number.isInteger(submissionId) || Boolean(signingToken),
+  };
+}
+
 async function authorisedSubmission({ agreement, body, user, client }) {
-  // AFTER-SIGN payment: the signed record already exists and the amount/policy
-  // frozen on it is authoritative. Guests prove access with the same private
-  // download token they received at signing; members are matched by user_id.
-  if (agreement.payment_mode === 'after_sign') {
-    const id = Number(body.submissionId);
-    if (!Number.isInteger(id)) {
-      const err = new Error('submissionId is required after signing.');
-      err.statusCode = 400;
-      throw err;
-    }
+  const requested = paymentSnapshotRequest(body);
+
+  // AFTER-SIGN payment is selected by the immutable signed submission, NOT by
+  // agreement_forms.payment_mode as it looks today. An admin may legitimately
+  // edit/close/archive the agreement after somebody signs. That must never
+  // erase the amount or payment route the signer already agreed to.
+  if (requested.submissionId !== null) {
     const r = await client.query(
       `SELECT * FROM agreement_submissions
         WHERE id = $1 AND agreement_id = $2 AND signed_at IS NOT NULL`,
-      [id, agreement.id]
+      [requested.submissionId, agreement.id]
     );
     if (!r.rowCount) {
       const err = new Error('Signed agreement record not found.');
@@ -113,15 +120,30 @@ async function authorisedSubmission({ agreement, body, user, client }) {
       throw err;
     }
     const s = r.rows[0];
-    if (user) {
-      if (s.user_id && Number(s.user_id) !== Number(user.id)) {
+
+    if (s.payment_mode_at_signing !== 'after_sign' || Number(s.amount_at_signing) <= 0) {
+      const err = new Error('This signed agreement does not require a post-signing payment.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // A member-owned signed record can only be paid by that member. A guest
+    // record always needs its private download token, even if the caller happens
+    // to be logged in, so knowing a sequential submission id is never enough.
+    if (s.user_id) {
+      if (!user) {
+        const err = new Error('This signed agreement belongs to an Unplug account. Sign in to continue.');
+        err.statusCode = 401;
+        throw err;
+      }
+      if (Number(s.user_id) !== Number(user.id)) {
         const err = new Error('That signed agreement belongs to another account.');
         err.statusCode = 403;
         throw err;
       }
     } else {
       if (!s.guest_payment_allowed_at_signing) {
-        const err = new Error('This agreement requires an Unplug account for payment.');
+        const err = new Error('This agreement required an Unplug account for payment.');
         err.statusCode = 401;
         throw err;
       }
@@ -131,24 +153,18 @@ async function authorisedSubmission({ agreement, body, user, client }) {
         throw err;
       }
     }
-    if (s.payment_mode_at_signing !== 'after_sign' || Number(s.amount_at_signing) <= 0) {
-      const err = new Error('This signed agreement does not require a post-signing payment.');
-      err.statusCode = 400;
-      throw err;
-    }
     return s;
   }
 
   // BEFORE-SIGN payment: resume by signingToken when the browser already has a
-  // session. This makes Back/Refresh/double-click return the same payment rather
-  // than minting a second bank reference.
-  const token = String(body.signingToken || '').trim();
-  if (token) {
+  // session. The session's amount and guest policy are authoritative even if an
+  // admin changes the agreement after this person started.
+  if (requested.signingToken) {
     const r = await client.query(
       `SELECT * FROM agreement_submissions
         WHERE agreement_id = $1 AND signing_token = $2
           AND signed_at IS NULL AND payment_mode_at_signing = 'before_sign'`,
-      [agreement.id, token]
+      [agreement.id, requested.signingToken]
     );
     if (!r.rowCount) {
       const err = new Error('That signing/payment session is not valid.');
@@ -156,19 +172,33 @@ async function authorisedSubmission({ agreement, body, user, client }) {
       throw err;
     }
     const s = r.rows[0];
-    if (user && s.user_id && Number(s.user_id) !== Number(user.id)) {
-      const err = new Error('That signing session belongs to another account.');
-      err.statusCode = 403;
-      throw err;
-    }
-    if (!user && !s.guest_payment_allowed_at_signing) {
-      const err = new Error('This agreement requires an Unplug account for payment.');
+
+    if (s.user_id) {
+      if (!user) {
+        const err = new Error('This signing session belongs to an Unplug account. Sign in to continue.');
+        err.statusCode = 401;
+        throw err;
+      }
+      if (Number(s.user_id) !== Number(user.id)) {
+        const err = new Error('That signing session belongs to another account.');
+        err.statusCode = 403;
+        throw err;
+      }
+    } else if (!s.guest_payment_allowed_at_signing) {
+      const err = new Error('This agreement required an Unplug account for payment.');
       err.statusCode = 401;
       throw err;
     }
     return s;
   }
 
+  // No immutable session exists yet: current policy applies to this NEW
+  // before-sign payment session.
+  if (agreement.payment_mode !== 'before_sign' || Number(agreement.amount) <= 0) {
+    const err = new Error('This agreement does not require payment before signing.');
+    err.statusCode = 400;
+    throw err;
+  }
   if (!user && !agreement.guest_payment_allowed) {
     const err = new Error('This agreement requires an Unplug account for payment.');
     err.statusCode = 401;
@@ -213,21 +243,24 @@ async function authorisedSubmission({ agreement, body, user, client }) {
   return created.rows[0];
 }
 
-// Public: tells the signing page exactly which payment path applies.
+// Public: tells the signing page exactly which payment path applies now.
+// Historical/start-in-progress payment rules come from the submission snapshot
+// instead and are intentionally not inferred from this endpoint.
 router.get('/:slug/options', async (req, res, next) => {
   try {
     const agreement = await agreementBySlug(req.params.slug);
     if (!agreement) return res.status(404).json({ error: 'Agreement not found.' });
+    const paid = Number(agreement.amount) > 0 && agreement.payment_mode !== 'none';
     res.json({
       slug: agreement.slug,
       title: agreement.title,
       open: activeNow(agreement),
-      paid: Number(agreement.amount) > 0 && agreement.payment_mode !== 'none',
+      paid,
       amount: agreement.amount === null ? null : Number(agreement.amount),
       paymentMode: agreement.payment_mode,
-      guestPaymentAllowed: agreement.guest_payment_allowed,
-      accountRequiredForPayment: !agreement.guest_payment_allowed,
-      liveMethods: ['eft'],
+      guestPaymentAllowed: paid ? agreement.guest_payment_allowed : false,
+      accountRequiredForPayment: paid ? !agreement.guest_payment_allowed : false,
+      liveMethods: paid ? ['eft'] : [],
     });
   } catch (err) { next(err); }
 });
@@ -236,7 +269,8 @@ router.get('/:slug/options', async (req, res, next) => {
 // permissioned/audited independently of editing the legal wording itself.
 router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
   try {
-    if (typeof req.body.guestPaymentAllowed !== 'boolean') {
+    const body = req.body || {};
+    if (typeof body.guestPaymentAllowed !== 'boolean') {
       return res.status(400).json({ error: 'guestPaymentAllowed must be true or false.' });
     }
     const r = await pool.query(
@@ -244,7 +278,7 @@ router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
           SET guest_payment_allowed = $2, updated_at = now()
         WHERE id = $1
         RETURNING id, slug, title, guest_payment_allowed`,
-      [req.params.id, req.body.guestPaymentAllowed]
+      [req.params.id, body.guestPaymentAllowed]
     );
     if (!r.rowCount) return res.status(404).json({ error: 'Agreement not found.' });
     res.json({
@@ -258,21 +292,35 @@ router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
 // Start/resume a paid Agreement EFT. Works for both payment timings:
 // * before_sign: creates/returns a provisional signing session first;
 // * after_sign: points at the already-signed submission.
+//
+// Critical invariant: once a session/signature exists, its snapshotted amount,
+// payment timing and guest policy survive later admin edits/closure/archive.
 router.post('/:slug/start', publicSubmitLimiter, async (req, res, next) => {
   const client = await pool.connect();
   try {
+    const body = req.body || {};
     const agreement = await agreementBySlug(req.params.slug, client);
     if (!agreement) return res.status(404).json({ error: 'Agreement not found.' });
-    if (!activeNow(agreement)) return res.status(410).json({ error: 'This agreement is not currently open.' });
-    if (!['before_sign', 'after_sign'].includes(agreement.payment_mode) || Number(agreement.amount) <= 0) {
-      return res.status(400).json({ error: 'This agreement does not require payment.' });
+
+    const requested = paymentSnapshotRequest(body);
+    // Only a brand-new payment session depends on CURRENT open/payable state.
+    // Existing before-sign tokens and already-signed after-sign submissions are
+    // contractual snapshots and must remain payable after an admin edit.
+    if (!requested.hasCredential) {
+      if (!activeNow(agreement)) {
+        return res.status(410).json({ error: 'This agreement is not currently open.' });
+      }
+      if (agreement.payment_mode !== 'before_sign' || Number(agreement.amount) <= 0) {
+        return res.status(400).json({ error: 'This agreement does not require payment before signing.' });
+      }
     }
-    if (req.body.termsAccepted !== true) {
+
+    if (body.termsAccepted !== true) {
       return res.status(400).json({
         error: 'You must read and accept the current Unplug Terms & Conditions and Cancellation, Refund & Account Credit Policy before payment.',
       });
     }
-    const method = String(req.body.method || 'eft').toLowerCase();
+    const method = String(body.method || 'eft').toLowerCase();
     if (method !== 'eft') {
       return res.status(400).json({ error: 'EFT is the only live payment method right now.' });
     }
@@ -280,17 +328,9 @@ router.post('/:slug/start', publicSubmitLimiter, async (req, res, next) => {
     const member = req.user ? await memberIdentity(req.user.id, client) : null;
     if (req.user && !member) return res.status(401).json({ error: 'Your account could not be verified.' });
 
-    let payerName = member ? member.full_name : safeName(req.body.payerName);
-    let payerEmail = member ? member.email : String(req.body.payerEmail || '').trim().slice(0, 255);
-    if (!member) {
-      if (!payerName) return res.status(400).json({ error: 'Your name is required for guest payment.' });
-      if (!validEmail(payerEmail)) return res.status(400).json({ error: 'A valid email address is required for guest payment.' });
-      payerEmail = payerEmail.toLowerCase();
-    }
-
     await client.query('BEGIN');
     const submission = await authorisedSubmission({
-      agreement, body: req.body || {}, user: req.user || null, client,
+      agreement, body, user: req.user || null, client,
     });
 
     // A session/signed record freezes its amount and guest policy. Never charge
@@ -299,7 +339,25 @@ router.post('/:slug/start', publicSubmitLimiter, async (req, res, next) => {
     const amount = Number(submission.amount_at_signing);
     if (!Number.isFinite(amount) || amount <= 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'This agreement has no payable amount.' });
+      return res.status(400).json({ error: 'This agreement snapshot has no payable amount.' });
+    }
+
+    // Member-owned submissions use the account identity. Guest submissions can
+    // reuse the signed name/email in the after-sign flow, so an external signer
+    // is not forced to type the same information twice.
+    const isGuestSubmission = !submission.user_id;
+    let payerName = member ? member.full_name : safeName(body.payerName) || safeName(submission.signer_name);
+    let payerEmail = member ? member.email : String(body.payerEmail || submission.signer_email || '').trim().slice(0, 255);
+    if (isGuestSubmission) {
+      if (!payerName) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Your name is required for guest payment.' });
+      }
+      if (!validEmail(payerEmail)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'A valid email address is required for guest payment.' });
+      }
+      payerEmail = payerEmail.toLowerCase();
     }
 
     const existing = await paymentForSubmission(submission.id, client);
@@ -307,6 +365,8 @@ router.post('/:slug/start', publicSubmitLimiter, async (req, res, next) => {
       await client.query('COMMIT');
       return res.status(200).json({
         existing: true,
+        guest: isGuestSubmission,
+        accountRequiredForPayment: !submission.guest_payment_allowed_at_signing,
         ...paymentResponse(existing, submission),
       });
     }
@@ -324,9 +384,9 @@ router.post('/:slug/start', publicSubmitLimiter, async (req, res, next) => {
                $7,now(),$8,$9,0,$4)
        RETURNING *`,
       [
-        member ? member.id : null,
-        member ? null : payerName,
-        member ? null : payerEmail,
+        submission.user_id || null,
+        isGuestSubmission ? payerName : null,
+        isGuestSubmission ? payerEmail : null,
         amount,
         gatewayReference,
         submission.id,
@@ -339,7 +399,7 @@ router.post('/:slug/start', publicSubmitLimiter, async (req, res, next) => {
 
     return res.status(201).json({
       existing: false,
-      guest: !member,
+      guest: isGuestSubmission,
       accountRequiredForPayment: !submission.guest_payment_allowed_at_signing,
       ...paymentResponse(p.rows[0], submission),
     });
