@@ -97,9 +97,17 @@ jobs:
       - name: Backend install and test suite
         working-directory: unplug-backend
         run: |
-          set -euo pipefail
+          set -o pipefail
           npm ci
-          npm test
+          npm test 2>&1 | tee ../backend-test.log
+
+      - name: Upload backend test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-log
+          path: backend-test.log
+          retention-days: 1
 
       - name: Commit isolated release assembly
         shell: bash
@@ -107,6 +115,7 @@ jobs:
           set -euo pipefail
           rm -f .github/workflows/assemble-control-centre-production.yml
           rm -f scripts/assemble-production-uploads.py
+          rm -f backend-test.log
           git add -A
           git commit -m "Assemble tested Control Centre production release"
           git push origin HEAD:production-control-centre-release-20260910
