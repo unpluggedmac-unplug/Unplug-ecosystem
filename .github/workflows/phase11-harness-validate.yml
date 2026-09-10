@@ -1,7 +1,7 @@
 name: Validate temporary Phase 11 staging harness
 on:
   push:
-    branches: [phase11-authenticated-staging-20260910]
+    branches: [staging-control-centre, phase11-authenticated-staging-20260910]
 permissions:
   contents: read
 jobs:
@@ -15,9 +15,11 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: unplug-backend/package-lock.json
-      - name: Syntax check temporary harness
+      - name: Syntax check temporary harness and release gates
         working-directory: unplug-backend
         run: |
+          node --check src/app.js
+          node --check src/utils/validateEnv.js
           node --check src/phase11Bootstrap.js
           node --check src/utils/phase11AuthenticatedStaging.js
       - name: Confirm package lock remains valid
