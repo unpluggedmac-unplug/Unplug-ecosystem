@@ -1,13 +1,30 @@
 // Runtime public configuration for Cloudflare Pages.
 // This endpoint intentionally exposes only non-secret values required by the browser.
 const PRODUCTION_API = 'https://unplug-ecosystem.onrender.com';
+const STAGING_API = 'https://unplug-ecosystem-staging.onrender.com';
+const STAGING_HOSTS = new Set([
+  'unplug-staging.pages.dev'
+]);
 
-export async function onRequest({ env }) {
-  const environment = String((env && env.UNPLUG_ENV) || 'production').toLowerCase();
+export async function onRequest({ env, request }) {
+  const requestedHost = (() => {
+    try { return new URL(request.url).hostname.toLowerCase(); }
+    catch (_) { return ''; }
+  })();
+
+  const configuredEnvironment = String((env && env.UNPLUG_ENV) || 'production').toLowerCase();
   const configured = String((env && env.UNPLUG_API) || '').trim().replace(/\/+$/, '');
-  const staging = environment === 'staging' || environment === 'preview';
-  const api = configured || (staging ? 'https://staging-api-not-configured.invalid' : PRODUCTION_API);
-  const badStaging = staging && (!configured || configured === PRODUCTION_API);
+  const stagingHost = STAGING_HOSTS.has(requestedHost);
+  const staging = stagingHost || configuredEnvironment === 'staging' || configuredEnvironment === 'preview';
+  const environment = stagingHost ? 'staging' : configuredEnvironment;
+
+  // The dedicated staging Pages hostname is a hard safety boundary. It must
+  // never inherit a production API value from missing/misconfigured Pages
+  // environment variables or from a stale browser setting.
+  const api = stagingHost
+    ? STAGING_API
+    : (configured || (staging ? 'https://staging-api-not-configured.invalid' : PRODUCTION_API));
+  const badStaging = staging && (!api || api === PRODUCTION_API || api === 'https://staging-api-not-configured.invalid');
 
   const lines = [
     'window.UNPLUG_ENV=' + JSON.stringify(environment) + ';',
