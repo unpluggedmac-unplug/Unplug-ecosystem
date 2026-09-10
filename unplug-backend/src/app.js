@@ -64,9 +64,11 @@ const seoRoutes = require('./routes/seo');
 
 const app = express();
 
-// Behind Render's TLS proxy. Lets req.protocol / req.secure reflect the real
-// https scheme (via x-forwarded-proto) so generated URLs aren't http://.
-app.set('trust proxy', true);
+// Render terminates TLS in front of this process. Trust exactly the nearest
+// proxy hop rather than every address supplied through X-Forwarded-For.
+// `true` is deliberately avoided: express-rate-limit rejects that permissive
+// mode because a forged forwarded chain can otherwise bypass IP throttles.
+app.set('trust proxy', 1);
 
 // Makes the caller's address available to anything running during the request,
 // without threading `req` through every function that might want it. The audit
@@ -202,7 +204,7 @@ app.use('/deaf-community', deafCommunityRoutes);
 app.use('/newsletter', newsletterRoutes);
 // Reader popups: the public feed and event counter, plus the admin's controls.
 // The feed is identical for everybody and cached for a minute — it is asked
-// for on every page view, and this instance sleeps when idle.
+// for on every page view, and treated as cached for a minute.
 app.use('/popups', require('./routes/popups'));
 // Site Buttons: the always-visible floating CTA stack (distinct from Popups,
 // which interrupt) — the public feed, plus the admin's controls.
