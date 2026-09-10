@@ -223,6 +223,14 @@ app.use('/social', require('./routes/social'));
 // Mounted AFTER /social so nothing here can shadow an existing route — a form
 // slug is arbitrary text an admin types.
 app.use('/forms', require('./routes/forms'));
+// Agreement Forms: admin-built agreements anyone can be sent a link to sign.
+// This is intentionally NOT /agreements, which remains the older four-type
+// signed_agreements system. Payment policy has its own bridge because option C
+// allows an admin to choose member-only or guest EFT per agreement.
+const agreementFormsRoutes = require('./routes/agreementForms');
+app.use('/agreement-forms', agreementFormsRoutes.router);
+app.use('/a', agreementFormsRoutes.shortLinkRouter);
+app.use('/agreement-payments', require('./routes/agreementPayments'));
 app.use('/privacy', require('./routes/privacy'));
 app.use('/sasl', require('./routes/sasl'));
 app.use('/public-settings', publicSettingsRoutes);
