@@ -1,4 +1,4 @@
-name: Dependency security audit
+name: Dependency security remediation validation
 
 on:
   push:
@@ -10,9 +10,9 @@ permissions:
   contents: read
 
 jobs:
-  audit:
+  validate-fix:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout audited release
         uses: actions/checkout@v4
@@ -22,39 +22,45 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            unplug-backend/package-lock.json
+          cache-dependency-path: unplug-backend/package-lock.json
 
-      - name: Audit frontend dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm ci
-          npm audit --json > "$RUNNER_TEMP/frontend-audit.json" || true
-          echo 'Frontend audit summary:'
-          jq '.metadata.vulnerabilities // {}' "$RUNNER_TEMP/frontend-audit.json"
-          echo 'Frontend vulnerable packages:'
-          jq -r '.vulnerabilities // {} | to_entries[] | [.key, .value.severity, (.value.isDirect|tostring), (.value.fixAvailable|tostring)] | @tsv' "$RUNNER_TEMP/frontend-audit.json" || true
-
-      - name: Audit exact backend production dependency set
+      - name: Generate lockfile-only audit fix
         shell: bash
         run: |
           set -euo pipefail
           cd unplug-backend
+          cp package-lock.json "$RUNNER_TEMP/package-lock.before.json"
+          npm audit fix --omit=dev --package-lock-only
+          cp package-lock.json "$RUNNER_TEMP/package-lock.candidate.json"
+          echo 'Candidate dependency changes:'
+          git diff -- package-lock.json
+          echo 'Resolved security-sensitive versions:'
           npm ci --omit=dev
-          npm audit --omit=dev --json > "$RUNNER_TEMP/backend-prod-audit.json" || true
-          echo 'Backend production audit summary:'
-          jq '.metadata.vulnerabilities // {}' "$RUNNER_TEMP/backend-prod-audit.json"
-          echo 'Backend vulnerable packages:'
-          jq -r '.vulnerabilities // {} | to_entries[] | [.key, .value.severity, (.value.isDirect|tostring), (.value.fixAvailable|tostring), (.value.via|tostring)] | @tsv' "$RUNNER_TEMP/backend-prod-audit.json" || true
+          npm ls express body-parser qs nodemailer sharp --all || true
+          npm audit --omit=dev --json > "$RUNNER_TEMP/backend-prod-audit-after.json" || true
+          jq '.metadata.vulnerabilities // {}' "$RUNNER_TEMP/backend-prod-audit-after.json"
+          total=$(jq -r '.metadata.vulnerabilities.total // 0' "$RUNNER_TEMP/backend-prod-audit-after.json")
+          if [ "$total" != "0" ]; then
+            echo "Security audit still reports $total production vulnerabilities"
+            jq -r '.vulnerabilities // {} | to_entries[] | [.key, .value.severity, (.value.fixAvailable|tostring)] | @tsv' "$RUNNER_TEMP/backend-prod-audit-after.json" || true
+            exit 1
+          fi
 
-      - name: Save audit reports
+      - name: Run complete backend suite against candidate lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd unplug-backend
+          npm ci
+          npm test
+
+      - name: Save candidate lockfile and audit
         uses: actions/upload-artifact@v4
         with:
-          name: dependency-audit-reports
+          name: dependency-fix-candidate
           path: |
-            ${{ runner.temp }}/frontend-audit.json
-            ${{ runner.temp }}/backend-prod-audit.json
+            ${{ runner.temp }}/package-lock.before.json
+            ${{ runner.temp }}/package-lock.candidate.json
+            ${{ runner.temp }}/backend-prod-audit-after.json
           if-no-files-found: error
           retention-days: 7
