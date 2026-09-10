@@ -7,7 +7,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,8 +20,13 @@ jobs:
         run: |
           node --check src/app.js
           node --check src/utils/validateEnv.js
+          node --check scripts/staging-readiness.js
+          node --check scripts/production-readiness.js
           node --check src/phase11Bootstrap.js
           node --check src/utils/phase11AuthenticatedStaging.js
-      - name: Confirm package lock remains valid
+      - name: Install backend dependencies
         working-directory: unplug-backend
-        run: npm ci --omit=dev
+        run: npm ci
+      - name: Run full backend test suite
+        working-directory: unplug-backend
+        run: npm test
