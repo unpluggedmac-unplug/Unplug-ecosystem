@@ -204,7 +204,7 @@ app.use('/deaf-community', deafCommunityRoutes);
 app.use('/newsletter', newsletterRoutes);
 // Reader popups: the public feed and event counter, plus the admin's controls.
 // The feed is identical for everybody and cached for a minute — it is asked
-// for on every page view, and treated as cached for a minute.
+// for on every page view, and this instance sleeps when idle.
 app.use('/popups', require('./routes/popups'));
 // Site Buttons: the always-visible floating CTA stack (distinct from Popups,
 // which interrupt) — the public feed, plus the admin's controls.
