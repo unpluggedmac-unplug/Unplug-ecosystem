@@ -25,18 +25,21 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "express": "^4.22.2",
     "express-rate-limit": "^7.4.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^9.1.0",
     "otplib": "^13.5.0",
     "pdfkit": "^0.19.1",
     "pg": "^8.11.5",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "embedded-postgres": "^17.5.0-beta.15",
     "nodemon": "^3.1.0"
+  },
+  "overrides": {
+    "qs": "6.16.0"
   }
 }
