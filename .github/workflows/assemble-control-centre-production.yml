@@ -1,0 +1,127 @@
+name: Assemble Control Centre production release
+
+on:
+  push:
+    branches:
+      - production-control-centre-release-20260910
+    paths:
+      - '.github/workflows/assemble-control-centre-production.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated production release branch
+        uses: actions/checkout@v4
+        with:
+          ref: production-control-centre-release-20260910
+          fetch-depth: 0
+
+      - name: Fetch tested boundary and recovery hotfix
+        run: |
+          set -euo pipefail
+          git fetch origin control-centre-release-boundary-20260910 production-backup-hotfix-20260909 --no-tags
+
+      - name: Merge tested Control Centre boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Merge the exact tested boundary. This intentionally stops before
+          # Daily Shout-Out migration 188 and all later staging-only work.
+          git merge --no-ff --no-commit origin/control-centre-release-boundary-20260910 || true
+
+          conflicts="$(git diff --name-only --diff-filter=U)"
+          if [ -n "$conflicts" ]; then
+            expected='unplug-backend/src/routes/uploads.js'
+            if [ "$conflicts" != "$expected" ]; then
+              echo "Unexpected merge conflict(s):"
+              echo "$conflicts"
+              exit 1
+            fi
+
+            # uploads.js changed independently on production (R2-only storage)
+            # and in Control Centre (Media Library indexing). Re-run a true
+            # three-way merge against their common production ancestor so both
+            # independent changes are preserved rather than choosing ours/theirs.
+            file='unplug-backend/src/routes/uploads.js'
+            git show HEAD:"$file" > /tmp/uploads-ours.js
+            git show fb2b543f903669efc79fca74187d2409e90e2530:"$file" > /tmp/uploads-base.js
+            git show 2ed654bcc799fa67e86ee6d653dbd9b811bca5ff:"$file" > /tmp/uploads-theirs.js
+            if ! git merge-file -p /tmp/uploads-ours.js /tmp/uploads-base.js /tmp/uploads-theirs.js > "$file"; then
+              echo 'uploads.js still contains a semantic merge conflict; refusing to assemble release.'
+              exit 1
+            fi
+            git add "$file"
+          fi
+
+          if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+            echo 'Unresolved merge conflicts remain.'
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+
+      - name: Preserve production migration replay hotfixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in \
+            unplug-backend/db/migrations/010_new_pricing_model.sql \
+            unplug-backend/db/migrations/046_consultant_role.sql \
+            unplug-backend/db/migrations/049_article_drafts.sql \
+            unplug-backend/db/migrations/053_ad_slots_rotation.sql
+          do
+            git show 6a8d5b3ce806859cea50ec49f96efb7081f6e442:"$file" > "$file"
+            git add "$file"
+          done
+
+      - name: Release boundary guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f unplug-backend/db/migrations/176_admin_content_trash.sql
+          test -f unplug-backend/db/migrations/183_media_library.sql
+          test -f unplug-backend/db/migrations/184_page_cms_drafts.sql
+          test -f unplug-backend/db/migrations/185_staff_roles_permissions.sql
+          test -f unplug-backend/db/migrations/186_ad_banner_campaign_manager.sql
+          test -f unplug-backend/db/migrations/187_payment_fulfilment_tracking.sql
+          test ! -f unplug-backend/db/migrations/188_daily_shoutout_social_system.sql
+
+          grep -q 'async function uploadPublicFile' unplug-backend/src/routes/uploads.js
+          grep -q 'async function indexPublicUpload' unplug-backend/src/routes/uploads.js
+          if grep -q 'SUPABASE_SERVICE_KEY' unplug-backend/src/routes/uploads.js; then
+            echo 'R2-only production storage was lost during merge.'
+            exit 1
+          fi
+          node --check unplug-backend/src/routes/uploads.js
+          node --check unplug-backend/src/app.js
+
+      - name: Frontend install, security check and build
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run security:check
+          npm run build
+
+      - name: Backend install and test suite
+        working-directory: unplug-backend
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+
+      - name: Commit isolated release assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/assemble-control-centre-production.yml
+          git add -A
+          git commit -m "Assemble tested Control Centre production release"
+          git push origin HEAD:production-control-centre-release-20260910
