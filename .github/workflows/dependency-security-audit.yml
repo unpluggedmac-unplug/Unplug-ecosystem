@@ -1,0 +1,60 @@
+name: Dependency security audit
+
+on:
+  push:
+    branches:
+      - security-audit-control-centre-20260910
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout audited release
+        uses: actions/checkout@v4
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            unplug-backend/package-lock.json
+
+      - name: Audit frontend dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm audit --json > "$RUNNER_TEMP/frontend-audit.json" || true
+          echo 'Frontend audit summary:'
+          jq '.metadata.vulnerabilities // {}' "$RUNNER_TEMP/frontend-audit.json"
+          echo 'Frontend vulnerable packages:'
+          jq -r '.vulnerabilities // {} | to_entries[] | [.key, .value.severity, (.value.isDirect|tostring), (.value.fixAvailable|tostring)] | @tsv' "$RUNNER_TEMP/frontend-audit.json" || true
+
+      - name: Audit exact backend production dependency set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd unplug-backend
+          npm ci --omit=dev
+          npm audit --omit=dev --json > "$RUNNER_TEMP/backend-prod-audit.json" || true
+          echo 'Backend production audit summary:'
+          jq '.metadata.vulnerabilities // {}' "$RUNNER_TEMP/backend-prod-audit.json"
+          echo 'Backend vulnerable packages:'
+          jq -r '.vulnerabilities // {} | to_entries[] | [.key, .value.severity, (.value.isDirect|tostring), (.value.fixAvailable|tostring), (.value.via|tostring)] | @tsv' "$RUNNER_TEMP/backend-prod-audit.json" || true
+
+      - name: Save audit reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-reports
+          path: |
+            ${{ runner.temp }}/frontend-audit.json
+            ${{ runner.temp }}/backend-prod-audit.json
+          if-no-files-found: error
+          retention-days: 7
