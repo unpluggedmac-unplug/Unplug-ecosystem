@@ -228,6 +228,7 @@ app.use('/forms', require('./routes/forms'));
 // signed_agreements system. Payment policy has its own bridge because option C
 // allows an admin to choose member-only or guest EFT per agreement.
 const agreementFormsRoutes = require('./routes/agreementForms');
+app.use('/agreement-forms', require('./middleware/agreementPaymentPolicy'));
 app.use('/agreement-forms', agreementFormsRoutes.router);
 app.use('/a', agreementFormsRoutes.shortLinkRouter);
 app.use('/agreement-payments', require('./routes/agreementPayments'));
