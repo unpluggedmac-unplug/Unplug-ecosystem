@@ -67,11 +67,171 @@ jobs:
             git add "$file"
           done
 
+      - name: Reconcile recovered-production integration contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Recovered production already owns migration number 176 for the
+          # consultant free-publishing toggle. Keep the Control Centre Trash
+          # migration, but give it the next safe release-only number instead of
+          # allowing two different 176 migrations to coexist.
+          if [ -f unplug-backend/db/migrations/176_admin_content_trash.sql ]; then
+            mv unplug-backend/db/migrations/176_admin_content_trash.sql \
+               unplug-backend/db/migrations/189_admin_content_trash.sql
+          fi
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one compatibility target, found {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          # The Control Centre kept the banner animation controls but refactored
+          # adBannerRowHtml(uid) to adBannerRowHtml(). Test the UI contract, not
+          # the obsolete parameter spelling.
+          replace_once(
+              'unplug-backend/test/adBannerAnimationUi.test.js',
+              "const idx = src.indexOf('function adBannerRowHtml(uid)');",
+              "const idx = src.indexOf('function adBannerRowHtml(');",
+          )
+
+          # Media Library is deliberately format-agnostic: an image may later
+          # be reused as a square profile, portrait gallery card, wide banner,
+          # etc. Treat it like the other row-dependent upload fields and make
+          # that explicit in the admin UI instead of inventing one false size.
+          replace_once(
+              'unplug-backend/test/imageSpecs.test.js',
+              "const dynamic = ['adImage_', 'coverImg', 'siteImg-', 'abImage', 'cover', 'bannerImage', 'sectionImage'];",
+              "const dynamic = ['adImage_', 'coverImg', 'siteImg-', 'abImage', 'cover', 'bannerImage', 'sectionImage', 'mediaLibraryUpload'];",
+          )
+          replace_once(
+              'unplug-admin-dashboard.html',
+              "Uploads are stored in Unplug's configured cloud storage and automatically catalogued here. Uploading does not publish the image anywhere until you choose it in content.",
+              "Uploads are stored in Unplug's configured cloud storage and automatically catalogued here. The Media Library has no single required image size because files can be reused in different placements; follow the size guidance shown when you choose an image for a specific use. Uploading does not publish the image anywhere until you choose it in content.",
+          )
+
+          # Trash-first deletion is an intentional Control Centre safety change.
+          # Update the recovered legacy tests so they verify that contract and
+          # still prove a permanent delete really removes the row and never
+          # refunds a confirmed payment.
+          replace_once(
+              'unplug-backend/test/adminContent.test.js',
+              """test('delete removes the row, and deleting twice is a clean 404', async () => {
+            const article = await makeArticle(memberId, { title: 'To Be Deleted' });
+
+            assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 200);
+            assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 404);
+
+            const row = await pool.query('SELECT id FROM articles WHERE id = $1', [article.id]);
+            assert.equal(row.rowCount, 0);
+          });""",
+              """test('permanent delete requires Trash first, then removes the row', async () => {
+            const article = await makeArticle(memberId, { title: 'To Be Deleted' });
+
+            const direct = await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken });
+            assert.equal(direct.status, 409, 'an existing item must be moved to Trash before permanent deletion');
+
+            const trashed = await req('POST', `/admin/content/articles/${article.id}/trash`, { token: adminToken, body: {} });
+            assert.equal(trashed.status, 200);
+            assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 200);
+            assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 409,
+              'after permanent deletion there is no active Trash entry to delete again');
+
+            const row = await pool.query('SELECT id FROM articles WHERE id = $1', [article.id]);
+            assert.equal(row.rowCount, 0);
+          });""",
+          )
+          replace_once(
+              'unplug-backend/test/adminContent.test.js',
+              """  await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken });
+
+            const still = await pool.query('SELECT status FROM payments WHERE id = $1', [payment.id]);""",
+              """  assert.equal((await req('POST', `/admin/content/articles/${article.id}/trash`, { token: adminToken, body: {} })).status, 200);
+            assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 200);
+
+            const still = await pool.query('SELECT status FROM payments WHERE id = $1', [payment.id]);""",
+          )
+
+          # Recovered tests predate two deliberate checkout guards added by the
+          # Control Centre boundary: ownership is enforced before duplicate
+          # detection, and PayFast/Ozow initiation stays closed until a real
+          # hosted-checkout builder exists. Preserve those protections.
+          replace_once(
+              'unplug-backend/test/paymentsDuplicateGuard.test.js',
+              """test(\"THE GUARD IS PER USER — SOMEONE ELSE'S PENDING ORDER NEVER BLOCKS YOURS\", async () => {
+            // Not a realistic path (linkedId ownership is enforced elsewhere for
+            // owned resources), but the query itself is scoped by user_id and that
+            // scoping is what this proves directly.
+            const buyer = await makeUser();
+            const otherUser = await makeUser();
+            const eventId = await makeAwaitingEvent(buyer);
+
+            await req('POST', '/payments/initiate', { token: tokenFor(buyer), body: initiateBody(eventId) });
+            const attempt = await req('POST', '/payments/initiate', { token: tokenFor(otherUser), body: initiateBody(eventId) });
+            assert.equal(attempt.status, 201, \"a different user's request for the same linkedId is not treated as their duplicate\");
+          });""",
+              """test(\"OWNERSHIP GUARD RUNS BEFORE DUPLICATE CHECK — ANOTHER USER CANNOT PAY FOR YOUR RESOURCE\", async () => {
+            const buyer = await makeUser();
+            const otherUser = await makeUser();
+            const eventId = await makeAwaitingEvent(buyer);
+
+            const first = await req('POST', '/payments/initiate', { token: tokenFor(buyer), body: initiateBody(eventId) });
+            assert.equal(first.status, 201);
+            const attempt = await req('POST', '/payments/initiate', { token: tokenFor(otherUser), body: initiateBody(eventId) });
+            assert.equal(attempt.status, 403);
+            assert.match(attempt.body.error, /own account/i);
+
+            const rows = await pool.query(
+              `SELECT count(*)::int AS n FROM payments WHERE linked_type = 'event_listing' AND linked_id = $1`, [eventId]);
+            assert.equal(rows.rows[0].n, 1, 'the blocked user did not create a second payment row');
+          });""",
+          )
+          replace_once(
+              'unplug-backend/test/paymentsDuplicateGuard.test.js',
+              """test('PayFast/Ozow resubmits are also caught — the guard is not EFT-only', async () => {
+            const user = await makeUser();
+            const eventId = await makeAwaitingEvent(user);
+            const token = tokenFor(user);
+
+            const first = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method: 'payfast' }) });
+            assert.equal(first.status, 201);
+            const second = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method: 'payfast' }) });
+            assert.equal(second.status, 200);
+            assert.equal(second.body.alreadyPending, true);
+            assert.ok(second.body.redirectUrl, 'still gets a redirect URL, not just an error');
+
+            const rows = await pool.query(
+              `SELECT count(*)::int AS n FROM payments WHERE linked_type = 'event_listing' AND linked_id = $1`, [eventId]);
+            assert.equal(rows.rows[0].n, 1);
+          });""",
+              """test('PayFast/Ozow initiation stays closed until a real hosted checkout exists', async () => {
+            const user = await makeUser();
+            const eventId = await makeAwaitingEvent(user);
+            const token = tokenFor(user);
+
+            const blocked = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method: 'payfast' }) });
+            assert.equal(blocked.status, 400);
+            assert.match(blocked.body.error, /coming soon|EFT/i);
+
+            const rows = await pool.query(
+              `SELECT count(*)::int AS n FROM payments WHERE linked_type = 'event_listing' AND linked_id = $1`, [eventId]);
+            assert.equal(rows.rows[0].n, 0, 'a disabled gateway must not create a pending payment row');
+          });""",
+          )
+          PY
+
       - name: Release boundary guards
         shell: bash
         run: |
           set -euo pipefail
-          test -f unplug-backend/db/migrations/176_admin_content_trash.sql
+          test -f unplug-backend/db/migrations/189_admin_content_trash.sql
+          test ! -f unplug-backend/db/migrations/176_admin_content_trash.sql
           test -f unplug-backend/db/migrations/183_media_library.sql
           test -f unplug-backend/db/migrations/184_page_cms_drafts.sql
           test -f unplug-backend/db/migrations/185_staff_roles_permissions.sql
