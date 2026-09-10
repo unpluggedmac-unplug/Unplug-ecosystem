@@ -14,6 +14,13 @@ This file is the durable decision log for the two approved builds. It captures t
 4. Public visibility: there is no always-on public Agreements directory. Admin explicitly chooses whether an agreement is public and, if public, chooses which approved site pages display it. Direct/private links remain supported.
 5. Control Centre navigation label: `Agreements`.
 
+### Agreement Forms — implementation decisions batch 2
+
+21. Payment timing is configurable per agreement. Admin chooses one of: `pay_before_sign`, `sign_before_pay`, or `free/no payment`.
+22. External/off-site agreements support structured external-service metadata entered by admin, including service name, description/reference, client, amount, and an optional external reference.
+23. When an external/off-site agreement has a price, payment still runs through Unplug's normal checkout/payment system and produces the normal payment record/reference/receipt.
+24. Signing must support both typed signature/name and drawn signature where applicable. The agreement configuration/UI may present both methods to the signer.
+
 ## Growth Application
 
 6. User-facing name: `Growth Application`.
@@ -30,6 +37,13 @@ This file is the durable decision log for the two approved builds. It captures t
 17. Repeat applications: allowed without a lifetime cap; retain full application history.
 18. Member dashboard: show a persistent `My Growth Journey` card containing progress, tasks, messages and Resume Application access.
 19. Admin research workspace: include private research notes, admin/internal notes, tasks, due dates and applicant-facing message history. Private/internal material must never be exposed to the applicant.
+
+### Growth Application — implementation decisions batch 2
+
+25. The Growth Application itself is free for members.
+26. Deep Discovery must contain approximately 250 detailed questions for Individuals AND a separate approximately 250-question tailored set for Businesses.
+27. After an application is Closed, the member's `My Growth Journey` card remains visible as permanent history, including completed tasks/messages, and the member may start another application.
+28. Final submission requires POPIA/privacy consent explaining that Unplug may use the applicant's answers to assess growth needs, research opportunities, and communicate with the applicant about the application.
 
 ## Build and release rule
 
