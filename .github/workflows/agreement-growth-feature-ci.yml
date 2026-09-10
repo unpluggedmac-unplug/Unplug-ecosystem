@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: agreement-growth-feature-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -32,8 +36,12 @@ jobs:
 
       - name: Syntax check Agreement Forms source
         run: |
+          node --check src/app.js
           node --check src/routes/agreementForms.js
+          node --check src/routes/agreementPayments.js
+          node --check src/middleware/agreementPaymentPolicy.js
           node --check src/utils/agreementDocument.js
+          node --check test/agreementPayments.test.js
 
       - name: PostgreSQL migration sweep
         run: node scripts/sweep-test-postgres.js
