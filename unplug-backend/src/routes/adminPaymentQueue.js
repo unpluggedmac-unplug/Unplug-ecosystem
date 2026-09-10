@@ -32,6 +32,7 @@ const SERVICE_LABELS = {
   article_publish: 'Article Submission', event_listing: 'Event Listing',
   gallery_bundle: 'Gallery Bundle', top10_entry: 'Top 10 Entry',
   edition_download: 'Edition Download', ad_banner: 'Page Banner',
+  agreement_payment: 'Agreement',
 };
 
 // Every payments/orders status maps onto a small shared vocabulary for the
@@ -49,13 +50,17 @@ async function queryPayments({ q, status, from, to }) {
   if (to) { values.push(to); conditions.push(`p.created_at <= $${values.length}`); }
   if (q) {
     values.push(`%${q}%`);
-    conditions.push(`(p.gateway_reference ILIKE $${values.length} OR u.email ILIKE $${values.length} OR u.full_name ILIKE $${values.length})`);
+    conditions.push(`(p.gateway_reference ILIKE $${values.length}
+      OR COALESCE(u.email, p.guest_payer_email, '') ILIKE $${values.length}
+      OR COALESCE(u.full_name, p.guest_payer_name, '') ILIKE $${values.length})`);
   }
   const result = await pool.query(
     `SELECT p.id, p.gateway_reference AS reference, p.linked_type, p.amount, p.order_total,
             p.voucher_discount, p.credit_used, p.method, p.status, p.pop_url, p.invoice_url,
-            p.receipt_url, p.created_at, p.confirmed_at, p.user_id, u.email, u.full_name
-       FROM payments p JOIN users u ON u.id = p.user_id
+            p.receipt_url, p.created_at, p.confirmed_at, p.user_id,
+            COALESCE(u.email, p.guest_payer_email) AS email,
+            COALESCE(u.full_name, p.guest_payer_name) AS full_name
+       FROM payments p LEFT JOIN users u ON u.id = p.user_id
       WHERE ${conditions.join(' AND ')}
       ORDER BY p.created_at DESC
       LIMIT 500`,
@@ -203,7 +208,11 @@ router.get('/', requireRole('admin'), async (req, res, next) => {
 async function loadRecord(source, id) {
   if (source === 'payment') {
     const r = await pool.query(
-      `SELECT p.*, u.email, u.full_name FROM payments p JOIN users u ON u.id = p.user_id WHERE p.id = $1`,
+      `SELECT p.*,
+              COALESCE(u.email, p.guest_payer_email) AS email,
+              COALESCE(u.full_name, p.guest_payer_name) AS full_name
+         FROM payments p LEFT JOIN users u ON u.id = p.user_id
+        WHERE p.id = $1`,
       [id]
     );
     if (r.rowCount === 0) return null;
