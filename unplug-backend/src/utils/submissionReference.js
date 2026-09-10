@@ -47,6 +47,7 @@ const SUBMISSION_TABLE = {
   vote_bundle: 'vote_bundles',
   edition_download: 'edition_purchases',
   form_payment: 'form_submissions',
+  agreement_payment: 'agreement_submissions',
 };
 
 // What each linked_type is CALLED, for a member reading their own order.
@@ -72,6 +73,7 @@ const SERVICE_LABEL = {
   vote_bundle: 'Votes',
   edition_download: 'Edition download',
   form_payment: 'Form payment',
+  agreement_payment: 'Agreement',
 };
 
 for (const type of Object.keys(SUBMISSION_TABLE)) {
