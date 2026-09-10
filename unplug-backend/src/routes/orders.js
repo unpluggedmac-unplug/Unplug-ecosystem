@@ -22,7 +22,8 @@ const { spendCredit, balanceFor } = require('../utils/accountCredit');
 const { eftInstructions } = require('../utils/eftDetails');
 const { logActivity } = require('./activityLog');
 const paymentsRouter = require('./payments');
-const { resolveAmount, applyVoucher, recordVoucherRedemption, applyPaymentEffect, TERMS_VERSION } = paymentsRouter;
+const { resolveAmount, applyVoucher, recordVoucherRedemption, applyPaymentEffectTracked, TERMS_VERSION, gatewayIsLive } = paymentsRouter;
+const { assertPurchasableByUser } = require('../utils/purchaseOwnership');
 
 const router = express.Router();
 
@@ -48,24 +49,30 @@ const generateOrderReference = () =>
 // "does this voucher apply here" means it matches AT LEAST ONE item —
 // duplicating just that check rather than bending applyVoucher's
 // single-item signature to also mean "matches any of these".
-async function applyVoucherToCart(code, userId, cartLinkedTypes, subtotal) {
+async function applyVoucherToCart(code, userId, pricedItems, subtotal) {
   const result = await pool.query(
     `SELECT * FROM vouchers WHERE code = $1 AND active = true AND expires_at > now()`,
     [code.toUpperCase().trim()]
   );
   if (result.rows.length === 0) throw new Error('This voucher code is invalid, expired, or no longer active.');
   const voucher = result.rows[0];
-  if (voucher.service_restriction && !cartLinkedTypes.includes(voucher.service_restriction)) {
+  const eligibleItems = voucher.service_restriction
+    ? pricedItems.filter((i) => i.linkedType === voucher.service_restriction)
+    : pricedItems;
+  if (voucher.service_restriction && eligibleItems.length === 0) {
     throw new Error('This voucher code does not apply to anything in this order.');
   }
+  const eligibleSubtotal = Number(eligibleItems.reduce((sum, i) => sum + Number(i.amount || 0), 0).toFixed(2));
   const alreadyUsed = await pool.query(
     `SELECT id FROM voucher_redemptions WHERE voucher_id = $1 AND user_id = $2`,
     [voucher.id, userId]
   );
   if (alreadyUsed.rows.length > 0) throw new Error('You have already used this voucher code.');
+  // A service-restricted voucher discounts only the matching items, never
+  // unrelated services that happen to share the same basket.
   const discountAmount = voucher.discount_type === 'percent'
-    ? Math.min(subtotal, (subtotal * Number(voucher.discount_value)) / 100)
-    : Math.min(subtotal, Number(voucher.discount_value));
+    ? Math.min(eligibleSubtotal, (eligibleSubtotal * Number(voucher.discount_value)) / 100)
+    : Math.min(eligibleSubtotal, Number(voucher.discount_value));
   const finalAmount = Math.max(0, subtotal - discountAmount);
   return { voucher, discountAmount, finalAmount };
 }
@@ -77,6 +84,7 @@ function validateItemsShape(items) {
   if (items.length > 20) {
     return 'A single order can hold at most 20 services — check out in more than one order if you need more.';
   }
+  const seen = new Set();
   for (const item of items) {
     if (!CART_ELIGIBLE_TYPES.includes(item.linkedType)) {
       return `"${item.linkedType}" cannot be added to a cart order — it must be one of: ${CART_ELIGIBLE_TYPES.join(', ')}.`;
@@ -84,6 +92,9 @@ function validateItemsShape(items) {
     if (!Number.isInteger(Number(item.linkedId))) {
       return `Every item needs a valid linkedId (got one for "${item.linkedType}" that isn't a number).`;
     }
+    const key = `${item.linkedType}:${Number(item.linkedId)}`;
+    if (seen.has(key)) return 'The same service cannot be added to one order more than once.';
+    seen.add(key);
   }
   return null;
 }
@@ -99,6 +110,7 @@ router.post('/quote', requireAuth, async (req, res, next) => {
 
     const priced = [];
     for (const item of items) {
+      await assertPurchasableByUser(item.linkedType, Number(item.linkedId), req.user.id);
       const amount = await resolveAmount(item.linkedType, Number(item.linkedId));
       priced.push({ linkedType: item.linkedType, linkedId: Number(item.linkedId), amount });
     }
@@ -109,7 +121,7 @@ router.post('/quote', requireAuth, async (req, res, next) => {
     let afterVoucher = subtotal;
     if (voucherCode) {
       try {
-        const v = await applyVoucherToCart(voucherCode, req.user.id, items.map((i) => i.linkedType), subtotal);
+        const v = await applyVoucherToCart(voucherCode, req.user.id, priced, subtotal);
         afterVoucher = v.finalAmount;
         voucherDiscount = Number((subtotal - afterVoucher).toFixed(2));
       } catch (e) {
@@ -136,6 +148,8 @@ router.post('/quote', requireAuth, async (req, res, next) => {
       settledWithoutPayment: total === 0,
     });
   } catch (err) {
+    if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
+    if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
     if (err.message.includes('not found') || err.message.includes('not implemented')) {
       return res.status(400).json({ error: err.message });
     }
@@ -159,6 +173,9 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     if (!['payfast', 'ozow', 'eft'].includes(method)) {
       return res.status(400).json({ error: 'method must be one of: payfast, ozow, eft' });
     }
+    if (!gatewayIsLive(method)) {
+      return res.status(400).json({ error: `${method === 'payfast' ? 'PayFast' : 'Ozow'} is coming soon and cannot be used yet — pay via EFT for now.` });
+    }
     // STEP 9 — two SEPARATE mandatory checkboxes, both required: reviewing
     // the information is not the same act as accepting the Terms, so one
     // cannot silently stand in for the other.
@@ -179,6 +196,7 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     // same rule every other checkout on this site follows.
     const priced = [];
     for (const item of items) {
+      await assertPurchasableByUser(item.linkedType, Number(item.linkedId), req.user.id);
       const amount = await resolveAmount(item.linkedType, Number(item.linkedId));
       priced.push({ linkedType: item.linkedType, linkedId: Number(item.linkedId), amount });
     }
@@ -188,7 +206,7 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
     let appliedVoucher = null;
     let voucherDiscount = 0;
     if (voucherCode) {
-      const v = await applyVoucherToCart(voucherCode, req.user.id, items.map((i) => i.linkedType), subtotal);
+      const v = await applyVoucherToCart(voucherCode, req.user.id, priced, subtotal);
       afterVoucher = v.finalAmount;
       appliedVoucher = v.voucher;
       voucherDiscount = Number((subtotal - afterVoucher).toFixed(2));
@@ -297,14 +315,18 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       // should not exist. Safe to call twice; the UNIQUE on order_id refuses a
       // second one, so a retry cannot mint a duplicate number.
       try { await issueForOrder(order.id); } catch (e) { /* an invoice must never block a paid order */ }
+      let fulfilmentFailures = 0;
       for (const p of paymentRows) {
-        try { await applyPaymentEffect({ ...p, status: 'confirmed' }); } catch (e) { /* one item's effect failing must not block the others */ }
+        try { await applyPaymentEffectTracked({ ...p, status: 'confirmed' }); } catch (e) { fulfilmentFailures += 1; }
       }
       return res.status(201).json({
         order: { ...order, status: 'confirmed' },
         items: paymentRows,
         paidInFull: true,
-        message: `Covered in full by your R${Number(order.credit_used).toFixed(2)} account credit — nothing to pay.`,
+        fulfilmentFailures,
+        message: fulfilmentFailures
+          ? `Payment is complete, but ${fulfilmentFailures} service item(s) need admin attention before activation.`
+          : `Covered in full by your R${Number(order.credit_used).toFixed(2)} account credit — nothing to pay.`,
       });
     }
 
@@ -322,6 +344,8 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
       note: `Stub URL — replace with a real ${method === 'payfast' ? 'PayFast' : 'Ozow'} checkout link once merchant credentials are available.`,
     });
   } catch (err) {
+    if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
+    if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
     if (err.message.includes('not found') || err.message.includes('not implemented') || err.message.includes('voucher')) {
       return res.status(400).json({ error: err.message });
     }
@@ -527,12 +551,18 @@ router.patch('/admin/:id/confirm-eft', requireRole('admin'), async (req, res, ne
     // §10.5, same as the paid-by-credit path above.
     try { await issueForOrder(req.params.id); } catch (e) { /* an invoice must never block a confirmed order */ }
 
+    let fulfilmentFailures = 0;
     for (const item of items.rows) {
-      try { await applyPaymentEffect({ ...item, status: 'confirmed' }); } catch (e) { /* one item's effect failing must not block the others */ }
+      try { await applyPaymentEffectTracked({ ...item, status: 'confirmed' }); } catch (e) { fulfilmentFailures += 1; }
     }
 
-    logActivity(req.user.id, 'order_confirmed', `Order ${order.rows[0].reference} — ${items.rows.length} item(s), R${order.rows[0].total}`);
-    res.json({ message: 'Order confirmed and every item applied.' });
+    logActivity(req.user.id, 'order_confirmed', `Order ${order.rows[0].reference} — ${items.rows.length} item(s), R${order.rows[0].total}${fulfilmentFailures ? ` — ${fulfilmentFailures} fulfilment failure(s)` : ''}`);
+    res.json({
+      fulfilmentFailures,
+      message: fulfilmentFailures
+        ? `Order confirmed, but ${fulfilmentFailures} service item(s) need attention in Checkout Health.`
+        : 'Order confirmed and every item applied.',
+    });
   } catch (err) {
     next(err);
   }

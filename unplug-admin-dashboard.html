@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="/runtime-config"></script>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Unplug Admin Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -221,6 +221,23 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .art-section-remove{ background:none; border:none; cursor:pointer; font-size:15px; color:var(--red); }
 .art-section label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin:10px 0 4px; }
 .art-section input, .art-section textarea{ width:100%; border:1px solid var(--paper-line); padding:9px 12px; font-size:14px; font-family:inherit; background:#fff; }
+
+/* Universal Control Centre search */
+.global-search-wrap{position:sticky;top:0;z-index:40;background:rgba(235,233,233,.96);backdrop-filter:blur(10px);border-bottom:1px solid var(--paper-line);padding:12px 0 14px;margin-bottom:18px}
+.global-search-bar{position:relative;display:flex;gap:8px;align-items:center}
+.global-search-input{width:100%;padding:12px 44px 12px 15px;border:1px solid #cfc9c4;background:#fff;font:inherit;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.global-search-input:focus{outline:2px solid var(--orange);outline-offset:1px}
+.global-search-kbd{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--slate);border:1px solid var(--paper-line);padding:2px 5px;background:#faf9f8}
+.global-search-results{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);max-height:65vh;overflow:auto;background:#fff;border:1px solid var(--paper-line);box-shadow:0 16px 40px rgba(0,0,0,.18);z-index:80}
+.global-search-results.open{display:block}
+.gs-head{padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;background:#f3f0ed;color:var(--slate);font-weight:800;border-top:1px solid var(--paper-line)}
+.gs-head:first-child{border-top:none}
+.gs-result{display:flex;justify-content:space-between;gap:14px;align-items:center;width:100%;border:0;border-top:1px solid #eee;background:#fff;padding:11px 14px;text-align:left;cursor:pointer;font:inherit}
+.gs-result:hover,.gs-result:focus{background:#fff7f3;outline:none}
+.gs-main{min-width:0}.gs-title{font-size:13.5px;font-weight:700;color:#171717;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gs-detail{font-size:11.5px;color:var(--slate);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:720px}.gs-status{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate);white-space:nowrap}
+.gs-empty{padding:18px;text-align:center;color:var(--slate);font-size:13px}
+.manage-tools{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.manage-tools>div{flex:1;min-width:180px}.manage-search-input{width:100%;padding:9px 11px;border:1px solid var(--paper-line);font:inherit}
+@media(max-width:800px){.global-search-wrap{top:49px}.global-search-kbd{display:none}.gs-status{display:none}.plw-grid{grid-template-columns:1fr !important;}}
 </style>
 </head>
 <body>
@@ -279,130 +296,141 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   <div class="m-topbar">
     <button class="m-menu-btn" id="admMenuBtn" aria-label="Open menu"
             aria-expanded="false" aria-controls="admSidebar">&#9776;</button>
-    <span class="m-topbar-title">Unplug Admin</span>
+    <span class="m-topbar-title">Unplug Control Centre</span>
   </div>
   <div class="m-backdrop" id="admBackdrop" hidden></div>
   <div class="sidebar" id="admSidebar">
-    <div class="brand">Unplug Admin</div>
-    <input type="search" class="nav-search" id="navSearch" placeholder="Search admin sections…" aria-label="Search admin sections">
+    <div class="brand">Unplug Control Centre</div>
+    <input type="search" class="nav-search" id="navSearch" placeholder="Find a tool or section…" aria-label="Find an admin tool or section">
 
-    <!-- Pinned: the two screens opened every single day sit above the
-         categories rather than inside one, so they are never a click away
-         behind a collapsed group. -->
     <div class="nav-pinned">
-      <a class="active" data-section="overview">📊 Dashboard Overview</a>
-      <a data-section="queue">Approval Queue</a>
+      <a class="active" data-section="overview">⌂ Control Centre</a>
+      <a data-section="queue">✓ Approval Centre</a>
+      <a data-section="manage">⌕ All Content</a>
     </div>
 
     <div class="nav-group" data-group="content">
-      <button type="button" class="nav-group-head"><span>Content Management</span><span class="chev">▶</span></button>
+      <button type="button" class="nav-group-head"><span>Content</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
-        <a data-section="manage">Manage Content</a>
-        <a data-section="highlights">Highlighted Articles</a>
+        <a data-section="publish">Articles &amp; Publishing</a>
+        <a data-section="highlights">Featured / Highlighted</a>
+        <a data-section="gallerymgmt">Media &amp; Gallery</a>
         <a data-section="covers">Cover Images</a>
-        <a data-section="gallerymgmt">Gallery</a>
-        <a data-section="publish">Publish</a>
         <a data-section="polls">Polls</a>
         <a data-section="comments">Comments <span id="commentsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="reviews">Reviews <span id="reviewsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="shoutouts">Shoutouts <span id="shoutoutBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="contributors">Contributors</a>
-        <a data-section="tags">Tags</a>
+        <a data-section="tags">Categories &amp; Tags</a>
+        <a data-section="testimonials">Testimonials</a>
+        <a data-section="impactmakers">Impact Makers</a>
         <a data-section="birthdays">Birthdays</a>
         <a data-section="halloffame">Hall of Fame</a>
-        <a data-section="calevents">Calendar Events</a>
-        <a data-section="edcal">Editions Calendar</a>
         <a data-section="editions">Editions</a>
+        <a data-section="edcal">Editions Calendar</a>
+        <a data-section="calevents">Calendar Events</a>
+        <a data-section="sasl">SASL Videos</a>
         <a data-section="deafjobs">Deaf Jobs <span id="deafJobsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="deafpassports">Deaf Passports <span id="deafPassportsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-        <a data-section="sasl">SASL Videos</a>
       </div>
     </div>
 
-    <div class="nav-group" data-group="business">
-      <button type="button" class="nav-group-head"><span>Business Management</span><span class="chev">▶</span></button>
+    <div class="nav-group" data-group="pages">
+      <button type="button" class="nav-group-head"><span>Pages &amp; Layout</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
-        <a data-section="dirprofiles">Directory Profiles</a>
-        <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-        <a data-section="projects">Investor Projects</a>
-        <a data-section="adbanners">Ad Banners</a>
-        <a data-section="inquiries">Inquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="pagecms">Page Content &amp; Sections</a>
+        <a data-section="pagevisibility">Page Visibility</a>
+        <a data-section="sitebuttons">Floating Buttons</a>
+        <a data-section="popups">Popups</a>
+        <a data-section="placements">Marketplace Placements</a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="community">
+      <button type="button" class="nav-group-head"><span>Members &amp; Community</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="users">Members &amp; Users</a>
+        <a data-section="staff">Staff &amp; Permissions</a>
+        <a data-section="myunplug">My Unplug Profiles</a>
+        <a data-section="partmembers">Participation Members</a>
+        <a data-section="unplugmembers">Member Scores</a>
+        <a data-section="badges">Badges &amp; Recognition</a>
+        <a data-section="unplugmissions">Missions</a>
+        <a data-section="unplugbizstatus">Business Status</a>
+        <a data-section="unplugmemberstatus">Member Status</a>
+        <a data-section="unplugstreaktiers">Streak Tiers</a>
+        <a data-section="unplugpointvalues">Point Values</a>
+        <a data-section="communitysettings">Community Settings</a>
       </div>
     </div>
 
     <div class="nav-group" data-group="competitions">
-      <button type="button" class="nav-group-head"><span>Competition Management</span><span class="chev">▶</span></button>
+      <button type="button" class="nav-group-head"><span>Competitions</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
-        <a data-section="competitions">Competitions</a>
+        <a data-section="competitions">Competition Manager</a>
         <a data-section="votebundles">Top 10</a>
-        <a data-section="top10monthly">Top 10 Monthly Rankings</a>
+        <a data-section="top10monthly">Monthly Rankings</a>
+        <a data-section="unplugtrust">Trust &amp; Anti-Cheat</a>
       </div>
     </div>
 
-    <div class="nav-group" data-group="users">
-      <button type="button" class="nav-group-head"><span>User Management</span><span class="chev">▶</span></button>
+    <div class="nav-group" data-group="directory">
+      <button type="button" class="nav-group-head"><span>Directory &amp; Business</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
-        <a data-section="users">Users</a>
-        <a data-section="partmembers">Participation Members</a>
-        <a data-section="myunplug">My Unplug</a>
+        <a data-section="dirprofiles">Directory Profiles</a>
+        <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="projects">Investor Projects</a>
         <a data-section="consultants">Sales Consultants</a>
       </div>
     </div>
 
-    <div class="nav-group" data-group="payments">
-      <button type="button" class="nav-group-head"><span>Payment Management</span><span class="chev">▶</span></button>
+    <div class="nav-group" data-group="advertising">
+      <button type="button" class="nav-group-head"><span>Advertising</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
-        <a data-section="payqueue">All Payments (Unified)</a>
-        <a data-section="payments">Payments (EFT)</a>
-        <a data-section="cancellations">Cancellations <span id="cancelBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-        <a data-section="pricing">Service Pricing</a>
-        <a data-section="vouchers">Vouchers</a>
+        <a data-section="adbanners">Banner Campaigns</a>
+        <a data-section="unplugsponsors">Sponsor Campaigns</a>
+        <a data-section="social">Social Feed</a>
       </div>
     </div>
 
-    <div class="nav-group" data-group="settings">
-      <button type="button" class="nav-group-head"><span>Website Settings</span><span class="chev">▶</span></button>
+    <div class="nav-group" data-group="commerce">
+      <button type="button" class="nav-group-head"><span>Commerce &amp; Payments</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="payqueue">All Payments</a>
+        <a data-section="checkouthealth">Checkout Health</a>
+        <a data-section="payments">EFT Payments</a>
+        <a data-section="cancellations">Cancellations <span id="cancelBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="pricing">Service Pricing</a>
+        <a data-section="vouchers">Vouchers &amp; Credits</a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="marketing">
+      <button type="button" class="nav-group-head"><span>Marketing &amp; CRM</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="crm">Sales &amp; CRM</a>
+        <a data-section="inquiries">Enquiries <span id="inquiriesBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+        <a data-section="emailmarketing">Email Marketing</a>
+        <a data-section="forms">Forms &amp; Submissions</a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="reports">
+      <button type="button" class="nav-group-head"><span>Analytics &amp; Reports</span><span class="chev">▶</span></button>
+      <div class="nav-group-items">
+        <a data-section="analytics">Website Analytics</a>
+        <a data-section="unplugpanalytics">Participation Analytics</a>
+        <a data-section="activitylog">Activity &amp; Audit Log</a>
+        <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="advanced">
+      <button type="button" class="nav-group-head"><span>Advanced / System</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
         <a data-section="sitesettings">Site Settings</a>
         <a data-section="redirects">Redirects &amp; 404s</a>
-        <a data-section="pagecms">Page Content</a>
-        <a data-section="placements">Marketplace Placements</a>
-        <a data-section="sitebuttons">Floating Buttons</a>
-        <a data-section="testimonials">Testimonials</a>
-        <a data-section="impactmakers">Impact Makers</a>
-      </div>
-    </div>
-
-    <div class="nav-group" data-group="system">
-      <button type="button" class="nav-group-head"><span>System</span><span class="chev">▶</span></button>
-      <div class="nav-group-items">
-        <a data-section="notifications">Notifications <span id="notifBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
-        <a data-section="analytics">Analytics</a>
-        <a data-section="activitylog">Activity Log</a>
-        <a data-section="crm">Sales &amp; CRM</a>
-        <a data-section="emailmarketing">Email Marketing</a>
-        <a data-section="popups">Popups</a>
-        <a data-section="social">Social Feed</a>
-        <a data-section="forms">Forms</a>
-        <a data-section="pagevisibility">Page Visibility</a>
         <a data-section="spam">Spam Filter</a>
-      </div>
-    </div>
-
-    <div class="nav-group" data-group="participation">
-      <button type="button" class="nav-group-head"><span>Participation Engine</span><span class="chev">▶</span></button>
-      <div class="nav-group-items">
-        <a data-section="unplugmembers">Member Scores</a>
-        <a data-section="unplugsponsors">Sponsor Campaigns</a>
-        <a data-section="unplugmissions">Missions</a>
-        <a data-section="unplugbizstatus">Business Status</a>
-        <a data-section="unplugpointvalues">Point Values</a>
-        <a data-section="unplugmemberstatus">Member Status</a>
-        <a data-section="unplugstreaktiers">Streak Tiers</a>
-        <a data-section="unplugtrust">Trust & Anti-Cheat</a>
-        <a data-section="unplugpanalytics">Participation Analytics</a>
-        <a data-section="communitysettings">Community Settings</a>
-        <a data-section="badges">Badges</a>
       </div>
     </div>
 
@@ -418,11 +446,19 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   </div>
 
   <div class="main">
+
+    <div class="global-search-wrap">
+      <div class="global-search-bar" id="globalSearchBar">
+        <input id="globalAdminSearch" class="global-search-input" type="search" autocomplete="off" placeholder="Search Unplug — articles, people, payments, events, submissions…" aria-label="Search all Unplug admin content" aria-expanded="false" aria-controls="globalSearchResults">
+        <span class="global-search-kbd">Ctrl K</span>
+        <div id="globalSearchResults" class="global-search-results" role="listbox"></div>
+      </div>
+    </div>
     <!-- DASHBOARD OVERVIEW — the landing screen: "what needs my attention
          today?" answered from one endpoint (GET /admin/overview) rather than
          opening ten sections to find out. -->
     <div class="admin-section active" id="section-overview">
-      <div class="main-head"><div><h1>Dashboard Overview</h1><p>A snapshot of the platform right now. Anything waiting on you is highlighted below — click through to act on it.</p></div></div>
+      <div class="main-head"><div><h1>Unplug Control Centre</h1><p>Your daily command centre — what needs attention, what changed, and where to act next.</p></div></div>
       <div class="stat-row" id="ovTotals">
         <div class="stat-card"><div class="num">—</div><div class="label">Loading…</div></div>
       </div>
@@ -438,13 +474,27 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- APPROVAL QUEUE -->
     <div class="admin-section" id="section-queue">
-      <div class="main-head"><div><h1>Approval Queue</h1><p>Everything on the site waiting for a decision, in one list — content, services, payments and access requests. Each row carries its reference code so you can match it to an EFT on your bank statement.</p></div></div>
+      <div class="main-head"><div><h1>Approval Centre</h1><p>Your operational inbox for every website submission and request. Review the full submission, make corrections, request changes from the member, then approve or reject from one place.</p></div></div>
+      <div class="stat-row" id="aqSummary">
+        <div class="stat-card"><div class="num">—</div><div class="label">Waiting for review</div></div>
+        <div class="stat-card"><div class="num">—</div><div class="label">Ready to approve</div></div>
+        <div class="stat-card"><div class="num">—</div><div class="label">Waiting for payment</div></div>
+        <div class="stat-card"><div class="num">—</div><div class="label">Older than 7 days</div></div>
+      </div>
       <div class="panel">
         <div class="panel-body" style="padding:12px 16px; border-bottom:1px solid var(--paper-line);">
           <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
             <input id="aqSearch" placeholder="Search reference, name, email…" style="flex:1; min-width:220px; padding:7px 10px; font-size:13px;">
             <label style="font-size:12px; color:var(--slate);">From <input type="date" id="aqFrom" style="font-size:12.5px; padding:5px;"></label>
             <label style="font-size:12px; color:var(--slate);">To <input type="date" id="aqTo" style="font-size:12.5px; padding:5px;"></label>
+            <label style="font-size:12px; color:var(--slate);">Sort
+              <select id="aqSort" style="font-size:12.5px; padding:5px;">
+                <option value="priority">Needs attention first</option>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="amount">Highest value first</option>
+              </select>
+            </label>
             <button class="btn btn-line" id="aqSearchBtn" style="width:auto; padding:6px 14px;">Search</button>
             <button class="btn btn-line" id="aqResetBtn" style="width:auto; padding:6px 14px;">Reset</button>
           </div>
@@ -495,11 +545,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- MANAGE CONTENT -->
     <div class="admin-section" id="section-manage">
-      <div class="main-head"><div><h1>Manage Content</h1><p>The Approval Queue only shows what's waiting. This shows everything, whatever its status — so you can find something already approved, fix a mistake in it, or take it down. Deleting is permanent; rejecting only hides it.</p></div></div>
+      <div class="main-head"><div><h1>All Content</h1><p>Find, preview, edit, publish or take content offline from one place. Everyday removal now goes to Trash first, where it can be restored before any permanent deletion.</p></div></div>
       <div class="panel">
         <div class="panel-head"><h3>Browse</h3></div>
         <div class="panel-body">
-          <div class="form-row">
+          <div class="manage-tools">
+            <div><label for="manageSearch">Search this content type</label><input id="manageSearch" class="manage-search-input" type="search" placeholder="Search title, name, text, email…"></div>
             <div><label for="manageResource">Content type</label>
               <select id="manageResource">
                 <option value="articles">Articles</option>
@@ -521,6 +572,12 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
                 <option value="awaiting_payment">Awaiting payment</option>
+                <option value="draft">Draft</option>
+                <option value="changes_requested">Changes requested</option>
+                <option value="resubmitted">Resubmitted</option>
+                <option value="credit_issued">Credit issued</option>
+                <option value="expired">Expired</option>
+                <option value="__trash">Trash</option>
               </select>
             </div>
             <div style="display:flex; align-items:flex-end;"><button class="btn btn-solid" style="width:100%;" id="manageLoadBtn">Load</button></div>
@@ -857,6 +914,14 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
+    <div class="admin-section" id="section-checkouthealth">
+      <div class="main-head"><div><h1>Checkout Health</h1><p>Operational checks across member services, carts and payment gateways. This flags purchases that are stuck or inconsistent so paid services do not disappear between checkout and approval.</p></div><button class="btn btn-line" id="checkoutHealthRefresh" style="width:auto;">Run Checks</button></div>
+      <div class="stat-grid" id="checkoutHealthStats" style="margin-bottom:18px;"></div>
+      <div class="panel" style="margin-bottom:18px;"><div class="panel-head"><h3>Payment gateways</h3></div><div class="panel-body" id="checkoutGatewayHealth">Loading…</div></div>
+      <div class="panel" style="margin-bottom:18px;"><div class="panel-head"><h3>Items requiring attention</h3></div><div class="panel-body" id="checkoutAnomalies" style="padding:0;">Loading…</div></div>
+      <div class="panel"><div class="panel-head"><h3>Current duration-based pricing</h3></div><div class="panel-body" id="checkoutPackageHealth">Loading…</div></div>
+    </div>
+
     <div class="admin-section" id="section-cancellations">
       <div class="main-head"><div><h1>Cancellations</h1><p>Members asking to stop a service they pay for. Nothing is cancelled until you approve it here — and approving stops the service immediately. Any money back is an amount you choose; nothing is ever refunded automatically.</p></div></div>
       <div class="panel">
@@ -903,6 +968,29 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" style="text-align:center;">
           <button class="btn btn-line" id="usersLoadMoreBtn" style="width:auto; display:none;">Load more</button>
         </div>
+      </div>
+    </div>
+
+    <!-- STAFF & PERMISSIONS -->
+    <div class="admin-section" id="section-staff">
+      <div class="main-head"><div><h1>Staff &amp; Permissions</h1><p>Super Admin only. Give staff the minimum access they need without giving away the whole website. Built-in roles can be adjusted, and you can create additional roles later.</p></div></div>
+      <div class="panel">
+        <div class="panel-head"><h3>Current staff</h3></div>
+        <div class="panel-body" id="staffAccountsBody">Loading…</div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Assign staff access</h3></div>
+        <div class="panel-body">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="field" style="flex:1; min-width:240px; margin-bottom:0;"><label>Find an existing account</label><input id="staffCandidateSearch" placeholder="Search by name or email…"></div>
+            <button class="btn btn-line" id="staffCandidateSearchBtn" style="width:auto;">Search</button>
+          </div>
+          <div id="staffCandidatesBody" style="margin-top:12px;"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Roles &amp; permissions</h3><button class="btn btn-solid" id="staffNewRoleBtn" style="width:auto; padding:6px 12px;">Create role</button></div>
+        <div class="panel-body" id="staffRolesBody">Loading…</div>
       </div>
     </div>
 
@@ -964,6 +1052,31 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <button data-range="90">Last 90 Days</button>
         </div>
       </div>
+      <div class="panel" id="businessReportsPanel" style="margin-bottom:22px;">
+        <div class="panel-head" style="align-items:flex-start; gap:12px; flex-wrap:wrap;">
+          <div><h3 style="margin-bottom:4px;">Unplug Business Report</h3><p style="margin:0; font-size:12.5px; color:var(--slate);">One reporting window for revenue, members, submissions, approvals, audience, competitions, enquiries, advertising and admin activity.</p></div>
+          <div class="row-actions" id="businessReportRanges" style="margin-left:auto; flex-wrap:wrap;">
+            <button class="btn btn-line" data-br-range="today" style="width:auto;">Today</button>
+            <button class="btn btn-line" data-br-range="7" style="width:auto;">7 Days</button>
+            <button class="btn btn-line" data-br-range="30" style="width:auto;">30 Days</button>
+            <button class="btn btn-line" data-br-range="month" style="width:auto;">This Month</button>
+            <button class="btn btn-line" data-br-range="year" style="width:auto;">This Year</button>
+          </div>
+        </div>
+        <div class="panel-body" style="padding-bottom:10px;">
+          <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="field" style="margin:0;"><label for="brFrom">From</label><input type="date" id="brFrom"></div>
+            <div class="field" style="margin:0;"><label for="brTo">To</label><input type="date" id="brTo"></div>
+            <button class="btn btn-solid" id="brApply" style="width:auto;">Apply</button>
+            <button class="btn btn-line" id="brCsv" style="width:auto;">Download CSV</button>
+            <button class="btn btn-line" id="brExcel" style="width:auto;">Download Excel</button>
+          </div>
+          <div id="brWindowNote" style="font-size:11.5px; color:var(--slate); margin-top:8px;"></div>
+        </div>
+        <div class="stat-row" id="businessReportStats" style="padding:0 16px 8px;"></div>
+        <div class="panel-body" id="businessReportBody" style="padding:0;"><div class="loading-state">Choose a reporting period.</div></div>
+      </div>
+
       <div class="stat-row" id="analyticsStats">
         <div class="stat-card"><div class="num" id="statTotalViews">—</div><div class="label">Total Page Views</div></div>
         <div class="stat-card"><div class="num" id="statUniqueVisitors">—</div><div class="label">Unique Visitors</div></div>
@@ -1162,18 +1275,99 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
     </div>
 
-    <!-- AD BANNERS -->
+    <!-- ADVERTISING CAMPAIGNS -->
     <div class="admin-section" id="section-adbanners">
-      <div class="main-head"><div><h1>Ad Banners</h1><p>Each advertising slot on the site starts as a "Reserve this space" placeholder. Add one or more banners to a slot — with more than one, they rotate automatically on the live site (fade, with prev/next and dots). <strong>Recommended banner size: 1920 × 600px — landscape, 16:5.</strong> Accepted: JPG, PNG, WEBP; max 5 MB. Keep important text/logos away from the extreme edges (banners are responsive and may crop on small screens). Optionally add a narrower <strong>mobile image</strong> for phones. Untick "Active" or set a schedule window (start/end dates) to hold a banner back without deleting it — expired banners drop out of rotation automatically.</p></div></div>
+      <div class="main-head"><div><h1>Advertising &amp; Banner Campaigns</h1><p>Manage every paid or complimentary banner from one place: advertiser, placement, creative, schedule, campaign value, delivery and performance. Banner analytics are first-party aggregate counts — no visitor identity is stored.</p></div></div>
       <div class="panel">
-        <div class="panel-body" id="adBannersBody">Loading…</div>
+        <div class="panel-head"><h3>Campaign Manager</h3></div>
+        <div class="panel-body">
+          <div class="form-row" style="align-items:end;margin-bottom:12px;">
+            <div><label for="adCampaignSearch">Search campaigns</label><input id="adCampaignSearch" placeholder="Advertiser, campaign, email, placement…"></div>
+            <div><label for="adCampaignStatus">Status</label><select id="adCampaignStatus"><option value="all">All campaigns</option><option value="live">Live</option><option value="scheduled">Scheduled</option><option value="paused">Paused</option><option value="expired">Expired</option><option value="pending">Pending approval/payment</option><option value="archived">Archived</option></select></div>
+            <div><label>&nbsp;</label><button class="btn btn-line" id="adCampaignRefresh" style="width:100%;">Refresh</button></div>
+          </div>
+          <div id="adCampaignSummary" style="margin-bottom:14px;"></div>
+          <div id="adBannersBody">Loading…</div>
+        </div>
       </div>
     </div>
 
     <div class="admin-section" id="section-pagecms">
-      <div class="main-head"><div><h1>Page Content</h1><p>Change wording on the site, and add image blocks to any page. Changes go live immediately.</p></div></div>
+      <div class="main-head"><div><h1>Pages &amp; Layout</h1><p>Edit a private draft first, review the page structure, then publish when you are ready. Draft changes do not affect the public website.</p></div></div>
 
-      <div class="panel">
+      <div class="panel" id="pageWorkspacePanel">
+        <div class="panel-head" style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+          <div><h3 style="margin:0;">Page Layout Studio</h3><div style="font-size:12px;color:var(--slate);margin-top:4px;">Draft → Preview → Publish</div></div>
+          <span id="plwStatus" style="font-size:11px;font-weight:800;letter-spacing:.08em;padding:6px 9px;border:1px solid var(--paper-line);">LOADING</span>
+        </div>
+        <div class="panel-body">
+          <div class="form-row" style="align-items:end;">
+            <div style="grid-column:1/-2;"><label for="plwPage">Page</label><select id="plwPage"></select></div>
+            <div><label>&nbsp;</label><button class="btn btn-line" id="plwReloadBtn" style="width:100%;">Reload</button></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 18px;">
+            <button class="btn btn-solid" id="plwSaveBtn" style="width:auto;">Save Draft</button>
+            <button class="btn btn-line" id="plwPreviewBtn" style="width:auto;">Preview Draft</button>
+            <button class="btn btn-solid" id="plwPublishBtn" style="width:auto;">Publish</button>
+            <button class="btn btn-line" id="plwDiscardBtn" style="width:auto;">Discard Draft</button>
+          </div>
+          <div id="plwNotice" style="display:none;margin-bottom:16px;padding:10px 12px;border:1px solid var(--paper-line);font-size:12.5px;"></div>
+
+          <div style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.8fr);gap:18px;align-items:start;" class="plw-grid">
+            <div>
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px;">
+                <h3 style="margin:0;font-size:15px;">Sections / Blocks</h3>
+                <span id="plwBlockCount" style="font-size:12px;color:var(--slate);"></span>
+              </div>
+              <div id="plwBlocks"><div class="loading-state">Loading…</div></div>
+            </div>
+            <div>
+              <div style="border:1px solid var(--paper-line);padding:14px;background:var(--paper);">
+                <h3 id="plwBlockFormTitle" style="font-size:15px;margin:0 0 12px;">Add section</h3>
+                <input type="hidden" id="plwEditBlockIndex" value="">
+                <label>Small label</label><input id="plwBlockSub" placeholder="Optional eyebrow / label">
+                <label style="margin-top:9px;">Heading</label><input id="plwBlockTitle" placeholder="Section heading">
+                <label style="margin-top:9px;">Description</label><textarea id="plwBlockDesc" rows="4" style="width:100%;" placeholder="Section text"></textarea>
+                <label style="margin-top:9px;">Image</label><div id="plwImageUpload"></div>
+                <div class="form-row" style="margin-top:8px;">
+                  <div><label>Image shape</label><select id="plwOrientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square</option></select></div>
+                  <div><label>Button label</label><input id="plwBtnLabel" placeholder="Read more"></div>
+                </div>
+                <label style="margin-top:9px;">Button link</label><input id="plwBtnUrl" placeholder="https://… or internal page">
+                <label style="margin-top:9px;">Image link</label><input id="plwImageLink" placeholder="Optional">
+                <label class="tc-row" style="margin-top:10px;text-transform:none;letter-spacing:0;font-size:12.5px;"><input type="checkbox" id="plwVisible" checked><span>Show this section when published</span></label>
+                <button class="btn btn-solid" id="plwBlockSaveBtn" style="width:100%;margin-top:12px;">Add to Draft</button>
+                <button class="btn btn-line" id="plwBlockCancelBtn" style="width:100%;margin-top:7px;display:none;">Cancel Edit</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:22px;border-top:1px solid var(--paper-line);padding-top:18px;">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;">
+              <div><h3 style="margin:0;font-size:15px;">Page wording overrides</h3><p style="font-size:12px;color:var(--slate);margin:4px 0 0;">These are staged with the page draft. Removing an override restores the wording built into the website when published.</p></div>
+            </div>
+            <div class="form-row">
+              <div><label for="plwContentKey">Content key</label><input id="plwContentKey" list="plwKnownKeys" placeholder="e.g. home.newstories.title"><datalist id="plwKnownKeys"></datalist></div>
+              <div style="grid-column:2/-1;"><label for="plwContentValue">Wording</label><textarea id="plwContentValue" rows="3" style="width:100%;" placeholder="Replacement wording"></textarea></div>
+            </div>
+            <button class="btn btn-line" id="plwContentSetBtn" style="width:auto;">Add / Update Draft Wording</button>
+            <div id="plwContentList" style="margin-top:12px;"></div>
+          </div>
+
+          <div style="margin-top:22px;border-top:1px solid var(--paper-line);padding-top:18px;">
+            <div><h3 style="margin:0;font-size:15px;">Built-in page images</h3><p style="font-size:12px;color:var(--slate);margin:4px 0 10px;">Images wired into fixed page positions. Stage the replacement here; it only changes publicly when this page draft is published.</p></div>
+            <div id="plwSiteImages"><div class="empty-state">Loading page images…</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="plwPreviewPanel" style="display:none;">
+        <div class="panel-head" style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><h3>Draft Preview</h3><button class="btn btn-line" id="plwClosePreview" style="width:auto;">Close</button></div>
+        <div class="panel-body"><div style="font-size:12px;color:var(--slate);margin-bottom:12px;">Structural preview of the staged sections and wording overrides. Nothing below is public until Publish is pressed.</div><div id="plwPreviewBody"></div></div>
+      </div>
+
+
+      <div class="panel" style="display:none;">
         <div class="panel-head"><h3>Add an image block</h3></div>
         <div class="panel-body">
           <div class="form-row">
@@ -1233,7 +1427,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel" style="display:none;">
         <div class="panel-head"><h3>Existing blocks</h3></div>
         <div class="panel-body" id="cmsBlocksBody" style="padding:0;"></div>
       </div>
@@ -1280,7 +1474,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-body" id="plBody" style="padding:0;"></div>
       </div>
 
-      <div class="panel">
+      <div class="panel" style="display:none;">
         <div class="panel-head"><h3>Reword the site</h3></div>
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Pick a piece of wording and type a replacement. Leave the box empty and save to put the original wording back.</p>
@@ -1341,7 +1535,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
       <!-- Pictures on the site that can be swapped without a developer. The
            list comes from the server, so a new one appears here on its own. -->
-      <div class="panel">
+      <div class="panel" style="display:none;">
         <div class="panel-head"><h3>Site images</h3></div>
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin-bottom:14px;">
@@ -2741,7 +2935,33 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- GALLERY MANAGEMENT -->
     <div class="admin-section" id="section-gallerymgmt">
-      <div class="main-head"><div><h1>Gallery Management</h1><p>Add, edit, replace, reorder, publish/unpublish, archive and delete Gallery images — including ones submitted by members. Standard size: <strong>1080 × 1350px, 4:5 portrait</strong>.</p></div>
+      <div class="main-head"><div><h1>Media Library &amp; Gallery</h1><p>One place to find and reuse images across Unplug. The Media Library catalogues uploads and shows where each image is being used; the Community Gallery controls what readers see on the Gallery page.</p></div></div>
+
+      <div class="panel" style="margin-bottom:18px;">
+        <div class="panel-head"><h3>Media Library</h3></div>
+        <div class="panel-body">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px;">
+            <div class="stat-card"><div class="stat-label">Media found</div><div class="stat-value" id="mlTotal">—</div></div>
+            <div class="stat-card"><div class="stat-label">In use</div><div class="stat-value" id="mlUsed">—</div></div>
+            <div class="stat-card"><div class="stat-label">Unused</div><div class="stat-value" id="mlUnused">—</div></div>
+            <div class="stat-card"><div class="stat-label">Trash</div><div class="stat-value" id="mlTrashCount">—</div></div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
+            <div class="field" style="flex:1; min-width:240px; margin:0;"><label for="mlSearch">Search media</label><input id="mlSearch" placeholder="Filename, caption, article, member, banner…"></div>
+            <div class="field" style="margin:0; min-width:150px;"><label for="mlFilter">Show</label><select id="mlFilter"><option value="all">All media</option><option value="used">In use</option><option value="unused">Unused</option><option value="trash">Trash</option></select></div>
+            <button class="btn btn-line" id="mlRefresh" style="width:auto;">Refresh</button>
+          </div>
+          <div style="border:1px dashed var(--paper-line); padding:12px; margin-bottom:14px; background:var(--paper);">
+            <strong style="font-size:13px;">Upload to Media Library</strong>
+            <p style="font-size:12px; color:var(--slate); margin:4px 0 8px;">Uploads are stored in Unplug's configured cloud storage and automatically catalogued here. The Media Library has no single required image size because files can be reused in different placements; follow the size guidance shown when you choose an image for a specific use. Uploading does not publish the image anywhere until you choose it in content.</p>
+            <div id="mlUpload"></div>
+          </div>
+          <div id="mlStatus" style="font-size:12px; color:var(--slate); margin-bottom:8px;"></div>
+          <div id="mlGrid"><div class="loading-state">Loading media…</div></div>
+        </div>
+      </div>
+
+      <div class="main-head" style="margin-top:24px;"><div><h2 style="margin:0;">Community Gallery</h2><p>Add, edit, replace, reorder, publish/unpublish and archive Gallery images shown to readers. Standard size: <strong>1080 × 1350px, 4:5 portrait</strong>.</p></div>
         <button class="approve" id="galAddBtn" style="padding:9px 16px;">+ Add Gallery Image</button></div>
 
       <div class="panel" style="margin-bottom:16px;">
@@ -3093,7 +3313,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 // bare "Failed to fetch" with no clue why. Also discard values saved before
 // the Railway -> Render move, and any localhost value when this page is not
 // actually being served locally.
-const LIVE_API_BASE = "https://unplug-ecosystem.onrender.com";
+const LIVE_API_BASE = (window.UNPLUG_RUNTIME_API || "https://unplug-ecosystem.onrender.com").replace(/\/$/, "");
 (function migrateApiBase() {
   const saved = localStorage.getItem("unplug_api_base");
   if (!saved) return;
@@ -3176,6 +3396,7 @@ function applyImageSpecLabels(root) {
 
 let AUTH_TOKEN = null;
 let CURRENT_USER = null;
+let CURRENT_ACCESS = null;
 
 // The admin session is stored under its OWN key. It used to share
 // 'unplug_auth_token' with the member dashboard and the checkout page, which
@@ -3360,6 +3581,54 @@ document.getElementById('submitResetBtn').addEventListener('click', async () => 
   }
 });
 
+
+// ---------------------------------------------------------------------------
+// Staff capability-aware dashboard visibility.
+// Backend permissions remain the security boundary; hiding unavailable tools
+// here makes the Control Centre understandable and prevents dead-end clicks.
+// ---------------------------------------------------------------------------
+const SECTION_PERMISSIONS = {
+  overview:['dashboard.view'], queue:['approvals.view','approvals.manage'], manage:['content.view','content.manage'],
+  publish:['content.view','content.manage'], highlights:['content.view','content.manage'], gallerymgmt:['media.manage'], covers:['media.manage'],
+  polls:['competitions.manage'], comments:['approvals.view','approvals.manage'], reviews:['approvals.view','approvals.manage'],
+  shoutouts:['content.view','content.manage'], contributors:['content.view','content.manage'], tags:['content.view','content.manage'],
+  testimonials:['content.view','content.manage'], impactmakers:['content.view','content.manage'], birthdays:['content.view','content.manage'],
+  halloffame:['content.view','content.manage'], editions:['content.view','content.manage'], edcal:['content.view','content.manage'], calevents:['events.manage'],
+  sasl:['content.view','content.manage'], deafjobs:['content.view','content.manage'], deafpassports:['content.view','content.manage'],
+  pagecms:['pages.manage'], pagevisibility:['pages.manage'], sitebuttons:['pages.manage'], popups:['pages.manage'], placements:['pages.manage'],
+  users:['members.view','members.manage'], staff:['staff.manage'], myunplug:['members.view','members.manage'], partmembers:['members.view','members.manage'],
+  unplugmembers:['members.view','members.manage'], badges:['competitions.manage'], unplugmissions:['members.manage'], unplugbizstatus:['members.manage'],
+  unplugmemberstatus:['members.manage'], unplugstreaktiers:['members.manage'], unplugpointvalues:['members.manage'], communitysettings:['members.manage'],
+  competitions:['competitions.manage'], votebundles:['competitions.manage'], top10monthly:['competitions.manage'], unplugtrust:['competitions.manage'],
+  dirprofiles:['directory.manage'], claims:['directory.manage'], projects:['directory.manage'], consultants:['directory.manage'],
+  adbanners:['advertising.manage'], unplugsponsors:['advertising.manage'], social:['marketing.manage'],
+  payqueue:['finance.view','finance.manage'], checkouthealth:['finance.view','finance.manage'], payments:['finance.view','finance.manage'], cancellations:['finance.manage'], pricing:['finance.manage'], vouchers:['finance.manage'],
+  crm:['crm.manage'], inquiries:['crm.manage'], emailmarketing:['marketing.manage'], forms:['crm.manage'],
+  analytics:['analytics.view'], unplugpanalytics:['analytics.view'], activitylog:['system.manage'], notifications:['system.manage'],
+  sitesettings:['system.manage'], redirects:['system.manage'], spam:['system.manage']
+};
+function hasAdminPermission(...permissions) {
+  if (!CURRENT_ACCESS) return false;
+  if (CURRENT_ACCESS.isSuperAdmin) return true;
+  const mine = new Set(CURRENT_ACCESS.permissions || []);
+  const implied = { 'content.view':'content.manage', 'approvals.view':'approvals.manage', 'members.view':'members.manage', 'finance.view':'finance.manage' };
+  return permissions.some((p) => mine.has(p) || (implied[p] && mine.has(implied[p])));
+}
+function applyStaffAccessToUi() {
+  if (!CURRENT_ACCESS) return;
+  document.querySelectorAll('.sidebar a[data-section]').forEach((link) => {
+    const need = SECTION_PERMISSIONS[link.dataset.section] || ['system.manage'];
+    link.style.display = hasAdminPermission(...need) ? '' : 'none';
+  });
+  document.querySelectorAll('.nav-group').forEach((group) => {
+    const visible = [...group.querySelectorAll('a[data-section]')].some((a) => a.style.display !== 'none');
+    group.style.display = visible ? '' : 'none';
+  });
+  const roleName = CURRENT_ACCESS.isSuperAdmin ? 'Super Admin' : (CURRENT_ACCESS.staffRoleName || 'Staff');
+  const emailEl = document.getElementById('currentUserEmail');
+  if (emailEl) emailEl.textContent = `${CURRENT_USER.email} · ${roleName}`;
+}
+
 // ---------------------------------------------------------------------------
 // Login
 // ---------------------------------------------------------------------------
@@ -3383,11 +3652,13 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 
   try {
     const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-    if (data.user.role !== 'admin') {
-      throw new Error('This dashboard is for admin accounts only.');
+    if (!['admin', 'staff'].includes(data.user.role)) {
+      throw new Error('This dashboard is for authorised staff accounts only.');
     }
     AUTH_TOKEN = data.token;
     CURRENT_USER = data.user;
+    const accessData = await api('/admin/staff/access');
+    CURRENT_ACCESS = accessData.access;
     SESSION_EXPIRED_SHOWN = false;
     // Persist so a page refresh doesn't log the admin straight back out.
     localStorage.setItem(ADMIN_TOKEN_KEY, AUTH_TOKEN);
@@ -3407,24 +3678,26 @@ function enterDashboard(user){
   // fields still work, they just show no hint.
   loadImageSpecs().then(() => applyImageSpecLabels());
   document.getElementById('currentUserEmail').textContent = user.email;
+  applyStaffAccessToUi();
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appShell').classList.add('active');
   // Dashboard Overview is the default screen now, so it needs data on first
   // paint too — the queue is prefetched so its waiting count is known before
   // the admin clicks through to it.
   loadOverview();
-  loadApprovalQueue();
-  refreshNotifBadge();
-  // Fill the comments badge up front so a waiting queue is visible without
-  // having to open the section first.
-  loadPendingComments();
-  loadPendingReviews();
-  loadPendingClaims();
+  if (hasAdminPermission('approvals.view', 'approvals.manage')) loadApprovalQueue();
+  if (hasAdminPermission('system.manage')) refreshNotifBadge();
+  if (hasAdminPermission('approvals.view', 'approvals.manage')) {
+    loadPendingComments();
+    loadPendingReviews();
+    loadPendingClaims();
+  }
 }
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
   AUTH_TOKEN = null;
   CURRENT_USER = null;
+  CURRENT_ACCESS = null;
   // Only the admin key — signing out of the admin must not also sign the
   // person out of the member site in another tab.
   localStorage.removeItem(ADMIN_TOKEN_KEY);
@@ -3445,8 +3718,10 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
     // here lands in this catch rather than flashing the expired-session
     // banner at someone who was never signed in to begin with.
     const data = await api('/auth/me');
-    if (data.user.role !== 'admin') throw new Error('Not an admin account.');
+    if (!['admin', 'staff'].includes(data.user.role)) throw new Error('Not a Control Centre account.');
     CURRENT_USER = data.user;
+    const accessData = await api('/admin/staff/access');
+    CURRENT_ACCESS = accessData.access;
     enterDashboard(data.user);
   } catch (err) {
     // Saved token is invalid/expired — clear it and fall back to the login screen.
@@ -3915,7 +4190,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'highlights') loadHighlightsAdmin();
     if (section === 'covers') loadCoverManager();
     if (section === 'projects') loadProjectsAdmin();
-    if (section === 'gallerymgmt') loadGalleryAdmin();
+    if (section === 'gallerymgmt') { loadMediaLibrary(); loadGalleryAdmin(); }
     if (section === 'pricing') loadServicePricing();
     if (section === 'competitions') loadCompetitions();
     if (section === 'votebundles') { loadTop10Entries(); loadVoteBundlesAdmin(); }
@@ -3935,17 +4210,19 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'halloffame') { loadHallOfFame(); populateHofUserPicker(); }
     if (section === 'birthdays') loadBirthdays();
     if (section === 'payqueue') loadPaymentQueue();
+    if (section === 'checkouthealth') loadCheckoutHealth();
     if (section === 'myunplug') { loadMyUnplugAnalytics(); loadMyUnplugProfiles(); }
     if (section === 'placements') loadPlacements();
     if (section === 'cancellations') loadCancellations();
     if (section === 'payments') { loadPendingEft(); loadAllPayments(); }
     if (section === 'users') loadUsers();
+    if (section === 'staff') loadStaffAdmin();
     if (section === 'consultants') { loadConsultants(); loadConsultantLinks(); }
     if (section === 'notifications') loadNotifications();
-    if (section === 'analytics') { loadAnalytics(7); loadAnalyticsReports(); }
+    if (section === 'analytics') { loadAnalytics(7); loadAnalyticsReports(); loadBusinessReport(); }
     if (section === 'comments') loadPendingComments();
     if (section === 'dirprofiles') { loadDirProfiles(); loadProfileLinks(); }
-    if (section === 'pagecms') { loadPageCms(); loadSiteImages(); }
+    if (section === 'pagecms') { loadPageWorkspace(); }
     if (section === 'adbanners') loadAdBanners();
     if (section === 'publish') { loadPublishSection(); loadEmailStatus(); }
     if (section === 'polls') loadPolls();
@@ -4014,6 +4291,107 @@ document.getElementById('navSearch').addEventListener('input', (e) => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// Universal Admin Search — real site data, not just menu labels.
+// ---------------------------------------------------------------------------
+let GLOBAL_SEARCH_TIMER = null;
+let GLOBAL_SEARCH_SEQ = 0;
+const globalSearchInput = document.getElementById('globalAdminSearch');
+const globalSearchResults = document.getElementById('globalSearchResults');
+
+function closeGlobalSearch() {
+  globalSearchResults.classList.remove('open');
+  globalSearchInput.setAttribute('aria-expanded', 'false');
+}
+
+function openGlobalSearchSection(result) {
+  closeGlobalSearch();
+  const link = document.querySelector(`.sidebar a[data-section="${result.section}"]`);
+  if (link) link.click();
+  if (result.section === 'manage' && result.resource) {
+    const resource = document.getElementById('manageResource');
+    const status = document.getElementById('manageStatus');
+    const localSearch = document.getElementById('manageSearch');
+    if (resource) resource.value = result.resource;
+    if (status) status.value = '';
+    if (localSearch) localSearch.value = result.label || '';
+    loadManageContent();
+  }
+}
+
+function renderGlobalSearch(data) {
+  const groups = data.groups || {};
+  const entries = Object.values(groups).flat();
+  if (!entries.length) {
+    globalSearchResults.innerHTML = '<div class="gs-empty">No matching Unplug content found.</div>';
+    globalSearchResults.classList.add('open');
+    globalSearchInput.setAttribute('aria-expanded', 'true');
+    return;
+  }
+  globalSearchResults.innerHTML = '';
+  Object.entries(groups).forEach(([key, rows]) => {
+    if (!rows || !rows.length) return;
+    const head = document.createElement('div');
+    head.className = 'gs-head';
+    head.textContent = `${rows[0].type} (${rows.length})`;
+    globalSearchResults.appendChild(head);
+    rows.forEach((result) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gs-result';
+      btn.innerHTML = `<span class="gs-main"><span class="gs-title">${escapeHtmlAdmin(result.label || ('#' + result.id))}</span><span class="gs-detail">${escapeHtmlAdmin(result.detail || '')}</span></span><span class="gs-status">${escapeHtmlAdmin(result.status || '')}</span>`;
+      btn.addEventListener('click', () => openGlobalSearchSection(result));
+      globalSearchResults.appendChild(btn);
+    });
+  });
+  globalSearchResults.classList.add('open');
+  globalSearchInput.setAttribute('aria-expanded', 'true');
+}
+
+async function runGlobalAdminSearch() {
+  const q = globalSearchInput.value.trim();
+  const seq = ++GLOBAL_SEARCH_SEQ;
+  if (q.length < 2) { closeGlobalSearch(); globalSearchResults.innerHTML = ''; return; }
+  globalSearchResults.innerHTML = '<div class="gs-empty">Searching Unplug…</div>';
+  globalSearchResults.classList.add('open');
+  globalSearchInput.setAttribute('aria-expanded', 'true');
+  try {
+    const data = await api('/admin/search?q=' + encodeURIComponent(q));
+    if (seq !== GLOBAL_SEARCH_SEQ) return;
+    renderGlobalSearch(data);
+  } catch (err) {
+    if (seq !== GLOBAL_SEARCH_SEQ) return;
+    globalSearchResults.innerHTML = `<div class="gs-empty">Search failed: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+
+globalSearchInput.addEventListener('input', () => {
+  clearTimeout(GLOBAL_SEARCH_TIMER);
+  GLOBAL_SEARCH_TIMER = setTimeout(runGlobalAdminSearch, 260);
+});
+globalSearchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeGlobalSearch();
+  if (e.key === 'Enter') { e.preventDefault(); clearTimeout(GLOBAL_SEARCH_TIMER); runGlobalAdminSearch(); }
+});
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault(); globalSearchInput.focus(); globalSearchInput.select();
+  }
+});
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('globalSearchBar').contains(e.target)) closeGlobalSearch();
+});
+
+const manageSearch = document.getElementById('manageSearch');
+if (manageSearch) {
+  let manageSearchTimer = null;
+  manageSearch.addEventListener('input', () => {
+    clearTimeout(manageSearchTimer);
+    manageSearchTimer = setTimeout(loadManageContent, 220);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard Overview — "what needs my attention today?" from one endpoint.
 // ---------------------------------------------------------------------------
@@ -4042,18 +4420,16 @@ async function loadOverview() {
   try {
     const d = await api('/admin/overview');
 
-    totalsEl.innerHTML = Object.keys(OV_STAT_LABELS).map((k) =>
-      `<div class="stat-card"><div class="num">${(d.totals[k] || 0).toLocaleString()}</div><div class="label">${OV_STAT_LABELS[k]}</div></div>`
-    ).join('')
-      + `<div class="stat-card${d.payments.pendingEftCount > 0 ? ' alert' : ''}">
-           <div class="num">${d.payments.pendingEftCount}</div>
-           <div class="label">Pending EFT ${d.payments.pendingEftCount > 0 ? '(R' + d.payments.pendingEftAmount.toLocaleString() + ')' : ''}</div>
-         </div>`
-      + `<div class="stat-card"><div class="num">${d.activity.views7d.toLocaleString()}</div><div class="label">Views, Last 7 Days</div></div>`;
+    const totalCards = Object.keys(OV_STAT_LABELS).filter((k) => d.totals[k] !== null && d.totals[k] !== undefined).map((k) =>
+      `<div class="stat-card"><div class="num">${Number(d.totals[k] || 0).toLocaleString()}</div><div class="label">${OV_STAT_LABELS[k]}</div></div>`
+    );
+    if (d.payments) totalCards.push(`<div class="stat-card${d.payments.pendingEftCount > 0 ? ' alert' : ''}"><div class="num">${d.payments.pendingEftCount}</div><div class="label">Pending EFT ${d.payments.pendingEftCount > 0 ? '(R' + Number(d.payments.pendingEftAmount || 0).toLocaleString() + ')' : ''}</div></div>`);
+    if (d.activity && d.activity.views7d !== null) totalCards.push(`<div class="stat-card"><div class="num">${Number(d.activity.views7d || 0).toLocaleString()}</div><div class="label">Views, Last 7 Days</div></div>`);
+    totalsEl.innerHTML = totalCards.join('') || '<div class="stat-card"><div class="num">✓</div><div class="label">Control Centre ready</div></div>';
 
-    const pendingRows = Object.keys(OV_PENDING_LINKS)
+    const pendingRows = (d.pending ? Object.keys(OV_PENDING_LINKS)
       .map((k) => ({ key: k, n: d.pending[k] || 0, ...OV_PENDING_LINKS[k] }))
-      .filter((r) => r.n > 0);
+      : []).filter((r) => r.n > 0);
     pendingEl.innerHTML = pendingRows.length
       ? pendingRows.map((r) => `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--paper-line);">
@@ -4301,6 +4677,56 @@ function aqPaymentColour(label) {
   return '#a15c00';
 }
 
+function aqAgeDays(row) {
+  if (!row || !row.submittedAt) return 0;
+  const ms = Date.now() - new Date(row.submittedAt).getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
+}
+
+function aqAttentionScore(row) {
+  // Payment confirmations come first because they can unblock paid services.
+  // Then old/paid submissions, then everything else. This is a display rule
+  // only — it never changes what may actually be approved.
+  let score = 0;
+  if (row.group === 'payment') score += 1000;
+  if (row.paidButNotPromoted) score += 800;
+  if (!row.awaitingPayment && row.group !== 'payment') score += 300;
+  score += Math.min(aqAgeDays(row), 30) * 10;
+  if (row.awaitingPayment) score -= 250;
+  return score;
+}
+
+function aqApplySort(rows) {
+  const mode = (document.getElementById('aqSort') || {}).value || 'priority';
+  const copy = rows.slice();
+  if (mode === 'oldest') return copy.sort((a,b) => new Date(a.submittedAt) - new Date(b.submittedAt));
+  if (mode === 'newest') return copy.sort((a,b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+  if (mode === 'amount') return copy.sort((a,b) => Number(b.amount || 0) - Number(a.amount || 0));
+  return copy.sort((a,b) => aqAttentionScore(b) - aqAttentionScore(a) || new Date(a.submittedAt) - new Date(b.submittedAt));
+}
+
+function aqRenderSummary(rows) {
+  const wrap = document.getElementById('aqSummary');
+  if (!wrap) return;
+  const ready = rows.filter((r) => r.group !== 'payment' && !r.awaitingPayment).length;
+  const payment = rows.filter((r) => r.awaitingPayment).length;
+  const old = rows.filter((r) => aqAgeDays(r) >= 7).length;
+  const cards = [
+    [rows.length, 'Waiting for review'],
+    [ready, 'Ready to approve'],
+    [payment, 'Waiting for payment'],
+    [old, 'Older than 7 days'],
+  ];
+  wrap.innerHTML = cards.map(([n,label]) => `<div class="stat-card"><div class="num">${n}</div><div class="label">${label}</div></div>`).join('');
+}
+
+function aqAgeBadge(row) {
+  const days = aqAgeDays(row);
+  if (days === 0) return '<span style="font-size:10.5px; font-weight:700; color:#1f7a3d;">TODAY</span>';
+  if (days >= 7) return `<span style="font-size:10.5px; font-weight:700; color:var(--red);">${days} DAYS</span>`;
+  return `<span style="font-size:10.5px; color:var(--slate);">${days}d</span>`;
+}
+
 // ---------------------------------------------------------------------------
 // REVIEWING A SUBMISSION BEFORE DECIDING ON IT
 //
@@ -4398,15 +4824,30 @@ async function aqOpenReview(row) {
     }).join('');
   }
 
+  const changeRequestPanel = data.canRequestChanges
+    ? `<div style="margin-top:22px; padding:16px; background:var(--paper,#f4f1ec); border:1px solid var(--paper-line,#e2ddd6);">
+        <div style="font-weight:700; margin-bottom:4px;">Request changes from the member</div>
+        <div style="font-size:12.5px; color:var(--slate); margin-bottom:10px;">Choose what needs fixing and/or leave a clear note. The submission will leave this queue until the member resubmits it.</div>
+        <div id="aqChangeFields" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:6px 12px;">
+          ${data.fields.map((f) => `<label style="font-size:12.5px;"><input type="checkbox" class="aq-change-field" value="${escapeAttrAdmin(f.col)}"> ${escapeHtmlAdmin(f.label)}</label>`).join('')}
+        </div>
+        <label for="aqChangeNote" style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.07em; color:var(--slate); margin:12px 0 5px;">Note to member</label>
+        <textarea id="aqChangeNote" rows="3" placeholder="Example: Please replace the cover image with a higher-resolution photo and correct the event date." style="width:100%; font-family:inherit; font-size:13.5px; padding:8px 10px; border:1px solid var(--paper-line,#e2ddd6);"></textarea>
+        <button class="btn btn-line" id="aqRequestChanges" style="width:auto; margin-top:10px;">Send change request</button>
+        <span id="aqChangeStatus" style="font-size:12.5px; color:var(--slate); margin-left:8px;"></span>
+      </div>`
+    : `<div style="margin-top:18px; padding:10px 12px; background:var(--paper,#f4f1ec); font-size:12px; color:var(--slate);">Request changes is not available for this submission type${data.requestChangesReason ? ': ' + escapeHtmlAdmin(data.requestChangesReason) : '.'}</div>`;
+
   card.innerHTML = head
     + `<div style="margin-bottom:6px;">${preview}</div>`
     + form
+    + changeRequestPanel
     + '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:22px; padding-top:16px; border-top:1px solid var(--paper-line,#e2ddd6);">'
     + (data.fields.length ? '<button class="btn btn-solid" id="aqRevSave" style="width:auto;">Save changes</button>' : '')
     + '<button class="btn btn-line" id="aqRevDone" style="width:auto;">Close</button>'
     + '<span id="aqRevNote" style="font-size:12.5px; color:var(--slate); align-self:center;"></span>'
     + '</div>'
-    + '<p style="font-size:12px; color:var(--slate); margin:14px 0 0;">Saving does not approve. Approve and Reject stay on the queue row, so a correction and a decision are two separate acts.</p>';
+    + '<p style="font-size:12px; color:var(--slate); margin:14px 0 0;">Saving does not approve. Approve, request changes and reject are deliberately separate decisions.</p>';
 
   // Values are set as PROPERTIES, never interpolated into the markup above —
   // this is somebody else's submitted text going into an admin's page.
@@ -4420,6 +4861,32 @@ async function aqOpenReview(row) {
 
   card.querySelector('#aqRevClose').addEventListener('click', aqCloseReview);
   card.querySelector('#aqRevDone').addEventListener('click', aqCloseReview);
+
+  const requestBtn = card.querySelector('#aqRequestChanges');
+  if (requestBtn) requestBtn.addEventListener('click', async () => {
+    const status = card.querySelector('#aqChangeStatus');
+    const fields = Array.from(card.querySelectorAll('.aq-change-field:checked')).map((el) => el.value);
+    const note = (card.querySelector('#aqChangeNote') || {}).value || '';
+    if (!fields.length && !note.trim()) {
+      showToast('Choose at least one field or write a note explaining what needs changing.', true);
+      return;
+    }
+    if (!confirm('Send this submission back to the member for changes? It will leave the Approval Centre until they resubmit it.')) return;
+    requestBtn.disabled = true;
+    status.textContent = 'Sending…';
+    try {
+      await api(`/admin/approval-queue/${encodeURIComponent(row.type)}/${row.id}/request-changes`, {
+        method: 'POST', body: JSON.stringify({ fields, note: note.trim() }),
+      });
+      showToast('Change request sent to the member.');
+      aqCloseReview();
+      loadApprovalQueue();
+    } catch (err) {
+      status.textContent = '';
+      showToast(err.message, true);
+      requestBtn.disabled = false;
+    }
+  });
 
   const saveBtn = card.querySelector('#aqRevSave');
   if (saveBtn) saveBtn.addEventListener('click', async () => {
@@ -4464,8 +4931,9 @@ async function loadApprovalQueue() {
 
   try {
     const data = await api('/admin/approval-queue' + (params.toString() ? '?' + params.toString() : ''));
-    AQ_LAST_ROWS = data.items || [];
-    aqRenderChips(data);
+    AQ_LAST_ROWS = aqApplySort(data.items || []);
+    aqRenderSummary(AQ_LAST_ROWS);
+    aqRenderChips({ ...data, items: AQ_LAST_ROWS });
 
     // A source that failed is named rather than hidden. A queue that quietly
     // drops a whole category is worse than one that admits it lost one.
@@ -4544,7 +5012,9 @@ async function loadApprovalQueue() {
       tr.appendChild(statusTd);
 
       const dateTd = document.createElement('td');
-      dateTd.textContent = row.submittedAt ? new Date(row.submittedAt).toLocaleDateString() : '—';
+      dateTd.innerHTML = row.submittedAt
+        ? `${escapeHtmlAdmin(new Date(row.submittedAt).toLocaleDateString())}<br>${aqAgeBadge(row)}`
+        : '—';
       tr.appendChild(dateTd);
 
       const filesTd = document.createElement('td');
@@ -4647,10 +5117,12 @@ function aqRenderChips(data) {
 
 document.getElementById('aqSearchBtn').addEventListener('click', loadApprovalQueue);
 document.getElementById('aqSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadApprovalQueue(); });
+document.getElementById('aqSort').addEventListener('change', loadApprovalQueue);
 document.getElementById('aqResetBtn').addEventListener('click', () => {
   document.getElementById('aqSearch').value = '';
   document.getElementById('aqFrom').value = '';
   document.getElementById('aqTo').value = '';
+  document.getElementById('aqSort').value = 'priority';
   AQ_ACTIVE_TYPES = new Set();
   loadApprovalQueue();
 });
@@ -5423,53 +5895,97 @@ const AD_SLOT_CATALOG = [
   { key: 'contact-leaderboard', label: 'Contact — Leaderboard' },
 ];
 
-function adBannerRowHtml(uid) {
+function adCampaignStatus(b) {
+  if (b.archived_at) return 'archived';
+  if (b.moderation_status === 'pending_payment' || b.moderation_status === 'pending_approval') return 'pending';
+  if (b.moderation_status === 'rejected') return 'rejected';
+  const today = new Date().toISOString().slice(0, 10);
+  const starts = b.starts_at ? String(b.starts_at).slice(0, 10) : '';
+  const ends = b.ends_at ? String(b.ends_at).slice(0, 10) : '';
+  if (ends && ends < today) return 'expired';
+  if (starts && starts > today) return 'scheduled';
+  if (!b.is_active) return 'paused';
+  return 'live';
+}
+function adCampaignStatusLabel(status) {
+  return ({ live:'LIVE', scheduled:'SCHEDULED', paused:'PAUSED', expired:'EXPIRED', pending:'PENDING', rejected:'REJECTED', archived:'ARCHIVED' })[status] || String(status || '').toUpperCase();
+}
+function adCampaignStatusTone(status) {
+  if (status === 'live') return '#207544';
+  if (status === 'scheduled') return '#806000';
+  if (status === 'pending') return '#a34b00';
+  if (status === 'rejected' || status === 'expired' || status === 'archived') return 'var(--red)';
+  return 'var(--slate)';
+}
+function adMoney(v) { return `R${Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits:2, maximumFractionDigits:2 })}`; }
+function adNum(v) { return Number(v || 0).toLocaleString('en-ZA'); }
+
+function adBannerRowHtml() {
+  const canFinance = hasAdminPermission('finance.manage');
   return `
-    <div class="form-row">
-      <div><label>Banner name / advertiser (optional)</label><input class="ad-name" placeholder="e.g. ABC Investments"></div>
-      <div><label>CTA button text (optional)</label><input class="ad-cta" placeholder="e.g. Learn More" maxlength="40"></div>
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      <div><strong class="ad-row-title">New campaign</strong><div class="ad-row-sub" style="font-size:11.5px;color:var(--slate);margin-top:2px;"></div></div>
+      <span class="ad-status" style="font-size:10.5px;font-weight:800;letter-spacing:.08em;border:1px solid var(--paper-line);padding:5px 8px;">DRAFT</span>
     </div>
     <div class="form-row">
-      <div style="grid-column:1/-2;"><label>Banner image (1920×600, 16:5)</label><div class="ad-img-upload"></div></div>
-      <div><label>Click-through link (optional)</label><input class="ad-link" placeholder="https://…"></div>
+      <div><label>Campaign name</label><input class="ad-campaign-name" placeholder="e.g. Spring Visibility Campaign"></div>
+      <div><label>Advertiser / business</label><input class="ad-advertiser-name" placeholder="e.g. ABC Investments"></div>
     </div>
     <div class="form-row">
-      <div style="grid-column:1/-2;"><label>Mobile banner (optional — narrower crop for phones)</label><div class="ad-mimg-upload"></div></div>
+      <div><label>Contact person</label><input class="ad-advertiser-contact" placeholder="Optional"></div>
+      <div><label>Advertiser email</label><input class="ad-advertiser-email" type="email" placeholder="Optional"></div>
+    </div>
+    <div class="form-row">
+      <div style="grid-column:1/-2;"><label>Desktop banner</label><div class="ad-img-upload"></div></div>
+      <div><label>Click-through link</label><input class="ad-link" placeholder="https://…"></div>
+    </div>
+    <div class="form-row">
+      <div style="grid-column:1/-2;"><label>Mobile banner (optional)</label><div class="ad-mimg-upload"></div></div>
+      <div><label>CTA button text</label><input class="ad-cta" placeholder="e.g. Learn More" maxlength="40"></div>
     </div>
     <div class="form-row">
       <div><label>Display order</label><input class="ad-order" type="number" value="0" style="width:100%;"></div>
-      <div><label>Active</label><div style="padding-top:8px;"><input class="ad-active" type="checkbox" checked> <span style="font-size:12.5px; color:var(--slate);">Shows on the live site</span></div></div>
-      <div><label>Starts (optional)</label><input class="ad-starts" type="date"></div>
-      <div><label>Ends (optional)</label><input class="ad-ends" type="date"></div>
+      <div><label>Active</label><div style="padding-top:8px;"><input class="ad-active" type="checkbox" checked> <span style="font-size:12.5px;color:var(--slate);">Allowed to run</span></div></div>
+      <div><label>Starts</label><input class="ad-starts" type="date"></div>
+      <div><label>Ends</label><input class="ad-ends" type="date"></div>
     </div>
     <div class="form-row">
       <div><label>Entrance effect</label><select class="ad-anim" style="width:100%;">
-        <option value="fade">Fade</option><option value="none">None</option>
-        <option value="fade-up">Fade up</option><option value="slide-up">Slide up</option>
-        <option value="slide-down">Slide down</option><option value="slide-left">Slide left</option>
+        <option value="fade">Fade</option><option value="none">None</option><option value="fade-up">Fade up</option>
+        <option value="slide-up">Slide up</option><option value="slide-down">Slide down</option><option value="slide-left">Slide left</option>
         <option value="slide-right">Slide right</option><option value="zoom">Zoom</option>
       </select></div>
       <div><label>Shows for (seconds)</label><input class="ad-display-secs" type="number" min="1" value="5" style="width:100%;"></div>
     </div>
-    <button class="btn btn-solid ad-save" style="width:auto; margin-top:8px;">Save banner</button>
-    <button class="btn btn-line ad-delete" style="width:auto; margin-top:8px;">Delete</button>
-    <span class="ad-note" style="font-size:12px; color:var(--slate); margin-left:10px;"></span>`;
+    ${canFinance ? `<div style="border:1px solid var(--paper-line);padding:12px;margin-top:12px;background:#fcfbf8;">
+      <div style="font-weight:700;font-size:12px;margin-bottom:8px;">Finance record</div>
+      <div class="form-row">
+        <div><label>Campaign value / amount paid (R)</label><input class="ad-amount" type="number" min="0" step="0.01" placeholder="0.00"></div>
+        <div><label>Payment status</label><select class="ad-payment-status"><option value="not_recorded">Not recorded</option><option value="pending">Pending</option><option value="paid">Paid</option><option value="credited">Paid with credit</option><option value="refunded">Refunded</option><option value="complimentary">Complimentary</option></select></div>
+      </div>
+    </div>` : ''}
+    <label style="margin-top:12px;">Internal campaign notes</label><textarea class="ad-notes" rows="2" style="width:100%;" placeholder="Sales notes, deliverables, special instructions…"></textarea>
+    <div class="ad-analytics" style="display:none;grid-template-columns:repeat(4,minmax(100px,1fr));gap:8px;margin-top:12px;"></div>
+    <button class="btn btn-solid ad-save" style="width:auto;margin-top:10px;">Save campaign</button>
+    <button class="btn btn-line ad-archive" style="width:auto;margin-top:10px;">Archive</button>
+    <span class="ad-note" style="font-size:12px;color:var(--slate);margin-left:10px;"></span>`;
 }
 
-// A SPONSOR SLOT AND A LEADERBOARD ARE NOT THE SAME SHAPE, so this row cannot
-// state one size for both. `slotKey` is the placement the row sits under, and
-// the server sends each placement's real format, so the field says the size of
-// the slot being filled rather than an average of all of them.
+// A SPONSOR SLOT AND A LEADERBOARD ARE NOT THE SAME SHAPE. The server's image
+// specification is the source of truth for each placement.
 function adSlotSpec(slotKey) {
   const s = AD_SLOT_SIZES && AD_SLOT_SIZES[slotKey];
-  return s ? { w: s.w, h: s.h, label: s.label, note: 'The exact format this slot is sold as.' } : undefined;
+  return s ? { w: s.w, h: s.h, label: s.label, note: 'Exact format for this advertising placement.' } : undefined;
 }
 
 function fillAdBannerRow(row, banner, slotKey) {
   const uploadHost = row.querySelector('.ad-img-upload');
   uploadHost.innerHTML = UnplugUpload.fieldHtml('adImage_' + Math.random().toString(36).slice(2), banner.image_url || '', '', adSlotSpec(slotKey));
   row.querySelector('.ad-mimg-upload').innerHTML = UnplugUpload.fieldHtml('adMImage_' + Math.random().toString(36).slice(2), banner.mobile_image_url || '', '', imgSpecFull('ad_banner_mobile'));
-  row.querySelector('.ad-name').value = banner.name || '';
+  row.querySelector('.ad-campaign-name').value = banner.campaign_name || banner.name || '';
+  row.querySelector('.ad-advertiser-name').value = banner.advertiser_name || banner.name || '';
+  row.querySelector('.ad-advertiser-contact').value = banner.advertiser_contact || '';
+  row.querySelector('.ad-advertiser-email').value = banner.advertiser_email || banner.owner_email || '';
   row.querySelector('.ad-cta').value = banner.cta_text || '';
   row.querySelector('.ad-link').value = banner.link_url || '';
   row.querySelector('.ad-order').value = banner.display_order || 0;
@@ -5478,19 +5994,47 @@ function fillAdBannerRow(row, banner, slotKey) {
   row.querySelector('.ad-ends').value = banner.ends_at ? String(banner.ends_at).slice(0, 10) : '';
   row.querySelector('.ad-anim').value = banner.animation_effect || 'fade';
   row.querySelector('.ad-display-secs').value = Math.round((banner.display_duration_ms || 5000) / 1000);
+  row.querySelector('.ad-notes').value = banner.internal_notes || '';
+  const amount = row.querySelector('.ad-amount'); if (amount) amount.value = banner.amount_paid == null ? '' : Number(banner.amount_paid).toFixed(2);
+  const pay = row.querySelector('.ad-payment-status'); if (pay) pay.value = banner.payment_status || 'not_recorded';
+
+  const status = banner.id ? adCampaignStatus(banner) : 'draft';
+  const st = row.querySelector('.ad-status');
+  st.textContent = banner.id ? adCampaignStatusLabel(status) : 'DRAFT';
+  st.style.color = banner.id ? adCampaignStatusTone(status) : 'var(--slate)';
+  const slotLabel = (AD_SLOT_CATALOG.find((s) => s.key === slotKey) || {}).label || slotKey;
+  row.querySelector('.ad-row-title').textContent = banner.campaign_name || banner.advertiser_name || banner.name || 'New campaign';
+  row.querySelector('.ad-row-sub').textContent = banner.id ? `${slotLabel} · #${banner.id}` : slotLabel;
+  row.dataset.archived = banner.archived_at ? '1' : '0';
+  const archiveBtn = row.querySelector('.ad-archive');
+  archiveBtn.textContent = banner.id ? (banner.archived_at ? 'Restore' : 'Archive') : 'Discard';
+
+  if (banner.id) {
+    const analytics = row.querySelector('.ad-analytics');
+    const imp = Number(banner.impressions || 0), clicks = Number(banner.clicks || 0), ctr = Number(banner.ctr || 0);
+    analytics.style.display = 'grid';
+    analytics.innerHTML = [
+      ['Impressions', adNum(imp)], ['Clicks', adNum(clicks)], ['CTR', `${ctr.toFixed(2)}%`], ['Recorded value', adMoney(banner.amount_paid || 0)]
+    ].map(([k,v]) => `<div style="border:1px solid var(--paper-line);padding:9px;"><div style="font-size:10px;text-transform:uppercase;color:var(--slate);letter-spacing:.06em;">${k}</div><div style="font-weight:800;font-size:16px;margin-top:3px;">${v}</div></div>`).join('');
+  }
 }
 
 function wireAdBannerRow(row, slotKey, bannerId) {
   const uploadHost = row.querySelector('.ad-img-upload');
   const note = row.querySelector('.ad-note');
-
   row.querySelector('.ad-save').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
+    const amount = row.querySelector('.ad-amount');
+    const payment = row.querySelector('.ad-payment-status');
     const payload = {
       slotKey,
       imageUrl: UnplugUpload.valueOf(uploadHost) || '',
       mobileImageUrl: UnplugUpload.valueOf(row.querySelector('.ad-mimg-upload')) || '',
-      name: row.querySelector('.ad-name').value.trim(),
+      name: row.querySelector('.ad-advertiser-name').value.trim(),
+      campaignName: row.querySelector('.ad-campaign-name').value.trim(),
+      advertiserName: row.querySelector('.ad-advertiser-name').value.trim(),
+      advertiserContact: row.querySelector('.ad-advertiser-contact').value.trim(),
+      advertiserEmail: row.querySelector('.ad-advertiser-email').value.trim(),
       ctaText: row.querySelector('.ad-cta').value.trim(),
       linkUrl: row.querySelector('.ad-link').value.trim(),
       displayOrder: Number(row.querySelector('.ad-order').value) || 0,
@@ -5499,31 +6043,32 @@ function wireAdBannerRow(row, slotKey, bannerId) {
       endsAt: row.querySelector('.ad-ends').value || null,
       animationEffect: row.querySelector('.ad-anim').value,
       displayDurationMs: (Number(row.querySelector('.ad-display-secs').value) || 5) * 1000,
+      amountPaid: amount ? amount.value : undefined,
+      paymentStatus: payment ? payment.value : undefined,
+      internalNotes: row.querySelector('.ad-notes').value.trim(),
     };
     btn.disabled = true;
     try {
       const res = bannerId
         ? await api(`/page-cms/admin/ad-slots/${bannerId}`, { method: 'PATCH', body: JSON.stringify(payload) })
         : await api('/page-cms/admin/ad-slots', { method: 'POST', body: JSON.stringify(payload) });
-      showToast(res.message || 'Saved.');
+      showToast(res.message || 'Campaign saved.');
       loadAdBanners();
     } catch (err) {
-      note.textContent = '';
-      showToast(err.message, true);
-      btn.disabled = false;
+      note.textContent = err.message;
+      showToast(err.message, true); btn.disabled = false;
     }
   });
 
-  row.querySelector('.ad-delete').addEventListener('click', async () => {
-    if (!bannerId) { row.remove(); return; } // never-saved row — just discard it
-    if (!confirm('Delete this banner? This cannot be undone.')) return;
+  row.querySelector('.ad-archive').addEventListener('click', async () => {
+    if (!bannerId) { row.remove(); return; }
+    const restore = row.dataset.archived === '1';
+    if (!restore && !confirm('Archive this campaign? It will stop appearing on the public site but its analytics/history will be kept.')) return;
     try {
-      await api(`/page-cms/admin/ad-slots/${bannerId}`, { method: 'DELETE' });
-      showToast('Banner deleted.');
+      const res = await api(`/page-cms/admin/ad-slots/${bannerId}/archive`, { method: 'PATCH', body: JSON.stringify({ restore }) });
+      showToast(res.message || (restore ? 'Campaign restored.' : 'Campaign archived.'));
       loadAdBanners();
-    } catch (err) {
-      showToast(err.message, true);
-    }
+    } catch (err) { showToast(err.message, true); }
   });
 }
 
@@ -5531,81 +6076,374 @@ async function moderateBanner(id, action) {
   if (action === 'reject' && !confirm('Reject this banner? The member is fully refunded to their account credit.')) return;
   try {
     const res = await api(`/page-cms/admin/ad-slots/${id}/moderate`, { method: 'PATCH', body: JSON.stringify({ action }) });
-    showToast(res.message || 'Done.');
-    loadAdBanners();
+    showToast(res.message || 'Done.'); loadAdBanners();
   } catch (err) { showToast(err.message, true); }
+}
+
+function renderAdCampaignSummary(all) {
+  const host = document.getElementById('adCampaignSummary'); if (!host) return;
+  const current = all.filter((b) => !b.archived_at);
+  const live = current.filter((b) => adCampaignStatus(b) === 'live').length;
+  const scheduled = current.filter((b) => adCampaignStatus(b) === 'scheduled').length;
+  const pending = current.filter((b) => adCampaignStatus(b) === 'pending').length;
+  const impressions = current.reduce((n,b) => n + Number(b.impressions || 0), 0);
+  const clicks = current.reduce((n,b) => n + Number(b.clicks || 0), 0);
+  const value = current.reduce((n,b) => n + Number(b.amount_paid || 0), 0);
+  const ctr = impressions ? clicks / impressions * 100 : 0;
+  const cards = [['Live',live],['Scheduled',scheduled],['Pending',pending],['Recorded value',adMoney(value)],['Impressions',adNum(impressions)],['Clicks',adNum(clicks)],['CTR',`${ctr.toFixed(2)}%`]];
+  host.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;">${cards.map(([k,v]) => `<div style="border:1px solid var(--paper-line);padding:11px 12px;background:var(--paper);"><div style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);">${k}</div><div style="font-size:19px;font-weight:800;margin-top:4px;">${v}</div></div>`).join('')}</div>`;
 }
 
 async function loadAdBanners() {
   const body = document.getElementById('adBannersBody');
-  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  body.innerHTML = '<div class="loading-state">Loading campaigns…</div>';
   let current = {};
-  try {
-    const data = await api('/page-cms/admin/ad-slots');
-    current = data.adSlots || {};
-  } catch (err) {
-    body.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
-    return;
-  }
+  try { const data = await api('/page-cms/admin/ad-slots'); current = data.adSlots || {}; }
+  catch (err) { body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`; return; }
+
+  const all = Object.values(current).flat();
+  renderAdCampaignSummary(all);
+  const q = String(document.getElementById('adCampaignSearch')?.value || '').trim().toLowerCase();
+  const wantedStatus = document.getElementById('adCampaignStatus')?.value || 'all';
+  const matches = (b) => {
+    const status = adCampaignStatus(b);
+    if (wantedStatus !== 'all' && status !== wantedStatus) return false;
+    if (!q) return true;
+    const hay = [b.campaign_name,b.advertiser_name,b.name,b.advertiser_contact,b.advertiser_email,b.owner_email,b.slot_key,b.internal_notes].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  };
   body.innerHTML = '';
 
-  // Member-submitted banners awaiting approval (paid, not yet live).
-  const pending = [];
-  Object.values(current).forEach((arr) => arr.forEach((b) => { if (b.moderation_status === 'pending_approval') pending.push(b); }));
-  if (pending.length) {
+  const pending = all.filter((b) => b.moderation_status === 'pending_approval' && !b.archived_at);
+  if (pending.length && (wantedStatus === 'all' || wantedStatus === 'pending') && !q) {
     const pw = document.createElement('div');
-    pw.style.cssText = 'padding:16px; margin-bottom:14px; border:2px solid var(--red); border-radius:8px; background:#fff8f6;';
-    pw.innerHTML = `<div style="font-weight:700; margin-bottom:10px;">⏳ Member banners awaiting approval (${pending.length})</div>` +
-      pending.map((b) => {
-        const slotLabel = (AD_SLOT_CATALOG.find((s) => s.key === b.slot_key) || {}).label || b.slot_key;
-        const dates = `${b.starts_at ? String(b.starts_at).slice(0, 10) : '—'} → ${b.ends_at ? String(b.ends_at).slice(0, 10) : '—'}`;
-        return `<div style="display:flex; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--paper-line);">
-          <img src="${escapeHtmlAdmin(b.image_url || '')}" onerror="this.style.visibility='hidden'" style="width:96px; height:36px; object-fit:cover; background:#eee; border-radius:4px; flex:none;">
-          <div style="flex:1; min-width:0; font-size:12.5px;">
-            <strong>${escapeHtmlAdmin(b.name || 'Banner')}</strong> · ${escapeHtmlAdmin(slotLabel)}<br>
-            <span style="color:#666;">${b.duration_days || '?'} days · ${dates} · ${escapeHtmlAdmin(b.owner_email || 'member')}</span>
-          </div>
-          <button class="approve" style="padding:6px 12px;" onclick="moderateBanner(${b.id},'approve')">Approve</button>
-          <button class="btn btn-line" style="width:auto; color:var(--red);" onclick="moderateBanner(${b.id},'reject')">Reject + refund</button>
-        </div>`;
-      }).join('');
-    body.appendChild(pw);
+    pw.style.cssText = 'padding:16px;margin-bottom:14px;border:2px solid var(--red);background:#fff8f6;';
+    pw.innerHTML = `<div style="font-weight:700;margin-bottom:10px;">Paid banners awaiting approval (${pending.length})</div>` + pending.map((b) => {
+      const slotLabel = (AD_SLOT_CATALOG.find((s) => s.key === b.slot_key) || {}).label || b.slot_key;
+      return `<div style="display:flex;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--paper-line);">
+        <img src="${escapeHtmlAdmin(b.image_url || '')}" onerror="this.style.visibility='hidden'" style="width:96px;height:40px;object-fit:contain;background:#eee;flex:none;">
+        <div style="flex:1;min-width:0;font-size:12.5px;"><strong>${escapeHtmlAdmin(b.campaign_name || b.advertiser_name || b.name || 'Banner')}</strong> · ${escapeHtmlAdmin(slotLabel)}<br><span style="color:#666;">${b.duration_days || '?'} days · ${escapeHtmlAdmin(b.owner_email || 'member')} · ${adMoney(b.amount_paid || 0)}</span></div>
+        <button class="approve" style="padding:6px 12px;" onclick="moderateBanner(${b.id},'approve')">Approve</button>
+        <button class="btn btn-line" style="width:auto;color:var(--red);" onclick="moderateBanner(${b.id},'reject')">Reject + refund</button>
+      </div>`;
+    }).join(''); body.appendChild(pw);
   }
 
+  let rendered = 0;
   AD_SLOT_CATALOG.forEach((slot) => {
-    const banners = current[slot.key] || [];
-    const activeCount = banners.filter((b) => b.is_active).length;
+    const banners = (current[slot.key] || []).filter(matches);
+    if (!banners.length && (q || wantedStatus !== 'all')) return;
+    rendered += banners.length;
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'padding:16px 0; border-bottom:1px solid var(--paper-line);';
-    wrap.innerHTML = `
-      <div style="font-weight:600; font-size:14px; margin-bottom:10px;">${escapeHtmlAdmin(slot.label)}
-        ${activeCount > 1 ? `<span style="color:var(--red); font-size:11px; margin-left:6px;">● ${activeCount} rotating</span>`
-          : activeCount === 1 ? '<span style="color:var(--red); font-size:11px; margin-left:6px;">● live</span>'
-          : '<span style="color:var(--slate); font-size:11px; margin-left:6px;">placeholder</span>'}</div>
-      <div class="ad-rows"></div>
-      <button class="btn btn-line ad-add-row" style="width:auto; margin-top:6px;">+ Add another banner</button>`;
+    wrap.style.cssText = 'padding:16px 0;border-bottom:1px solid var(--paper-line);';
+    const liveCount = (current[slot.key] || []).filter((b) => adCampaignStatus(b) === 'live').length;
+    const size = adSlotSpec(slot.key);
+    wrap.innerHTML = `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <div><div style="font-weight:700;font-size:14px;">${escapeHtmlAdmin(slot.label)}</div><div style="font-size:11.5px;color:var(--slate);margin-top:2px;">${size ? `${size.w} × ${size.h}px · ${size.label}` : slot.key}</div></div>
+      <div style="font-size:11px;color:${liveCount ? '#207544' : 'var(--slate)'};font-weight:700;">${liveCount ? `${liveCount} LIVE` : 'NO LIVE CAMPAIGN'}</div>
+    </div><div class="ad-rows"></div>${(!q && wantedStatus === 'all') ? '<button class="btn btn-line ad-add-row" style="width:auto;margin-top:6px;">+ New campaign in this placement</button>' : ''}`;
     body.appendChild(wrap);
-
     const rowsWrap = wrap.querySelector('.ad-rows');
     banners.forEach((banner) => {
       const row = document.createElement('div');
-      row.style.cssText = 'padding:12px; margin-bottom:10px; border:1px solid var(--paper-line); border-radius:8px;';
-      row.innerHTML = adBannerRowHtml();
-      rowsWrap.appendChild(row);
-      fillAdBannerRow(row, banner, slot.key);
-      wireAdBannerRow(row, slot.key, banner.id);
+      row.style.cssText = 'padding:14px;margin-bottom:10px;border:1px solid var(--paper-line);';
+      row.innerHTML = adBannerRowHtml(); rowsWrap.appendChild(row);
+      fillAdBannerRow(row, banner, slot.key); wireAdBannerRow(row, slot.key, banner.id);
     });
-
-    wrap.querySelector('.ad-add-row').addEventListener('click', () => {
-      const row = document.createElement('div');
-      row.style.cssText = 'padding:12px; margin-bottom:10px; border:1px solid var(--paper-line); border-radius:8px;';
-      row.innerHTML = adBannerRowHtml();
-      rowsWrap.appendChild(row);
-      fillAdBannerRow(row, {}, slot.key);
-      wireAdBannerRow(row, slot.key, null);
+    const add = wrap.querySelector('.ad-add-row');
+    if (add) add.addEventListener('click', () => {
+      const row = document.createElement('div'); row.style.cssText = 'padding:14px;margin-bottom:10px;border:1px solid var(--paper-line);';
+      row.innerHTML = adBannerRowHtml(); rowsWrap.prepend(row); fillAdBannerRow(row, {}, slot.key); wireAdBannerRow(row, slot.key, null);
     });
   });
+  if (!rendered && (q || wantedStatus !== 'all')) body.insertAdjacentHTML('beforeend','<div class="empty-state">No campaigns match this search/filter.</div>');
 }
+
+let adSearchTimer = null;
+document.getElementById('adCampaignSearch')?.addEventListener('input', () => { clearTimeout(adSearchTimer); adSearchTimer = setTimeout(loadAdBanners, 220); });
+document.getElementById('adCampaignStatus')?.addEventListener('change', loadAdBanners);
+document.getElementById('adCampaignRefresh')?.addEventListener('click', loadAdBanners);
+
+
+// ---------------------------------------------------------------------------
+// Phase 6 — Pages & Layout draft workspace.
+// ---------------------------------------------------------------------------
+const plwState = { pages: [], pageKey: 'home', content: {}, blocks: [], siteImages: [], hasDraft: false, dirty: false };
+
+function plwSetStatus(text, tone = 'neutral') {
+  const el = document.getElementById('plwStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.style.borderColor = tone === 'draft' ? '#a66b00' : tone === 'live' ? 'var(--green, #2e7d32)' : tone === 'warn' ? 'var(--red)' : 'var(--paper-line)';
+  el.style.color = tone === 'draft' ? '#8a5700' : tone === 'live' ? 'var(--green, #2e7d32)' : tone === 'warn' ? 'var(--red)' : 'inherit';
+}
+
+function plwNotice(message, isError = false) {
+  const el = document.getElementById('plwNotice');
+  if (!el) return;
+  if (!message) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.style.borderColor = isError ? 'var(--red)' : 'var(--paper-line)';
+  el.style.background = isError ? '#fff4f2' : 'var(--paper)';
+  el.innerHTML = escapeHtmlAdmin(message);
+}
+
+function plwMarkDirty() {
+  plwState.dirty = true;
+  plwSetStatus(plwState.hasDraft ? 'DRAFT • UNSAVED' : 'UNSAVED DRAFT', 'draft');
+}
+
+function plwNormaliseBlock(b = {}) {
+  return {
+    title: b.title || '', subheading: b.subheading || '', description: b.description || '',
+    image_url: b.image_url || '', button_label: b.button_label || '', button_url: b.button_url || '',
+    position: Number(b.position) || 0, is_visible: b.is_visible !== false,
+    orientation: b.orientation || 'landscape', image_link_url: b.image_link_url || '',
+    show_click_hint: !!b.show_click_hint, click_hint_text: b.click_hint_text || '',
+  };
+}
+
+function plwEnsureUpload(value = '') {
+  const host = document.getElementById('plwImageUpload');
+  if (host) host.innerHTML = UnplugUpload.fieldHtml('plwBlockImage', value || '', '', imgSpecFull('cms_block'));
+}
+
+async function loadPageWorkspace(preferredPage) {
+  const pageSel = document.getElementById('plwPage');
+  if (!pageSel) return;
+  plwNotice('');
+  plwSetStatus('LOADING');
+  try {
+    if (!plwState.pages.length) {
+      const data = await api('/page-cms/admin/pages');
+      plwState.pages = data.pages || [];
+      pageSel.innerHTML = plwState.pages.map((p) => `<option value="${escapeAttrAdmin(p.pageKey)}">${escapeHtmlAdmin(p.label)}${p.hasDraft ? ' • draft' : ''}</option>`).join('');
+    }
+    const wanted = preferredPage || pageSel.value || plwState.pageKey || 'home';
+    if ([...pageSel.options].some((o) => o.value === wanted)) pageSel.value = wanted;
+    plwState.pageKey = pageSel.value || wanted;
+    const data = await api(`/page-cms/admin/workspace/${encodeURIComponent(plwState.pageKey)}`);
+    if (!plwState.siteImages.length) {
+      try { const imgs = await api('/page-cms/admin/site-images'); plwState.siteImages = imgs.images || []; } catch (_) { plwState.siteImages = []; }
+    }
+    plwState.content = { ...(data.draft?.content || {}) };
+    plwState.blocks = (data.draft?.blocks || []).map(plwNormaliseBlock);
+    plwState.hasDraft = !!data.hasDraft;
+    plwState.dirty = false;
+    plwSetStatus(plwState.hasDraft ? 'SAVED DRAFT' : 'LIVE — NO DRAFT', plwState.hasDraft ? 'draft' : 'live');
+    renderPageWorkspace();
+    plwResetBlockForm();
+  } catch (err) {
+    plwSetStatus('ERROR', 'warn');
+    plwNotice(err.message, true);
+  }
+}
+
+function renderPageWorkspace() {
+  const blocksBody = document.getElementById('plwBlocks');
+  const count = document.getElementById('plwBlockCount');
+  if (count) count.textContent = `${plwState.blocks.length} section${plwState.blocks.length === 1 ? '' : 's'}`;
+  if (blocksBody) {
+    if (!plwState.blocks.length) {
+      blocksBody.innerHTML = '<div class="empty-state">No custom sections on this page yet. Add one using the form.</div>';
+    } else {
+      blocksBody.innerHTML = plwState.blocks.map((b, i) => `
+        <div style="border:1px solid var(--paper-line);padding:12px;margin-bottom:9px;background:${b.is_visible ? 'var(--paper)' : '#f5f5f5'};opacity:${b.is_visible ? '1' : '.72'};" data-plw-block="${i}">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            ${b.image_url ? `<img src="${escapeAttrAdmin(b.image_url)}" alt="" style="width:92px;height:64px;object-fit:cover;border:1px solid var(--paper-line);">` : '<div style="width:92px;height:64px;border:1px dashed var(--paper-line);display:grid;place-items:center;font-size:10px;color:var(--slate);">NO IMAGE</div>'}
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--slate);">SECTION ${i + 1}${b.is_visible ? '' : ' • HIDDEN'}</div>
+              <div style="font-weight:800;margin-top:3px;">${escapeHtmlAdmin(b.title || b.subheading || 'Untitled section')}</div>
+              ${b.description ? `<div style="font-size:12px;color:var(--slate);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtmlAdmin(b.description)}</div>` : ''}
+              <div class="row-actions" style="margin-top:8px;flex-wrap:wrap;">
+                <button class="approve" onclick="plwMoveBlock(${i},-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+                <button class="approve" onclick="plwMoveBlock(${i},1)" ${i === plwState.blocks.length - 1 ? 'disabled' : ''}>↓</button>
+                <button class="approve" onclick="plwEditBlock(${i})">Edit</button>
+                <button class="reject" onclick="plwToggleBlock(${i})">${b.is_visible ? 'Hide' : 'Show'}</button>
+                <button class="reject" onclick="plwRemoveBlock(${i})">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>`).join('');
+    }
+  }
+  const list = document.getElementById('plwContentList');
+  const entries = Object.entries(plwState.content).sort(([a], [b]) => a.localeCompare(b));
+  const datalist = document.getElementById('plwKnownKeys');
+  if (datalist) datalist.innerHTML = entries.map(([k]) => `<option value="${escapeAttrAdmin(k)}"></option>`).join('');
+  if (list) {
+    list.innerHTML = entries.length ? entries.map(([k, v]) => `
+      <div style="display:grid;grid-template-columns:minmax(180px,.55fr) minmax(0,1.45fr) auto;gap:10px;align-items:start;border-top:1px solid var(--paper-line);padding:9px 0;">
+        <code style="font-size:11px;word-break:break-word;">${escapeHtmlAdmin(k)}</code>
+        <div style="font-size:12.5px;white-space:pre-wrap;">${escapeHtmlAdmin(v)}</div>
+        <div class="row-actions"><button class="approve" onclick="plwLoadContent('${escapeAttrAdmin(k)}')">Edit</button><button class="reject" onclick="plwRemoveContent('${escapeAttrAdmin(k)}')">Restore Built-in</button></div>
+      </div>`).join('') : '<div class="empty-state">No wording overrides are saved for this page. The site is using its built-in wording.</div>';
+  }
+  const imageHost = document.getElementById('plwSiteImages');
+  if (imageHost) {
+    const imgs = plwState.siteImages.filter((img) => String(img.key || '').startsWith(`${plwState.pageKey}.`));
+    if (!imgs.length) imageHost.innerHTML = '<div class="empty-state">This page has no separately wired built-in image positions. Use Sections / Blocks for additional imagery.</div>';
+    else {
+      imageHost.innerHTML = imgs.map((img, i) => {
+        const contentKey = img.key.slice(plwState.pageKey.length + 1);
+        const value = plwState.content[contentKey] || '';
+        return `<div style="border-top:1px solid var(--paper-line);padding:12px 0;" data-plw-siteimg="${i}">
+          <div style="font-weight:800;font-size:13px;">${escapeHtmlAdmin(img.label)}</div>
+          <div style="font-size:12px;color:var(--slate);margin:3px 0 8px;">${escapeHtmlAdmin(img.hint || '')}</div>
+          <div id="plwSiteImg-${i}"></div>
+          <div class="row-actions" style="margin-top:8px;"><button class="approve" onclick="plwStageSiteImage(${i})">Stage Image</button><button class="reject" onclick="plwClearSiteImage(${i})">Clear in Draft</button></div>
+        </div>`;
+      }).join('');
+      imgs.forEach((img, i) => {
+        const contentKey = img.key.slice(plwState.pageKey.length + 1);
+        const host = document.getElementById(`plwSiteImg-${i}`);
+        if (host) host.innerHTML = UnplugUpload.fieldHtml(`plwSiteImage${i}`, plwState.content[contentKey] || '', '', img.ratio || imgSpecFull('cms_block'));
+      });
+    }
+  }
+}
+
+
+function plwCurrentPageImages() {
+  return plwState.siteImages.filter((img) => String(img.key || '').startsWith(`${plwState.pageKey}.`));
+}
+function plwStageSiteImage(index) {
+  const img = plwCurrentPageImages()[index]; if (!img) return;
+  const host = document.getElementById(`plwSiteImg-${index}`);
+  const value = UnplugUpload.valueOf(host);
+  if (!value) return showToast('Upload or choose an image first.', true);
+  const contentKey = img.key.slice(plwState.pageKey.length + 1);
+  plwState.content[contentKey] = value; plwMarkDirty(); renderPageWorkspace(); showToast('Image staged in the draft.');
+}
+function plwClearSiteImage(index) {
+  const img = plwCurrentPageImages()[index]; if (!img) return;
+  const contentKey = img.key.slice(plwState.pageKey.length + 1);
+  delete plwState.content[contentKey]; plwMarkDirty(); renderPageWorkspace(); showToast('Image will be cleared when this draft is published.');
+}
+
+function plwMoveBlock(index, delta) {
+  const next = index + delta;
+  if (next < 0 || next >= plwState.blocks.length) return;
+  [plwState.blocks[index], plwState.blocks[next]] = [plwState.blocks[next], plwState.blocks[index]];
+  plwState.blocks.forEach((b, i) => { b.position = i; });
+  plwMarkDirty(); renderPageWorkspace();
+}
+function plwToggleBlock(index) { plwState.blocks[index].is_visible = !plwState.blocks[index].is_visible; plwMarkDirty(); renderPageWorkspace(); }
+function plwRemoveBlock(index) { if (!confirm('Remove this section from the draft? The live page is unchanged until Publish.')) return; plwState.blocks.splice(index,1); plwState.blocks.forEach((b,i)=>b.position=i); plwMarkDirty(); renderPageWorkspace(); plwResetBlockForm(); }
+function plwEditBlock(index) {
+  const b = plwState.blocks[index];
+  document.getElementById('plwEditBlockIndex').value = String(index);
+  document.getElementById('plwBlockSub').value = b.subheading || '';
+  document.getElementById('plwBlockTitle').value = b.title || '';
+  document.getElementById('plwBlockDesc').value = b.description || '';
+  document.getElementById('plwOrientation').value = b.orientation || 'landscape';
+  document.getElementById('plwBtnLabel').value = b.button_label || '';
+  document.getElementById('plwBtnUrl').value = b.button_url || '';
+  document.getElementById('plwImageLink').value = b.image_link_url || '';
+  document.getElementById('plwVisible').checked = b.is_visible !== false;
+  plwEnsureUpload(b.image_url || '');
+  document.getElementById('plwBlockFormTitle').textContent = 'Edit section';
+  document.getElementById('plwBlockSaveBtn').textContent = 'Update Draft Section';
+  document.getElementById('plwBlockCancelBtn').style.display = '';
+}
+function plwResetBlockForm() {
+  const edit = document.getElementById('plwEditBlockIndex'); if (!edit) return;
+  edit.value = '';
+  ['plwBlockSub','plwBlockTitle','plwBlockDesc','plwBtnLabel','plwBtnUrl','plwImageLink'].forEach((id)=>{ const e=document.getElementById(id); if(e)e.value=''; });
+  document.getElementById('plwOrientation').value = 'landscape';
+  document.getElementById('plwVisible').checked = true;
+  plwEnsureUpload('');
+  document.getElementById('plwBlockFormTitle').textContent = 'Add section';
+  document.getElementById('plwBlockSaveBtn').textContent = 'Add to Draft';
+  document.getElementById('plwBlockCancelBtn').style.display = 'none';
+}
+function plwLoadContent(key) { document.getElementById('plwContentKey').value = key; document.getElementById('plwContentValue').value = plwState.content[key] || ''; document.getElementById('plwContentValue').focus(); }
+function plwRemoveContent(key) { if (!confirm('Restore this item to the wording built into the website when the draft is published?')) return; delete plwState.content[key]; plwMarkDirty(); renderPageWorkspace(); }
+
+async function plwSaveDraft() {
+  try {
+    const res = await api(`/page-cms/admin/workspace/${encodeURIComponent(plwState.pageKey)}`, { method:'PUT', body:JSON.stringify({ content:plwState.content, blocks:plwState.blocks }) });
+    plwState.hasDraft = true; plwState.dirty = false; plwSetStatus('SAVED DRAFT','draft');
+    showToast(res.message || 'Draft saved.');
+    // Refresh the catalogue marker next time but keep the current editor state.
+    plwState.pages = [];
+  } catch (err) { plwNotice(err.message, true); showToast(err.message, true); return false; }
+  return true;
+}
+
+function plwPreview() {
+  const panel = document.getElementById('plwPreviewPanel');
+  const body = document.getElementById('plwPreviewBody');
+  const visible = plwState.blocks.filter((b)=>b.is_visible);
+  const copy = Object.entries(plwState.content);
+  body.innerHTML = `
+    <div style="max-width:920px;margin:auto;border:1px solid var(--paper-line);background:white;padding:18px;">
+      <div style="font-size:10px;font-weight:900;letter-spacing:.14em;color:var(--red);">${escapeHtmlAdmin(plwState.pageKey.toUpperCase())} • DRAFT</div>
+      <h2 style="margin:5px 0 16px;">Page structure preview</h2>
+      ${visible.length ? visible.map((b,i)=>`<section style="border-top:1px solid var(--paper-line);padding:18px 0;">
+        ${b.subheading ? `<div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--red);">${escapeHtmlAdmin(b.subheading)}</div>`:''}
+        ${b.title ? `<h3 style="font-size:24px;margin:4px 0 8px;">${escapeHtmlAdmin(b.title)}</h3>`:''}
+        ${b.image_url ? `<img src="${escapeAttrAdmin(b.image_url)}" alt="" style="width:100%;max-height:360px;object-fit:cover;margin:8px 0;">`:''}
+        ${b.description ? `<p style="line-height:1.55;">${escapeHtmlAdmin(b.description)}</p>`:''}
+        ${b.button_label ? `<span class="btn btn-solid" style="display:inline-block;width:auto;margin-top:6px;">${escapeHtmlAdmin(b.button_label)}</span>`:''}
+      </section>`).join('') : '<div class="empty-state">No visible custom sections in this draft.</div>'}
+      <div style="border-top:2px solid var(--paper-line);padding-top:14px;margin-top:12px;"><strong>Staged wording overrides (${copy.length})</strong>${copy.length ? `<div style="margin-top:8px;">${copy.map(([k,v])=>`<div style="padding:7px 0;border-top:1px solid var(--paper-line);"><code style="font-size:10px;">${escapeHtmlAdmin(k)}</code><div style="font-size:12px;margin-top:3px;">${escapeHtmlAdmin(v)}</div></div>`).join('')}</div>` : ''}</div>
+    </div>`;
+  panel.style.display = '';
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+const plwPageEl = document.getElementById('plwPage');
+if (plwPageEl) plwPageEl.addEventListener('change', async () => {
+  if (plwState.dirty && !confirm('You have unsaved draft changes. Switch pages and lose those unsaved changes?')) { plwPageEl.value = plwState.pageKey; return; }
+  await loadPageWorkspace(plwPageEl.value);
+});
+document.getElementById('plwReloadBtn')?.addEventListener('click', () => { if (!plwState.dirty || confirm('Reload and lose unsaved changes?')) loadPageWorkspace(plwState.pageKey); });
+document.getElementById('plwSaveBtn')?.addEventListener('click', () => { plwSaveDraft(); });
+document.getElementById('plwPreviewBtn')?.addEventListener('click', plwPreview);
+document.getElementById('plwClosePreview')?.addEventListener('click', () => { document.getElementById('plwPreviewPanel').style.display='none'; });
+document.getElementById('plwDiscardBtn')?.addEventListener('click', async () => {
+  if (!plwState.hasDraft && !plwState.dirty) return showToast('There is no draft to discard.');
+  if (!confirm('Discard the saved/unsaved draft and return to the current live page?')) return;
+  try { await api(`/page-cms/admin/workspace/${encodeURIComponent(plwState.pageKey)}`, {method:'DELETE'}); plwState.pages=[]; await loadPageWorkspace(plwState.pageKey); showToast('Draft discarded. Live page unchanged.'); } catch(err){ showToast(err.message,true); }
+});
+document.getElementById('plwPublishBtn')?.addEventListener('click', async () => {
+  try {
+    if (plwState.dirty || !plwState.hasDraft) { const saved = await plwSaveDraft(); if (!saved) return; }
+    if (!confirm('Publish this reviewed draft to the live website now?')) return;
+    const res = await api(`/page-cms/admin/workspace/${encodeURIComponent(plwState.pageKey)}/publish`, {method:'POST'});
+    showToast(res.message || 'Published.'); plwState.pages=[]; await loadPageWorkspace(plwState.pageKey);
+  } catch(err) { plwNotice(err.message, true); showToast(err.message,true); }
+});
+document.getElementById('plwBlockCancelBtn')?.addEventListener('click', plwResetBlockForm);
+document.getElementById('plwBlockSaveBtn')?.addEventListener('click', () => {
+  const block = plwNormaliseBlock({
+    subheading:document.getElementById('plwBlockSub').value,
+    title:document.getElementById('plwBlockTitle').value,
+    description:document.getElementById('plwBlockDesc').value,
+    image_url:UnplugUpload.valueOf(document.getElementById('plwImageUpload')),
+    orientation:document.getElementById('plwOrientation').value,
+    button_label:document.getElementById('plwBtnLabel').value,
+    button_url:document.getElementById('plwBtnUrl').value,
+    image_link_url:document.getElementById('plwImageLink').value,
+    is_visible:document.getElementById('plwVisible').checked,
+  });
+  if (!(block.title || block.subheading || block.description || block.image_url)) return showToast('Add at least an image, heading, label or description.', true);
+  const rawIndex = document.getElementById('plwEditBlockIndex').value;
+  if (rawIndex !== '') plwState.blocks[Number(rawIndex)] = block; else plwState.blocks.push(block);
+  plwState.blocks.forEach((b,i)=>b.position=i); plwMarkDirty(); renderPageWorkspace(); plwResetBlockForm();
+});
+document.getElementById('plwContentSetBtn')?.addEventListener('click', () => {
+  let key = document.getElementById('plwContentKey').value.trim();
+  const value = document.getElementById('plwContentValue').value;
+  // Allow friendly full keys copied from data-cms; strip the selected page prefix
+  // because page_content stores it separately.
+  if (key.startsWith(`${plwState.pageKey}.`)) key = key.slice(plwState.pageKey.length + 1);
+  if (!key || !/^[a-z0-9_.:-]{1,120}$/i.test(key)) return showToast('Enter a valid content key.', true);
+  if (!value.trim()) delete plwState.content[key]; else plwState.content[key] = value;
+  document.getElementById('plwContentKey').value=''; document.getElementById('plwContentValue').value='';
+  plwMarkDirty(); renderPageWorkspace();
+});
 
 // Page Content (CMS) — image blocks and wording overrides.
 // The swappable site pictures. The list of them lives on the server, so
@@ -7090,12 +7928,18 @@ async function loadManageContent() {
   body.innerHTML = '<div class="loading-state">Loading…</div>';
 
   try {
-    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+    const query = status === '__trash'
+      ? '?trash=1'
+      : (status ? `?status=${encodeURIComponent(status)}` : '');
     const data = await api(`/admin/content/${resource}${query}`);
     manageEditable = data.editable || [];
     manageSelectFields = data.selectFields || {};
-    const items = data.items || [];
-    document.getElementById('manageListTitle').textContent = `Items (${items.length})`;
+    const rawItems = data.items || [];
+    const searchQ = (document.getElementById('manageSearch')?.value || '').trim().toLowerCase();
+    const items = searchQ ? rawItems.filter((item) => Object.values(item).some((value) =>
+      value !== null && value !== undefined && String(value).toLowerCase().includes(searchQ)
+    )) : rawItems;
+    document.getElementById('manageListTitle').textContent = `Items (${items.length}${searchQ ? ` of ${rawItems.length}` : ''})`;
     if (items.length === 0) {
       body.innerHTML = '<div class="empty-state">Nothing here.</div>';
       return;
@@ -7109,24 +7953,62 @@ async function loadManageContent() {
 
     items.forEach((item) => {
       const tr = document.createElement('tr');
+      const isTrash = status === '__trash';
+      const actions = [
+        '<button class="manage-preview btn-line">Preview</button>',
+        (!isTrash && manageEditable.length ? '<button class="manage-edit approve">Edit</button>' : ''),
+        (!isTrash && data.trashSupported && item.status === 'approved' ? '<button class="manage-publish btn-line">Unpublish</button>' : ''),
+        (!isTrash && data.trashSupported && item.status !== 'approved' ? '<button class="manage-publish btn-line">Publish</button>' : ''),
+        (!isTrash && data.trashSupported ? '<button class="manage-trash reject">Trash</button>' : ''),
+        (isTrash ? '<button class="manage-restore approve">Restore</button><button class="manage-delete reject">Delete permanently</button>' : ''),
+      ].join('');
       tr.innerHTML = columns.map((c) => `<td>${escapeHtmlAdmin(manageCellText(item[c]))}</td>`).join('')
-        + `<td><div class="row-actions">${manageEditable.length ? '<button class="approve">Edit</button>' : ''}<button class="reject">Delete</button></div></td>`;
-      const editBtn = tr.querySelector('.approve');
-      if (editBtn) editBtn.addEventListener('click', () => openManageEditor(resource, item));
-      // Only offered while the item is still awaiting a decision — crediting
-      // something already approved and live is a different situation, and the
-      // policy says an active service isn't refunded.
-      if (item.status === 'pending') {
-        addDeclineWithCreditButton(tr.querySelector('.row-actions'), resource, item.id, loadManageContent);
-      }
-      tr.querySelector('.reject').addEventListener('click', async () => {
-        if (!(await confirmContentDelete(resource, item.id))) return;
+        + `<td><div class="row-actions">${actions}</div></td>`;
+
+      tr.querySelector('.manage-preview')?.addEventListener('click', () => openManagePreview(resource, item));
+      tr.querySelector('.manage-edit')?.addEventListener('click', () => openManageEditor(resource, item));
+      tr.querySelector('.manage-publish')?.addEventListener('click', async (ev) => {
+        const published = item.status !== 'approved';
+        const verb = published ? 'publish' : 'take offline';
+        if (!confirm(`Are you sure you want to ${verb} this item?`)) return;
         try {
-          await api(`/admin/content/${resource}/${item.id}`, { method: 'DELETE' });
-          showToast('Deleted.');
+          await api(`/admin/content/${resource}/${item.id}/publication`, {
+            method: 'POST', body: JSON.stringify({ published })
+          });
+          showToast(published ? 'Published.' : 'Taken offline.');
           loadManageContent();
         } catch (err) { showToast(err.message, true); }
       });
+      tr.querySelector('.manage-trash')?.addEventListener('click', async () => {
+        if (!confirm('Move this item to Trash? It will be taken off the public site and can be restored later.')) return;
+        try {
+          await api(`/admin/content/${resource}/${item.id}/trash`, { method: 'POST', body: '{}' });
+          showToast('Moved to Trash.');
+          loadManageContent();
+        } catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.manage-restore')?.addEventListener('click', async () => {
+        try {
+          await api(`/admin/content/${resource}/${item.id}/restore`, { method: 'POST', body: '{}' });
+          showToast('Restored.');
+          loadManageContent();
+        } catch (err) { showToast(err.message, true); }
+      });
+      tr.querySelector('.manage-delete')?.addEventListener('click', async () => {
+        if (!(await confirmContentDelete(resource, item.id, 'Permanently delete this trashed item? This cannot be undone.'))) return;
+        try {
+          await api(`/admin/content/${resource}/${item.id}`, { method: 'DELETE' });
+          showToast('Permanently deleted.');
+          loadManageContent();
+        } catch (err) { showToast(err.message, true); }
+      });
+
+      // Only offered while the item is still awaiting a decision — crediting
+      // something already approved and live is a different situation, and the
+      // policy says an active service isn't refunded.
+      if (!isTrash && item.status === 'pending') {
+        addDeclineWithCreditButton(tr.querySelector('.row-actions'), resource, item.id, loadManageContent);
+      }
       table.appendChild(tr);
     });
 
@@ -7172,6 +8054,36 @@ async function confirmContentDelete(resource, id, plainMessage) {
     + amount + " to their Unplug Credit in one step.\n\n"
     + "Delete anyway, with no refund?"
   );
+}
+
+// Read-only preview in the same side panel, so an admin can inspect the full
+// record before deciding to edit, publish, trash or restore it.
+function openManagePreview(resource, item) {
+  const panel = document.getElementById('manageEditPanel');
+  const body = document.getElementById('manageEditBody');
+  document.getElementById('manageEditTitle').textContent = `Preview #${item.id}`;
+  panel.style.display = 'block';
+  body.innerHTML = '';
+
+  Object.entries(item).forEach(([field, value]) => {
+    if (MANAGE_HIDE_COLUMNS.includes(field)) return;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--paper-line)';
+    const label = document.createElement('div');
+    label.style.cssText = 'font-weight:700;text-transform:capitalize;margin-bottom:4px';
+    label.textContent = field.replace(/_/g, ' ');
+    const content = document.createElement('div');
+    content.style.whiteSpace = 'pre-wrap';
+    content.textContent = value == null || value === '' ? '—' : String(value);
+    wrap.append(label, content);
+    body.appendChild(wrap);
+  });
+
+  const close = document.createElement('button');
+  close.className = 'btn btn-line';
+  close.textContent = 'Close preview';
+  close.addEventListener('click', () => { panel.style.display = 'none'; });
+  body.appendChild(close);
 }
 
 // Only the fields the server said it will accept get an input, so the form
@@ -8882,6 +9794,60 @@ async function loadDeafPassports() {
 }
 
 // ---------------------------------------------------------------------------
+
+// Checkout Health — Phase 10 commercial journey audit. Read-only: this screen
+// never changes a payment or a service; it points admin to the existing queues.
+async function loadCheckoutHealth() {
+  const stats = document.getElementById('checkoutHealthStats');
+  const gateways = document.getElementById('checkoutGatewayHealth');
+  const anomalies = document.getElementById('checkoutAnomalies');
+  const packages = document.getElementById('checkoutPackageHealth');
+  if (!stats) return;
+  stats.innerHTML = '<div class="empty-state">Running checkout checks…</div>';
+  try {
+    const d = await api('/admin/checkout-health');
+    const pp = d.pending && d.pending.payments || {};
+    const po = d.pending && d.pending.orders || {};
+    const issues = d.anomalies || [];
+    const fulfilmentFailures = d.failedFulfilments || [];
+    stats.innerHTML = [
+      [pp.count || 0, `Pending payments · R${Number(pp.amount || 0).toLocaleString()}`],
+      [po.count || 0, `Pending cart orders · R${Number(po.amount || 0).toLocaleString()}`],
+      [(pp.olderThan7Days || 0) + (po.olderThan7Days || 0), 'Pending over 7 days'],
+      [issues.length + fulfilmentFailures.length, 'Checkout anomalies'],
+    ].map(([n,l]) => `<div class="stat-card${n ? ' alert' : ''}"><div class="num">${n}</div><div class="label">${escapeHtmlAdmin(l)}</div></div>`).join('');
+
+    gateways.innerHTML = Object.values(d.gateways || {}).map((g) =>
+      `<span style="display:inline-block; margin:0 10px 8px 0; padding:7px 10px; border:1px solid var(--paper-line); border-radius:4px;"><strong>${escapeHtmlAdmin(g.label)}</strong> · <span style="color:${g.live ? '#1f7a3d' : '#a15c00'};">${g.live ? 'LIVE' : 'NOT LIVE'}</span></span>`
+    ).join('') || 'No gateway information.';
+
+    if (!issues.length && !fulfilmentFailures.length) {
+      anomalies.innerHTML = '<div class="empty-state">No stuck service/payment combinations found.</div>';
+    } else {
+      const fulfilRows = fulfilmentFailures.map((x) => `<tr><td>${escapeHtmlAdmin(x.linked_type || 'Service')}</td><td>Payment #${x.id}</td><td>confirmed</td><td style="color:var(--red); font-weight:600;">Service fulfilment failed${x.fulfillment_error ? ': ' + escapeHtmlAdmin(x.fulfillment_error) : ''}${hasAdminPermission('finance.manage') ? ` <button class="btn btn-line checkout-retry-fulfilment" data-payment-id="${x.id}" style="width:auto; padding:3px 7px; margin-left:6px;">Retry</button>` : ''}</td><td>${x.confirmed_at ? new Date(x.confirmed_at).toLocaleString() : '—'}</td></tr>`).join('');
+      const serviceRows = issues.map((x) => `<tr><td>${escapeHtmlAdmin(x.service)}</td><td>#${x.linkedId}</td><td>${escapeHtmlAdmin(x.status)}</td><td style="color:var(--red); font-weight:600;">${x.issue === 'confirmed_payment_but_service_still_awaiting' ? 'Payment confirmed but service still awaits payment' : 'Awaiting payment but no active payment record'}</td><td>${x.createdAt ? new Date(x.createdAt).toLocaleString() : '—'}</td></tr>`).join('');
+      anomalies.innerHTML = `<div style="overflow:auto;"><table class="data-table"><thead><tr><th>Service</th><th>ID</th><th>Status</th><th>Issue</th><th>Created</th></tr></thead><tbody>${fulfilRows}${serviceRows}</tbody></table></div>`;
+      anomalies.querySelectorAll('.checkout-retry-fulfilment').forEach((btn) => btn.addEventListener('click', async () => {
+        btn.disabled = true; btn.textContent = 'Retrying…';
+        try { await api(`/admin/checkout-health/payments/${btn.dataset.paymentId}/retry-fulfilment`, { method:'POST' }); await loadCheckoutHealth(); }
+        catch (e) { alert(e.message || 'Fulfilment retry failed.'); btn.disabled = false; btn.textContent = 'Retry'; }
+      }));
+    }
+
+    const groups = [
+      ['Page banners', d.packages && d.packages.adBanner],
+      ['Article highlights', d.packages && d.packages.highlightArticle],
+      ['Directory highlights', d.packages && d.packages.highlightDirectory],
+    ];
+    packages.innerHTML = groups.map(([name, rows]) => `<div style="margin-bottom:12px;"><strong>${escapeHtmlAdmin(name)}</strong><div style="margin-top:5px;">${(rows || []).map((r) => `<span style="display:inline-block; margin:0 8px 6px 0; padding:5px 8px; border:1px solid var(--paper-line); border-radius:3px;">${Number(r.durationDays)} days · R${Number(r.price).toFixed(0)}</span>`).join('') || 'No active packages'}</div></div>`).join('');
+  } catch (e) {
+    stats.innerHTML = `<div class="empty-state" style="color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not run checkout health checks.')}</div>`;
+    gateways.innerHTML = anomalies.innerHTML = packages.innerHTML = '—';
+  }
+}
+const checkoutHealthRefresh = document.getElementById('checkoutHealthRefresh');
+if (checkoutHealthRefresh) checkoutHealthRefresh.addEventListener('click', loadCheckoutHealth);
+
 // Payments — manual EFT confirmation
 // ---------------------------------------------------------------------------
 async function loadPendingEft() {
@@ -9078,17 +10044,20 @@ function userRowHtml(u) {
 
   // Same rule the server enforces, shown here so a button isn't offered that
   // would only be refused.
-  const deletable = u.role !== 'admin' && owns === 0;
-  const isSelf = u.email === (document.getElementById('currentUserEmail') || {}).textContent;
+  const deletable = !['admin', 'staff'].includes(u.role) && owns === 0;
+  const isSelf = CURRENT_USER && u.id === CURRENT_USER.id;
+  const canManageMembers = hasAdminPermission('members.manage');
+  const canManageFinance = hasAdminPermission('finance.manage');
+  const roleLocked = isSelf || u.role === 'staff' || !canManageMembers;
   const credit = Number(u.credit_balance) || 0;
 
-  const roleOpts = USER_ROLES.map((r) =>
+  const roleOpts = (u.role === 'staff' ? ['staff'] : USER_ROLES).map((r) =>
     `<option value="${r}"${u.role === r ? ' selected' : ''}>${r}</option>`).join('');
   const typeOpts = ['', 'individual', 'business'].map((t) =>
     `<option value="${t}"${(u.member_type || '') === t ? ' selected' : ''}>${t || '— not set —'}</option>`).join('');
 
-  const deleteTitle = u.role === 'admin'
-    ? 'Admin accounts are not deleted here — change the role first.'
+  const deleteTitle = ['admin', 'staff'].includes(u.role)
+    ? 'Admin and staff accounts are managed through Staff & Permissions.'
     : `This account owns ${ownsLabel}. That content would be deleted with it.`;
 
   return `<div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);" data-user="${u.id}">
@@ -9102,11 +10071,11 @@ function userRowHtml(u) {
       </div>
     </div>
     <div class="grid-2">
-      <div class="field"><label>Full name</label><input class="u-name" value="${escapeAttrAdmin(u.full_name || '')}"></div>
-      <div class="field"><label>Phone</label><input class="u-phone" value="${escapeAttrAdmin(u.phone || '')}"></div>
-      <div class="field"><label>Role${isSelf ? ' — you cannot change your own' : ''}</label>
-        <select class="u-role"${isSelf ? ' disabled style="opacity:0.6;"' : ''}>${roleOpts}</select></div>
-      <div class="field"><label>Member type</label><select class="u-type">${typeOpts}</select></div>
+      <div class="field"><label>Full name</label><input class="u-name" value="${escapeAttrAdmin(u.full_name || '')}"${canManageMembers ? '' : ' disabled'}></div>
+      <div class="field"><label>Phone</label><input class="u-phone" value="${escapeAttrAdmin(u.phone || '')}"${canManageMembers ? '' : ' disabled'}></div>
+      <div class="field"><label>Role${isSelf ? ' — you cannot change your own' : (u.role === 'staff' ? ' — managed in Staff & Permissions' : '')}</label>
+        <select class="u-role"${roleLocked ? ' disabled style="opacity:0.6;"' : ''}>${roleOpts}</select></div>
+      <div class="field"><label>Member type</label><select class="u-type"${canManageMembers ? '' : ' disabled'}>${typeOpts}</select></div>
     </div>
     <div style="margin-bottom:10px;">
       <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
@@ -9114,20 +10083,17 @@ function userRowHtml(u) {
         Free publishing enabled <span style="color:var(--slate); font-weight:400;">(consultants only — has no effect on any other role)</span>
       </label>
     </div>
-    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:10px;">
-      <div class="field" style="margin-bottom:0;"><label>Account credit</label>
-        <div style="font-weight:700; font-size:15px;">R${credit.toFixed(2)}</div></div>
-      <div class="field" style="margin-bottom:0;"><label>Adjust by (R)</label>
-        <input class="u-credit" type="number" step="0.01" placeholder="e.g. 50 or -50" style="width:130px;"></div>
-      <div class="field" style="margin-bottom:0; flex:1; min-width:200px;"><label>Reason (required)</label>
-        <input class="u-credit-note" placeholder="Why is this changing?"></div>
+    ${canManageFinance ? `<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:10px;">
+      <div class="field" style="margin-bottom:0;"><label>Account credit</label><div style="font-weight:700; font-size:15px;">R${credit.toFixed(2)}</div></div>
+      <div class="field" style="margin-bottom:0;"><label>Adjust by (R)</label><input class="u-credit" type="number" step="0.01" placeholder="e.g. 50 or -50" style="width:130px;"></div>
+      <div class="field" style="margin-bottom:0; flex:1; min-width:200px;"><label>Reason (required)</label><input class="u-credit-note" placeholder="Why is this changing?"></div>
       <button class="approve" style="padding:9px 14px;" onclick="adjustUserCredit(${u.id})">Apply credit</button>
-    </div>
-    <button class="approve" style="padding:5px 12px;" onclick="saveUser(${u.id})">Save changes</button>
-    ${isSelf
+    </div>` : ''}
+    ${canManageMembers ? `<button class="approve" style="padding:5px 12px;" onclick="saveUser(${u.id})">Save changes</button>` : ''}
+    ${canManageMembers ? (isSelf
       ? `<button class="reject" disabled title="You cannot suspend the account you are signed in with." style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">${u.is_suspended ? 'Unsuspend' : 'Suspend'} account</button>`
-      : `<button class="reject" style="padding:5px 12px;" onclick="toggleSuspendUser(${u.id}, ${!!u.is_suspended})">${u.is_suspended ? 'Unsuspend' : 'Suspend'} account</button>`}
-    ${deletable
+      : `<button class="reject" style="padding:5px 12px;" onclick="toggleSuspendUser(${u.id}, ${!!u.is_suspended})">${u.is_suspended ? 'Unsuspend' : 'Suspend'} account</button>`) : ''}
+    ${canManageMembers && deletable
       ? `<button class="reject" style="padding:5px 12px;" onclick="deleteUser(${u.id})">Delete account</button>`
       : `<button class="reject" disabled title="${escapeAttrAdmin(deleteTitle)}" style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">Delete account</button>`}
   </div>`;
@@ -9198,6 +10164,130 @@ async function deleteUser(id) {
     loadUsers();
   } catch (e) { showToast(e.message || 'Could not delete.', true); }
 }
+
+
+// ---------------------------------------------------------------------------
+// Staff & Permissions — Super Admin only.
+// ---------------------------------------------------------------------------
+const STAFF_PERMISSION_LABELS = {
+  'dashboard.view':'Dashboard', 'content.view':'View content', 'content.manage':'Manage content',
+  'approvals.view':'View approvals', 'approvals.manage':'Manage approvals', 'pages.manage':'Pages & layout',
+  'media.manage':'Media library', 'members.view':'View members', 'members.manage':'Manage members',
+  'events.manage':'Events', 'competitions.manage':'Competitions', 'directory.manage':'Directory',
+  'advertising.manage':'Advertising', 'finance.view':'View finance', 'finance.manage':'Manage finance',
+  'marketing.manage':'Marketing', 'crm.manage':'CRM & enquiries', 'analytics.view':'Analytics',
+  'reports.export':'Export reports', 'staff.manage':'Staff permissions', 'system.manage':'Advanced / System'
+};
+let _staffRoles = [];
+let _staffAccounts = [];
+
+async function loadStaffAdmin() {
+  const accountsBody = document.getElementById('staffAccountsBody');
+  const rolesBody = document.getElementById('staffRolesBody');
+  if (!CURRENT_ACCESS || !CURRENT_ACCESS.isSuperAdmin) {
+    if (accountsBody) accountsBody.innerHTML = '<div class="empty-state">Super Admin access is required.</div>';
+    if (rolesBody) rolesBody.innerHTML = '';
+    return;
+  }
+  try {
+    const [rolesData, accountsData] = await Promise.all([api('/admin/staff/roles'), api('/admin/staff/accounts')]);
+    _staffRoles = rolesData.roles || [];
+    _staffAccounts = accountsData.staff || [];
+    renderStaffAccounts();
+    renderStaffRoles(rolesData.allPermissions || []);
+  } catch (e) {
+    if (accountsBody) accountsBody.innerHTML = `<div class="empty-state">${escapeHtmlAdmin(e.message || 'Could not load staff.')}</div>`;
+  }
+}
+
+function renderStaffAccounts() {
+  const body = document.getElementById('staffAccountsBody');
+  if (!body) return;
+  body.innerHTML = _staffAccounts.length ? _staffAccounts.map((u) => {
+    const superAdmin = u.account_role === 'admin';
+    return `<div style="display:flex; justify-content:space-between; gap:14px; align-items:center; padding:12px 0; border-bottom:1px solid var(--paper-line); flex-wrap:wrap;">
+      <div><strong>${escapeHtmlAdmin(u.full_name || u.email)}</strong><div style="font-size:12px;color:#666;">${escapeHtmlAdmin(u.email)}</div></div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; padding:3px 8px; border:1px solid var(--paper-line);">${escapeHtmlAdmin(superAdmin ? 'Super Admin' : (u.staff_role_name || 'Staff'))}</span>
+        ${superAdmin ? '' : `<select id="staff-role-${u.id}" style="padding:6px;">${_staffRoles.map(r => `<option value="${r.id}"${Number(r.id)===Number(u.staff_role_id)?' selected':''}>${escapeHtmlAdmin(r.name)}</option>`).join('')}</select>
+          <button class="approve" onclick="reassignStaff(${u.id})">Change role</button>
+          <button class="reject" onclick="removeStaffAccess(${u.id})">Remove staff access</button>`}
+      </div>
+    </div>`;
+  }).join('') : '<div style="color:#666;">No staff accounts yet.</div>';
+}
+
+function renderStaffRoles(allPermissions) {
+  const body = document.getElementById('staffRolesBody');
+  if (!body) return;
+  body.innerHTML = _staffRoles.map((r) => {
+    const assigned = Number(r.assigned_count) || 0;
+    const checks = allPermissions.map((p) => `<label style="display:flex; gap:6px; align-items:center; font-size:12px; padding:4px 0;"><input type="checkbox" class="staff-perm" data-role="${r.id}" value="${escapeAttrAdmin(p)}" ${(r.permissions||[]).includes(p)?'checked':''} ${p==='dashboard.view'?'disabled':''}>${escapeHtmlAdmin(STAFF_PERMISSION_LABELS[p] || p)}</label>`).join('');
+    return `<div style="padding:14px 0; border-bottom:1px solid var(--paper-line);" data-staff-role="${r.id}">
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;"><input class="staff-role-name" value="${escapeAttrAdmin(r.name)}" style="font-weight:700;max-width:300px;"><div style="font-size:11px;color:#777;margin:4px 0;">${r.is_system?'Built-in role':'Custom role'} · ${assigned} assigned</div><input class="staff-role-desc" value="${escapeAttrAdmin(r.description||'')}" placeholder="Role description" style="width:100%;max-width:520px;"></div>
+        <div><button class="approve" onclick="saveStaffRole(${r.id})">Save role</button>${r.is_system?'':` <button class="reject" onclick="deleteStaffRole(${r.id})">Delete</button>`}</div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0 14px; margin-top:10px;">${checks}</div>
+    </div>`;
+  }).join('');
+}
+
+async function reassignStaff(userId) {
+  const select = document.getElementById(`staff-role-${userId}`);
+  if (!select) return;
+  try {
+    const r = await api('/admin/staff/assign', { method:'POST', body:JSON.stringify({ userId, staffRoleId:Number(select.value) }) });
+    showToast(r.message || 'Staff role updated.'); loadStaffAdmin();
+  } catch (e) { showToast(e.message || 'Could not update staff role.', true); }
+}
+async function removeStaffAccess(userId) {
+  const u = _staffAccounts.find(x => Number(x.id) === Number(userId));
+  if (!confirm(`Remove Control Centre access from ${u ? u.email : 'this account'}?`)) return;
+  try { const r = await api(`/admin/staff/accounts/${userId}`, { method:'DELETE' }); showToast(r.message || 'Staff access removed.'); loadStaffAdmin(); }
+  catch (e) { showToast(e.message || 'Could not remove access.', true); }
+}
+async function saveStaffRole(roleId) {
+  const card = document.querySelector(`[data-staff-role="${roleId}"]`);
+  if (!card) return;
+  const permissions = [...card.querySelectorAll('.staff-perm:checked')].map(x => x.value);
+  try {
+    await api(`/admin/staff/roles/${roleId}`, { method:'PATCH', body:JSON.stringify({ name:card.querySelector('.staff-role-name').value.trim(), description:card.querySelector('.staff-role-desc').value.trim(), permissions }) });
+    showToast('Role permissions saved.'); loadStaffAdmin();
+  } catch(e) { showToast(e.message || 'Could not save role.', true); }
+}
+async function deleteStaffRole(roleId) {
+  if (!confirm('Delete this custom role? This is only allowed when nobody is assigned to it.')) return;
+  try { await api(`/admin/staff/roles/${roleId}`, { method:'DELETE' }); showToast('Role deleted.'); loadStaffAdmin(); }
+  catch(e) { showToast(e.message || 'Could not delete role.', true); }
+}
+async function searchStaffCandidates() {
+  const q = document.getElementById('staffCandidateSearch').value.trim();
+  const body = document.getElementById('staffCandidatesBody');
+  if (q.length < 2) { body.innerHTML = '<span style="color:#666;font-size:12px;">Type at least 2 characters.</span>'; return; }
+  try {
+    const d = await api('/admin/staff/candidates?q=' + encodeURIComponent(q));
+    body.innerHTML = (d.users || []).length ? d.users.map((u) => `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--paper-line);flex-wrap:wrap;"><div><strong>${escapeHtmlAdmin(u.full_name||u.email)}</strong><div style="font-size:11px;color:#777;">${escapeHtmlAdmin(u.email)} · current role: ${escapeHtmlAdmin(u.role)}</div></div><div style="display:flex;gap:6px;"><select id="candidate-role-${u.id}" style="padding:6px;">${_staffRoles.map(r => `<option value="${r.id}">${escapeHtmlAdmin(r.name)}</option>`).join('')}</select><button class="approve" onclick="assignStaffCandidate(${u.id})">Grant access</button></div></div>`).join('') : '<span style="color:#666;font-size:12px;">No matching accounts.</span>';
+  } catch(e) { body.innerHTML = `<span style="color:var(--red);">${escapeHtmlAdmin(e.message)}</span>`; }
+}
+async function assignStaffCandidate(userId) {
+  const select = document.getElementById(`candidate-role-${userId}`); if (!select) return;
+  try { const r = await api('/admin/staff/assign', { method:'POST', body:JSON.stringify({ userId, staffRoleId:Number(select.value) }) }); showToast(r.message || 'Staff access granted.'); document.getElementById('staffCandidatesBody').innerHTML=''; loadStaffAdmin(); }
+  catch(e) { showToast(e.message || 'Could not grant access.', true); }
+}
+async function createStaffRole() {
+  const name = prompt('Name for the new staff role (for example: Events Assistant):');
+  if (!name) return;
+  const description = prompt('Short description of what this role is for:') || '';
+  try { await api('/admin/staff/roles', { method:'POST', body:JSON.stringify({ name, description, permissions:['dashboard.view'] }) }); showToast('Role created. Choose its permissions below.'); loadStaffAdmin(); }
+  catch(e) { showToast(e.message || 'Could not create role.', true); }
+}
+const staffSearchBtn = document.getElementById('staffCandidateSearchBtn');
+if (staffSearchBtn) staffSearchBtn.addEventListener('click', searchStaffCandidates);
+const staffSearchInput = document.getElementById('staffCandidateSearch');
+if (staffSearchInput) staffSearchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') searchStaffCandidates(); });
+const staffNewRoleBtn = document.getElementById('staffNewRoleBtn');
+if (staffNewRoleBtn) staffNewRoleBtn.addEventListener('click', createStaffRole);
 
 // ---------------------------------------------------------------------------
 // Sales Consultants
@@ -12372,6 +13462,132 @@ document.getElementById('addImpactMakerBtn').addEventListener('click', async () 
 });
 
 // ---------------------------------------------------------------------------
+// Media Library — one searchable catalogue of uploaded and already-referenced
+// images. Existing content URLs remain the source of truth; this is the safe
+// admin index around them.
+// ---------------------------------------------------------------------------
+let _mlWired = false;
+let _mlItems = [];
+let _mlDebounce = null;
+
+function mlBytes(n) {
+  if (!Number(n)) return 'Size unknown';
+  const units = ['B','KB','MB','GB']; let v=Number(n), i=0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1; }
+  return `${v.toFixed(i ? 1 : 0)} ${units[i]}`;
+}
+function mlEscape(v) { return escapeHtmlAdmin(String(v == null ? '' : v)); }
+
+async function loadMediaLibrary() {
+  if (!_mlWired) {
+    _mlWired = true;
+    const up = document.getElementById('mlUpload');
+    if (up) {
+      up.innerHTML = UnplugUpload.fieldHtml('mediaLibraryUpload', '', '', null);
+      up.addEventListener('img-upload:done', () => {
+        showToast('Image uploaded to Media Library.');
+        up.innerHTML = UnplugUpload.fieldHtml('mediaLibraryUpload', '', '', null);
+        loadMediaLibrary();
+      });
+    }
+    const search = document.getElementById('mlSearch');
+    if (search) search.addEventListener('input', () => {
+      clearTimeout(_mlDebounce); _mlDebounce = setTimeout(loadMediaLibrary, 250);
+    });
+    const filter = document.getElementById('mlFilter');
+    if (filter) filter.addEventListener('change', loadMediaLibrary);
+    const refresh = document.getElementById('mlRefresh');
+    if (refresh) refresh.addEventListener('click', loadMediaLibrary);
+  }
+
+  const grid = document.getElementById('mlGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="loading-state">Loading media…</div>';
+  try {
+    const filter = (document.getElementById('mlFilter') || {}).value || 'all';
+    const q = ((document.getElementById('mlSearch') || {}).value || '').trim();
+    const trash = filter === 'trash';
+    const d = await api('/admin/media?' + new URLSearchParams({ q, trash: trash ? '1' : '0' }).toString());
+    _mlItems = d.items || [];
+    let shown = _mlItems;
+    if (filter === 'used') shown = shown.filter((x) => Number(x.usage_count) > 0);
+    if (filter === 'unused') shown = shown.filter((x) => Number(x.usage_count) === 0);
+
+    // Summary counts from the active result set. Trash count is fetched once
+    // separately because it is not mixed with active media by design.
+    document.getElementById('mlTotal').textContent = trash ? '—' : _mlItems.length;
+    document.getElementById('mlUsed').textContent = trash ? '—' : _mlItems.filter((x) => Number(x.usage_count) > 0).length;
+    document.getElementById('mlUnused').textContent = trash ? '—' : _mlItems.filter((x) => Number(x.usage_count) === 0).length;
+    if (!trash) {
+      api('/admin/media?trash=1').then((t) => { const e=document.getElementById('mlTrashCount'); if(e)e.textContent=(t.items||[]).length; }).catch(()=>{});
+    } else document.getElementById('mlTrashCount').textContent = _mlItems.length;
+
+    const status = document.getElementById('mlStatus');
+    if (status) status.textContent = `${shown.length} item${shown.length === 1 ? '' : 's'} shown. Images already used by site content are automatically indexed here.`;
+    if (!shown.length) { grid.innerHTML = '<div class="empty-state">No media matches this view.</div>'; return; }
+
+    grid.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px;">${shown.map(mlCardHtml).join('')}</div>`;
+  } catch (e) {
+    grid.innerHTML = `<div class="empty-state">Could not load Media Library: ${mlEscape(e.message)}</div>`;
+  }
+}
+
+function mlCardHtml(a) {
+  const refs = a.references || [];
+  const used = Number(a.usage_count) > 0;
+  const dim = a.width && a.height ? `${a.width} × ${a.height}px` : 'Dimensions unknown';
+  const created = a.created_at ? new Date(a.created_at).toLocaleDateString() : 'Existing site image';
+  const refText = refs.slice(0,3).map((r) => `${mlEscape(r.type)}: ${mlEscape(r.label || '#'+r.id)}`).join('<br>');
+  const more = refs.length > 3 ? `<br>+ ${refs.length - 3} more` : '';
+  const action = a.trashed_at
+    ? `<button class="btn btn-line" style="width:auto;" onclick="mlRestore(${a.id})">Restore</button>`
+    : `<button class="btn btn-line" style="width:auto;" onclick="mlCopyUrl(${JSON.stringify(a.url)})">Copy URL</button>
+       <button class="btn btn-line" style="width:auto;" onclick="mlOpenMeta(${a.id})">Details</button>
+       ${used ? '' : `<button class="btn btn-line" style="width:auto; color:var(--red);" onclick="mlTrash(${a.id})">Trash</button>`}`;
+  return `<div style="border:1px solid var(--paper-line); background:#fff; border-radius:6px; overflow:hidden;">
+    <div style="aspect-ratio:4/3; background:#f3f1ee; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+      <img src="${mlEscape(a.url)}" alt="${mlEscape(a.alt_text || '')}" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.opacity=.18">
+    </div>
+    <div style="padding:10px;">
+      <div style="font-weight:700; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${mlEscape(a.filename || '')}">${mlEscape(a.filename || 'Image')}</div>
+      <div style="font-size:11.5px; color:var(--slate); margin-top:3px;">${mlEscape(dim)} · ${mlEscape(mlBytes(a.size_bytes))}</div>
+      <div style="font-size:11.5px; color:var(--slate);">${mlEscape(created)} · ${mlEscape(a.storage || 'existing')}</div>
+      <div style="font-size:11.5px; margin-top:7px; padding:6px; background:${used ? '#f2f8f2' : '#f7f5f2'}; border-radius:4px; min-height:32px;">
+        <strong>${refs.length} use${refs.length === 1 ? '' : 's'}</strong>${refs.length ? `<br>${refText}${more}` : '<br>Safe to move to Trash.'}
+      </div>
+      <div style="display:flex; gap:5px; flex-wrap:wrap; margin-top:8px;">${action}</div>
+    </div>
+  </div>`;
+}
+
+async function mlCopyUrl(url) {
+  try { await navigator.clipboard.writeText(url); showToast('Image URL copied.'); }
+  catch (_) { window.prompt('Copy this image URL:', url); }
+}
+
+function mlOpenMeta(id) {
+  const a = _mlItems.find((x) => Number(x.id) === Number(id));
+  if (!a) return;
+  const alt = window.prompt('Alt text (describes the image for accessibility and SEO):', a.alt_text || '');
+  if (alt === null) return;
+  const caption = window.prompt('Caption / internal description:', a.caption || '');
+  if (caption === null) return;
+  api(`/admin/media/${id}`, { method:'PATCH', body:JSON.stringify({ altText:alt, caption }) })
+    .then(() => { showToast('Media details saved.'); loadMediaLibrary(); })
+    .catch((e) => showToast(e.message || 'Could not save media details.', true));
+}
+
+async function mlTrash(id) {
+  if (!confirm('Move this unused image to Media Library Trash? The stored file is kept safely; this only removes it from normal reuse.')) return;
+  try { await api(`/admin/media/${id}/trash`, { method:'POST' }); showToast('Moved to Media Library Trash.'); loadMediaLibrary(); }
+  catch (e) { showToast(e.message || 'Could not move media to Trash.', true); }
+}
+async function mlRestore(id) {
+  try { await api(`/admin/media/${id}/restore`, { method:'POST' }); showToast('Media restored.'); loadMediaLibrary(); }
+  catch (e) { showToast(e.message || 'Could not restore media.', true); }
+}
+
+// ---------------------------------------------------------------------------
 // Gallery Management — full admin control over the existing gallery_images
 // table (member submissions AND admin-added images), per the Gallery spec.
 // ---------------------------------------------------------------------------
@@ -13217,6 +14433,116 @@ async function adjustTop10Votes(entry) {
     showToast(err.message, true);
   }
 }
+
+// ---------------------------------------------------------------------------
+// BUSINESS REPORTING CENTRE
+// ---------------------------------------------------------------------------
+function brDateValue(d) {
+  const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return z.toISOString().slice(0,10);
+}
+function brSetRange(kind) {
+  const now = new Date();
+  let from = new Date(now);
+  if (kind === 'today') from.setHours(0,0,0,0);
+  else if (kind === 'month') { from = new Date(now.getFullYear(), now.getMonth(), 1); }
+  else if (kind === 'year') { from = new Date(now.getFullYear(), 0, 1); }
+  else from = new Date(now.getTime() - Math.max(1, Number(kind || 30)) * 864e5);
+  document.getElementById('brFrom').value = brDateValue(from);
+  document.getElementById('brTo').value = brDateValue(now);
+  loadBusinessReport();
+}
+function brQuery() {
+  const f = document.getElementById('brFrom');
+  const t = document.getElementById('brTo');
+  if (!f || !t) return '';
+  if (!f.value || !t.value) brSetDefaultDates();
+  const from = new Date(f.value + 'T00:00:00');
+  const to = new Date(t.value + 'T23:59:59.999');
+  return `?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`;
+}
+function brSetDefaultDates() {
+  const now = new Date();
+  const from = new Date(now.getTime() - 30 * 864e5);
+  const f = document.getElementById('brFrom'), t = document.getElementById('brTo');
+  if (f && !f.value) f.value = brDateValue(from);
+  if (t && !t.value) t.value = brDateValue(now);
+}
+const brRand = (v) => 'R' + Number(v || 0).toLocaleString('en-ZA', { minimumFractionDigits:2, maximumFractionDigits:2 });
+function brChange(v) {
+  const n = Number(v || 0);
+  const sign = n > 0 ? '+' : '';
+  const colour = n > 0 ? '#157347' : (n < 0 ? 'var(--red)' : 'var(--slate)');
+  return `<span style="font-size:11px; color:${colour};">${sign}${n.toFixed(1)}% vs previous period</span>`;
+}
+function brCard(label, value, hint) {
+  return `<div class="stat-card"><div class="num" style="font-size:22px;">${value}</div><div class="label">${label}</div>${hint ? `<div style="font-size:11px; margin-top:4px;">${hint}</div>` : ''}</div>`;
+}
+function brMiniTable(title, rows) {
+  if (!rows || !rows.length) return `<div class="panel"><div class="panel-head"><h3>${title}</h3></div><div class="empty-state">Nothing recorded in this period.</div></div>`;
+  return `<div class="panel" style="margin:0;"><div class="panel-head"><h3>${title}</h3></div><div class="panel-body" style="padding:0;"><table><tr><th>Service</th><th>Payments</th><th>Revenue</th></tr>${rows.map(r => `<tr><td>${escapeHtmlAdmin(String(r.linked_type || '').replace(/_/g,' '))}</td><td>${anNum(r.payments)}</td><td>${brRand(r.revenue)}</td></tr>`).join('')}</table></div></div>`;
+}
+function brDailyTable(rows) {
+  const recent = (rows || []).slice(-31).reverse();
+  if (!recent.length) return '<div class="empty-state">No daily activity recorded in this period.</div>';
+  return `<table><tr><th>Date</th><th>Revenue</th><th>Members</th><th>Payments</th><th>Articles</th><th>Views</th><th>Votes</th></tr>${recent.map(r => `<tr><td>${escapeHtmlAdmin(r.day)}</td><td>${brRand(r.revenue)}</td><td>${anNum(r.members)}</td><td>${anNum(r.payments)}</td><td>${anNum(r.articles)}</td><td>${anNum(r.views)}</td><td>${anNum(r.votes)}</td></tr>`).join('')}</table>`;
+}
+async function loadBusinessReport() {
+  const stats = document.getElementById('businessReportStats');
+  const body = document.getElementById('businessReportBody');
+  if (!stats || !body) return;
+  brSetDefaultDates();
+  stats.innerHTML = '<div class="loading-state">Loading business report…</div>';
+  body.innerHTML = '';
+  try {
+    const d = await api('/admin/business-reports/summary' + brQuery());
+    const h = d.headline || {}, ch = d.change || {}, op = d.operations || {};
+    stats.innerHTML = brCard('Revenue', brRand(h.revenue), brChange(ch.revenuePct))
+      + brCard('Payments', anNum(h.confirmedPayments), brChange(ch.paymentsPct))
+      + brCard('New Members', anNum(h.newMembers), brChange(ch.membersPct))
+      + brCard('Submissions', anNum(h.submissions), `${anNum(h.pendingApprovals)} awaiting approval now`)
+      + brCard('Page Views', anNum(h.pageViews), brChange(ch.viewsPct))
+      + brCard('Visitors', anNum(h.visitors))
+      + brCard('Votes', anNum(h.votes))
+      + brCard('Pending Payments', brRand(h.pendingPaymentAmount), `${anNum(h.pendingPaymentCount)} payment(s)`)
+      + brCard('Enquiries', anNum(h.inquiries))
+      + brCard('Active Banners', anNum(h.activeBanners))
+      + brCard('Banner Impressions', anNum(h.bannerImpressions))
+      + brCard('Banner Clicks', anNum(h.bannerClicks), `${Number(h.bannerCtr || 0).toFixed(2)}% CTR`)
+      + brCard('Admin Actions', anNum(h.adminActions));
+    const note = document.getElementById('brWindowNote');
+    if (note) note.textContent = `Reporting ${new Date(d.window.from).toLocaleDateString('en-ZA')} – ${new Date(d.window.to).toLocaleDateString('en-ZA')}. Comparison uses the immediately preceding period of equal length.`;
+    const contentRows = [
+      ['Articles',op.articles], ['Events',op.events], ['Directory profiles',op.profiles], ['Gallery',op.gallery], ['Competition entries',op.competitionEntries]
+    ];
+    body.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:16px; padding:16px;">`
+      + brMiniTable('Revenue by service', d.revenueByService)
+      + `<div class="panel" style="margin:0;"><div class="panel-head"><h3>Operational submissions</h3></div><div class="panel-body" style="padding:0;"><table><tr><th>Area</th><th>Submitted</th><th>Approved now</th><th>Pending now</th></tr>${contentRows.map(([name,r]) => `<tr><td>${name}</td><td>${anNum(r && r.total)}</td><td>${anNum(r && r.approved)}</td><td>${anNum(r && r.pending)}</td></tr>`).join('')}<tr><td>Forms</td><td>${anNum(op.forms && op.forms.total)}</td><td>—</td><td>${anNum(op.forms && op.forms.new_count)}</td></tr><tr><td>Banner submissions</td><td>${anNum(op.bannerSubmissions)}</td><td>—</td><td>—</td></tr></table></div></div>`
+      + `</div><div class="panel" style="margin:0 16px 16px;"><div class="panel-head"><h3>Daily history</h3><span style="font-size:11px;color:var(--slate);">Showing up to the latest 31 active days on-screen; exports include the full selected period.</span></div><div class="panel-body" style="padding:0; overflow-x:auto;">${brDailyTable(d.daily)}</div></div>`;
+    const canExport = hasAdminPermission('reports.export');
+    document.getElementById('brCsv').style.display = canExport ? '' : 'none';
+    document.getElementById('brExcel').style.display = canExport ? '' : 'none';
+  } catch (e) {
+    stats.innerHTML = '';
+    body.innerHTML = `<div class="empty-state">Could not load business report: ${escapeHtmlAdmin(e.message)}</div>`;
+  }
+}
+async function downloadBusinessReport(ext) {
+  if (!hasAdminPermission('reports.export')) return showToast('You do not have permission to export reports.', true);
+  try {
+    const res = await fetch(API_BASE + `/admin/business-reports/export.${ext}` + brQuery(), { headers: AUTH_TOKEN ? { Authorization:'Bearer ' + AUTH_TOKEN } : {} });
+    if (!res.ok) { let msg='Export failed.'; try { msg=(await res.json()).error || msg; } catch(e){} throw new Error(msg); }
+    const blob = await res.blob();
+    const cd = res.headers.get('content-disposition') || '';
+    const match = cd.match(/filename="?([^";]+)"?/i);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = match ? match[1] : `unplug-report.${ext}`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } catch(e) { showToast(e.message, true); }
+}
+document.querySelectorAll('[data-br-range]').forEach(b => b.addEventListener('click', () => brSetRange(b.dataset.brRange)));
+document.getElementById('brApply')?.addEventListener('click', loadBusinessReport);
+document.getElementById('brCsv')?.addEventListener('click', () => downloadBusinessReport('csv'));
+document.getElementById('brExcel')?.addEventListener('click', () => downloadBusinessReport('xls'));
 
 // ---------------------------------------------------------------------------
 // ANALYTICS REPORTS (migration 118 tables)

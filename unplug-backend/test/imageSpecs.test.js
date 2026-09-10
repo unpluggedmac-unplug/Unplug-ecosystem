@@ -222,7 +222,7 @@ test('every upload field states a size, or is one whose size is not fixed', () =
   // artCoverOrientation/artWireSectionOrientation wiring in both dashboard
   // files, all of which still call imgSpecFull() themselves, just one layer
   // removed from this literal scan). Everything else must name a key.
-  const dynamic = ['adImage_', 'coverImg', 'siteImg-', 'abImage', 'cover', 'bannerImage', 'sectionImage'];
+  const dynamic = ['adImage_', 'coverImg', 'siteImg-', 'abImage', 'cover', 'bannerImage', 'sectionImage', 'mediaLibraryUpload'];
   const silent = [];
   DASHBOARDS.forEach((f) => {
     const src = fs.readFileSync(path.join(siteRoot, f), 'utf8');

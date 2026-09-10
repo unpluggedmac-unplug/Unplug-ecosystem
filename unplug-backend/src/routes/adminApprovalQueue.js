@@ -790,6 +790,14 @@ router.get('/:type/:id', requireRole('admin'), async (req, res, next) => {
       // button that opens the homepage and looks broken.
       previewUrl: d.preview ? d.preview(item) : null,
       editable: d.fields.length > 0,
+      // The dashboard uses this to expose the third review outcome alongside
+      // Approve and Reject. The rule stays server-owned: the browser is told
+      // whether this type can be returned, not asked to recreate ownership
+      // logic that differs from one submission table to another.
+      canRequestChanges: CR.canRequestChanges(type) && isLiveFor('changes_requested', d.table),
+      requestChangesReason: CR.canRequestChanges(type)
+        ? (isLiveFor('changes_requested', d.table) ? null : 'This service has not been migrated for change requests yet.')
+        : (CR.NOT_RETURNABLE[type] || 'This kind of submission cannot be returned to a member.'),
     });
   } catch (err) {
     next(err);

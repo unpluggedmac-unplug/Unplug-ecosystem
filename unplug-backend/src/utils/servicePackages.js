@@ -14,7 +14,7 @@ const pool = require('../db');
 const FALLBACK_PRICES = {
   highlight_article: { 7: 150.00, 14: 250.00, 21: 300.00, 28: 450.00 },
   highlight_directory: { 7: 100.00, 14: 150.00, 21: 200.00, 28: 250.00 },
-  ad_banner: { 7: 300.00, 14: 550.00, 28: 1000.00 },
+  ad_banner: { 7: 300.00, 14: 550.00, 21: 785.00, 28: 1000.00 },
 };
 
 // 'article' | 'directory' -> the service_packages key for a highlight.

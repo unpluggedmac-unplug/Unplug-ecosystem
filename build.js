@@ -72,7 +72,10 @@ const MODULES = [
 // rewritten is the undefined-token bug all over again, one layer down.
 const STATIC = ['sw.js', 'manifest.webmanifest', 'robots.txt', '_headers',
                 '_redirects', 'unplug-tokens.css', 'unplug-popups.js', 'unplug-form-render.js'];
-const STATIC_DIRS = ['icons', 'media', 'functions'];
+// Pages Functions must stay in /functions at the project root. Cloudflare
+// compiles them separately; copying them into dist would publish their source
+// as static files.
+const STATIC_DIRS = ['icons', 'media'];
 
 function hash(content) {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 10);

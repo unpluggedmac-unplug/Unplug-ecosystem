@@ -39,7 +39,8 @@
   (function loadHandoff() {
     var base;
     try {
-      base = localStorage.getItem('unplug_api_base') || 'https://unplug-ecosystem.onrender.com';
+      base = localStorage.getItem('unplug_api_base') || window.UNPLUG_RUNTIME_API || window.UNPLUG_RUNTIME_API
+        || 'https://unplug-ecosystem.onrender.com';
     } catch (e) {
       base = 'https://unplug-ecosystem.onrender.com';
     }
