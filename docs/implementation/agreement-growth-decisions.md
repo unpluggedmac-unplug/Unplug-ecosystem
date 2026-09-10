@@ -60,6 +60,21 @@ This file is the durable decision log for the two approved builds. It captures t
 - Growth Application is separate from Agreement Forms, `signed_agreements`, Impact Makers, Directory and the participation/recognition system unless a later explicit decision connects them.
 - Growth Application must autosave and resume, support the three-stage applicant journey, admin research/tasks/messages, configurable placements, previews and applicant/admin PDF output as described in the handover.
 
+## Verified repository integration state — 2026-09-10
+
+- The feature branch is based on `staging-control-centre` and production remains untouched.
+- The current migration directory ends at `189_admin_content_trash.sql`. Migrations `183_media_library.sql`, `184_page_cms_drafts.sql`, `185_staff_roles_permissions.sql`, `186_ad_banner_campaign_manager.sql`, `187_payment_fulfilment_tracking.sql`, and `189_admin_content_trash.sql` already occupy the high-number sequence. The old local `183_agreement_forms.sql` must not be reused under number 183.
+- Reserve `190_agreement_forms.sql` for the imported Agreement Forms migration, subject to re-checking the migration directory immediately before integration in case another migration lands first. Do not back-fill the existing 188 gap for this feature.
+- `db/migrate.js` applies all zero-padded SQL migration filenames in lexical order, so `190_...` is the correct monotonic continuation after the current 189 file.
+- Current `src/app.js` still mounts `/forms` immediately before `/privacy`, so the handover's intended insertion remains valid: mount the new `/agreement-forms` router and top-level `/a` short-link router between those two existing mounts. The old `/agreements` router remains untouched.
+- Current `src/utils/submissionReference.js` still lacks the Agreement Forms linked-payment type. When the Agreement Forms backend is imported, add `agreement_payment: 'agreement_submissions'` to `SUBMISSION_TABLE` and `agreement_payment: 'Agreement'` to `SERVICE_LABEL`, exactly as the handover specifies.
+- Do not wire the `app.js` require/mount before `src/routes/agreementForms.js` exists on this branch; doing so would make startup fail. Import the tested backend source first, then wire integration points in the same change set.
+
+## Source-of-truth boundary
+
+- The uploaded Agreement Forms handover is sufficient to verify architecture, integration points and non-negotiable safeguards, but it does not contain the complete 381-line migration, 1,158-line route, 197-line document generator or 540-line test source. Those original source files should be imported rather than silently approximated if they remain available in the owner's local working copy.
+- The Growth Application handover explicitly states that the exact `growth-application-proposal.md` contains every field, validation rule and the complete Deep Discovery questionnaire. Do not invent or silently replace those missing question sets. Exact Growth implementation requires that proposal source.
+
 ## Source-loss rule
 
 Do not rely on chat memory alone for build-critical decisions. Any new material decision made during implementation must be appended to this file (or a successor decision-log file in the repository) before it is treated as locked.
