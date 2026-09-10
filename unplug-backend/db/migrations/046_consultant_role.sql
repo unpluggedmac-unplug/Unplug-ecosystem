@@ -5,9 +5,14 @@
 -- address keeps free publishing forever, including someone who has left —
 -- and revoking it would require changing their email. A role can be granted
 -- and withdrawn.
+--
+-- This migration is re-run at service startup. Keep every role introduced by
+-- later migrations in this compatibility constraint so a restart cannot fail
+-- before those later migrations get a chance to run. In particular, migration
+-- 185 adds the capability-based 'staff' role used by the Control Centre.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
-  CHECK (role IN ('member', 'investor', 'advertiser', 'admin', 'consultant'));
+  CHECK (role IN ('member', 'investor', 'advertiser', 'admin', 'consultant', 'staff'));
 
 -- Links a consultant record to the account they sign in with, so their
 -- referrals and activity can be attributed.
