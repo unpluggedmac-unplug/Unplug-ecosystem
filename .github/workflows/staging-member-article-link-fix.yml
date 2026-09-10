@@ -1,0 +1,88 @@
+name: Staging member article link fix
+
+on:
+  push:
+    branches:
+      - staging-control-centre
+    paths:
+      - .github/workflows/staging-member-article-link-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-member-article-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: staging-control-centre
+          fetch-depth: 0
+
+      - name: Make approved article titles clickable
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('unplug-member-dashboard.html')
+          text = path.read_text()
+          old = """  var main = document.createElement('div');
+          var title = document.createElement('div');
+          title.className = 'subs-title';
+          title.textContent = s.title || '(untitled)';
+          main.appendChild(title);
+          """
+          new = """  var main = document.createElement('div');
+          // Approved articles are public, so their titles take the member back to
+          // the article they submitted. Unpublished items stay plain text because
+          // the public article route deliberately refuses non-approved content.
+          var title = document.createElement(
+            s.type === 'article' && s.status === 'approved' && s.id ? 'a' : 'div'
+          );
+          title.className = 'subs-title';
+          title.textContent = s.title || '(untitled)';
+          if (title.tagName === 'A') {
+            title.href = 'unplug-magazine.html?p=article&id=' + encodeURIComponent(s.id);
+            title.target = '_blank';
+            title.rel = 'noopener';
+            title.style.color = 'inherit';
+            title.style.textDecoration = 'underline';
+            title.style.textUnderlineOffset = '2px';
+          }
+          main.appendChild(title);
+          """
+          if old not in text:
+              raise SystemExit('Expected subsRow title block not found; refusing to patch.')
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected exactly one title block, found {text.count(old)}; refusing to patch.')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Verify isolated source change
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('unplug-member-dashboard.html').read_text()
+          required = [
+            "s.type === 'article' && s.status === 'approved' && s.id ? 'a' : 'div'",
+            "title.href = 'unplug-magazine.html?p=article&id=' + encodeURIComponent(s.id);",
+            "title.rel = 'noopener';",
+          ]
+          missing = [x for x in required if x not in text]
+          if missing:
+              raise SystemExit('Missing expected link code: ' + repr(missing))
+          print('Approved member article link patch verified.')
+          PY
+
+      - name: Commit fix and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "unpluggedmac-unplug"
+          git config user.email "unpluggedmac@gmail.com"
+          git rm .github/workflows/staging-member-article-link-fix.yml
+          git add unplug-member-dashboard.html
+          git commit -m "Make approved member articles clickable in staging"
+          git push origin HEAD:staging-control-centre
