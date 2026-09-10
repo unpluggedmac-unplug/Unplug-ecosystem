@@ -1,0 +1,72 @@
+name: Phase 11 staging public probes
+
+on:
+  push:
+    branches:
+      - phase11-public-probes-20260910
+    paths:
+      - .github/workflows/phase11-public-staging-probes.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Public account, access-control and banner probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://unplug-ecosystem-staging.onrender.com'
+
+          expect_code() {
+            expected="$1"; method="$2"; path="$3"; data="${4:-}"
+            body="$(mktemp)"
+            if [ -n "$data" ]; then
+              code=$(curl --silent --show-error --location --output "$body" --write-out '%{http_code}' \
+                -X "$method" -H 'Content-Type: application/json' --data "$data" "$base$path")
+            else
+              code=$(curl --silent --show-error --location --output "$body" --write-out '%{http_code}' \
+                -X "$method" "$base$path")
+            fi
+            echo "$method $path -> HTTP $code"
+            cat "$body" | head -c 500 || true
+            echo
+            test "$code" = "$expected"
+            rm -f "$body"
+          }
+
+          expect_code 200 GET '/health/ready'
+          expect_code 200 POST '/auth/forgot-password' '{"email":"collarsilver@gmail.com"}'
+          expect_code 200 GET '/ad-banners/options'
+
+          # Protected surfaces must fail closed without a bearer token.
+          expect_code 401 GET '/admin/business-reports/summary'
+          expect_code 401 GET '/admin/business-reports/export.csv'
+          expect_code 401 GET '/admin/business-reports/export.xls'
+          expect_code 401 GET '/admin/approval-queue'
+          expect_code 401 GET '/admin/payment-queue'
+          expect_code 401 GET '/ad-banners/mine'
+          expect_code 401 POST '/uploads/pdf'
+          expect_code 401 GET '/admin/staff/access'
+
+          # Public page state exposes only currently live banners. If one exists,
+          # exercise one real staging impression and one click against it.
+          cms="$(mktemp)"
+          code=$(curl --silent --show-error --location --output "$cms" --write-out '%{http_code}' "$base/page-cms")
+          echo "GET /page-cms -> HTTP $code"
+          test "$code" = '200'
+          banner_id=$(jq -r '[.adSlots[]?[]? | .id] | first // empty' "$cms")
+          rm -f "$cms"
+          if [ -n "$banner_id" ]; then
+            echo "Active staging banner selected: $banner_id"
+            expect_code 204 POST "/ad-banners/$banner_id/event" '{"eventType":"impression"}'
+            expect_code 204 POST "/ad-banners/$banner_id/event" '{"eventType":"click"}'
+            echo "BANNER_EVENT_RESULT=PASS:$banner_id"
+          else
+            echo 'BANNER_EVENT_RESULT=SKIP:NO_ACTIVE_BANNER'
+          fi
+
+          echo 'PHASE11_PUBLIC_PROBES=PASS'
