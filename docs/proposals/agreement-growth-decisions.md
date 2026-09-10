@@ -20,7 +20,14 @@ Date locked: 2026-09-10
 - Agreement Forms implementation must preserve the tested local backend described in `agreement-forms-HANDOVER` and must be reconciled with the current staging-derived codebase before integration.
 - Exact Agreement Forms field definitions, business rules and UI wording must come from `docs/proposals/agreement-forms-proposal.md` when that source file is available.
 - Exact Growth Application fields, validation, business copy, and the Individual/Business Deep Discovery question sets must come from `docs/proposals/growth-application-proposal.md`. Do not invent or silently replace missing questionnaire content.
-- The original local Agreement Forms migration number `183_agreement_forms.sql` is not safe to reuse on the staging-derived branch because later staging migrations already occupy that sequence. Assign a new monotonic migration number after verifying the current migration directory.
+
+## Verified integration notes
+
+- The feature branch currently contains migrations through `189_admin_content_trash.sql`; migration numbers `183`–`187` and `189` are already occupied. The old local `183_agreement_forms.sql` must therefore be renumbered. **Reserve `190_agreement_forms.sql` for the Agreement Forms migration** unless a new migration lands on this branch before integration, in which case re-check the sequence first.
+- The migration runner reads every `db/migrations/*.sql` filename and applies them in zero-padded lexical order. The existing gap at `188` is not a reason to back-fill a feature migration there.
+- Current `src/app.js` still mounts `/forms` immediately before `/privacy`, matching the handover's intended Agreement Forms insertion point. Agreement Forms should add `/agreement-forms` and the top-level `/a` short-link router between those mounts, without altering the existing `/agreements` system.
+- Current `src/utils/submissionReference.js` still lacks `agreement_payment`. The handover's two additions remain applicable: `agreement_payment: 'agreement_submissions'` in `SUBMISSION_TABLE`, and `agreement_payment: 'Agreement'` in `SERVICE_LABEL`.
+- Do not wire either of those code changes before the actual Agreement Forms route/migration source is integrated, because `app.js` would otherwise require a module that is not yet present.
 
 ## Release safety
 
