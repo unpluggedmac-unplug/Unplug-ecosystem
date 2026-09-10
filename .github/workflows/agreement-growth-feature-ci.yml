@@ -1,0 +1,42 @@
+name: Agreement + Growth feature CI
+
+on:
+  push:
+    branches:
+      - feature/agreement-growth-applications-20260910
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check Agreement Forms source
+        run: |
+          node --check src/routes/agreementForms.js
+          node --check src/utils/agreementDocument.js
+
+      - name: PostgreSQL migration sweep
+        run: node scripts/sweep-test-postgres.js
+
+      - name: Full backend test suite
+        run: npm test
