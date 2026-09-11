@@ -10,7 +10,8 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB — generous for photos, still bounded
+const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB — generous for normal site photos, still bounded
+const MAX_GROWTH_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // Growth Application locked requirement
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -34,6 +35,15 @@ const upload = multer({
   storage,
   fileFilter,
   limits: { fileSize: MAX_FILE_SIZE_BYTES },
+});
+
+// Growth Application deliberately allows up to 10MB per image. Keep this
+// separate from the normal uploader so a Growth requirement does not silently
+// loosen every other image endpoint on the site.
+const uploadGrowthImage = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: MAX_GROWTH_IMAGE_SIZE_BYTES },
 });
 
 // Magazine edition PDFs need their own uploader: the image filter above would
@@ -98,7 +108,8 @@ function verifySignature(file, allowedMimes) {
 }
 
 module.exports = {
-  upload, uploadPdf, uploadProof, verifySignature,
+  upload, uploadGrowthImage, uploadPdf, uploadProof, verifySignature,
   ALLOWED_MIME_TYPES, ALLOWED_PROOF_MIME_TYPES,
-  UPLOAD_DIR, MAX_PDF_SIZE_BYTES, MAX_PROOF_SIZE_BYTES,
+  UPLOAD_DIR, MAX_FILE_SIZE_BYTES, MAX_GROWTH_IMAGE_SIZE_BYTES,
+  MAX_PDF_SIZE_BYTES, MAX_PROOF_SIZE_BYTES,
 };

@@ -232,6 +232,11 @@ app.use('/agreement-forms', require('./middleware/agreementPaymentPolicy'));
 app.use('/agreement-forms', agreementFormsRoutes.router);
 app.use('/a', agreementFormsRoutes.shortLinkRouter);
 app.use('/agreement-payments', require('./routes/agreementPayments'));
+// Growth Application: a separate, member-only three-stage growth journey.
+// Historical /grow short codes remain valid when admin regenerates the current code.
+const growthApplicationRoutes = require('./routes/growthApplication');
+app.use('/growth-application', growthApplicationRoutes.router);
+app.use('/grow', growthApplicationRoutes.shortLinkRouter);
 app.use('/privacy', require('./routes/privacy'));
 app.use('/sasl', require('./routes/sasl'));
 app.use('/public-settings', publicSettingsRoutes);
