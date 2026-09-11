@@ -97,7 +97,7 @@ Current release state: DEGRADED / BLOCKED
 
 The production build (`npm run build`) generates a clean `dist/` artifact with executable inline scripts externalised.
 
-Diagnostic result on 2026-09-11/12:
+Diagnostic result on 2026-09-11/12 before the Cloudflare configuration correction:
 
 - built `dist/` executable inline scripts: **0**
 - actual live production homepage executable inline scripts: **2**
@@ -106,15 +106,23 @@ Diagnostic result on 2026-09-11/12:
 
 The enforced Cloudflare CSP blocks inline `<script>` elements.
 
-Therefore the live homepage is serving the raw/unbuilt source artifact rather than the intended built `dist` homepage. This can directly break menus, popups, buttons and page initialisation while the HTML itself still returns HTTP 200.
+Therefore the live homepage had been serving the raw/unbuilt source artifact rather than the intended built `dist` homepage. This can directly break menus, popups, buttons and page initialisation while the HTML itself still returns HTTP 200.
 
-The current Cloudflare Pages build/output configuration must be inspected and corrected so the deployed output directory is `dist`.
+Cloudflare Production configuration was corrected on 2026-09-12 to:
+
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Root directory: blank
+
+Production `main` commit `55f8a50` was redeployed successfully after that configuration change.
+
+**Verification of the newly rebuilt public artifact is now mandatory and in progress.** Do not assume the incident is fixed merely because Cloudflare reports Success.
 
 Do NOT weaken CSP to make raw source execute. Fix the artifact/output configuration instead.
 
 #### CSP evidence
 
-Production `csp_reports` has recent homepage `script-src-elem` / `inline` violations, including after the latest production deployment.
+Production `csp_reports` has recent homepage `script-src-elem` / `inline` violations from the period when raw source was served.
 
 CSP reporting is evidence, but historical report rows must not be confused with the current enforced policy. Always correlate `last_seen_at` with the release being investigated.
 
@@ -157,11 +165,11 @@ A PostgreSQL-compatible replacement is the lower-risk path if/when the database 
 
 ## Release-gatekeeper state
 
-Current overall state: **DEGRADED / BLOCKED**
+Current overall state: **DEGRADED / BLOCKED — public artifact verification in progress**
 
 Do not issue VERIFIED LIVE while any of the following remain unresolved:
 
-- Cloudflare production serves raw/unbuilt homepage instead of `dist`
+- newly rebuilt production homepage has not yet been proven to serve `dist`
 - menu/buttons/popups are not proven functional in the actual public browser
 - remaining production data/media failures are not reconciled against legacy Supabase dependencies and quota limitations
 - authenticated critical workflows remain unverified after the frontend artifact fix
@@ -178,16 +186,14 @@ Diagnostic workflow:
 
 ## Immediate execution order
 
-1. Correct Cloudflare Pages production/staging build output to serve `dist`.
-2. Deploy the exact current production code through staging first if the configuration change affects both environments.
-3. Re-run interactive staging smoke: menu, buttons, popups, data sections, login/signup CTA, member/admin shells.
-4. Promote the same artifact/configuration to production.
-5. Re-run public production interaction smoke and production route/feature inventory.
-6. Reconcile broken data/media against remaining Supabase URLs and quota-limited legacy services.
-7. Migrate historical Supabase Storage objects/references to R2 in verified batches.
-8. Verify authenticated workflows, R2 upload, EFT/payment-proof upload and Growth journey.
-9. Check production logs after testing.
-10. Only release-gatekeeper may issue `VERIFIED LIVE`.
+1. Verify the newly rebuilt public Production artifact actually serves `dist` with 0 executable inline scripts.
+2. Re-run public interaction/runtime smoke: menu, buttons, popups, data sections, login/signup CTA, member/admin shells.
+3. Check production logs and new CSP report timestamps after verification.
+4. Reconcile broken data/media against remaining Supabase URLs and quota-limited legacy services.
+5. Migrate historical Supabase Storage objects/references to R2 in verified batches.
+6. Verify authenticated workflows, R2 upload, EFT/payment-proof upload and Growth journey.
+7. Re-run production route/feature inventory.
+8. Only release-gatekeeper may issue `VERIFIED LIVE`.
 
 ## Completion rule
 
