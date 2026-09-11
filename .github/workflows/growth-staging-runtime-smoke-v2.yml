@@ -16,60 +16,56 @@ jobs:
       - name: Verify exact staging runtime surfaces
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           BASE='https://staging-control-centre.unplug-magazine.pages.dev'
           API='https://unplug-ecosystem-staging.onrender.com'
           TMP="$(mktemp -d)"
           trap 'rm -rf "$TMP"' EXIT
+          failures=0
 
           request() {
             local url="$1" out="$2"
-            curl --fail-with-body --silent --show-error --location --max-time 30 \
-              -A 'Unplug-Staging-Smoke/2.0' -o "$out" -w '%{http_code}' "$url"
+            curl --silent --show-error --location --max-time 30 -A 'Unplug-Staging-Smoke/2.1' -o "$out" -w '%{http_code}' "$url"
+          }
+          check_page() {
+            local path="$1" marker="$2" name="$3" out="$TMP/$name"
+            local code marker_ok='no'
+            code="$(request "$BASE$path" "$out")"
+            grep -Fqi "$marker" "$out" && marker_ok='yes'
+            echo "$name HTTP=$code marker=$marker_ok bytes=$(wc -c < "$out")"
+            if [ "$code" != '200' ] || [ "$marker_ok" != 'yes' ]; then failures=$((failures+1)); fi
           }
 
-          echo 'Checking staging backend readiness...'
           code="$(request "$API/health/ready" "$TMP/ready")"
-          test "$code" = '200'
-          grep -q '"status":"ready"' "$TMP/ready"
+          ready_ok='no'; grep -q '"status":"ready"' "$TMP/ready" && ready_ok='yes'
+          echo "backend-ready HTTP=$code marker=$ready_ok"
+          if [ "$code" != '200' ] || [ "$ready_ok" != 'yes' ]; then failures=$((failures+1)); fi
 
-          echo 'Checking Cloudflare staging runtime binding and ribbon...'
           code="$(request "$BASE/runtime-config" "$TMP/runtime.js")"
-          test "$code" = '200'
-          grep -q 'https://unplug-ecosystem-staging.onrender.com' "$TMP/runtime.js"
-          grep -q 'UNPLUG STAGING' "$TMP/runtime.js"
-          grep -q 'ISOLATED TEST ENVIRONMENT' "$TMP/runtime.js"
+          api_ok='no'; ribbon_ok='no'
+          grep -q 'https://unplug-ecosystem-staging.onrender.com' "$TMP/runtime.js" && api_ok='yes'
+          grep -q 'UNPLUG STAGING.*ISOLATED TEST ENVIRONMENT' "$TMP/runtime.js" && ribbon_ok='yes'
+          echo "runtime-config HTTP=$code staging_api=$api_ok ribbon=$ribbon_ok bytes=$(wc -c < "$TMP/runtime.js")"
+          if [ "$code" != '200' ] || [ "$api_ok" != 'yes' ] || [ "$ribbon_ok" != 'yes' ]; then failures=$((failures+1)); fi
 
-          echo 'Checking repaired packaged pages...'
-          code="$(request "$BASE/unplug-growth-application.html" "$TMP/growth.html")"
-          test "$code" = '200'
-          grep -q 'My Growth Journey' "$TMP/growth.html"
+          check_page '/unplug-growth-application.html' 'My Growth Journey' 'growth-applicant'
+          check_page '/unplug-growth-applications-admin.html' 'Growth Applications' 'growth-admin'
+          check_page '/unplug-agreement.html' 'Agreement | Unplug Magazine' 'agreement-signer'
+          check_page '/unplug-agreements-admin.html' 'Agreement' 'agreement-admin'
+          check_page '/growth-integration.js' 'growth' 'growth-integration'
 
-          code="$(request "$BASE/unplug-growth-applications-admin.html" "$TMP/growth-admin.html")"
-          test "$code" = '200'
-          grep -q 'Growth Applications' "$TMP/growth-admin.html"
+          code="$(request "$BASE/__unplug_release_missing_1937b309__" "$TMP/missing")"
+          echo "unknown-route HTTP=$code bytes=$(wc -c < "$TMP/missing")"
+          if [ "$code" != '404' ]; then failures=$((failures+1)); fi
 
-          code="$(request "$BASE/unplug-agreement.html" "$TMP/agreement.html")"
-          test "$code" = '200'
-          grep -q 'Agreement | Unplug Magazine' "$TMP/agreement.html"
+          check_page '/' 'Unplug' 'homepage'
+          check_page '/unplug-member-dashboard.html' 'Unplug' 'member-dashboard'
+          check_page '/unplug-admin-dashboard.html' 'Unplug' 'admin-dashboard'
+          check_page '/unplug-checkout.html' 'Unplug' 'checkout'
 
-          code="$(request "$BASE/unplug-agreements-admin.html" "$TMP/agreement-admin.html")"
-          test "$code" = '200'
-          grep -q 'Agreement' "$TMP/agreement-admin.html"
-
-          code="$(request "$BASE/growth-integration.js" "$TMP/growth-integration.js")"
-          test "$code" = '200'
-          grep -qi 'growth' "$TMP/growth-integration.js"
-
-          echo 'Checking 404 contract...'
-          code="$(curl --silent --show-error --location --max-time 30 -A 'Unplug-Staging-Smoke/2.0' -o "$TMP/missing" -w '%{http_code}' "$BASE/__unplug_release_missing_1937b309__")"
-          test "$code" = '404'
-
-          echo 'Checking critical existing pages remain reachable...'
-          for p in / /unplug-member-dashboard.html /unplug-admin-dashboard.html /unplug-checkout.html; do
-            code="$(request "$BASE$p" "$TMP/page")"
-            test "$code" = '200'
-            test -s "$TMP/page"
-          done
-
-          echo 'PASS: exact staging runtime has Growth + Agreement packaging, isolated API config, staging ribbon and clean 404 behavior.'
+          echo "TOTAL_FAILURES=$failures"
+          if [ "$failures" -ne 0 ]; then
+            echo 'FAIL: Cloudflare staging artifact does not yet match the repaired release candidate.'
+            exit 1
+          fi
+          echo 'PASS: staging runtime has Growth + Agreement packaging, isolated API config, staging ribbon and clean 404 behavior.'
