@@ -3,7 +3,7 @@ name: Public production browser interaction smoke
 on:
   push:
     branches:
-      - hotfix/frontend-runtime-csp-20260912
+      - hotfix/**
   workflow_dispatch:
 
 jobs:
@@ -65,6 +65,17 @@ jobs:
             const title = await page.title();
             if (!/Unplug Magazine/i.test(title)) fail('homepage title', title);
             pass('homepage title', title);
+
+            // Prove the restored fixed-path Site Buttons asset independently.
+            // Chromium can cancel a duplicate page request during navigation;
+            // that is benign only when this direct request has already proved
+            // the production asset exists and contains real JavaScript.
+            const siteButtonsAsset = await page.request.get('https://www.unplugnews.com/unplug-site-buttons.js');
+            const siteButtonsBody = await siteButtonsAsset.text();
+            if (siteButtonsAsset.status() !== 200 || siteButtonsBody.length < 100) {
+              fail('Site Buttons production asset', `status=${siteButtonsAsset.status()} bytes=${siteButtonsBody.length}`);
+            }
+            pass('Site Buttons production asset', `status=200 bytes=${siteButtonsBody.length}`);
 
             // FIRST-VISIT GATE: this is the exact Visit Site / Sign Up / Sign In
             // experience reported missing by the owner. New browser context = new session.
@@ -146,10 +157,30 @@ jobs:
             // First-party runtime failures are release blockers. Filter only known
             // harmless browser noise; do not suppress application errors.
             const seriousConsole = consoleErrors.filter(x =>
-              !/favicon|Failed to load resource.*404/i.test(x)
+              !/favicon|Failed to load resource.*404/i.test(x) &&
+              !/^The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy\.$/.test(x)
             );
             if (pageErrors.length) fail('page JavaScript exceptions', pageErrors.join(' | '));
-            if (failedRequests.length) fail('first-party failed requests', failedRequests.join(' | '));
+            // Impression telemetry is deliberately best-effort and uses
+            // keepalive. Chromium may still report those POSTs as ERR_ABORTED
+            // when this smoke intentionally navigates to another SPA page.
+            // Ignore only that exact navigation-abort shape; every other
+            // first-party request failure remains a release blocker.
+            const abortedTelemetry = failedRequests.filter(x =>
+              /POST https:\/\/unplug-ecosystem\.onrender\.com\/ad-banners\/\d+\/event :: net::ERR_ABORTED$/.test(x)
+            );
+            const verifiedAssetAborts = failedRequests.filter(x =>
+              x === 'GET https://www.unplugnews.com/unplug-site-buttons.js :: net::ERR_ABORTED'
+            );
+            const nonBlockingRequests = new Set([...abortedTelemetry, ...verifiedAssetAborts]);
+            const blockingRequests = failedRequests.filter(x => !nonBlockingRequests.has(x));
+            if (abortedTelemetry.length) {
+              console.log(`INFO ignored ${abortedTelemetry.length} best-effort advert telemetry request(s) aborted by navigation`);
+            }
+            if (verifiedAssetAborts.length) {
+              console.log(`INFO ignored ${verifiedAssetAborts.length} duplicate Site Buttons request aborted after direct HTTP verification`);
+            }
+            if (blockingRequests.length) fail('first-party failed requests', blockingRequests.join(' | '));
             if (seriousConsole.length) fail('browser console errors', seriousConsole.join(' | '));
             pass('no blocking browser/runtime errors');
 

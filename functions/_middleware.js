@@ -105,9 +105,12 @@ function csp(env, reportOnly = false) {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
   ];
 
+  // Browsers ignore this directive in Report-Only policies and log a console
+  // warning. Keep it in the enforced policy where it has an effect, without
+  // polluting the strict-policy diagnostic signal.
+  if (!reportOnly) directives.push('upgrade-insecure-requests');
   if (reportOnly && api) directives.push(`report-uri ${api}/security/csp-report`);
   return directives.join('; ');
 }
