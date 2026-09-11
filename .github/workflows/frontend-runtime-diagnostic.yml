@@ -1,0 +1,56 @@
+name: Frontend runtime diagnostic
+
+on:
+  push:
+    branches:
+      - hotfix/frontend-runtime-csp-20260912
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Inspect built pages for executable inline scripts forbidden by CSP
+        run: |
+          node <<'NODE'
+          const fs=require('fs'); const path=require('path');
+          const dist='dist'; let bad=[];
+          for (const file of fs.readdirSync(dist).filter(f=>f.endsWith('.html')).sort()) {
+            const html=fs.readFileSync(path.join(dist,file),'utf8');
+            const matches=[...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)];
+            for (const m of matches) {
+              const attrs=m[1]||''; const code=m[2]||'';
+              if (/\ssrc\s*=/.test(attrs)) continue;
+              if (/type\s*=\s*["']application\/ld\+json/i.test(attrs)) continue;
+              if (!code.trim()) continue;
+              bad.push({file,bytes:Buffer.byteLength(code),sample:code.trim().replace(/\s+/g,' ').slice(0,180)});
+            }
+          }
+          console.log('EXECUTABLE_INLINE_SCRIPT_COUNT='+bad.length);
+          for (const b of bad) console.log(`${b.file} bytes=${b.bytes} :: ${b.sample}`);
+          if (bad.length) {
+            console.error('FAIL: production CSP blocks inline script elements, but build left executable inline scripts in dist.');
+            process.exit(1);
+          }
+          NODE
+      - name: Inspect live production CSP and HTML inline script count
+        if: always()
+        run: |
+          set -e
+          curl -fsS -D /tmp/headers.txt https://www.unplugnews.com/ -o /tmp/live.html
+          echo '--- CSP headers ---'
+          grep -i '^content-security-policy' /tmp/headers.txt || true
+          node <<'NODE'
+          const fs=require('fs'); const html=fs.readFileSync('/tmp/live.html','utf8');
+          const bad=[...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)].filter(m=>!/\ssrc\s*=/.test(m[1]||'')&&!/type\s*=\s*["']application\/ld\+json/i.test(m[1]||'')&&(m[2]||'').trim());
+          console.log('LIVE_EXECUTABLE_INLINE_SCRIPT_COUNT='+bad.length);
+          for(const m of bad) console.log('live bytes='+Buffer.byteLength(m[2])+' :: '+m[2].trim().replace(/\s+/g,' ').slice(0,180));
+          NODE
