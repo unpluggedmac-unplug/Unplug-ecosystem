@@ -1,0 +1,65 @@
+name: Production live smoke
+
+on:
+  push:
+    branches: [production-smoke-20260911]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify public frontend and production API
+        shell: bash
+        run: |
+          set -euo pipefail
+          FRONT='https://www.unplugnews.com'
+          API='https://unplug-ecosystem.onrender.com'
+
+          check_page() {
+            local url="$1" pattern="$2" label="$3"
+            echo "Checking $label: $url"
+            body="$(curl --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 45 -fsSL "$url")"
+            printf '%s' "$body" | grep -qi "$pattern" || { echo "FAIL: $label missing expected marker: $pattern"; exit 1; }
+            echo "PASS: $label"
+          }
+
+          check_page "$FRONT/" 'Unplug Magazine' 'homepage'
+          check_page "$FRONT/unplug-member-dashboard.html" 'My Account' 'member dashboard shell'
+          check_page "$FRONT/unplug-admin-dashboard.html" 'Control Centre' 'control centre shell'
+          check_page "$FRONT/unplug-agreements-admin.html" 'Agreements' 'agreements admin shell'
+          check_page "$FRONT/unplug-agreement.html" 'Agreement' 'agreement public shell'
+
+          echo 'Checking production runtime config'
+          runtime="$(curl --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 45 -fsSL "$FRONT/runtime-config")"
+          printf '%s' "$runtime" | grep -q 'https://unplug-ecosystem.onrender.com' || { echo 'FAIL: runtime config missing production API'; exit 1; }
+          if printf '%s' "$runtime" | grep -q 'https://unplug-ecosystem-staging.onrender.com'; then
+            echo 'FAIL: production runtime config points to or exposes staging runtime'; exit 1
+          fi
+          if printf '%s' "$runtime" | grep -q 'UNPLUG STAGING'; then
+            echo 'FAIL: staging ribbon leaked into production runtime'; exit 1
+          fi
+          echo 'PASS: production runtime config'
+
+          echo 'Checking backend health'
+          curl --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 45 -fsSL "$API/health" >/tmp/health.json
+          curl --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 45 -fsSL "$API/health/ready" >/tmp/ready.json
+          echo 'PASS: backend health and readiness'
+
+          echo 'Checking Agreement admin export remains protected'
+          status="$(curl --connect-timeout 15 --max-time 45 -sS -o /tmp/protected.out -w '%{http_code}' "$API/agreement-forms/admin/records.csv")"
+          case "$status" in
+            401|403) echo "PASS: protected Agreement export returned $status" ;;
+            *) echo "FAIL: protected Agreement export returned $status"; cat /tmp/protected.out; exit 1 ;;
+          esac
+
+          echo 'Checking public CORS for production origin'
+          headers="$(curl --connect-timeout 15 --max-time 45 -sSI -H 'Origin: https://www.unplugnews.com' "$API/health")"
+          printf '%s' "$headers" | grep -qi 'access-control-allow-origin: https://www.unplugnews.com' || { echo 'FAIL: production origin missing from CORS response'; printf '%s\n' "$headers"; exit 1; }
+          echo 'PASS: production CORS'
+
+          echo 'PRODUCTION LIVE SMOKE PASSED'
