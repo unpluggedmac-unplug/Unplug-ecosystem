@@ -10,4 +10,6 @@ for (const page of pages) {
 const fn=fs.readFileSync('functions/runtime-config.js','utf8');
 if (!fn.includes('staging-api-not-configured.invalid')) { console.error('FAIL runtime config does not fail closed for staging'); bad=true; }
 else console.log('OK   runtime config fails closed when staging API is missing');
+if (!fn.includes('staging-control-centre.unplug-magazine.pages.dev')) { console.error('FAIL runtime config does not recognize the deployed staging Pages alias'); bad=true; }
+else console.log('OK   runtime config recognizes deployed staging Pages alias');
 process.exit(bad?1:0);
