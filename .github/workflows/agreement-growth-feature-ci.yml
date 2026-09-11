@@ -67,8 +67,14 @@ jobs:
             echo "Run: $GITHUB_RUN_ID"
             echo "Commit: $GITHUB_SHA"
             echo
+            echo "## Failure markers"
             echo '```text'
-            tail -n 500 /tmp/unplug-ci-tests.log
+            grep -n -B 20 -A 60 -E '(^not ok |ERR_|AssertionError|error:|failureType:|expected:|actual:)' /tmp/unplug-ci-tests.log || true
+            echo '```'
+            echo
+            echo "## Test summary"
+            echo '```text'
+            tail -n 80 /tmp/unplug-ci-tests.log
             echo '```'
           } > ../CI-FAILURE-DIAGNOSTICS.md
           git config user.name "unplug-ci-diagnostics"
