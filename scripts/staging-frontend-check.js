@@ -12,4 +12,6 @@ if (!fn.includes('staging-api-not-configured.invalid')) { console.error('FAIL ru
 else console.log('OK   runtime config fails closed when staging API is missing');
 if (!fn.includes('staging-control-centre.unplug-magazine.pages.dev')) { console.error('FAIL runtime config does not recognize the deployed staging Pages alias'); bad=true; }
 else console.log('OK   runtime config recognizes deployed staging Pages alias');
+if (!fn.includes('UNPLUG STAGING • ISOLATED TEST ENVIRONMENT')) { console.error('FAIL runtime config does not render an explicit staging ribbon'); bad=true; }
+else console.log('OK   runtime config renders explicit staging ribbon');
 process.exit(bad?1:0);
