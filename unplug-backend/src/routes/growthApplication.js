@@ -271,16 +271,14 @@ function previewApplication(type) {
 
 router.get('/public-config', async (req, res, next) => {
   try {
-    const [visibility, responseDays, shortCode, placements] = await Promise.all([
+    const [visibility, responseDays, placements] = await Promise.all([
       getSetting('growth_application_site_visibility', 'hidden'),
       getSetting('growth_application_response_days', '5'),
-      getSetting('growth_application_short_code', ''),
       pool.query('SELECT page_key,enabled FROM growth_application_placements ORDER BY page_key'),
     ]);
     return res.json({
       site_visibility: visibility,
       response_days: Number(responseDays || 5),
-      current_short_code: shortCode || null,
       placements: placements.rows,
       requires_account: true,
       free: true,
