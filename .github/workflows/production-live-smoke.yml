@@ -24,7 +24,7 @@ jobs:
             local url="$1" pattern="$2" label="$3"
             echo "Checking $label: $url"
             body="$(curl --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 45 -fsSL "$url")"
-            printf '%s' "$body" | grep -qi "$pattern" || { echo "FAIL: $label missing expected marker: $pattern"; exit 1; }
+            grep -qi "$pattern" <<<"$body" || { echo "FAIL: $label missing expected marker: $pattern"; exit 1; }
             echo "PASS: $label"
           }
 
@@ -36,11 +36,11 @@ jobs:
 
           echo 'Checking production runtime config'
           runtime="$(curl --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 45 -fsSL "$FRONT/runtime-config")"
-          printf '%s' "$runtime" | grep -q 'https://unplug-ecosystem.onrender.com' || { echo 'FAIL: runtime config missing production API'; exit 1; }
-          if printf '%s' "$runtime" | grep -q 'https://unplug-ecosystem-staging.onrender.com'; then
+          grep -q 'https://unplug-ecosystem.onrender.com' <<<"$runtime" || { echo 'FAIL: runtime config missing production API'; exit 1; }
+          if grep -q 'https://unplug-ecosystem-staging.onrender.com' <<<"$runtime"; then
             echo 'FAIL: production runtime config points to or exposes staging runtime'; exit 1
           fi
-          if printf '%s' "$runtime" | grep -q 'UNPLUG STAGING'; then
+          if grep -q 'UNPLUG STAGING' <<<"$runtime"; then
             echo 'FAIL: staging ribbon leaked into production runtime'; exit 1
           fi
           echo 'PASS: production runtime config'
@@ -59,7 +59,7 @@ jobs:
 
           echo 'Checking public CORS for production origin'
           headers="$(curl --connect-timeout 15 --max-time 45 -sSI -H 'Origin: https://www.unplugnews.com' "$API/health")"
-          printf '%s' "$headers" | grep -qi 'access-control-allow-origin: https://www.unplugnews.com' || { echo 'FAIL: production origin missing from CORS response'; printf '%s\n' "$headers"; exit 1; }
+          grep -qi 'access-control-allow-origin: https://www.unplugnews.com' <<<"$headers" || { echo 'FAIL: production origin missing from CORS response'; printf '%s\n' "$headers"; exit 1; }
           echo 'PASS: production CORS'
 
           echo 'PRODUCTION LIVE SMOKE PASSED'
