@@ -59,8 +59,11 @@ const cors = String(process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()
 if (cors.some(v => /localhost|127\.0\.0\.1/.test(v))) fail('CORS_ORIGINS contains localhost in staging');
 else if (cors.length) ok('CORS_ORIGINS has explicit non-local origins');
 
-if (enabled('UNPLUG_DISABLE_RATE_LIMITS')) fail('UNPLUG_DISABLE_RATE_LIMITS must not be enabled');
-else ok('rate limiting is not disabled');
+if (enabled('UNPLUG_DISABLE_RATE_LIMITS')) {
+  fail('rate limiting must not be disabled (UNPLUG_DISABLE_RATE_LIMITS is enabled)');
+} else {
+  ok('rate limiting is not disabled');
+}
 
 console.log('');
 if (failed) {
