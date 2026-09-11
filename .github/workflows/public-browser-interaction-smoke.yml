@@ -66,6 +66,17 @@ jobs:
             if (!/Unplug Magazine/i.test(title)) fail('homepage title', title);
             pass('homepage title', title);
 
+            // Prove the restored fixed-path Site Buttons asset independently.
+            // Chromium can cancel a duplicate page request during navigation;
+            // that is benign only when this direct request has already proved
+            // the production asset exists and contains real JavaScript.
+            const siteButtonsAsset = await page.request.get('https://www.unplugnews.com/unplug-site-buttons.js');
+            const siteButtonsBody = await siteButtonsAsset.text();
+            if (siteButtonsAsset.status() !== 200 || siteButtonsBody.length < 100) {
+              fail('Site Buttons production asset', `status=${siteButtonsAsset.status()} bytes=${siteButtonsBody.length}`);
+            }
+            pass('Site Buttons production asset', `status=200 bytes=${siteButtonsBody.length}`);
+
             // FIRST-VISIT GATE: this is the exact Visit Site / Sign Up / Sign In
             // experience reported missing by the owner. New browser context = new session.
             const overlay = page.locator('#welcomeOverlay');
@@ -158,9 +169,16 @@ jobs:
             const abortedTelemetry = failedRequests.filter(x =>
               /POST https:\/\/unplug-ecosystem\.onrender\.com\/ad-banners\/\d+\/event :: net::ERR_ABORTED$/.test(x)
             );
-            const blockingRequests = failedRequests.filter(x => !abortedTelemetry.includes(x));
+            const verifiedAssetAborts = failedRequests.filter(x =>
+              x === 'GET https://www.unplugnews.com/unplug-site-buttons.js :: net::ERR_ABORTED'
+            );
+            const nonBlockingRequests = new Set([...abortedTelemetry, ...verifiedAssetAborts]);
+            const blockingRequests = failedRequests.filter(x => !nonBlockingRequests.has(x));
             if (abortedTelemetry.length) {
               console.log(`INFO ignored ${abortedTelemetry.length} best-effort advert telemetry request(s) aborted by navigation`);
+            }
+            if (verifiedAssetAborts.length) {
+              console.log(`INFO ignored ${verifiedAssetAborts.length} duplicate Site Buttons request aborted after direct HTTP verification`);
             }
             if (blockingRequests.length) fail('first-party failed requests', blockingRequests.join(' | '));
             if (seriousConsole.length) fail('browser console errors', seriousConsole.join(' | '));
