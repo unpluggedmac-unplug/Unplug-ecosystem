@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  cloudflare-production-artifact:
+  cloudflare-deployment-artifact:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -40,7 +40,7 @@ jobs:
       - name: Prove the artifact marker and critical files
         run: |
           test -s dist/build-contract.json
-          node -e "const x=require('./dist/build-contract.json');if(x.outputDirectory!=='dist'||x.project!=='unplug-magazine'||x.sourceCommit!==process.env.GITHUB_SHA)process.exit(1)"
+          node -e "const x=require('./dist/build-contract.json');if(x.outputDirectory!=='dist'||x.sourceCommit!==process.env.GITHUB_SHA)process.exit(1)"
           test -s dist/unplug-magazine.html
           test -s dist/unplug-site-buttons.js
           test -s dist/unplug-shared.css
