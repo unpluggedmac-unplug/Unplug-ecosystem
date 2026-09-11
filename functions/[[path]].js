@@ -1,4 +1,4 @@
-// Catch-all: security boundary, Agreement short links, static asset first,
+// Catch-all: security boundary, Agreement/Growth short links, static asset first,
 // then redirect-manager lookup for genuine page misses.
 import { apiOrigin } from './_shared.js';
 
@@ -16,6 +16,21 @@ const NOT_THE_SITE = [
 ];
 function isNotTheSite(pathname) { return NOT_THE_SITE.some((rule) => rule.test(pathname)); }
 
+function withGrowthIntegration(response, pathname) {
+  const type = String(response.headers.get('content-type') || '').toLowerCase();
+  if (!type.includes('text/html')) return response;
+  const eligible = pathname === '/'
+    || /\/(?:index|unplug-magazine|unplug-member-dashboard|unplug-admin-dashboard)\.html$/i.test(pathname);
+  if (!eligible) return response;
+  return new HTMLRewriter()
+    .on('body', {
+      element(element) {
+        element.append('<script src="/growth-integration.js" defer></script>', { html: true });
+      },
+    })
+    .transform(response);
+}
+
 export async function onRequest(context) {
   const { request, next, env, waitUntil } = context;
   const url = new URL(request.url);
@@ -30,14 +45,12 @@ export async function onRequest(context) {
 
   const api = apiOrigin(env);
 
-  // Agreement Forms owns stable 10-character short codes. Resolve server-side
-  // so /a/CODE behaves like a normal share link rather than displaying JSON.
-  // The API remains authoritative and no open redirect is possible because the
-  // only browser destination is our own dedicated Agreement signer page.
-  const short = /^\/a\/([A-Za-z0-9_-]{4,96})\/?$/.exec(url.pathname);
-  if (request.method === 'GET' && short) {
+  // Agreement Forms owns stable short codes. Resolve server-side so /a/CODE
+  // behaves like a normal share link rather than displaying JSON.
+  const agreementShort = /^\/a\/([A-Za-z0-9_-]{4,96})\/?$/.exec(url.pathname);
+  if (request.method === 'GET' && agreementShort) {
     try {
-      const lookup = await fetch(`${api}/a/${encodeURIComponent(short[1])}`, {
+      const lookup = await fetch(`${api}/a/${encodeURIComponent(agreementShort[1])}`, {
         headers: { Accept: 'application/json' },
       });
       if (lookup.ok) {
@@ -51,8 +64,42 @@ export async function onRequest(context) {
     } catch (_) { /* return the site's normal fallback below */ }
   }
 
+  // Growth Application short codes are persistent. The backend remains the
+  // authority on whether a historical code exists; Cloudflare only turns a
+  // valid code into a same-origin member-facing application URL.
+  const growthShort = /^\/grow\/([A-Za-z0-9-]{4,40})\/?$/.exec(url.pathname);
+  if (request.method === 'GET' && growthShort) {
+    try {
+      const code = growthShort[1].toUpperCase();
+      const lookup = await fetch(`${api}/growth-application/entry-access?code=${encodeURIComponent(code)}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (lookup.ok) {
+        const data = await lookup.json();
+        if (data && data.allowed) {
+          const target = new URL('/unplug-growth-application.html', url.origin);
+          target.searchParams.set('code', code);
+          return Response.redirect(target.toString(), 302);
+        }
+      }
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>Growth link not found</title>'
+        + '<p style="font:16px system-ui;padding:2rem">That Growth Application link is not valid. <a href="/">Go to Unplug Magazine</a>.</p>',
+        { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    } catch (_) {
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>Growth link unavailable</title>'
+        + '<p style="font:16px system-ui;padding:2rem">The Growth Application link cannot be checked right now. Please try again shortly.</p>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    }
+  }
+
   const response = await next();
-  if (response.status !== 404) return response;
+  if (response.status !== 404) {
+    return request.method === 'GET' ? withGrowthIntegration(response, url.pathname) : response;
+  }
   if (request.method !== 'GET' || IGNORED.test(url.pathname)) return response;
 
   const path = url.pathname;
