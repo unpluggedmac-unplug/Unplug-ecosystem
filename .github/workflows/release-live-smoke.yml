@@ -21,22 +21,24 @@ jobs:
           code=$(curl -L -sS -o /tmp/home.html -w '%{http_code}' "$FRONT/")
           test "$code" = "200"
 
-          echo "[2] Staging ribbon exists in deployed page/assets"
-          grep -qi 'UNPLUG STAGING' /tmp/home.html || {
-            echo 'UNPLUG STAGING not found in homepage HTML';
-            exit 1;
-          }
-
-          echo "[3] Runtime config responds and is hard-wired to staging API"
+          echo "[2] Runtime config responds and is hard-wired to staging API"
           code=$(curl -L -sS -o /tmp/runtime.js -w '%{http_code}' "$FRONT/runtime-config")
           test "$code" = "200"
           grep -F 'window.UNPLUG_ENV="staging"' /tmp/runtime.js
           grep -F 'window.UNPLUG_RUNTIME_API="https://unplug-ecosystem-staging.onrender.com"' /tmp/runtime.js
           grep -F 'window.UNPLUG_RUNTIME_CONFIG_ERROR=""' /tmp/runtime.js
+          grep -F 'UNPLUG STAGING • ISOLATED TEST ENVIRONMENT' /tmp/runtime.js
           if grep -F 'window.UNPLUG_RUNTIME_API="https://unplug-ecosystem.onrender.com"' /tmp/runtime.js; then
             echo 'FAIL: staging runtime points at production API'
             exit 1
           fi
+
+          echo "[3] Staging ribbon renders in a real headless browser DOM"
+          BROWSER=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          test -n "$BROWSER"
+          "$BROWSER" --headless --disable-gpu --no-sandbox --virtual-time-budget=6000 --dump-dom "$FRONT/unplug-magazine.html" > /tmp/dom.html 2>/tmp/chrome.err
+          grep -F 'UNPLUG STAGING • ISOLATED TEST ENVIRONMENT' /tmp/dom.html
+          grep -F 'id="unplug-staging-ribbon"' /tmp/dom.html
 
           echo "[4] Backend readiness"
           code=$(curl -L -sS -o /tmp/ready.json -w '%{http_code}' "$API/health/ready")
