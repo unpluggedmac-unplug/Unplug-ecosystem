@@ -22,6 +22,7 @@ Do not substitute a green CI check, provider “success”, HTTP 200, or a mutab
 
 - Keep staging and production as separate named targets. Never assume they use the same Cloudflare Pages project or Render service.
 - Derive the expected target from the actual branch and compare it with provider-supplied deployment metadata.
+- Route preview-only branch patterns to staging explicitly; never allow them to match production.
 - Require the published marker's `sourceCommit` to equal the candidate's full SHA.
 - Validate the immutable preview before any mutable alias or production hostname.
 - Keep production untouched until the exact staging SHA passes CI, provider, API, and browser gates.
