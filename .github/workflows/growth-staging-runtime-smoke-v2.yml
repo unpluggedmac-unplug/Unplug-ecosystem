@@ -1,3 +1,4 @@
+# Rerun after Cloudflare Preview deployed staging-control-centre@1937b309
 name: Growth staging runtime smoke v2
 
 on:
