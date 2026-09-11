@@ -40,7 +40,12 @@ requireText(targets.production && targets.production.branch, 'main', 'Cloudflare
 
 const deploymentBranch = process.env.CF_PAGES_BRANCH || process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || '';
 const deploymentUrl = process.env.CF_PAGES_URL || '';
-const deploymentTarget = Object.entries(targets).find(([, value]) => value && value.branch === deploymentBranch);
+function targetMatchesBranch(targetName, value) {
+  if (!value) return false;
+  if (value.branch === deploymentBranch) return true;
+  return targetName === 'staging' && (value.previewBranchPrefixes || []).some(prefix => deploymentBranch.startsWith(prefix));
+}
+const deploymentTarget = Object.entries(targets).find(([targetName, value]) => targetMatchesBranch(targetName, value));
 
 if (process.env.CF_PAGES === '1') {
   if (!deploymentTarget) {
