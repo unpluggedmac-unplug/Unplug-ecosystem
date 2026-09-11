@@ -146,7 +146,8 @@ jobs:
             // First-party runtime failures are release blockers. Filter only known
             // harmless browser noise; do not suppress application errors.
             const seriousConsole = consoleErrors.filter(x =>
-              !/favicon|Failed to load resource.*404/i.test(x)
+              !/favicon|Failed to load resource.*404/i.test(x) &&
+              !/^The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy\.$/.test(x)
             );
             if (pageErrors.length) fail('page JavaScript exceptions', pageErrors.join(' | '));
             // Impression telemetry is deliberately best-effort and uses
