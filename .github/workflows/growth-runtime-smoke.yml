@@ -1,0 +1,137 @@
+name: Growth staging + production runtime smoke
+
+on:
+  push:
+    branches:
+      - ops/growth-runtime-smoke-20260911
+
+permissions:
+  contents: read
+
+jobs:
+  growth-staging-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe staging backend and Cloudflare preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+
+          fetch() {
+            local name="$1" url="$2"
+            local body="$TMP/${name}.body" headers="$TMP/${name}.headers"
+            local code
+            code=$(curl -sS -L --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
+              -D "$headers" -o "$body" -w '%{http_code}' "$url")
+            echo "$code" > "$TMP/${name}.code"
+            echo "[$name] HTTP $code $url"
+          }
+
+          require_code() {
+            local name="$1" expected="$2"
+            local actual
+            actual=$(cat "$TMP/${name}.code")
+            if [[ "$actual" != "$expected" ]]; then
+              echo "FAIL $name expected HTTP $expected, got $actual"
+              echo '--- response preview ---'
+              head -c 800 "$TMP/${name}.body" || true
+              echo
+              exit 1
+            fi
+          }
+
+          require_contains() {
+            local name="$1" needle="$2"
+            if ! grep -Fq "$needle" "$TMP/${name}.body"; then
+              echo "FAIL $name missing required marker: $needle"
+              echo '--- response preview ---'
+              head -c 1200 "$TMP/${name}.body" || true
+              echo
+              exit 1
+            fi
+          }
+
+          require_not_contains() {
+            local name="$1" needle="$2"
+            if grep -Fq "$needle" "$TMP/${name}.body"; then
+              echo "FAIL $name unexpectedly exposed: $needle"
+              exit 1
+            fi
+          }
+
+          fetch ready https://unplug-ecosystem-staging.onrender.com/health/ready
+          require_code ready 200
+
+          fetch config https://unplug-ecosystem-staging.onrender.com/growth-application/public-config
+          require_code config 200
+          require_contains config '"site_visibility"'
+          require_contains config '"requires_account":true'
+          require_contains config '"free":true'
+          require_not_contains config 'current_short_code'
+
+          fetch invalid_short https://unplug-ecosystem-staging.onrender.com/growth-application/entry-access?code=THIS-CODE-MUST-NOT-EXIST
+          require_code invalid_short 404
+
+          fetch protected_schema https://unplug-ecosystem-staging.onrender.com/growth-application/schema?type=individual
+          require_code protected_schema 401
+
+          fetch stage_home https://staging-control-centre.unplug-magazine.pages.dev/
+          require_code stage_home 200
+          require_contains stage_home 'UNPLUG STAGING • ISOLATED TEST ENVIRONMENT'
+
+          fetch growth_page https://staging-control-centre.unplug-magazine.pages.dev/unplug-growth-application.html
+          require_code growth_page 200
+          require_contains growth_page 'My Growth Journey | Unplug Magazine'
+          require_contains growth_page 'Everything autosaves.'
+
+          fetch growth_asset https://staging-control-centre.unplug-magazine.pages.dev/growth-integration.js
+          require_code growth_asset 200
+          require_contains growth_asset 'My Growth Journey'
+
+          echo 'PASS: Growth staging runtime and frontend candidate are present.'
+
+  production-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe actual public production baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+
+          check_page() {
+            local name="$1" url="$2"
+            local body="$TMP/${name}.body"
+            local code
+            code=$(curl -sS -L --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
+              -o "$body" -w '%{http_code}' "$url")
+            echo "[$name] HTTP $code $url bytes=$(wc -c < "$body")"
+            if [[ "$code" != 2* ]]; then
+              echo "FAIL $name expected successful 2xx response, got $code"
+              head -c 800 "$body" || true
+              echo
+              exit 1
+            fi
+            if [[ ! -s "$body" ]]; then
+              echo "FAIL $name returned an empty body"
+              exit 1
+            fi
+          }
+
+          check_page backend_ready https://unplug-ecosystem.onrender.com/health/ready
+          check_page homepage https://www.unplugnews.com/
+          check_page member_dashboard https://www.unplugnews.com/unplug-member-dashboard.html
+          check_page admin_dashboard https://www.unplugnews.com/unplug-admin-dashboard.html
+          check_page agreement https://www.unplugnews.com/unplug-agreement.html
+
+          if grep -Fq 'UNPLUG STAGING • ISOLATED TEST ENVIRONMENT' "$TMP/homepage.body"; then
+            echo 'FAIL production homepage displays the staging ribbon'
+            exit 1
+          fi
+
+          echo 'PASS: production baseline routes are publicly reachable.'
