@@ -2,7 +2,10 @@
 // This endpoint intentionally exposes only non-secret values required by the browser.
 const PRODUCTION_API = 'https://unplug-ecosystem.onrender.com';
 const STAGING_API = 'https://unplug-ecosystem-staging.onrender.com';
-const STAGING_HOSTS = new Set(['unplug-staging.pages.dev']);
+const STAGING_HOSTS = new Set([
+  'unplug-staging.pages.dev',
+  'staging-control-centre.unplug-magazine.pages.dev'
+]);
 
 export async function onRequest({ env, request }) {
   const requestedHost = (() => { try { return new URL(request.url).hostname.toLowerCase(); } catch (_) { return ''; } })();
