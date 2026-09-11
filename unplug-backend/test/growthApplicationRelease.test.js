@@ -87,6 +87,13 @@ test('pipeline requires messages for Contacted/In progress/Closed and a private 
   assert.match(route, /A private closed_reason is required/);
 });
 
+test('public Growth config never exposes the private current short code', () => {
+  const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplication.js'), 'utf8');
+  const publicBlock = route.slice(route.indexOf("router.get('/public-config'"), route.indexOf("router.get('/entry-access'"));
+  assert.ok(publicBlock.length > 0);
+  assert.doesNotMatch(publicBlock, /growth_application_short_code|current_short_code|shortCode/);
+});
+
 test('Cloudflare resolves persistent Growth short links and only redirects same-origin', () => {
   const fn = read('functions', '[[path]].js');
   assert.match(fn, /\^\\\/grow\\\/\(/);
@@ -104,10 +111,12 @@ test('production build explicitly packages both Growth pages and the integration
   assert.match(builder, /growth-integration\.js/);
 });
 
-test('Growth integration covers admin, member journey, member popup and public placements', () => {
+test('Growth integration covers admin, member journey, resume links, member popup and public placements', () => {
   const integration = read('growth-integration.js');
   assert.match(integration, /Growth Applications/);
   assert.match(integration, /My Growth Journey/);
+  assert.match(integration, /Show my resume link/);
+  assert.match(integration, /resume-link/);
   assert.match(integration, /applications\/me/);
   assert.match(integration, /member_dashboard/);
   assert.match(integration, /site_visibility !== 'visible'/);
