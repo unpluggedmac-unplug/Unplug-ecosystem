@@ -1,0 +1,166 @@
+name: Production route and feature inventory
+
+on:
+  push:
+    branches:
+      - ops/production-inventory-20260911
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout production source snapshot
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Build production frontend
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+
+      - name: Discover source routes and safely probe deployed production pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError, URLError
+          from urllib.parse import quote
+          import concurrent.futures, json, re, sys, time
+
+          BASE='https://www.unplugnews.com'
+          API='https://unplug-ecosystem.onrender.com'
+          dist=Path('dist')
+          if not dist.exists():
+              raise SystemExit('FAIL: production build did not create dist/')
+
+          all_html=sorted(p.relative_to(dist).as_posix() for p in dist.rglob('*.html'))
+          nonprod_tokens=('demo','test-fixture','staging-only')
+          deploy_pages=[p for p in all_html if not any(t in p.lower() for t in nonprod_tokens)]
+          excluded=[p for p in all_html if p not in deploy_pages]
+          print(f'DISCOVERED_FRONTEND_HTML={len(all_html)}')
+          print(f'PRODUCTION_PAGE_CANDIDATES={len(deploy_pages)}')
+          if excluded: print('NONPROD_EXCLUDED=' + ','.join(excluded))
+
+          app=Path('unplug-backend/src/app.js').read_text(errors='replace')
+          mounts=[]
+          for m in re.finditer(r"app\.(use|get|post|put|patch|delete)\(\s*['\"]([^'\"]+)['\"]", app):
+              mounts.append((m.group(1).upper(),m.group(2)))
+          print(f'APP_LEVEL_ROUTES={len(mounts)}')
+          for method,path in mounts:
+              print(f'APP_ROUTE {method:6} {path}')
+
+          route_files=sorted(Path('unplug-backend/src/routes').glob('*.js'))
+          endpoint_counts={}
+          endpoint_total=0
+          for f in route_files:
+              text=f.read_text(errors='replace')
+              found=re.findall(r"(?:router|shortLinkRouter)\.(get|post|put|patch|delete)\(\s*['\"]([^'\"]*)['\"]",text,re.I)
+              if found:
+                  endpoint_counts[f.name]=len(found)
+                  endpoint_total += len(found)
+          print(f'BACKEND_ROUTE_FILES={len(endpoint_counts)}')
+          print(f'BACKEND_DECLARED_ENDPOINTS={endpoint_total}')
+          for name,count in sorted(endpoint_counts.items(), key=lambda x:(-x[1],x[0])):
+              print(f'ROUTE_FILE {name} endpoints={count}')
+
+          def get(url, limit=65536):
+              req=Request(url,headers={'User-Agent':'Unplug-Production-Inventory/1.0','Accept':'text/html,application/json;q=0.9,*/*;q=0.8'})
+              try:
+                  with urlopen(req,timeout=25) as r:
+                      body=r.read(limit)
+                      return r.status, body, r.headers.get('content-type','')
+              except HTTPError as e:
+                  body=e.read(limit)
+                  return e.code, body, e.headers.get('content-type','')
+              except Exception as e:
+                  return 0, str(e).encode(), 'error'
+
+          # Runtime config must bind production frontend to production backend.
+          status,body,ctype=get(BASE+'/runtime-config')
+          text=body.decode('utf-8','replace')
+          print(f'RUNTIME_CONFIG HTTP={status} bytes_sampled={len(body)}')
+          runtime_ok=(status==200 and 'https://unplug-ecosystem.onrender.com' in text and 'staging-api-not-configured.invalid' not in text.split('window.UNPLUG_RUNTIME_CONFIG_ERROR=',1)[-1][:140])
+          if not runtime_ok:
+              print('FAIL runtime-config production binding')
+
+          # Actual backend readiness.
+          hstatus,hbody,_=get(API+'/health/ready',8192)
+          print(f'BACKEND_READY HTTP={hstatus} body={hbody.decode("utf-8","replace")[:200]}')
+
+          def probe(path):
+              url=BASE+'/'+quote(path,safe='/')
+              status,body,ctype=get(url,32768)
+              title=''
+              if 'html' in ctype.lower() or body.lstrip().lower().startswith(b'<!doctype') or b'<html' in body[:1000].lower():
+                  m=re.search(br'<title[^>]*>(.*?)</title>',body,re.I|re.S)
+                  if m: title=re.sub(br'\s+',b' ',m.group(1)).decode('utf-8','replace')[:100]
+              return path,status,len(body),ctype.split(';')[0],title
+
+          results=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+              futs={ex.submit(probe,p):p for p in deploy_pages}
+              for fut in concurrent.futures.as_completed(futs):
+                  results.append(fut.result())
+          results.sort()
+
+          failed=[]
+          for path,status,size,ctype,title in results:
+              ok=200 <= status < 400 and size>0
+              mark='PASS' if ok else 'FAIL'
+              print(f'PAGE {mark:4} HTTP={status:3} bytes_sampled={size:5} {path} | {title}')
+              if not ok: failed.append((path,status))
+
+          # Critical pages are release-baseline assertions even if build discovery changes.
+          critical=['index.html','unplug-member-dashboard.html','unplug-admin-dashboard.html','unplug-agreement.html','unplug-agreements-admin.html']
+          indexed={r[0]:(r[1],r[2]) for r in results}
+          critical_failed=[]
+          for p in critical:
+              if p not in indexed:
+                  critical_failed.append((p,'missing-from-build'))
+              else:
+                  s,n=indexed[p]
+                  if not (200 <= s < 400 and n>0): critical_failed.append((p,s))
+
+          # Unknown route should fail cleanly instead of masquerading as a valid page.
+          unknown='/__unplug_inventory_missing_route_20260911__'
+          ustatus,ubody,_=get(BASE+unknown,8192)
+          print(f'UNKNOWN_ROUTE HTTP={ustatus}')
+          unknown_ok=ustatus==404
+
+          print('--- INVENTORY SUMMARY ---')
+          print(json.dumps({
+              'frontend_html_discovered':len(all_html),
+              'production_page_candidates':len(deploy_pages),
+              'app_level_routes':len(mounts),
+              'backend_route_files':len(endpoint_counts),
+              'backend_declared_endpoints':endpoint_total,
+              'page_pass':len(results)-len(failed),
+              'page_fail':len(failed),
+              'critical_failures':critical_failed,
+              'backend_ready':hstatus,
+              'runtime_config_ok':runtime_ok,
+              'unknown_route_status':ustatus,
+          },sort_keys=True))
+
+          if hstatus != 200 or not runtime_ok or not unknown_ok or critical_failed:
+              raise SystemExit('FAIL: critical production baseline gate failed')
+          # Non-critical build pages are still regressions: fail so they are investigated.
+          if failed:
+              raise SystemExit('FAIL: one or more deployed production HTML routes are not reachable')
+          print('PASS: safe production route baseline completed.')
+          PY
