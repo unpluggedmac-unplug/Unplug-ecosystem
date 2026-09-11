@@ -1,9 +1,18 @@
 {
   "schemaVersion": 1,
-  "contractVersion": "2026-09-12.1",
+  "contractVersion": "2026-09-12.2",
   "frontend": {
     "provider": "cloudflare-pages",
-    "project": "unplug-magazine",
+    "targets": {
+      "staging": {
+        "project": "unplug-staging",
+        "branch": "staging-control-centre"
+      },
+      "production": {
+        "project": "unplug-magazine",
+        "branch": "main"
+      }
+    },
     "rootDirectory": "",
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
