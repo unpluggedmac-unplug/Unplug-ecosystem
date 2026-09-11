@@ -43,7 +43,7 @@ jobs:
           node --check src/utils/agreementDocument.js
           node --check src/data/growthApplicationQuestions.js
           node --check src/routes/growthApplication.js
-          node --check middleware/upload.js 2>/dev/null || true
+          node --check src/routes/growthApplicationUpload.js
           node --check src/middleware/upload.js
           node --check test/growthApplicationQuestions.test.js
 
