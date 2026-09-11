@@ -26,6 +26,13 @@ Use these skills together, not independently:
 - no-premature-completion
 - production-route-feature-inventory
 - release-gatekeeper
+- build-configuration-drift-guard
+
+`build-configuration-drift-guard` is enforced by
+`deploy/build-config.contract.json`, `scripts/verify-build-configuration.js`
+and `.github/workflows/build-configuration-gate.yml`. It must block release
+when the Cloudflare project root, build command, output directory, ordered
+packaging pipeline or required production artifacts drift from the contract.
 
 Core rule:
 
