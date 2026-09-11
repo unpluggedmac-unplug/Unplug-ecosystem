@@ -79,18 +79,20 @@ jobs:
               print(f'ROUTE_FILE {name} endpoints={count}')
 
           def get(url, limit=65536):
-              req=Request(url,headers={'User-Agent':'Unplug-Production-Inventory/1.0','Accept':'text/html,application/json;q=0.9,*/*;q=0.8'})
-              try:
-                  with urlopen(req,timeout=25) as r:
-                      body=r.read(limit)
-                      return r.status, body, r.headers.get('content-type','')
-              except HTTPError as e:
-                  body=e.read(limit)
-                  return e.code, body, e.headers.get('content-type','')
-              except Exception as e:
-                  return 0, str(e).encode(), 'error'
+              req=Request(url,headers={'User-Agent':'Unplug-Production-Inventory/1.1','Accept':'text/html,application/json;q=0.9,*/*;q=0.8'})
+              for attempt in range(4):
+                  try:
+                      with urlopen(req,timeout=30) as r:
+                          body=r.read(limit)
+                          return r.status, body, r.headers.get('content-type','')
+                  except HTTPError as e:
+                      body=e.read(limit)
+                      return e.code, body, e.headers.get('content-type','')
+                  except Exception as e:
+                      if attempt == 3:
+                          return 0, str(e).encode(), 'error'
+                      time.sleep(3)
 
-          # Runtime config must bind production frontend to production backend.
           status,body,ctype=get(BASE+'/runtime-config')
           text=body.decode('utf-8','replace')
           print(f'RUNTIME_CONFIG HTTP={status} bytes_sampled={len(body)}')
@@ -98,7 +100,6 @@ jobs:
           if not runtime_ok:
               print('FAIL runtime-config production binding')
 
-          # Actual backend readiness.
           hstatus,hbody,_=get(API+'/health/ready',8192)
           print(f'BACKEND_READY HTTP={hstatus} body={hbody.decode("utf-8","replace")[:200]}')
 
@@ -125,8 +126,11 @@ jobs:
               print(f'PAGE {mark:4} HTTP={status:3} bytes_sampled={size:5} {path} | {title}')
               if not ok: failed.append((path,status))
 
-          # Critical pages are release-baseline assertions even if build discovery changes.
-          critical=['index.html','unplug-member-dashboard.html','unplug-admin-dashboard.html','unplug-agreement.html','unplug-agreements-admin.html']
+          critical=[
+              'index.html','unplug-member-dashboard.html','unplug-admin-dashboard.html',
+              'unplug-checkout.html','unplug-agreement.html','unplug-agreements-admin.html',
+              'unplug-growth-application.html','unplug-growth-applications-admin.html'
+          ]
           indexed={r[0]:(r[1],r[2]) for r in results}
           critical_failed=[]
           for p in critical:
@@ -136,8 +140,7 @@ jobs:
                   s,n=indexed[p]
                   if not (200 <= s < 400 and n>0): critical_failed.append((p,s))
 
-          # Unknown route should fail cleanly instead of masquerading as a valid page.
-          unknown='/__unplug_inventory_missing_route_20260911__'
+          unknown='/__unplug_inventory_missing_route_20260912__'
           ustatus,ubody,_=get(BASE+unknown,8192)
           print(f'UNKNOWN_ROUTE HTTP={ustatus}')
           unknown_ok=ustatus==404
@@ -159,7 +162,6 @@ jobs:
 
           if hstatus != 200 or not runtime_ok or not unknown_ok or critical_failed:
               raise SystemExit('FAIL: critical production baseline gate failed')
-          # Non-critical build pages are still regressions: fail so they are investigated.
           if failed:
               raise SystemExit('FAIL: one or more deployed production HTML routes are not reachable')
           print('PASS: safe production route baseline completed.')
