@@ -1,0 +1,72 @@
+name: Release live staging smoke
+
+on:
+  push:
+    branches:
+      - release-smoke-20260911
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate deployed staging frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+          FRONT="https://staging-control-centre.unplug-magazine.pages.dev"
+          API="https://unplug-ecosystem-staging.onrender.com"
+
+          echo "[1] Homepage responds"
+          code=$(curl -L -sS -o /tmp/home.html -w '%{http_code}' "$FRONT/")
+          test "$code" = "200"
+
+          echo "[2] Staging ribbon exists in deployed page/assets"
+          grep -qi 'UNPLUG STAGING' /tmp/home.html || {
+            echo 'UNPLUG STAGING not found in homepage HTML';
+            exit 1;
+          }
+
+          echo "[3] Runtime config responds and is hard-wired to staging API"
+          code=$(curl -L -sS -o /tmp/runtime.js -w '%{http_code}' "$FRONT/runtime-config")
+          test "$code" = "200"
+          grep -F 'window.UNPLUG_ENV="staging"' /tmp/runtime.js
+          grep -F 'window.UNPLUG_RUNTIME_API="https://unplug-ecosystem-staging.onrender.com"' /tmp/runtime.js
+          grep -F 'window.UNPLUG_RUNTIME_CONFIG_ERROR=""' /tmp/runtime.js
+          if grep -F 'window.UNPLUG_RUNTIME_API="https://unplug-ecosystem.onrender.com"' /tmp/runtime.js; then
+            echo 'FAIL: staging runtime points at production API'
+            exit 1
+          fi
+
+          echo "[4] Backend readiness"
+          code=$(curl -L -sS -o /tmp/ready.json -w '%{http_code}' "$API/health/ready")
+          test "$code" = "200"
+          grep -F '"status":"ready"' /tmp/ready.json
+          grep -F '"database":"ok"' /tmp/ready.json
+
+          echo "[5] Critical frontend pages respond"
+          for path in /unplug-admin-dashboard.html /unplug-member-dashboard.html /unplug-checkout.html /unplug-agreements-admin.html /unplug-agreement.html; do
+            code=$(curl -L -sS -o /dev/null -w '%{http_code}' "$FRONT$path")
+            echo "$path -> $code"
+            test "$code" = "200"
+          done
+
+          echo "[6] Protected admin API refuses anonymous access"
+          code=$(curl -sS -o /tmp/protected.txt -w '%{http_code}' "$API/agreement-forms/admin/records.csv")
+          echo "protected route -> $code"
+          case "$code" in 401|403) ;; *) echo 'FAIL: protected Agreement export did not reject anonymous caller'; cat /tmp/protected.txt; exit 1;; esac
+
+          echo "[7] CORS does not allow an untrusted browser origin"
+          curl -sS -D /tmp/cors.headers -o /tmp/cors.body -H 'Origin: https://evil.example.invalid' "$API/health/ready" || true
+          if grep -qi '^access-control-allow-origin: https://evil.example.invalid' /tmp/cors.headers; then
+            echo 'FAIL: untrusted origin was granted CORS access'
+            cat /tmp/cors.headers
+            exit 1
+          fi
+
+          echo "[8] Public Agreement short-link unknown code fails cleanly, never 500"
+          code=$(curl -sS -o /tmp/short.txt -w '%{http_code}' "$API/a/SMOKE-NOT-REAL")
+          echo "unknown short link -> $code"
+          case "$code" in 400|404) ;; *) echo 'FAIL: unknown Agreement short link returned unexpected status'; cat /tmp/short.txt; exit 1;; esac
+
+          echo 'LIVE STAGING SMOKE PASSED'
