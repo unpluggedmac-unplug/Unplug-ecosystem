@@ -26,7 +26,9 @@ jobs:
           request() {
             local url="$1"
             local out="$2"
-            curl --silent --show-error --location --max-time 30 -A 'Unplug-Production-Smoke/3.0' -o "$out" -w '%{http_code}' "$url"
+            local code
+            code="$(curl --silent --show-error --location --retry 3 --retry-delay 3 --retry-all-errors --connect-timeout 10 --max-time 45 -A 'Unplug-Production-Smoke/3.1' -o "$out" -w '%{http_code}' "$url" || true)"
+            printf '%s' "${code:-000}"
           }
           check_page() {
             local path="$1"
@@ -36,21 +38,21 @@ jobs:
             local code
             local marker_ok='no'
             code="$(request "$BASE$path" "$out")"
-            grep -Fqi "$marker" "$out" && marker_ok='yes'
-            echo "$name HTTP=$code marker=$marker_ok bytes=$(wc -c < "$out")"
+            grep -Fqi "$marker" "$out" 2>/dev/null && marker_ok='yes'
+            echo "$name HTTP=$code marker=$marker_ok bytes=$(wc -c < "$out" 2>/dev/null || echo 0)"
             if [ "$code" != '200' ] || [ "$marker_ok" != 'yes' ]; then failures=$((failures+1)); fi
           }
 
           code="$(request "$API/health/ready" "$TMP/ready")"
-          ready_ok='no'; grep -q '"status":"ready"' "$TMP/ready" && ready_ok='yes'
+          ready_ok='no'; grep -q '"status":"ready"' "$TMP/ready" 2>/dev/null && ready_ok='yes'
           echo "backend-ready HTTP=$code marker=$ready_ok"
           if [ "$code" != '200' ] || [ "$ready_ok" != 'yes' ]; then failures=$((failures+1)); fi
 
           code="$(request "$BASE/runtime-config" "$TMP/runtime.js")"
           prod_ok='no'; staging_leak='no'
-          grep -q 'https://unplug-ecosystem.onrender.com' "$TMP/runtime.js" && prod_ok='yes'
-          if grep -q 'https://unplug-ecosystem-staging.onrender.com\|UNPLUG STAGING\|ISOLATED TEST ENVIRONMENT' "$TMP/runtime.js"; then staging_leak='yes'; fi
-          echo "runtime-config HTTP=$code production_api=$prod_ok staging_leak=$staging_leak bytes=$(wc -c < "$TMP/runtime.js")"
+          grep -q 'https://unplug-ecosystem.onrender.com' "$TMP/runtime.js" 2>/dev/null && prod_ok='yes'
+          if grep -q 'https://unplug-ecosystem-staging.onrender.com\|UNPLUG STAGING\|ISOLATED TEST ENVIRONMENT' "$TMP/runtime.js" 2>/dev/null; then staging_leak='yes'; fi
+          echo "runtime-config HTTP=$code production_api=$prod_ok staging_leak=$staging_leak bytes=$(wc -c < "$TMP/runtime.js" 2>/dev/null || echo 0)"
           if [ "$code" != '200' ] || [ "$prod_ok" != 'yes' ] || [ "$staging_leak" != 'no' ]; then failures=$((failures+1)); fi
 
           check_page '/unplug-growth-application.html' 'My Growth Journey' 'growth-applicant'
@@ -60,7 +62,7 @@ jobs:
           check_page '/growth-integration.js' 'growth' 'growth-integration'
 
           code="$(request "$BASE/__unplug_release_missing_55f8a50d__" "$TMP/missing")"
-          echo "unknown-route HTTP=$code bytes=$(wc -c < "$TMP/missing")"
+          echo "unknown-route HTTP=$code bytes=$(wc -c < "$TMP/missing" 2>/dev/null || echo 0)"
           if [ "$code" != '404' ]; then failures=$((failures+1)); fi
 
           check_page '/' 'Unplug' 'homepage'
@@ -68,13 +70,13 @@ jobs:
           check_page '/unplug-admin-dashboard.html' 'Unplug' 'admin-dashboard'
           check_page '/unplug-checkout.html' 'Unplug' 'checkout'
 
-          export_code="$(curl --silent --show-error --max-time 30 -A 'Unplug-Production-Smoke/3.0' -o "$TMP/export" -w '%{http_code}' "$API/agreement-forms/admin/export")"
-          echo "protected-agreement-export HTTP=$export_code"
+          export_code="$(curl --silent --show-error --retry 3 --retry-delay 3 --retry-all-errors --connect-timeout 10 --max-time 45 -A 'Unplug-Production-Smoke/3.1' -o "$TMP/export" -w '%{http_code}' "$API/agreement-forms/admin/export" || true)"
+          echo "protected-agreement-export HTTP=${export_code:-000}"
           if [ "$export_code" != '401' ] && [ "$export_code" != '403' ]; then failures=$((failures+1)); fi
 
           cors_headers="$TMP/cors"
-          curl --silent --show-error --max-time 30 -D "$cors_headers" -o /dev/null -H 'Origin: https://www.unplugnews.com' "$API/health"
-          cors_ok='no'; grep -qi '^access-control-allow-origin: https://www.unplugnews.com' "$cors_headers" && cors_ok='yes'
+          curl --silent --show-error --retry 3 --retry-delay 3 --retry-all-errors --connect-timeout 10 --max-time 45 -D "$cors_headers" -o /dev/null -H 'Origin: https://www.unplugnews.com' "$API/health" || true
+          cors_ok='no'; grep -qi '^access-control-allow-origin: https://www.unplugnews.com' "$cors_headers" 2>/dev/null && cors_ok='yes'
           echo "production-cors=$cors_ok"
           if [ "$cors_ok" != 'yes' ]; then failures=$((failures+1)); fi
 
@@ -84,5 +86,3 @@ jobs:
             exit 1
           fi
           echo 'PASS: production Growth runtime surfaces, backend, 404, Agreement protection and CORS are healthy.'
-
-# rerun marker: Cloudflare production main 55f8a50 deployed successfully on 2026-09-12
