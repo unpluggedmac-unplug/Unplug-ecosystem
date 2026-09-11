@@ -24,12 +24,17 @@ jobs:
           failures=0
 
           request() {
-            local url="$1" out="$2"
-            curl --silent --show-error --location --max-time 30 -A 'Unplug-Staging-Smoke/2.1' -o "$out" -w '%{http_code}' "$url"
+            local url="$1"
+            local out="$2"
+            curl --silent --show-error --location --max-time 30 -A 'Unplug-Staging-Smoke/2.2' -o "$out" -w '%{http_code}' "$url"
           }
           check_page() {
-            local path="$1" marker="$2" name="$3" out="$TMP/$name"
-            local code marker_ok='no'
+            local path="$1"
+            local marker="$2"
+            local name="$3"
+            local out="$TMP/$name"
+            local code
+            local marker_ok='no'
             code="$(request "$BASE$path" "$out")"
             grep -Fqi "$marker" "$out" && marker_ok='yes'
             echo "$name HTTP=$code marker=$marker_ok bytes=$(wc -c < "$out")"
