@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  cloudflare-production-artifact:
+  cloudflare-deployment-artifact:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
