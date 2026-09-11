@@ -20,7 +20,7 @@ function withGrowthIntegration(response, pathname) {
   const type = String(response.headers.get('content-type') || '').toLowerCase();
   if (!type.includes('text/html')) return response;
   const eligible = pathname === '/'
-    || /\/(?:index|unplug-magazine|unplug-member-dashboard|unplug-admin-dashboard)\.html$/i.test(pathname);
+    || /\/(?:index|unplug-magazine|unplug-member-dashboard|unplug-admin-dashboard|unplug-growth-application)\.html$/i.test(pathname);
   if (!eligible) return response;
   return new HTMLRewriter()
     .on('body', {
