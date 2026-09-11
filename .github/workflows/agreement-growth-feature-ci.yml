@@ -1,16 +1,16 @@
-name: Agreement + Growth feature CI
+name: Growth Application feature CI
 
 on:
   push:
     branches:
-      - feature/agreement-growth-applications-20260910
+      - feature/growth-application-20260911
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: agreement-growth-feature-ci-${{ github.ref }}
+  group: growth-application-feature-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -34,14 +34,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Syntax check feature source
+      - name: Syntax check release source
         run: |
           node --check src/app.js
           node --check src/routes/agreementForms.js
           node --check src/routes/agreementPayments.js
           node --check src/middleware/agreementPaymentPolicy.js
           node --check src/utils/agreementDocument.js
-          node --check test/agreementPayments.test.js
+          node --check src/data/growthApplicationQuestions.js
+          node --check src/routes/growthApplication.js
+          node --check middleware/upload.js 2>/dev/null || true
+          node --check src/middleware/upload.js
+          node --check test/growthApplicationQuestions.test.js
 
       - name: PostgreSQL migration sweep
         run: node scripts/sweep-test-postgres.js
@@ -80,8 +84,8 @@ jobs:
           git config user.name "unplug-ci-diagnostics"
           git config user.email "actions@users.noreply.github.com"
           git add ../CI-FAILURE-DIAGNOSTICS.md
-          git commit -m "ci: capture backend failure diagnostics [skip ci]" || true
-          git push origin HEAD:feature/agreement-growth-applications-20260910
+          git commit -m "ci: capture Growth Application failure diagnostics [skip ci]" || true
+          git push origin HEAD:feature/growth-application-20260911
 
       - name: Enforce backend test result
         if: steps.fulltests.outcome == 'failure'
