@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Scan deployed HTML and first-party scripts for Supabase runtime dependencies
+      - name: Scan deployed HTML and first-party scripts for actual Supabase runtime calls
         shell: bash
         run: |
           set -euo pipefail
@@ -29,14 +29,19 @@ jobs:
             '/unplug-admin-dashboard.html', '/unplug-agreement.html',
             '/unplug-agreements-admin.html', '/runtime-config'
           ]
-          MARKERS=[
-            'supabase.co', 'functions/v1', 'submit-card', 'review-card',
-            'fkuzbwysvyskhsskjmmi', 'jaywxegcxjgyqhcwzbte',
-            'SUPABASE_URL', '@supabase'
-          ]
+          # Deliberately use exact runtime signatures. Generic words like
+          # "review-card" also occur in harmless CSS classes such as
+          # "preview-card" and caused a false positive in the first audit.
+          PATTERNS={
+            'supabase-host': re.compile(r'https?://[a-z0-9-]+\.supabase\.co', re.I),
+            'supabase-functions': re.compile(r'/functions/v1/(?:submit-card|review-card)\b', re.I),
+            'old-storage-project': re.compile(r'fkuzbwysvyskhsskjmmi\.supabase\.co', re.I),
+            'production-project': re.compile(r'jaywxegcxjgyqhcwzbte\.supabase\.co', re.I),
+            'supabase-js-client': re.compile(r'@supabase|createClient\s*\(', re.I),
+          }
 
           def fetch(url, limit=5_000_000):
-            req=Request(url,headers={'User-Agent':'Unplug-Supabase-Runtime-Audit/1.0','Accept':'*/*'})
+            req=Request(url,headers={'User-Agent':'Unplug-Supabase-Runtime-Audit/1.1','Accept':'*/*'})
             try:
               with urlopen(req,timeout=25) as r:
                 return r.status, r.read(limit), r.headers.get('content-type','')
@@ -44,11 +49,8 @@ jobs:
               return e.code, e.read(limit), e.headers.get('content-type','')
 
           scanned={}
-          queue=[]
-          for p in START:
-            queue.append(urljoin(ORIGIN,p))
-
-          while queue and len(scanned) < 80:
+          queue=[urljoin(ORIGIN,p) for p in START]
+          while queue and len(scanned) < 100:
             url=queue.pop(0)
             if url in scanned: continue
             status,body,ctype=fetch(url)
@@ -64,17 +66,13 @@ jobs:
 
           hits=[]
           for url,(status,ctype,text) in scanned.items():
-            lower=text.lower()
-            for marker in MARKERS:
-              if marker.lower() in lower:
-                hits.append({'resource':urlparse(url).path or '/', 'marker':marker, 'http':status})
+            for label,pattern in PATTERNS.items():
+              if pattern.search(text):
+                hits.append({'resource':urlparse(url).path or '/', 'signature':label, 'http':status})
 
           print('SCANNED_RESOURCES='+str(len(scanned)))
-          print('SUPABASE_RUNTIME_HITS='+str(len(hits)))
+          print('ACTUAL_SUPABASE_RUNTIME_HITS='+str(len(hits)))
           for hit in hits:
-            print('HIT resource={resource} marker={marker} HTTP={http}'.format(**hit))
-
-          # Do not fail merely because historical/legacy runtime references exist;
-          # this job is an inventory sensor. A nonzero result becomes migration work.
+            print('HIT resource={resource} signature={signature} HTTP={http}'.format(**hit))
           print(json.dumps({'scanned':len(scanned),'hits':hits},sort_keys=True))
           PY
