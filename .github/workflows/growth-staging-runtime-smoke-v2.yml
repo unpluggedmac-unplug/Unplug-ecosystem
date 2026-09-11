@@ -1,0 +1,75 @@
+name: Growth staging runtime smoke v2
+
+on:
+  push:
+    branches:
+      - ops/growth-staging-smoke-20260911-v2
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify exact staging runtime surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://staging-control-centre.unplug-magazine.pages.dev'
+          API='https://unplug-ecosystem-staging.onrender.com'
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "$TMP"' EXIT
+
+          request() {
+            local url="$1" out="$2"
+            curl --fail-with-body --silent --show-error --location --max-time 30 \
+              -A 'Unplug-Staging-Smoke/2.0' -o "$out" -w '%{http_code}' "$url"
+          }
+
+          echo 'Checking staging backend readiness...'
+          code="$(request "$API/health/ready" "$TMP/ready")"
+          test "$code" = '200'
+          grep -q '"status":"ready"' "$TMP/ready"
+
+          echo 'Checking Cloudflare staging runtime binding and ribbon...'
+          code="$(request "$BASE/runtime-config" "$TMP/runtime.js")"
+          test "$code" = '200'
+          grep -q 'https://unplug-ecosystem-staging.onrender.com' "$TMP/runtime.js"
+          grep -q 'UNPLUG STAGING' "$TMP/runtime.js"
+          grep -q 'ISOLATED TEST ENVIRONMENT' "$TMP/runtime.js"
+
+          echo 'Checking repaired packaged pages...'
+          code="$(request "$BASE/unplug-growth-application.html" "$TMP/growth.html")"
+          test "$code" = '200'
+          grep -q 'My Growth Journey' "$TMP/growth.html"
+
+          code="$(request "$BASE/unplug-growth-applications-admin.html" "$TMP/growth-admin.html")"
+          test "$code" = '200'
+          grep -q 'Growth Applications' "$TMP/growth-admin.html"
+
+          code="$(request "$BASE/unplug-agreement.html" "$TMP/agreement.html")"
+          test "$code" = '200'
+          grep -q 'Agreement | Unplug Magazine' "$TMP/agreement.html"
+
+          code="$(request "$BASE/unplug-agreements-admin.html" "$TMP/agreement-admin.html")"
+          test "$code" = '200'
+          grep -q 'Agreement' "$TMP/agreement-admin.html"
+
+          code="$(request "$BASE/growth-integration.js" "$TMP/growth-integration.js")"
+          test "$code" = '200'
+          grep -qi 'growth' "$TMP/growth-integration.js"
+
+          echo 'Checking 404 contract...'
+          code="$(curl --silent --show-error --location --max-time 30 -A 'Unplug-Staging-Smoke/2.0' -o "$TMP/missing" -w '%{http_code}' "$BASE/__unplug_release_missing_1937b309__")"
+          test "$code" = '404'
+
+          echo 'Checking critical existing pages remain reachable...'
+          for p in / /unplug-member-dashboard.html /unplug-admin-dashboard.html /unplug-checkout.html; do
+            code="$(request "$BASE$p" "$TMP/page")"
+            test "$code" = '200'
+            test -s "$TMP/page"
+          done
+
+          echo 'PASS: exact staging runtime has Growth + Agreement packaging, isolated API config, staging ribbon and clean 404 behavior.'
