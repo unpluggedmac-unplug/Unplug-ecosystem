@@ -66,17 +66,13 @@ const MODULES = [
 ];
 
 // Copied through untouched.
-// unplug-tokens.css is listed here rather than being minified into a hashed
-// asset because every page LINKS it by name. Hashing it would mean rewriting
-// that link in seven files, and a page linking a hashed name that did not get
-// rewritten is the undefined-token bug all over again, one layer down.
-//
-// unplug-site-buttons.js is also deliberately copied by name: the magazine
-// loads it as a standalone script. Omitting it from dist makes Cloudflare
-// serve a page whose floating CTA stack simply never initialises.
+// unplug-tokens.css and unplug-shared.css are listed here rather than being
+// hashed because pages link them by name. The Site Buttons script is likewise
+// loaded by a fixed public path from the magazine shell.
 const STATIC = ['sw.js', 'manifest.webmanifest', 'robots.txt', '_headers',
-                '_redirects', 'unplug-tokens.css', 'unplug-popups.js',
-                'unplug-site-buttons.js', 'unplug-form-render.js'];
+                '_redirects', 'unplug-tokens.css', 'unplug-shared.css',
+                'unplug-popups.js', 'unplug-site-buttons.js',
+                'unplug-form-render.js'];
 // Pages Functions must stay in /functions at the project root. Cloudflare
 // compiles them separately; copying them into dist would publish their source
 // as static files.
