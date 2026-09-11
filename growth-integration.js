@@ -54,6 +54,51 @@
     sidebar.insertBefore(a, logout || null);
   }
 
+  function addResumeLinkControl() {
+    if (!/unplug-growth-application\.html$/i.test(path) || !token()) return;
+    if (document.getElementById('unplug-growth-resume-control')) return;
+    const wrap = document.querySelector('main.wrap') || document.querySelector('main') || document.body;
+    const box = document.createElement('section');
+    box.id = 'unplug-growth-resume-control';
+    box.style.cssText = 'max-width:1100px;margin:0 auto 18px;background:#fff;border:1px solid #d7d1cd;border-radius:16px;padding:15px 18px;box-sizing:border-box';
+    box.innerHTML = '<div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">'
+      + '<div><strong style="display:block">Resume this journey later</strong><span style="font-size:12px;color:#6b6764">Your member dashboard also resumes your current draft automatically.</span></div>'
+      + '<button type="button" id="unplugGrowthShowResume" style="border:0;border-radius:999px;background:#000001;color:#fff;padding:10px 14px;font-weight:800;cursor:pointer">Show my resume link</button></div>'
+      + '<div id="unplugGrowthResumeResult" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #eee9e6"></div>';
+    const hero = wrap.querySelector('.hero');
+    if (hero && hero.parentNode) hero.parentNode.insertBefore(box, hero.nextSibling);
+    else wrap.insertBefore(box, wrap.firstChild);
+
+    document.getElementById('unplugGrowthShowResume').onclick = async () => {
+      const out = document.getElementById('unplugGrowthResumeResult');
+      out.style.display = 'block';
+      out.textContent = 'Creating a fresh secure resume link…';
+      try {
+        const mine = await json('/growth-application/applications/me');
+        const apps = mine.applications || [];
+        const target = apps.find((item) => !item.submitted_at) || apps[0];
+        if (!target) {
+          out.textContent = 'Start a Growth Application first. Your resume link will appear here immediately afterwards.';
+          return;
+        }
+        const data = await json(`/growth-application/applications/${encodeURIComponent(target.id)}/resume-link`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        });
+        out.innerHTML = '<div style="font-size:12px;color:#6b6764;margin-bottom:6px">Keep this link private. A fresh copy was also sent to your member email.</div>'
+          + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input id="unplugGrowthResumeUrl" readonly style="flex:1;min-width:230px;padding:10px;border:1px solid #bbb;border-radius:9px" value="">'
+          + '<button type="button" id="unplugGrowthCopyResume" style="border:1px solid #000;background:#fff;padding:9px 12px;border-radius:999px;font-weight:800;cursor:pointer">Copy link</button></div>';
+        const input = document.getElementById('unplugGrowthResumeUrl');
+        input.value = data.resume_url || '';
+        document.getElementById('unplugGrowthCopyResume').onclick = async () => {
+          try { await navigator.clipboard.writeText(input.value); }
+          catch (_) { input.select(); document.execCommand('copy'); }
+        };
+      } catch (err) {
+        out.textContent = err.message || 'Could not create a resume link right now.';
+      }
+    };
+  }
+
   function placementKey() {
     if (/unplug-member-dashboard\.html$/i.test(path)) return 'member_dashboard';
     if (!/unplug-magazine\.html$/i.test(path) && path !== '/' && !/index\.html$/i.test(path)) return null;
@@ -117,6 +162,7 @@
   async function init() {
     addAdminLink();
     addMemberJourneyLink();
+    addResumeLinkControl();
     try {
       const config = await json('/growth-application/public-config');
       renderPlacement(config);
