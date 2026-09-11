@@ -3,11 +3,27 @@
 // persistence logic that were previously copy-pasted into each file
 // independently.
 
+// Cloudflare Preview/Staging gets its API origin from /runtime-config.
+// A visible ribbon prevents staff from mistaking staging for production.
+(function showEnvironmentRibbon() {
+  if (!/^staging|preview$/i.test(String(window.UNPLUG_ENV || ''))) return;
+  function mount() {
+    if (document.getElementById('unplugEnvironmentRibbon')) return;
+    var el = document.createElement('div');
+    el.id = 'unplugEnvironmentRibbon';
+    el.setAttribute('role', 'status');
+    el.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:2147483647;background:#111;color:#fff;padding:5px 12px;border-radius:0 0 8px 8px;font:700 11px/1.2 system-ui;letter-spacing:.08em;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+    el.textContent = window.UNPLUG_RUNTIME_CONFIG_ERROR ? 'STAGING — API NOT CONFIGURED' : 'UNPLUG STAGING';
+    document.body.appendChild(el);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+})();
+
 const UnplugAPI = (function () {
   // Live backend on Render. For local development, either set
   // localStorage.unplug_api_base to 'http://localhost:4000', or use the API
   // base input on the admin/checkout/member dashboards.
-  const LIVE_API_BASE = 'https://unplug-ecosystem.onrender.com';
+  const LIVE_API_BASE = (window.UNPLUG_RUNTIME_API || 'https://unplug-ecosystem.onrender.com').replace(/\/$/, '');
   // Drop a saved API base that cannot possibly work from here.
   //
   // Two cases, both of which leave the site looking broken with no clue why:
@@ -117,7 +133,7 @@ function showToast(message, isError = false) {
 // Nothing here runs, and NO ID IS EVER MINTED, until the visitor has actively
 // accepted on the consent bar. Declining leaves nothing behind at all.
 window.UnplugAnalytics = (function () {
-  const API_BASE = 'https://unplug-ecosystem.onrender.com';
+  const API_BASE = (window.UNPLUG_RUNTIME_API || 'https://unplug-ecosystem.onrender.com').replace(/\/$/, '');
   const SESSION_GAP_MS = 30 * 60 * 1000;
 
   function allowed() {

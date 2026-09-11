@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="/runtime-config"></script>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Unplug — My Account</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -690,7 +690,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <option value="gallery">Gallery Bundle — R100 for up to 3 photos</option>
           <option value="top10">Top 10 Entry — R100</option>
           <option value="marketplace">Marketplace Poster — R500 for 30 days</option>
-          <option value="ad_banner">Page Banner — R300 / R550 / R1000 (7 / 14 / 28 days)</option>
+          <option value="ad_banner">Page Banner — R300 / R550 / R785 / R1000 (7 / 14 / 21 / 28 days)</option>
         </select>
       </div>
 
@@ -1265,7 +1265,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 // bare "Failed to fetch" with no clue why. Also discard values saved before
 // the Railway -> Render move, and any localhost value when this page is not
 // actually being served locally.
-const LIVE_API_BASE = "https://unplug-ecosystem.onrender.com";
+const LIVE_API_BASE = (window.UNPLUG_RUNTIME_API || "https://unplug-ecosystem.onrender.com").replace(/\/$/, "");
 (function migrateApiBase() {
   const saved = localStorage.getItem("unplug_api_base");
   if (!saved) return;
@@ -4861,12 +4861,12 @@ const MS_SERVICES=[
   // The two advertising options are easy to confuse, so each description says
   // WHERE it appears: a Page Banner runs on a page of your choosing, while a
   // Marketplace poster only ever shows on the Marketplace page.
-  { t:'Page Banner', d:'Banner on a page you choose - R300-R1000, 7/14/28 days', submit:'ad_banner',
+  { t:'Page Banner', d:'Banner on a page you choose - R300-R1000, 7/14/21/28 days', submit:'ad_banner',
       intro:{ what:'A banner advert on a page of the site you choose.',
         who:'Business', price:'R300 - R1000, depending on the page and how long it runs',
         included:['Your banner on the page you pick','A link to wherever you want it to go','Desktop and mobile versions'],
         need:['A banner image','A mobile version of it','The link it should open'],
-        duration:'7, 14 or 28 days, whichever you choose.' } },
+        duration:'7, 14, 21 or 28 days, whichever you choose.' } },
   { t:'Advertising', d:'Poster on the Marketplace page only', href:'unplug-magazine.html?p=brandplacement' },
   { t:'Sponsorship', d:'Partner with us', href:'unplug-magazine.html?p=investors' },
   { t:'Magazine Feature', d:'Get featured', href:'unplug-magazine.html?p=editions' },
@@ -5048,9 +5048,22 @@ function subsRow(s){
   row.className = 'subs-row';
 
   var main = document.createElement('div');
-  var title = document.createElement('div');
+  // Approved articles are public, so their titles take the member back to
+  // the article they submitted. Unpublished items stay plain text because
+  // the public article route deliberately refuses non-approved content.
+  var title = document.createElement(
+    s.type === 'article' && s.status === 'approved' && s.id ? 'a' : 'div'
+  );
   title.className = 'subs-title';
   title.textContent = s.title || '(untitled)';
+  if (title.tagName === 'A') {
+    title.href = 'unplug-magazine.html?p=article&id=' + encodeURIComponent(s.id);
+    title.target = '_blank';
+    title.rel = 'noopener';
+    title.style.color = 'inherit';
+    title.style.textDecoration = 'underline';
+    title.style.textUnderlineOffset = '2px';
+  }
   main.appendChild(title);
 
   // Type, date, reference and money on one quiet line. Reference is what the

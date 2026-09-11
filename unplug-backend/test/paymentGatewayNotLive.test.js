@@ -8,10 +8,9 @@
 //
 // Website remediation punch-list (2026-09-03), PAY-001/PAY-005.
 //
-// Fixed by gating on the SAME env vars the webhook signature verifiers
-// already require for a real merchant account (PAYFAST_PASSPHRASE,
-// OZOW_PRIVATE_KEY) — not a separate flag that could drift out of sync with
-// whether credentials actually exist.
+// Fixed by refusing those methods until a real hosted-checkout session builder
+// exists. Webhook verification credentials are not enough: they let us verify
+// money arriving, but they do not create a real customer checkout URL.
 //
 // Run with:  npm test   (from unplug-backend/)
 
@@ -147,18 +146,19 @@ test('EFT IS UNAFFECTED — NO MERCHANT ACCOUNT IS NEEDED FOR IT', async () => {
   assert.ok(body.instructions);
 });
 
-test('THE MOMENT A MERCHANT CREDENTIAL IS CONFIGURED, THAT METHOD STARTS WORKING — NO CODE CHANGE NEEDED', async () => {
+test('MERCHANT CALLBACK CREDENTIALS ALONE DO NOT ENABLE A FAKE CHECKOUT URL', async () => {
   const user = await makeUser();
   const eventId = await makeAwaitingEvent(user);
 
-  process.env.PAYFAST_PASSPHRASE = 'now-configured';
+  process.env.PAYFAST_PASSPHRASE = 'callback-secret-is-not-a-checkout-session';
   try {
     const { status, body } = await req('POST', '/payments/initiate', {
       token: tokenFor(user), body: initiateBody(eventId, 'payfast'),
     });
-    assert.equal(status, 201);
-    assert.ok(body.redirectUrl);
+    assert.equal(status, 400);
+    assert.match(body.error, /coming soon/i);
+    assert.ok(!body.redirectUrl);
   } finally {
-    delete process.env.PAYFAST_PASSPHRASE; // back to "not configured" for tests after this one
+    delete process.env.PAYFAST_PASSPHRASE;
   }
 });

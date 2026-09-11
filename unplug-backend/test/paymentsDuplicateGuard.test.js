@@ -193,32 +193,32 @@ test('BUYING TWO DIFFERENT THINGS IS NOT MISTAKEN FOR A DUPLICATE', async () => 
   assert.notEqual(a.body.payment.gateway_reference, b.body.payment.gateway_reference);
 });
 
-test("THE GUARD IS PER USER — SOMEONE ELSE'S PENDING ORDER NEVER BLOCKS YOURS", async () => {
-  // Not a realistic path (linkedId ownership is enforced elsewhere for
-  // owned resources), but the query itself is scoped by user_id and that
-  // scoping is what this proves directly.
+test("OWNERSHIP GUARD RUNS BEFORE DUPLICATE CHECK — ANOTHER USER CANNOT PAY FOR YOUR RESOURCE", async () => {
   const buyer = await makeUser();
   const otherUser = await makeUser();
   const eventId = await makeAwaitingEvent(buyer);
 
-  await req('POST', '/payments/initiate', { token: tokenFor(buyer), body: initiateBody(eventId) });
+  const first = await req('POST', '/payments/initiate', { token: tokenFor(buyer), body: initiateBody(eventId) });
+  assert.equal(first.status, 201);
   const attempt = await req('POST', '/payments/initiate', { token: tokenFor(otherUser), body: initiateBody(eventId) });
-  assert.equal(attempt.status, 201, "a different user's request for the same linkedId is not treated as their duplicate");
+  assert.equal(attempt.status, 403);
+  assert.match(attempt.body.error, /own account/i);
+
+  const rows = await pool.query(
+    `SELECT count(*)::int AS n FROM payments WHERE linked_type = 'event_listing' AND linked_id = $1`, [eventId]);
+  assert.equal(rows.rows[0].n, 1, 'the blocked user did not create a second payment row');
 });
 
-test('PayFast/Ozow resubmits are also caught — the guard is not EFT-only', async () => {
+test('PayFast/Ozow initiation stays closed until a real hosted checkout exists', async () => {
   const user = await makeUser();
   const eventId = await makeAwaitingEvent(user);
   const token = tokenFor(user);
 
-  const first = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method: 'payfast' }) });
-  assert.equal(first.status, 201);
-  const second = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method: 'payfast' }) });
-  assert.equal(second.status, 200);
-  assert.equal(second.body.alreadyPending, true);
-  assert.ok(second.body.redirectUrl, 'still gets a redirect URL, not just an error');
+  const blocked = await req('POST', '/payments/initiate', { token, body: initiateBody(eventId, { method: 'payfast' }) });
+  assert.equal(blocked.status, 400);
+  assert.match(blocked.body.error, /coming soon|EFT/i);
 
   const rows = await pool.query(
     `SELECT count(*)::int AS n FROM payments WHERE linked_type = 'event_listing' AND linked_id = $1`, [eventId]);
-  assert.equal(rows.rows[0].n, 1);
+  assert.equal(rows.rows[0].n, 0, 'a disabled gateway must not create a pending payment row');
 });

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="/runtime-config"></script>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Unplug Magazine — Real People. Real Impact.</title>
 <meta name="description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them — Directory profiles, uplifting news, and community spotlights.">
@@ -5754,6 +5754,21 @@ async function applyPageCms() {
   // absolutely-positioned slide crossfading over the last — see .ad-slide in
   // the stylesheet — so 1 banner just renders statically and 2+ rotate.
   const adSlots = cms.adSlots || {};
+  const seenAdImpressions = new Set();
+  const trackAdEvent = (bannerId, eventType) => {
+    const id = Number(bannerId);
+    if (!Number.isInteger(id) || !['impression','click'].includes(eventType)) return;
+    if (eventType === 'impression') {
+      const key = String(id);
+      if (seenAdImpressions.has(key)) return;
+      seenAdImpressions.add(key);
+    }
+    // Analytics must never delay navigation or break page rendering.
+    fetch(UnplugAPI.getApiBase() + `/ad-banners/${id}/event`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventType }), keepalive: true,
+    }).catch(() => {});
+  };
   document.querySelectorAll('[data-ad-slot]').forEach((slot) => {
     const banners = adSlots[slot.getAttribute('data-ad-slot')];
     if (!banners || !banners.length) return; // empty state: keep the placeholder, never a blank/broken box
@@ -5764,13 +5779,13 @@ async function applyPageCms() {
         : `<img src="${escapeHtml(b.image_url)}" alt="${escapeHtml(b.name || 'Advertisement')}" loading="lazy" decoding="async" style="display:block;width:100%;height:100%;object-fit:contain;">`;
       const cta = b.cta_text ? `<span class="ad-cta">${escapeHtml(b.cta_text)}</span>` : '';
       const inner = b.link_url
-        ? `<a href="${escapeHtml(b.link_url)}" target="_blank" rel="noopener sponsored" style="display:block;width:100%;height:100%;position:relative;">${picture}${cta}</a>`
+        ? `<a href="${escapeHtml(b.link_url)}" data-ad-click="${Number(b.id) || ''}" target="_blank" rel="noopener sponsored" style="display:block;width:100%;height:100%;position:relative;">${picture}${cta}</a>`
         : picture;
       // The entrance effect and its speed are per-banner (admin-controlled) —
       // see the shared [data-anim] library in the stylesheet.
       const anim = escapeAttr(b.animation_effect || 'fade');
       const dur = Number(b.transition_duration_ms) > 0 ? Number(b.transition_duration_ms) : 600;
-      return `<div class="ad-slide anim-target${i === 0 ? ' is-active' : ''}" data-anim="${anim}" style="--anim-dur:${dur}ms;">${inner}</div>`;
+      return `<div class="ad-slide anim-target${i === 0 ? ' is-active' : ''}" data-ad-id="${Number(b.id) || ''}" data-anim="${anim}" style="--anim-dur:${dur}ms;">${inner}</div>`;
     }).join('');
     const controls = banners.length > 1
       ? `<button class="ad-nav ad-prev" type="button" aria-label="Previous advert">‹</button>
@@ -5779,6 +5794,8 @@ async function applyPageCms() {
       : '';
     slot.innerHTML = slidesHtml + controls;
     slot.classList.add('ad-slot-filled');
+    slot.querySelectorAll('[data-ad-click]').forEach((a) => a.addEventListener('click', () => trackAdEvent(a.getAttribute('data-ad-click'), 'click')));
+    if (banners[0] && banners[0].id) trackAdEvent(banners[0].id, 'impression');
     if (banners.length > 1) {
       const slides = slot.querySelectorAll('.ad-slide');
       const dots = slot.querySelectorAll('.ad-dot');
@@ -5787,6 +5804,7 @@ async function applyPageCms() {
         slides[i].classList.remove('is-active'); if (dots[i]) dots[i].classList.remove('is-active');
         i = (n + slides.length) % slides.length;
         slides[i].classList.add('is-active'); if (dots[i]) dots[i].classList.add('is-active');
+        if (banners[i] && banners[i].id) trackAdEvent(banners[i].id, 'impression');
       };
       // Each banner decides how long IT stays up before the carousel advances
       // — a per-slide duration, not one fixed rate for every banner alike.

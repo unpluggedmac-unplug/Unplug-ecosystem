@@ -41,15 +41,16 @@ function isHighRisk(action) {
 // details). The fourth argument is for callers outside a request — a scheduled
 // job — that want to say so explicitly rather than have the context read back
 // empty.
-async function logActivity(adminUserId, action, details, override, actorRole = 'admin') {
+async function logActivity(adminUserId, action, details, override, actorRole = null) {
   try {
     const ctx = override || requestContext.current();
+    const effectiveActorRole = actorRole || ctx.actorRole || 'admin';
     await pool.query(
       `INSERT INTO admin_activity_log
          (admin_user_id, action, details, ip_address, user_agent, high_risk, actor_role)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [adminUserId, action, details || null,
-       ctx.ip || null, ctx.userAgent || null, isHighRisk(action), actorRole]
+       ctx.ip || null, ctx.userAgent || null, isHighRisk(action), effectiveActorRole]
     );
   } catch (err) {
     // Never throws. An audit entry failing must not be the reason the action

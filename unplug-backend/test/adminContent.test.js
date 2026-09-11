@@ -363,11 +363,17 @@ test('a gallery edit records who made it', async () => {
 // Deleting
 // ---------------------------------------------------------------------------
 
-test('delete removes the row, and deleting twice is a clean 404', async () => {
+test('permanent delete requires Trash first, then removes the row', async () => {
   const article = await makeArticle(memberId, { title: 'To Be Deleted' });
 
+  const direct = await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken });
+  assert.equal(direct.status, 409, 'an existing item must be moved to Trash before permanent deletion');
+
+  const trashed = await req('POST', `/admin/content/articles/${article.id}/trash`, { token: adminToken, body: {} });
+  assert.equal(trashed.status, 200);
   assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 200);
-  assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 404);
+  assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 409,
+    'after permanent deletion there is no active Trash entry to delete again');
 
   const row = await pool.query('SELECT id FROM articles WHERE id = $1', [article.id]);
   assert.equal(row.rowCount, 0);
@@ -380,7 +386,8 @@ test('DELETING A PAID ITEM LEAVES THE PAYMENT STANDING — IT IS NOT A REFUND', 
   const article = await makeArticle(memberId, { title: 'Paid For' });
   const payment = await makePayment(memberId, 'article_publish', article.id, 95.00);
 
-  await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken });
+  assert.equal((await req('POST', `/admin/content/articles/${article.id}/trash`, { token: adminToken, body: {} })).status, 200);
+  assert.equal((await req('DELETE', `/admin/content/articles/${article.id}`, { token: adminToken })).status, 200);
 
   const still = await pool.query('SELECT status FROM payments WHERE id = $1', [payment.id]);
   assert.equal(still.rows[0].status, 'confirmed', 'the payment record survives the deletion');

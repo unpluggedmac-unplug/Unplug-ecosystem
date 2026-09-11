@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('./utils/validateEnv')();
 const express = require('express');
 const { notifyAdminAsync, NOTIFY } = require('./utils/adminNotify');
 const cors = require('cors');
@@ -63,9 +64,11 @@ const seoRoutes = require('./routes/seo');
 
 const app = express();
 
-// Behind Render's TLS proxy. Lets req.protocol / req.secure reflect the real
-// https scheme (via x-forwarded-proto) so generated URLs aren't http://.
-app.set('trust proxy', true);
+// Render terminates TLS in front of this process. Trust exactly the nearest
+// proxy hop rather than every address supplied through X-Forwarded-For.
+// `true` is deliberately avoided: express-rate-limit rejects that permissive
+// mode because a forged forwarded chain can otherwise bypass IP throttles.
+app.set('trust proxy', 1);
 
 // Makes the caller's address available to anything running during the request,
 // without threading `req` through every function that might want it. The audit
@@ -75,7 +78,10 @@ app.set('trust proxy', true);
 app.use(require('./middleware/requestContext').middleware);
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
-app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
+// Development remains convenient, but a production API must never silently
+// become cross-origin-open because one Render variable was forgotten.
+const corsOrigin = allowedOrigins.length ? allowedOrigins : (process.env.NODE_ENV === 'production' ? false : true);
+app.use(cors({ origin: corsOrigin }));
 // 512kb. The largest honest JSON payload is a long article with its gallery
 // list; uploads are multipart and handled by multer, which has its own larger
 // limits. Express defaults to 100kb, which a long article can exceed — so this
@@ -120,6 +126,20 @@ app.use(require('./middleware/wafLite').middleware);
 // a filter and report the site down when it is fine.
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// Readiness is deliberately stronger than /health: it proves the process can
+// reach PostgreSQL before a deployment is considered ready to serve traffic.
+// No credentials or infrastructure details are returned.
+app.get('/health/ready', async (req, res) => {
+  try {
+    const pool = require('./db');
+    await pool.query('SELECT 1');
+    return res.json({ status: 'ready', database: 'ok' });
+  } catch (err) {
+    console.error('[readiness] database check failed:', err.message);
+    return res.status(503).json({ status: 'not_ready', database: 'unavailable' });
+  }
+});
+
 // What the mail provider tells us after a send: delivered, bounced,
 // complained. Unauthenticated because Resend cannot log in — but every request
 // is verified against a shared signing secret, and unsigned requests are
@@ -128,6 +148,9 @@ app.use('/email/webhooks', require('./routes/emailWebhooks'));
 
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
+app.use('/admin/staff', require('./routes/adminStaff'));
+app.use('/admin/business-reports', require('./routes/adminBusinessReports'));
+app.use('/admin/checkout-health', require('./routes/adminCheckoutHealth'));
 app.use('/', profileRoutes); // exposes /directory and /profiles/*
 app.use('/gallery', galleryRoutes);
 app.use('/payments', paymentRoutes);
@@ -169,6 +192,8 @@ app.use('/admin/email', require('./routes/emailCampaigns'));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/agreements', agreementRoutes);
 app.use('/admin/content', require('./routes/adminContent'));
+app.use('/admin/search', require('./routes/adminSearch'));
+app.use('/admin/media', require('./routes/adminMedia'));
 app.use('/admin/bulk-email', bulkEmailRoutes);
 app.use('/editions', editionRoutes);
 app.use('/analytics', analyticsRoutes);
@@ -198,6 +223,15 @@ app.use('/social', require('./routes/social'));
 // Mounted AFTER /social so nothing here can shadow an existing route — a form
 // slug is arbitrary text an admin types.
 app.use('/forms', require('./routes/forms'));
+// Agreement Forms: admin-built agreements anyone can be sent a link to sign.
+// This is intentionally NOT /agreements, which remains the older four-type
+// signed_agreements system. Payment policy has its own bridge because option C
+// allows an admin to choose member-only or guest EFT per agreement.
+const agreementFormsRoutes = require('./routes/agreementForms');
+app.use('/agreement-forms', require('./middleware/agreementPaymentPolicy'));
+app.use('/agreement-forms', agreementFormsRoutes.router);
+app.use('/a', agreementFormsRoutes.shortLinkRouter);
+app.use('/agreement-payments', require('./routes/agreementPayments'));
 app.use('/privacy', require('./routes/privacy'));
 app.use('/sasl', require('./routes/sasl'));
 app.use('/public-settings', publicSettingsRoutes);

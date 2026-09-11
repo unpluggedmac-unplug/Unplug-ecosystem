@@ -327,3 +327,63 @@ test('re-running every migration is idempotent — orders/payments.order_id surv
   const col = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'payments' AND column_name = 'order_id'`);
   assert.equal(col.rows.length, 1);
 });
+
+test('A MEMBER CANNOT QUOTE OR PAY FOR ANOTHER MEMBERS SERVICE RECORD', async () => {
+  const owner = await makeUser();
+  const other = await makeUser();
+  const eventId = await makeAwaitingEvent(owner);
+  const quote = await req('POST', '/orders/quote', {
+    token: tokenFor(other), body: { items: [{ linkedType: 'event_listing', linkedId: eventId }] },
+  });
+  assert.equal(quote.status, 403);
+  assert.match(quote.body.error, /own account/i);
+});
+
+test('THE SAME SERVICE CANNOT APPEAR TWICE IN ONE CART', async () => {
+  const user = await makeUser();
+  const eventId = await makeAwaitingEvent(user);
+  const quote = await req('POST', '/orders/quote', {
+    token: tokenFor(user), body: { items: [
+      { linkedType: 'event_listing', linkedId: eventId },
+      { linkedType: 'event_listing', linkedId: eventId },
+    ] },
+  });
+  assert.equal(quote.status, 400);
+  assert.match(quote.body.error, /cannot be added.*more than once/i);
+});
+
+test('A SERVICE-RESTRICTED CART VOUCHER DISCOUNTS ONLY MATCHING ITEMS', async () => {
+  const user = await makeUser();
+  const articleId = await makeAwaitingArticle(user);
+  const eventId = await makeAwaitingEvent(user);
+  await pool.query(
+    `INSERT INTO vouchers (code, discount_type, discount_value, service_restriction, expires_at)
+     VALUES ('ARTICLE50', 'percent', 50, 'article_publish', now() + interval '7 days')`
+  );
+  const quote = await req('POST', '/orders/quote', {
+    token: tokenFor(user), body: {
+      items: [
+        { linkedType: 'article_publish', linkedId: articleId },
+        { linkedType: 'event_listing', linkedId: eventId },
+      ],
+      voucherCode: 'ARTICLE50',
+    },
+  });
+  assert.equal(quote.status, 200);
+  assert.equal(Number(quote.body.subtotal), 395);
+  assert.equal(Number(quote.body.voucherDiscount), 47.5, '50% of the R95 article only');
+  assert.equal(Number(quote.body.total), 347.5, 'the R300 event must not be discounted');
+});
+
+test('CART CHECKOUT REFUSES PAYFAST/OZOW WHILE ONLY STUB REDIRECTS EXIST', async () => {
+  const user = await makeUser();
+  const eventId = await makeAwaitingEvent(user);
+  const body = {
+    items: [{ linkedType: 'event_listing', linkedId: eventId }],
+    method: 'payfast', infoConfirmed: true, termsAccepted: true,
+  };
+  const result = await req('POST', '/orders/initiate', { token: tokenFor(user), body });
+  assert.equal(result.status, 400);
+  assert.match(result.body.error, /coming soon/i);
+  assert.ok(!result.body.redirectUrl);
+});

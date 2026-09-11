@@ -1,11 +1,13 @@
 {
   "name": "unplug-frontend",
   "version": "1.0.0",
-  "description": "Unplug Magazine frontend \u2014 static pages plus a production build step.",
+  "description": "Unplug Magazine frontend — static pages plus a production build step.",
   "scripts": {
     "build": "node build.js",
     "serve:src": "python -m http.server 4173",
-    "serve:dist": "cd dist && python -m http.server 4174"
+    "serve:dist": "cd dist && python -m http.server 4174",
+    "staging:check": "node scripts/staging-frontend-check.js",
+    "security:check": "node scripts/security-headers-check.js"
   },
   "repository": {
     "type": "git",

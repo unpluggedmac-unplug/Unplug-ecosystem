@@ -7,6 +7,7 @@ const { balanceFor, historyFor } = require('../utils/accountCredit');
 const { sendEmail, isConfigured, verifyConnection, config: emailConfig } = require('../utils/email');
 const { marketingStatus } = require('../utils/marketingEvents');
 const { probe } = require('../utils/portProbe');
+const { getStaffAccess } = require('../utils/staffPermissions');
 
 const router = express.Router();
 
@@ -64,13 +65,16 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
     );
     const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM users u ${whereClause}`, searchParams);
 
+    const access = await getStaffAccess(req.user.id);
+    const perms = new Set(access ? access.permissions : []);
+    const canFinance = access && (access.isSuperAdmin || perms.has('finance.view') || perms.has('finance.manage'));
     res.json({
-      // SUM() arrives from pg as a NUMERIC string; cast so the dashboard can
-      // format it as money rather than concatenating it.
-      users: result.rows.map((u) => ({ ...u, credit_balance: Number(u.credit_balance) })),
-      total: countResult.rows[0].total,
-      limit,
-      offset,
+      users: result.rows.map((u) => {
+        const row = { ...u, credit_balance: Number(u.credit_balance) };
+        if (!canFinance) { delete row.credit_balance; delete row.confirmed_payments; }
+        return row;
+      }),
+      total: countResult.rows[0].total, limit, offset,
     });
   } catch (err) {
     next(err);
@@ -108,6 +112,9 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     }
     if (b.role !== undefined && !ASSIGNABLE_ROLES.includes(b.role)) {
       return res.status(400).json({ error: `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}.` });
+    }
+    if (b.role !== undefined && b.role !== target.rows[0].role && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only a Super Admin can change account roles.' });
     }
     if (b.memberType !== undefined && b.memberType !== null && b.memberType !== ''
         && !MEMBER_TYPES.includes(b.memberType)) {
@@ -285,8 +292,8 @@ router.delete('/users/:id', requireRole('admin'), async (req, res, next) => {
 
     // Other admins aren't deletable through this tool — losing an admin should
     // be a deliberate act, not a row in a members cleanup.
-    if (target.rows[0].role === 'admin') {
-      return res.status(403).json({ error: 'Admin accounts cannot be deleted here. Change the role first if this is intended.' });
+    if (['admin', 'staff'].includes(target.rows[0].role)) {
+      return res.status(403).json({ error: 'Admin and staff accounts cannot be deleted here. Remove staff access or change the role first.' });
     }
 
     const owned = await pool.query(
@@ -1235,6 +1242,9 @@ router.get('/sales-consultants/:id/payments', requireRole('admin'), async (req, 
 // duplicate any business logic, it only aggregates.
 router.get('/overview', requireRole('admin'), async (req, res, next) => {
   try {
+    const access = await getStaffAccess(req.user.id);
+    const perms = new Set(access ? access.permissions : []);
+    const can = (...needed) => access && (access.isSuperAdmin || needed.some((p) => perms.has(p)));
     const [
       users, articles, profiles, editions, gallery,
       pendingEft, pendingArticles, pendingProfiles, pendingGallery,
@@ -1275,33 +1285,26 @@ router.get('/overview', requireRole('admin'), async (req, res, next) => {
 
     res.json({
       totals: {
-        users: users.rows[0].n,
-        articles: articles.rows[0].n,
-        profiles: profiles.rows[0].n,
-        editions: editions.rows[0].n,
-        gallery: gallery.rows[0].n,
+        users: can('members.view','members.manage') ? users.rows[0].n : null,
+        articles: can('content.view','content.manage') ? articles.rows[0].n : null,
+        profiles: can('directory.manage') ? profiles.rows[0].n : null,
+        editions: can('content.view','content.manage') ? editions.rows[0].n : null,
+        gallery: can('media.manage') ? gallery.rows[0].n : null,
       },
-      pending: {
-        articles: pendingArticles.rows[0].n,
-        profiles: pendingProfiles.rows[0].n,
-        gallery: pendingGallery.rows[0].n,
-        claims: pendingClaims.rows[0].n,
-        reviews: pendingReviews.rows[0].n,
-        comments: pendingComments.rows[0].n,
-        // The single number a submission-inbox badge would show — how many
-        // things across every type are actually waiting on a decision.
+      pending: can('approvals.view','approvals.manage') ? {
+        articles: pendingArticles.rows[0].n, profiles: pendingProfiles.rows[0].n, gallery: pendingGallery.rows[0].n,
+        claims: pendingClaims.rows[0].n, reviews: pendingReviews.rows[0].n, comments: pendingComments.rows[0].n,
         total: pendingArticles.rows[0].n + pendingProfiles.rows[0].n + pendingGallery.rows[0].n
           + pendingClaims.rows[0].n + pendingReviews.rows[0].n + pendingComments.rows[0].n,
-      },
-      payments: {
-        pendingEftCount: pendingEft.rows[0].n,
-        pendingEftAmount: Number(pendingEft.rows[0].amount),
-      },
+      } : null,
+      payments: can('finance.view','finance.manage') ? {
+        pendingEftCount: pendingEft.rows[0].n, pendingEftAmount: Number(pendingEft.rows[0].amount),
+      } : null,
       activity: {
-        views7d: views7d.rows[0].n,
+        views7d: can('analytics.view') ? views7d.rows[0].n : null,
         unreadNotifications: unreadNotifications.rows[0].n,
       },
-      recentSubmissions: recent.rows,
+      recentSubmissions: can('approvals.view','approvals.manage') ? recent.rows : [],
     });
   } catch (err) {
     next(err);
