@@ -3,7 +3,7 @@ name: Public production browser interaction smoke
 on:
   push:
     branches:
-      - hotfix/frontend-runtime-csp-20260912
+      - hotfix/**
   workflow_dispatch:
 
 jobs:
@@ -149,7 +149,19 @@ jobs:
               !/favicon|Failed to load resource.*404/i.test(x)
             );
             if (pageErrors.length) fail('page JavaScript exceptions', pageErrors.join(' | '));
-            if (failedRequests.length) fail('first-party failed requests', failedRequests.join(' | '));
+            // Impression telemetry is deliberately best-effort and uses
+            // keepalive. Chromium may still report those POSTs as ERR_ABORTED
+            // when this smoke intentionally navigates to another SPA page.
+            // Ignore only that exact navigation-abort shape; every other
+            // first-party request failure remains a release blocker.
+            const abortedTelemetry = failedRequests.filter(x =>
+              /POST https:\/\/unplug-ecosystem\.onrender\.com\/ad-banners\/\d+\/event :: net::ERR_ABORTED$/.test(x)
+            );
+            const blockingRequests = failedRequests.filter(x => !abortedTelemetry.includes(x));
+            if (abortedTelemetry.length) {
+              console.log(`INFO ignored ${abortedTelemetry.length} best-effort advert telemetry request(s) aborted by navigation`);
+            }
+            if (blockingRequests.length) fail('first-party failed requests', blockingRequests.join(' | '));
             if (seriousConsole.length) fail('browser console errors', seriousConsole.join(' | '));
             pass('no blocking browser/runtime errors');
 
