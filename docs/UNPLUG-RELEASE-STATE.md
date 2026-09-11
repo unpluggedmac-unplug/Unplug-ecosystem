@@ -31,8 +31,10 @@ Use these skills together, not independently:
 `build-configuration-drift-guard` is enforced by
 `deploy/build-config.contract.json`, `scripts/verify-build-configuration.js`
 and `.github/workflows/build-configuration-gate.yml`. It must block release
-when the Cloudflare project root, build command, output directory, ordered
-packaging pipeline or required production artifacts drift from the contract.
+when the Cloudflare target project/branch mapping, project root, build command,
+output directory, ordered packaging pipeline or required deployment artifacts
+drift from the contract. Its reusable Codex instructions are versioned at
+`.codex/skills/build-configuration-drift-guard/SKILL.md`.
 
 Core rule:
 
@@ -54,11 +56,18 @@ Production Render service: `Unplug-ecosystem` / `srv-d9cqt62hil2s73amk07g`
 
 Staging Render service: `Unplug-ecosystem-staging` / `srv-daembcmq1p3s739v6sog`
 
-Cloudflare Pages project: `unplug-magazine`
+Cloudflare Pages production project: `unplug-magazine` / branch `main`
+
+Cloudflare Pages staging project: `unplug-staging` / branch `staging-control-centre`
 
 Public production URL: `https://www.unplugnews.com`
 
-Staging alias: `https://staging-control-centre.unplug-magazine.pages.dev`
+Current immutable staging frontend candidate:
+`https://b3d195ec.unplug-staging.pages.dev` at
+`9e125c67f021bc629b22df3fffb791b106863f57`
+
+Do not use `https://staging-control-centre.unplug-magazine.pages.dev`; it is
+not a valid staging target and returns 404.
 
 ## Active workstreams
 
