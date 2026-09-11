@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Configuration Drift Guard"
+  short_description: "Prevent provider build and artifact drift"
+  default_prompt: "Audit this release candidate for build configuration drift and block deployment unless repository, CI, provider, and published artifact evidence agree."
