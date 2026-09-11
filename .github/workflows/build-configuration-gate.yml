@@ -1,0 +1,47 @@
+name: Build configuration contract gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - staging-control-centre
+      - hotfix/**
+      - feature/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-config-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cloudflare-production-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+      - name: Use supported Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Validate repository deployment contract
+        run: npm run verify:build-config
+      - name: Build the exact Cloudflare production artifact
+        run: npm run build
+      - name: Prove the artifact marker and critical files
+        run: |
+          test -s dist/build-contract.json
+          node -e "const x=require('./dist/build-contract.json');if(x.outputDirectory!=='dist'||x.project!=='unplug-magazine'||x.sourceCommit!==process.env.GITHUB_SHA)process.exit(1)"
+          test -s dist/unplug-magazine.html
+          test -s dist/unplug-site-buttons.js
+          test -s dist/unplug-shared.css
+          echo "Build configuration contract is satisfied for $GITHUB_SHA."
