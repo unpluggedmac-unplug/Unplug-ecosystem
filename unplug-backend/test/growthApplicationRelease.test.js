@@ -17,9 +17,9 @@ test('Growth migrations exist and remain additive', () => {
   const files = [
     '195_growth_application.sql',
     '196_growth_application_stage_version.sql',
-    '202_growth_application_v2.sql',
-    '203_growth_application_master_seed.sql',
-    '204_growth_application_prefill.sql',
+    '207_growth_application_v2.sql',
+    '208_growth_application_master_seed.sql',
+    '209_growth_application_prefill.sql',
   ];
   const sql = files.map((file) => fs.readFileSync(path.join(BACKEND, 'db/migrations', file), 'utf8'));
   for (const body of sql) {
@@ -42,7 +42,7 @@ test('Growth migrations exist and remain additive', () => {
 });
 
 test('seeded Growth master covers the six core questions and ships a published usable version', () => {
-  const seed = fs.readFileSync(path.join(BACKEND, 'db/migrations/203_growth_application_master_seed.sql'), 'utf8');
+  const seed = fs.readFileSync(path.join(BACKEND, 'db/migrations/208_growth_application_master_seed.sql'), 'utf8');
   assert.match(seed, /'published','Unplug Growth Application'/);
   for (const step of [
     'identity_profile','current_situation','goals_priorities','challenges_needs',
@@ -149,7 +149,7 @@ test('Growth V2 conditional logic controls visible requirements server-side', ()
 test('Growth V2 separates ordinary and sensitive staff capabilities', () => {
   const permissions = fs.readFileSync(path.join(BACKEND, 'src/utils/staffPermissions.js'), 'utf8');
   const admin = fs.readFileSync(path.join(BACKEND, 'src/routes/growthAdmin.js'), 'utf8');
-  const migration = fs.readFileSync(path.join(BACKEND, 'db/migrations/202_growth_application_v2.sql'), 'utf8');
+  const migration = fs.readFileSync(path.join(BACKEND, 'db/migrations/207_growth_application_v2.sql'), 'utf8');
   assert.match(permissions, /'growth\.view'/);
   assert.match(permissions, /'growth\.manage'/);
   assert.match(permissions, /'growth\.sensitive'/);
@@ -161,8 +161,8 @@ test('Growth V2 separates ordinary and sensitive staff capabilities', () => {
 });
 
 test('Growth V2 preserves stable form versions, expanded types, audiences and relational links', () => {
-  const base = fs.readFileSync(path.join(BACKEND, 'db/migrations/202_growth_application_v2.sql'), 'utf8');
-  const seed = fs.readFileSync(path.join(BACKEND, 'db/migrations/203_growth_application_master_seed.sql'), 'utf8');
+  const base = fs.readFileSync(path.join(BACKEND, 'db/migrations/207_growth_application_v2.sql'), 'utf8');
+  const seed = fs.readFileSync(path.join(BACKEND, 'db/migrations/208_growth_application_master_seed.sql'), 'utf8');
   assert.match(base, /UNIQUE\(form_id, version_number\)/i);
   assert.match(base, /UNIQUE\(version_id, field_key\)/i);
   assert.match(base, /sensitive_enabled/);
