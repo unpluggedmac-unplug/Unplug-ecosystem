@@ -51,6 +51,7 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
       `SELECT u.id, u.email, u.phone, u.role, u.created_at, u.full_name, u.member_type,
               u.is_suspended, u.suspended_reason, u.free_publishing_enabled,
               u.sales_consultant_id, sc.name AS sales_consultant_name,
+              u.consultant_domain_exception,
               -- Credit is a SUM of the ledger, not a stored column, so it is
               -- computed here rather than trusted from anywhere else.
               (SELECT COALESCE(SUM(amount), 0) FROM account_credits ac WHERE ac.user_id = u.id)::numeric AS credit_balance,
@@ -103,7 +104,7 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid user id is required.' });
 
-    const target = await pool.query('SELECT id, email, role FROM users WHERE id = $1', [id]);
+    const target = await pool.query('SELECT id, email, role, consultant_domain_exception FROM users WHERE id = $1', [id]);
     if (target.rowCount === 0) return res.status(404).json({ error: 'That account no longer exists.' });
 
     const b = req.body;
@@ -117,6 +118,11 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     }
     if (b.role !== undefined && b.role !== target.rows[0].role && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only a Super Admin can change account roles.' });
+    }
+    // Same restriction as the role change it exists to gate — granting this
+    // exception is exactly as sensitive as granting the role itself.
+    if (b.consultantDomainException !== undefined && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only a Super Admin can grant the consultant-role domain exception.' });
     }
     if (b.memberType !== undefined && b.memberType !== null && b.memberType !== ''
         && !MEMBER_TYPES.includes(b.memberType)) {
@@ -160,9 +166,17 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     // publishing forever, even after leaving, since there'd be no role to take
     // away. The domain restriction the brief asks for is enforced at the one
     // moment it actually matters — the grant itself.
-    if (b.role === 'consultant' && !/@unplugnews\.com$/i.test(target.rows[0].email)) {
+    // consultant_domain_exception is the one-off escape hatch: an admin can
+    // explicitly approve a specific non-staff account for the role, without
+    // loosening the domain rule for everyone else. It has no effect on any
+    // other role and must already be set (or be set in this same request,
+    // checked below) before the grant is allowed.
+    const willHaveException = b.consultantDomainException !== undefined
+      ? !!b.consultantDomainException
+      : target.rows[0].consultant_domain_exception;
+    if (b.role === 'consultant' && !/@unplugnews\.com$/i.test(target.rows[0].email) && !willHaveException) {
       return res.status(400).json({
-        error: 'Only an @unplugnews.com email address can be made a Sales Consultant. This account is ' + target.rows[0].email + '.',
+        error: 'Only an @unplugnews.com email address can be made a Sales Consultant. This account is ' + target.rows[0].email + ' — tick "Allow consultant role for this account" first if you mean to grant an exception.',
       });
     }
 
@@ -180,12 +194,13 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     // since it does nothing for any other role.
     if (b.freePublishingEnabled !== undefined) put('free_publishing_enabled', !!b.freePublishingEnabled);
     if (b.salesConsultantId !== undefined) put('sales_consultant_id', consultantForLog ? consultantForLog.id : null);
+    if (b.consultantDomainException !== undefined) put('consultant_domain_exception', !!b.consultantDomainException);
     if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
     vals.push(id);
     const result = await pool.query(
       `UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason, free_publishing_enabled, sales_consultant_id`,
+       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason, free_publishing_enabled, sales_consultant_id, consultant_domain_exception`,
       vals
     );
 
@@ -200,6 +215,7 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
         : b.isSuspended !== undefined ? (b.isSuspended ? 'user_suspended' : 'user_unsuspended')
         : b.freePublishingEnabled !== undefined ? 'user_free_publishing_toggled'
         : b.salesConsultantId !== undefined ? 'user_consultant_linked'
+        : b.consultantDomainException !== undefined ? 'user_consultant_domain_exception_toggled'
         : 'user_edited',
       roleChanged
         ? `${target.rows[0].email} (#${id}): ${target.rows[0].role} → ${b.role}`
@@ -207,6 +223,8 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
         ? `${target.rows[0].email} (#${id}): free publishing ${b.freePublishingEnabled ? 'enabled' : 'disabled'}`
         : b.salesConsultantId !== undefined
         ? `${target.rows[0].email} (#${id}): ${consultantForLog ? `linked to representative "${consultantForLog.name}"` : 'unlinked from their representative'}`
+        : b.consultantDomainException !== undefined
+        ? `${target.rows[0].email} (#${id}): consultant-role domain exception ${b.consultantDomainException ? 'granted' : 'revoked'}`
         : `${target.rows[0].email} (#${id})`
     );
 

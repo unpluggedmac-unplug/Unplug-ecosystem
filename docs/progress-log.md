@@ -3155,3 +3155,27 @@ different consultant correctly moving the link. Two earlier test files
 payment" via a raw insert that bypassed the code path where this now happens, so they'd have silently
 stopped finding their expected clients otherwise. Full suite: **2306 passing, 0 failing.**
 
+## 2026-09-12 — Two small follow-ups: always-available "None", and a per-account consultant-role exception
+
+**The link-representative picker always offers "None" now.** It previously only showed an unlink option when
+a member already had a representative linked, so picking "no representative" for someone with none yet
+wasn't possible — there was nothing to choose but real representatives. `0. None` is now always the first
+option; picking it for an already-unlinked member is a harmless no-op.
+
+**A deliberate, per-account exception to the `@unplugnews.com` consultant-role restriction.** A real request
+came up to grant the `consultant` role to a specific account (an admin's own account, as it turned out) that
+doesn't use a staff email — confirmed with the user first whether this should loosen the rule generally or
+stay a one-off: **one-off only**, the domain rule stays in place for every other account. New column
+`users.consultant_domain_exception` (migration `202_consultant_role_exception.sql`), off by default. An admin
+(Super Admin only — same restriction as changing a role at all) ticks a new "Allow consultant role for this
+account" checkbox in the Members & Users editor (shown only for non-`@unplugnews.com` accounts, so it's never
+a distraction on the accounts that don't need it), which can be set in the same request as the role change or
+beforehand — either order works. The domain check in `PATCH /admin/users/:id` now passes if either the email
+matches, or this flag is already true, or is being set true in the same request.
+
+**Tests.** 5 new tests in `usersAdmin.test.js` (added alongside the existing domain-restriction tests rather
+than a new file, since they cover the same code path): refused by default even with the column present,
+granted via the same request as the role change, granted via an earlier request then the role change
+succeeding later, a staff token refused (Super-Admin-only), and `GET /admin/users` carrying the flag. Full
+suite: **2311 passing, 0 failing.**
+
