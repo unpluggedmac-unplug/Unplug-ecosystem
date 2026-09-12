@@ -19,11 +19,18 @@ function intId(value) {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+function requireMember(req, res, next) {
+  if (!req.user || req.user.role !== 'member') {
+    return res.status(403).json({ error: 'Growth Applications are available to member accounts only.' });
+  }
+  return next();
+}
+
 // Growth Application media can contain personal/confidential material. It is
 // stored in the PRIVATE R2 bucket and catalogued against the owning application.
 // Production fails closed if private R2 storage is unavailable; there is no
 // Render-local fallback for these files.
-router.post('/', requireAuth, (req, res) => {
+router.post('/', requireAuth, requireMember, (req, res) => {
   if (!uploads.r2PrivateConfigured) {
     return res.status(503).json({
       error: 'Private permanent storage is unavailable right now. Please try again later.',
@@ -57,7 +64,7 @@ router.post('/', requireAuth, (req, res) => {
 
     try {
       const application = await pool.query(
-        `SELECT id, status, form_version_id, applicant_type
+        `SELECT id, status, form_version_id, applicant_type, external_sharing_allowed
            FROM growth_applications WHERE id=$1 AND user_id=$2`,
         [applicationId, req.user.id],
       );
@@ -133,7 +140,7 @@ router.post('/', requireAuth, (req, res) => {
 
 // Members may retrieve only their own Growth uploads. Staff/admin retrieval is
 // intentionally handled through the Growth Admin sensitive surface instead.
-router.get('/:uploadId', requireAuth, async (req, res, next) => {
+router.get('/:uploadId', requireAuth, requireMember, async (req, res, next) => {
   const uploadId = intId(req.params.uploadId);
   if (!uploadId) return res.status(400).json({ error: 'Invalid upload id.' });
   try {
