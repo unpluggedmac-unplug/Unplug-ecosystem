@@ -6,6 +6,7 @@ const ALL_PERMISSIONS = [
   'approvals.view', 'approvals.manage',
   'pages.manage', 'media.manage',
   'members.view', 'members.manage',
+  'agreements.view', 'agreements.manage',
   'events.manage', 'competitions.manage', 'directory.manage',
   'advertising.manage', 'finance.view', 'finance.manage',
   'marketing.manage', 'crm.manage',
@@ -43,6 +44,12 @@ function permissionForRequest(req) {
   if (/\/admin\/business-reports/.test(path)) return 'analytics.view';
   if (/\/analytics|\/analytics-reports/.test(path)) return 'analytics.view';
   if (/\/email|\/newsletter|\/bulk-email|\/social/.test(path)) return 'marketing.manage';
+
+  // Agreement Generator is intentionally separate from the generic form
+  // builder. Staff only reaches it when Super Admin has granted the explicit
+  // Agreement permission; individual records add an assignment check as well.
+  if (/\/agreement-forms(?:\/|$)/.test(path)) return read ? 'agreements.view' : 'agreements.manage';
+
   if (/\/crm|\/inquiries|\/forms/.test(path)) return 'crm.manage';
   if (/\/ad-banners|\/placements|\/sponsors/.test(path)) return 'advertising.manage';
   if (/\/competitions|\/top10|\/votes|\/polls|\/badges|\/participation/.test(path)) return 'competitions.manage';
@@ -98,6 +105,7 @@ async function hasPermission(userId, permission) {
     'content.view': 'content.manage',
     'approvals.view': 'approvals.manage',
     'members.view': 'members.manage',
+    'agreements.view': 'agreements.manage',
     'finance.view': 'finance.manage',
   };
   return implied[permission] ? access.permissions.includes(implied[permission]) : false;

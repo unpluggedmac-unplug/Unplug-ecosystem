@@ -653,6 +653,8 @@ router.get('/consultant/clients', requireRole('consultant'), async (req, res, ne
       `SELECT u.id AS user_id,
               COALESCE(u.full_name, SPLIT_PART(u.email, '@', 1)) AS name,
               u.email,
+              u.created_at AS joined_at,
+              (SELECT COUNT(*) FROM payments p2 WHERE p2.user_id = u.id AND p2.status = 'confirmed')::int AS services_used_count,
               ga.id AS application_id,
               ga.applicant_type,
               ga.status,
@@ -660,9 +662,9 @@ router.get('/consultant/clients', requireRole('consultant'), async (req, res, ne
               ga.submitted_at,
               ga.updated_at
          FROM (
-           SELECT DISTINCT p.user_id
-             FROM payments p
-            WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+           -- Direct standing link (users.sales_consultant_id), not derived
+           -- from payment history — see 201_member_consultant_link.sql.
+           SELECT id AS user_id FROM users WHERE sales_consultant_id = $1
          ) referred
          JOIN users u ON u.id = referred.user_id
          LEFT JOIN LATERAL (

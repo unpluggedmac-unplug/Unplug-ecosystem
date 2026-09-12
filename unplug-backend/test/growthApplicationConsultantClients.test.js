@@ -50,12 +50,18 @@ async function makeConsultant(name, userId) {
   );
   return r.rows[0].id;
 }
+// "Confirmed payment referred by this consultant" also updates the payer's
+// standing sales_consultant_id — a real confirmed payment does this via
+// applyPaymentEffectTracked (payments.js). The clients queries read that
+// standing link now, not payment history directly, so this fixture sets
+// both to accurately simulate what a real confirmation does.
 async function makeConfirmedPayment(payerUserId, consultantId) {
   await pool.query(
     `INSERT INTO payments (user_id, amount, method, gateway_reference, status, linked_type, linked_id, sales_consultant_id, confirmed_at)
      VALUES ($1, 500, 'eft', $2, 'confirmed', 'profile_package', 1, $3, now())`,
     [payerUserId, `ref-${_nextRef++}`, consultantId]
   );
+  await pool.query('UPDATE users SET sales_consultant_id = $1 WHERE id = $2', [consultantId, payerUserId]);
 }
 async function makeGrowthApplication(userId, status) {
   await pool.query(

@@ -3103,3 +3103,55 @@ feed, the same through the member-dashboard feed, a blank label returns `null` r
 a previously-set label back to blank actually clears it (not just ignored). Full suite: **2299 passing, 0
 failing.**
 
+## 2026-09-12 — A standing member ↔ representative link, independent of payment history
+
+Direct request: admin should be able to link any member to a representative, see each representative's full
+member list, and see — for the whole member base — who is linked to whom. Confirmed with the user first: one
+combined relationship (a member has at most one representative, set either automatically by a referred
+payment or manually by admin — whichever happened most recently wins), and "activity" means what's already
+built (Growth Application status, signed agreements) plus service/feature usage.
+
+**Before this, "client" was entirely derived**: the only way to know if a member belonged to a consultant was
+to check whether they had a *confirmed payment* with that `sales_consultant_id` attached — real, but
+indirect, with no way to link someone who hadn't paid yet or fix a wrong attribution. New column
+`users.sales_consultant_id` (migration `201_member_consultant_link.sql`) is now the single, direct, standing
+answer everywhere.
+
+**Two ways it gets set, by design.** `PATCH /admin/users/:id` accepts `salesConsultantId` (existing
+consultant id, or `null` to unlink) — reusing the account-editing endpoint rather than inventing a separate
+one, since this is exactly what it already does with role/suspension/free-publishing. Separately,
+`applyPaymentEffectTracked` in `payments.js` — the one function every confirmed payment passes through
+regardless of gateway, manual EFT, or which route (`payments.js`/`orders.js`) triggered it — now also sets
+this column whenever the confirmed payment carries a `sales_consultant_id`. A later payment to a *different*
+consultant updates the link again: the freshest confirmed referral always wins over a stale manual
+assignment, matching the "one combined relationship" decision.
+
+**Every "clients" query updated to match.** The four existing per-consultant client lists
+(`GET /growth-application/consultant/clients`, its admin equivalent, `GET /agreement-forms/consultant/clients`,
+its admin equivalent) all previously derived their client set from `payments.sales_consultant_id` directly;
+all four now read `users.sales_consultant_id` instead — the exact same shape of subquery, just sourced from
+the standing link. A manually-linked member with zero payment history now correctly appears as a client
+everywhere a consultant's roster is shown. Commission and revenue calculations were deliberately **not**
+touched — those correctly stay payment-derived, since they're inherently transactional.
+
+**Activity, extended per the decision above.** Both growth-application clients queries (self + admin) now
+also return `joined_at` and a `services_used_count` (confirmed payment count) per client — surfaced as new
+columns in the existing "My Clients" (member dashboard) and "Their Members" (admin commission-report panel,
+renamed from "Clients' Growth Applications" now that it shows the full roster, not just growth-application
+activity) tables.
+
+**Admin UI.** The Members & Users list (`unplug-admin-dashboard.html`) now shows each member's linked
+representative inline, with a "link"/"change" action that lists real active representatives and lets admin
+pick one (or unlink) — same `prompt()`-based numbered-list pattern already used for consultant-account
+linking elsewhere on this page, for consistency rather than introducing a new interaction style.
+
+**Tests.** New file `consultantMemberLinking.test.js`, 7 tests: manual link with zero payment involved,
+rejecting an unknown consultant id, unlinking back to null, `GET /admin/users` returning the linked name,
+a manually-linked member with no payments still appearing as a client, a real EFT confirmation
+(`PATCH /payments/:id/confirm-eft`) setting the link automatically end-to-end, and a second payment to a
+different consultant correctly moving the link. Two earlier test files
+(`growthApplicationConsultantClients.test.js`, `representativeGaps.test.js`) had their
+`makeConfirmedPayment` fixtures updated to also set the standing link — they were simulating "confirmed
+payment" via a raw insert that bypassed the code path where this now happens, so they'd have silently
+stopped finding their expected clients otherwise. Full suite: **2306 passing, 0 failing.**
+

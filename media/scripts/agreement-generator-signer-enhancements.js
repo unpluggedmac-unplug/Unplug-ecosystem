@@ -1,0 +1,19 @@
+(function(){
+  'use strict';
+  if(location.pathname.indexOf('unplug-agreement-generator.html')===-1)return;
+  const token=new URLSearchParams(location.search).get('token')||'';
+  if(!token)return;
+  const API=String(window.UNPLUG_RUNTIME_API||'https://unplug-ecosystem.onrender.com').replace(/\/$/,'');
+  const AUTH=localStorage.getItem('accessToken')||'';
+  async function status(){const r=await fetch(API+'/agreement-forms/generator/access/'+encodeURIComponent(token),{headers:AUTH?{Authorization:'Bearer '+AUTH}:{}});if(!r.ok)return null;return r.json().catch(()=>null);}
+  function apply(data){if(!data||!data.agreement)return;const a=data.agreement,signer=data.signer||{};
+    const name=document.getElementById('signerName'),email=document.getElementById('signerEmail'),mobile=document.getElementById('mobile'),capacity=document.getElementById('capacity');
+    if(name&&!name.value&&signer.legalName)name.value=signer.legalName;if(email&&!email.value&&signer.email)email.value=signer.email;if(mobile&&!mobile.value&&signer.mobile)mobile.value=signer.mobile;if(capacity&&!capacity.value&&signer.capacity)capacity.value=signer.capacity;
+    let badge=document.getElementById('agreementSignerBadge');if(!badge&&document.getElementById('agreementForm')){badge=document.createElement('div');badge.id='agreementSignerBadge';badge.className='alert ok';badge.style.marginTop='12px';document.getElementById('agreementForm').prepend(badge);}if(badge)badge.textContent=`Signer: ${signer.legalName||'Party B'} · ${String(signer.role||'primary').replaceAll('_',' ')}${signer.required?' · required signer':''}`;
+    if(a.contentLocked&&!a.locked){document.querySelectorAll('[data-field-key] input,[data-field-key] textarea,[data-field-key] select,[data-item-note],[data-item-file],[data-upload]').forEach(el=>el.disabled=true);const save=document.getElementById('saveDraft');if(save)save.disabled=true;let warning=document.getElementById('agreementContentFrozen');if(!warning&&document.getElementById('agreementForm')){warning=document.createElement('div');warning.id='agreementContentFrozen';warning.className='alert';warning.innerHTML='<strong>Agreement details are frozen.</strong> Another required signer has already signed this exact content. You can review it, verify your contact details and add your own signature, but the shared agreement details can no longer be changed.';document.getElementById('agreementForm').prepend(warning);}}
+    if(Array.isArray(data.signers)&&data.signers.length){let box=document.getElementById('agreementSignerProgress');if(!box&&document.getElementById('agreementForm')){box=document.createElement('div');box.id='agreementSignerProgress';box.className='section';document.getElementById('agreementForm').appendChild(box);}if(box)box.innerHTML='<h2>Signing progress</h2>'+data.signers.map(s=>`<div class="check"><span>${s.signed?'✅':'🟡'}</span><span>${String(s.legalName||'Party B signer').replace(/[&<>]/g,'')} · ${String(s.role||'primary').replaceAll('_',' ')}${s.required?' · required':''}</span></div>`).join('');}
+    if(data.delivery&&data.delivery.manualDownloadEmail){let m=document.getElementById('manualDeliveryNote');if(!m&&document.getElementById('agreementForm')){m=document.createElement('div');m.id='manualDeliveryNote';m.className='alert';m.textContent='Delivery instruction: after completion, download the signed PDF and email it to the Unplug address provided by your agreement administrator.';document.getElementById('agreementForm').appendChild(m);}}
+  }
+  let busy=false;async function refresh(){if(busy)return;busy=true;try{apply(await status());}catch(_){}finally{busy=false;}}
+  const observer=new MutationObserver(()=>setTimeout(refresh,80));observer.observe(document.documentElement,{subtree:true,childList:true});window.addEventListener('load',refresh);setTimeout(refresh,250);
+})();

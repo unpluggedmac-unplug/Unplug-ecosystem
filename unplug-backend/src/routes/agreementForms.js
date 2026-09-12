@@ -814,9 +814,9 @@ router.get('/consultant/clients', requireRole('consultant'), async (req, res, ne
                 ) FILTER (WHERE s.id IS NOT NULL), '[]'
               ) AS submissions
          FROM (
-           SELECT DISTINCT p.user_id
-             FROM payments p
-            WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+           -- Direct standing link (users.sales_consultant_id), not derived
+           -- from payment history — see 201_member_consultant_link.sql.
+           SELECT id AS user_id FROM users WHERE sales_consultant_id = $1
          ) referred
          JOIN users u ON u.id = referred.user_id
          LEFT JOIN agreement_submissions s ON s.user_id = referred.user_id

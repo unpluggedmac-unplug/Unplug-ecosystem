@@ -23,11 +23,7 @@ export async function onRequest({ env, request }) {
     'window.UNPLUG_RUNTIME_CONFIG_ERROR=' + JSON.stringify(badStaging ? 'Staging frontend is not connected to an isolated staging API.' : '') + ';'
   ];
 
-  // Account/session controls and the Terms-to-checkout return flow are shared
-  // across every user-facing page. Loading them here means standalone portals
-  // (checkout, voting, forms, etc.) cannot accidentally omit Sign In / Sign Out
-  // or strand a customer on the policy page. The script self-excludes admin
-  // workspaces and pages that already own richer account controls.
+  // Shared account/session controls from the staging account-anywhere release.
   lines.push(
     '(function(){',
     ' if (window.__unplugAccountToolsRequested) return;',
@@ -39,25 +35,15 @@ export async function onRequest({ env, request }) {
     ' (document.head||document.documentElement).appendChild(s);',
     '})();',
     '',
-    '// Standalone portals can keep session-dependent state in local variables and',
-    '// can already have private order/payment content rendered in the DOM. After',
-    '// the shared account control signs IN or OUT, reload that SAME portal so its',
-    '// complete page state is rebuilt from the new session immediately. The richer',
-    '// magazine, Member Dashboard and admin workspaces own their own auth lifecycle.',
     '(function(){',
     ' window.addEventListener("unplug:auth-changed",function(){',
     '  var p=String(location.pathname||"").toLowerCase();',
-    '  if (p.indexOf("unplug-admin-dashboard")!==-1 || p.indexOf("unplug-agreements-admin")!==-1 || p.indexOf("unplug-member-dashboard")!==-1 || p.indexOf("unplug-magazine")!==-1 || p==="/" || p.slice(-10)==="/index.html") return;',
+    '  if (p.indexOf("unplug-admin-dashboard")!==-1 || p.indexOf("unplug-agreements-admin")!==-1 || p.indexOf("unplug-agreement-generator-admin")!==-1 || p.indexOf("unplug-member-dashboard")!==-1 || p.indexOf("unplug-magazine")!==-1 || p==="/" || p.slice(-10)==="/index.html") return;',
     '  location.reload();',
     ' });',
-    '})();'
-  );
-
-  // The Agreement builder is a separate admin workspace so the very large
-  // Control Centre stays stable. Inject one ordinary same-origin link into the
-  // Marketing & CRM group. It has no data-section attribute, so the existing
-  // section router correctly treats it as normal navigation.
-  lines.push(
+    '})();',
+    '',
+    '// Standalone Agreement Generator Control Centre module.',
     '(function(){',
     ' function addAgreementAdminLink(){',
     '  if (location.pathname.indexOf("unplug-admin-dashboard.html") === -1) return;',
@@ -65,20 +51,28 @@ export async function onRequest({ env, request }) {
     '  var group=document.querySelector(".nav-group[data-group=marketing] .nav-group-items");',
     '  if (!group) return;',
     '  var a=document.createElement("a");',
-    '  a.href="/unplug-agreements-admin.html";',
-    '  a.textContent="Agreements";',
+    '  a.href="/unplug-agreement-generator-admin.html";',
+    '  a.textContent="Agreement Generator";',
     '  a.setAttribute("data-unplug-agreements-link","true");',
     '  group.appendChild(a);',
     ' }',
     ' if (document.readyState==="loading") document.addEventListener("DOMContentLoaded",addAgreementAdminLink,{once:true}); else addAgreementAdminLink();',
     '})();',
     '',
-    '// Agreement admin exports/previews are protected API endpoints. Browsers',
-    '// do not attach a bearer token to a plain href/window.open request, so',
-    '// intercept these two controls in capture phase and fetch the blob with',
-    '// the existing admin token instead. This preserves server-side auth.',
+    '(function(){',
+    ' function add(src,key){ if(document.querySelector("script[data-agreement-module=\""+key+"\"]")) return; var s=document.createElement("script"); s.src=src; s.defer=true; s.setAttribute("data-agreement-module",key); (document.head||document.documentElement).appendChild(s); }',
+    ' if(location.pathname.indexOf("unplug-agreement-generator-admin.html")!==-1) add("/media/scripts/agreement-generator-admin-enhancements.js?v=20260912-1","admin");',
+    ' if(location.pathname.indexOf("unplug-agreement-generator.html")!==-1) add("/media/scripts/agreement-generator-signer-enhancements.js?v=20260912-1","signer");',
+    '})();',
+    '',
+    '// The older Agreement Forms admin page remains available for backward-compatible',
+    '// template preview/export controls. Rename its confusing Questions control and',
+    '// fetch protected blobs with the existing bearer token.',
     '(function(){',
     ' if (location.pathname.indexOf("unplug-agreements-admin.html") === -1) return;',
+    ' function renameQuestions(){ document.querySelectorAll("button,a").forEach(function(el){ if(/^\\s*Questions\\s*$/i.test(el.textContent||"")) el.textContent="Edit Form"; }); }',
+    ' if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",renameQuestions,{once:true}); else renameQuestions();',
+    ' new MutationObserver(renameQuestions).observe(document.documentElement,{childList:true,subtree:true});',
     ' document.addEventListener("click", async function(e){',
     '  var preview=e.target && e.target.closest ? e.target.closest("#preview") : null;',
     '  var csv=e.target && e.target.closest ? e.target.closest("#csv") : null;',
