@@ -62,9 +62,13 @@ Cloudflare Pages staging project: `unplug-staging` / branch `staging-control-cen
 
 Public production URL: `https://www.unplugnews.com`
 
-Current immutable staging frontend candidate:
+Last independently validated pre-guard staging artifact:
 `https://b3d195ec.unplug-staging.pages.dev` at
-`9e125c67f021bc629b22df3fffb791b106863f57`
+`9e125c67f021bc629b22df3fffb791b106863f57`.
+
+Resolve the active staging head from `staging-control-centre` and its immutable
+Cloudflare check URL at the start of every release session. Never infer it from
+this historical evidence or from a mutable alias.
 
 Do not use `https://staging-control-centre.unplug-magazine.pages.dev`; it is
 not a valid staging target and returns 404.
@@ -132,7 +136,11 @@ Cloudflare Production configuration was corrected on 2026-09-12 to:
 
 Production `main` commit `55f8a50` was redeployed successfully after that configuration change.
 
-**Verification of the newly rebuilt public artifact is now mandatory and in progress.** Do not assume the incident is fixed merely because Cloudflare reports Success.
+At the production baseline `55f8a50`, the rebuilt public artifact was proven to
+contain zero executable inline scripts and its Welcome flow, menu, navigation,
+public data routes and shared Site Buttons source passed browser/runtime checks.
+The repair is incorporated into the staging release candidate, but the wider
+release remains blocked until the exact final candidate passes every gate below.
 
 Do NOT weaken CSP to make raw source execute. Fix the artifact/output configuration instead.
 
@@ -181,12 +189,13 @@ A PostgreSQL-compatible replacement is the lower-risk path if/when the database 
 
 ## Release-gatekeeper state
 
-Current overall state: **DEGRADED / BLOCKED — public artifact verification in progress**
+Current overall state: **BLOCKED — exact staging release certification in progress**
 
 Do not issue VERIFIED LIVE while any of the following remain unresolved:
 
-- newly rebuilt production homepage has not yet been proven to serve `dist`
-- menu/buttons/popups are not proven functional in the actual public browser
+- the exact current staging SHA has not passed CI, Cloudflare artifact, Render,
+  public API and browser verification as one candidate
+- a fresh production rollback checkpoint has not been taken for that candidate
 - remaining production data/media failures are not reconciled against legacy Supabase dependencies and quota limitations
 - authenticated critical workflows remain unverified after the frontend artifact fix
 
@@ -202,14 +211,16 @@ Diagnostic workflow:
 
 ## Immediate execution order
 
-1. Verify the newly rebuilt public Production artifact actually serves `dist` with 0 executable inline scripts.
-2. Re-run public interaction/runtime smoke: menu, buttons, popups, data sections, login/signup CTA, member/admin shells.
-3. Check production logs and new CSP report timestamps after verification.
-4. Reconcile broken data/media against remaining Supabase URLs and quota-limited legacy services.
-5. Migrate historical Supabase Storage objects/references to R2 in verified batches.
-6. Verify authenticated workflows, R2 upload, EFT/payment-proof upload and Growth journey.
-7. Re-run production route/feature inventory.
-8. Only release-gatekeeper may issue `VERIFIED LIVE`.
+1. Resolve and record the exact current staging SHA.
+2. Require green build-contract and backend CI for that SHA.
+3. Verify its Cloudflare marker, zero executable inline scripts, staging ribbon,
+   Welcome flow, menus, navigation, shared buttons and public data routes.
+4. Deploy that exact SHA to Render staging and verify readiness, public APIs and logs.
+5. Take a fresh production rollback checkpoint before promotion.
+6. Promote only that SHA through review, then verify Render and Cloudflare production.
+7. Re-run the production route/feature inventory and authenticated critical workflows.
+8. Continue the Supabase-to-Cloudflare migration in verified, reversible batches.
+9. Only release-gatekeeper may issue `VERIFIED LIVE`.
 
 ## Completion rule
 
