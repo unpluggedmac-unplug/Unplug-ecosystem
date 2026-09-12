@@ -3039,3 +3039,50 @@ into the total). Full suite: **2288 passing, 0 failing** — 10 new here plus wh
 other work merged in the meantime (Coming Soon Mode, an admin session-handoff fix); the 1 pre-existing test
 whose text-match needed updating for the rename is fixed, not counted as new.
 
+## 2026-09-12 — Agreement Forms: templates, controlled placement, and a real visual redesign
+
+Requested directly: a template an agreement can be created *from* (so new agreements start from a known-good
+standard rather than blank), and admin control over where a real "sign this agreement" button appears on the
+site. Both turned out to be **half-built already** — real database schema, real backend logic, zero UI path
+to either — confirmed before writing anything, the same "verify what's actually there" discipline as every
+other feature this session.
+
+**Templates.** `agreement_templates`/`template_fields` (with 8 seeded built-ins — Sponsorship, Media
+Partnership, Freelance Service, etc.) and the copy-through logic in `POST /agreement-forms/admin` (accepts a
+`templateId`, copies the template's rules/terms/metadata as defaults and its fields onto the new agreement)
+already existed and already worked — the "+ New agreement" button just never sent `templateId`, only ever
+prompting for a bare name. Fixed by extending that button's existing `prompt()`-based flow (matching this
+page's established interaction style, not introducing a new modal system) to first list the real templates
+from the already-existing `GET /admin/templates/list` endpoint, or blank. Verified live: creating from
+"Sponsorship" brings across all 8 of its fields.
+
+**Controlled placement, not free text.** `agreement_forms.public_pages` + the admin's "Public placements"
+input + the feed endpoint (`GET /agreement-forms?page=X`) all existed and worked as *storable, queryable*
+data — but zero code anywhere on the actual site ever fetched that feed. Setting it changed nothing visible.
+Two decisions here, both deliberate: (1) `sanitizePages()` now enforces a real allow-list (currently just
+`checkout`) instead of accepting any string — the same safety pattern Growth Application's
+`growth_application_placements` already uses, so admin can never select a page nothing renders on; (2) built
+the actual consumer — `unplug-checkout.html` now fetches `GET /agreement-forms?page=checkout` and renders a
+real "View & sign agreement" card for anything active, published, and placed there. The free-text input in
+`unplug-agreements-admin.html` became a plain checkbox ("Show a 'Sign agreement' button on Checkout").
+Homepage and Directory are real candidates for the same treatment later — both live inside the large
+`unplug-magazine.html` SPA rather than a standalone file, which is more investigation than this pass's scope
+— logged here rather than silently dropped.
+
+**Visual redesign.** `unplug-agreements-admin.html` linked neither `/unplug-tokens.css` nor the site's Google
+Fonts (Playfair Display / Inter) — it defined its own unrelated colour palette (`--hot:#ff2f00`,
+`--paper:#ebe9e9`, Arial body text) entirely disconnected from the rest of the Control Centre. That's the
+whole reason it read as a different, less polished tool next to `unplug-admin-dashboard.html`. Fixed by
+linking the real tokens/fonts and rewriting the page's `<style>` block to the same visual vocabulary as the
+main dashboard — flat panels with hairline borders (no border-radius/shadow), Playfair Display headings,
+`--red`/`--ink`/`--cream`/`--slate`/`--green` tokens, the same active-row/pill/button treatment. Zero HTML
+structure or `<script>` logic touched — every `id`/class the JS depends on is unchanged; only how it looks.
+Confirmed `unplug-growth-applications-admin.html` was never affected by this — it already linked the shared
+tokens correctly, which is exactly why it never looked out of place.
+
+**Tests.** New file `agreementTemplatesAndPlacements.test.js`, 6 tests: template listing, create-from-template
+field/metadata copy-through, create-without-template still blank as before, `sanitizePages` allow-list
+enforcement (checkout kept, `homepage`/an arbitrary string dropped), the `page=checkout` feed returning only
+active+published+placed agreements (not drafts, not agreements placed elsewhere), and no-`page=` returning
+empty rather than everything. Full suite: **2295 passing, 0 failing.**
+
