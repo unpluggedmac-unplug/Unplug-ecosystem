@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..', '..');
 const read = (...parts) => fs.readFileSync(path.join(ROOT, ...parts), 'utf8');
@@ -60,6 +61,24 @@ test('runtime Control Centre navigation and enhancement scripts point to Agreeme
   assert.match(runtime, /Edit Form/);
   assert.ok(fs.existsSync(path.join(ROOT, 'unplug-agreements-admin.html')));
   assert.ok(fs.existsSync(path.join(ROOT, 'unplug-agreement.html')));
+});
+
+test('runtime-config emits syntactically valid browser JavaScript for staging', async () => {
+  const source = read('functions', 'runtime-config.js')
+    .replace('export async function onRequest', 'async function onRequest')
+    .concat('\n;this.__onRequest = onRequest;');
+  const context = { URL, Response };
+  vm.createContext(context);
+  new vm.Script(source, { filename: 'runtime-config.js' }).runInContext(context);
+  const response = await context.__onRequest({
+    env: { UNPLUG_ENV: 'staging' },
+    request: new Request('https://unplug-staging.pages.dev/runtime-config'),
+  });
+  const browserJavaScript = await response.text();
+  assert.doesNotThrow(
+    () => new vm.Script(browserJavaScript, { filename: 'generated-runtime-config.js' }),
+    'the live /runtime-config response must be valid browser JavaScript'
+  );
 });
 
 test('migration is additive: it creates lifecycle structures but never truncates or drops signed agreement data', () => {
