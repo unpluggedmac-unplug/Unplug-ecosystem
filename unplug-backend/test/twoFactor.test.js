@@ -34,6 +34,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-2fa-'));
 const port = 38400 + (process.pid % 300); // bases are 400 apart so ranges cannot overlap
 
 const ADMIN_ID = 441001;
+let enrolmentCode;
 
 async function login(email, password, twoFactorCode) {
   const res = await fetch(baseUrl + '/auth/login', {
@@ -114,7 +115,8 @@ test('A PROVED CODE SWITCHES IT ON AND HANDS BACK RECOVERY CODES', async () => {
   const r = await pool.query('SELECT two_factor_secret FROM users WHERE id = $1', [ADMIN_ID]);
   const secret = r.rows[0].two_factor_secret;
 
-  const result = await tf.confirmEnrolment(ADMIN_ID, await otplib.generate({ secret }));
+  enrolmentCode = await otplib.generate({ secret });
+  const result = await tf.confirmEnrolment(ADMIN_ID, enrolmentCode);
   assert.equal(result.ok, true);
   assert.equal(await tf.isEnabled(ADMIN_ID), true);
   assert.equal(result.recoveryCodes.length, tf.RECOVERY_CODE_COUNT);
@@ -171,7 +173,6 @@ test('THE CODE USED TO ENROL CANNOT THEN BE USED TO SIGN IN', async () => {
   // Not a quirk — the correct behaviour, and worth pinning. That code has been
   // used once already, to prove the app worked. Somebody who saw it during
   // setup must not be able to sign in with it seconds later.
-  const enrolmentCode = await currentCode();
   const res = await login('admin2fa@test.com', 'right-password', enrolmentCode);
   assert.equal(res.status, 401);
   assert.match(res.body.error, /already been used/i);

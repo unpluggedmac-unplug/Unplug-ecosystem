@@ -1,7 +1,7 @@
 'use strict';
 
 // The legacy production builder has an explicit page allow-list. Keep Growth
-// packaging isolated here so these new pages cannot silently disappear from
+// packaging isolated here so Growth pages cannot silently disappear from
 // Cloudflare Pages output while the broader builder remains stable.
 const fs = require('fs');
 const path = require('path');
@@ -11,8 +11,24 @@ const esbuild = require('esbuild');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'dist');
 const ASSETS = path.join(OUT, 'assets');
-const PAGES = ['unplug-growth-application.html', 'unplug-growth-applications-admin.html'];
-const COPY = ['growth-integration.js'];
+
+// Keep legacy pages in the artifact as a rollback path during staged rollout.
+// V2 links point only to the V2 pages; legacy pages are not deleted here.
+const PAGES = [
+  'unplug-growth-application.html',
+  'unplug-growth-applications-admin.html',
+  'unplug-growth-application-v2.html',
+  'unplug-growth-applications-admin-v2.html',
+];
+const COPY = [
+  'growth-integration.js',
+  'growth-private-upload-helper.js',
+  'growth-admin-builder-helper.js',
+];
+const RUNTIME_ISOLATED_V2 = new Set([
+  'unplug-growth-application-v2.html',
+  'unplug-growth-applications-admin-v2.html',
+]);
 
 function hash(content) {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 10);
@@ -25,11 +41,41 @@ function writeAsset(base, ext, content) {
   return `/assets/${name}`;
 }
 
+function injectRuntimeIsolation(file, html) {
+  if (!RUNTIME_ISOLATED_V2.has(file)) return html;
+
+  // Growth V2 must never fall through to the production API when it is served
+  // from Cloudflare staging/preview. The host-scoped guard provides an
+  // independent fail-closed staging API/ribbon before runtime-config; the
+  // normal runtime config and shared layer remain authoritative afterwards.
+  const guard = '<script src="/media/scripts/staging-runtime-guard.js"></script>';
+  if (!html.includes('src="/media/scripts/staging-runtime-guard.js"')) {
+    html = html.replace('<head>', `<head>\n  ${guard}`);
+  }
+  if (!html.includes('src="/runtime-config"')) {
+    html = html.replace(guard, `${guard}\n  <script src="/runtime-config"></script>`);
+  }
+  if (!html.includes('src="/unplug-shared.js"')) {
+    html = html.replace('<script>', '<script src="/unplug-shared.js"></script>\n<script>');
+  }
+
+  for (const required of [
+    'src="/media/scripts/staging-runtime-guard.js"',
+    'src="/runtime-config"',
+    'src="/unplug-shared.js"',
+  ]) {
+    if (!html.includes(required)) throw new Error(`Growth V2 runtime isolation injection failed: ${file} missing ${required}`);
+  }
+  return html;
+}
+
 async function buildPage(file) {
   const src = path.join(ROOT, file);
   if (!fs.existsSync(src)) throw new Error(`Missing Growth page: ${file}`);
   let html = fs.readFileSync(src, 'utf8');
   const base = file.replace(/\.html$/, '');
+
+  html = injectRuntimeIsolation(file, html);
 
   let styleIndex = 0;
   for (const match of [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]) {
@@ -52,6 +98,24 @@ async function buildPage(file) {
     });
     const url = writeAsset(`${base}-script${scriptIndex++}`, 'js', transformed.code);
     html = html.replace(match[0], `<script src="${url}" defer></script>`);
+  }
+
+  if (file === 'unplug-growth-applications-admin-v2.html') {
+    const helpers = [
+      '<script src="/growth-private-upload-helper.js" defer></script>',
+      '<script src="/growth-admin-builder-helper.js" defer></script>',
+    ].join('\n');
+    html = html.includes('</body>') ? html.replace('</body>', `${helpers}\n</body>`) : `${html}\n${helpers}`;
+  }
+
+  if (RUNTIME_ISOLATED_V2.has(file)) {
+    for (const required of [
+      'src="/media/scripts/staging-runtime-guard.js"',
+      'src="/runtime-config"',
+      'src="/unplug-shared.js"',
+    ]) {
+      if (!html.includes(required)) throw new Error(`Packaged Growth V2 page lost runtime isolation: ${file} missing ${required}`);
+    }
   }
 
   fs.writeFileSync(path.join(OUT, file), html);

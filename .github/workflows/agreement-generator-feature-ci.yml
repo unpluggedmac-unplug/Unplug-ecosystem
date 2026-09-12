@@ -1,0 +1,108 @@
+# Release gate for the reconciled Agreement Generator feature tree.
+name: Agreement Generator feature CI
+
+on:
+  push:
+    branches:
+      - feature/agreement-generator-20260912
+      - staging-control-centre
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agreement-generator-feature-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check Agreement Generator release source
+        run: |
+          node --check src/app.js
+          node --check src/middleware/agreementPaymentPolicy.js
+          node --check src/routes/agreementForms.js
+          node --check src/routes/agreementGenerator.js
+          node --check src/routes/agreementGeneratorSetup.js
+          node --check src/routes/agreementGeneratorTemplateAdmin.js
+          node --check src/routes/agreementGeneratorRecordAdmin.js
+          node --check src/routes/agreementGeneratorSignerUpload.js
+          node --check src/routes/agreementGeneratorPartyB.js
+          node --check src/utils/agreementGenerator.js
+          node --check src/utils/agreementGeneratorService.js
+          node --check src/utils/agreementDocument.js
+          node --check src/utils/staffPermissions.js
+          node --check test/agreementGenerator.test.js
+          node --check test/agreementGeneratorMultiSigner.test.js
+          node --check test/agreementGeneratorApprovedVersion.test.js
+          node --check test/agreementGeneratorRelease.test.js
+
+      - name: PostgreSQL migration sweep
+        run: node scripts/sweep-test-postgres.js
+
+      - name: Prepare text-search test fixture
+        run: node scripts/ensure-text-search.js
+
+      - name: Agreement Generator targeted tests
+        run: node --test --test-concurrency=1 test/agreementGeneratorRelease.test.js test/agreementGenerator.test.js test/agreementGeneratorMultiSigner.test.js test/agreementGeneratorApprovedVersion.test.js
+
+      - name: Full backend test suite
+        shell: bash
+        run: |
+          set -o pipefail
+          find test -name '*.test.js' -print0 | sort -z | xargs -0 node --test --test-concurrency=1 2>&1 | tee /tmp/unplug-ci-tests.log
+
+      - name: Upload backend failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agreement-generator-backend-failure-log
+          path: /tmp/unplug-ci-tests.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production frontend
+        run: npm run build
+
+      - name: Verify packaged Agreement Generator pages
+        run: |
+          test -f dist/unplug-agreement-generator.html
+          test -f dist/unplug-agreement-generator-admin.html
+          grep -q "runtime-config" dist/unplug-agreement-generator.html
+          grep -q "runtime-config" dist/unplug-agreement-generator-admin.html
