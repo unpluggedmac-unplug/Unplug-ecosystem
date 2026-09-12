@@ -6,6 +6,12 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(requireAuth);
+router.use((req, res, next) => {
+  if (req.user.role !== 'member') {
+    return res.status(403).json({ error: 'Growth Applications are available to member accounts only.' });
+  }
+  return next();
+});
 
 const asId = (v) => { const n = Number.parseInt(v, 10); return Number.isInteger(n) && n > 0 ? n : null; };
 const empty = (v) => v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length)
@@ -161,9 +167,15 @@ router.post('/applications/:id/withdraw',async(req,res,next)=>{
 });
 
 router.post('/information-requests/:id/respond',async(req,res,next)=>{
-  const requestId=asId(req.params.id),responseText=String(req.body?.responseText||'').trim(),responseData=obj(req.body?.responseData);if(!requestId||(!responseText&&!Object.keys(responseData).length))return res.status(400).json({error:'Provide a response.'});const client=await pool.connect();
-  try{await client.query('BEGIN');const q=await client.query(`SELECT q.id,q.application_id,q.status FROM growth_information_requests q JOIN growth_applications a ON a.id=q.application_id WHERE q.id=$1 AND a.user_id=$2 FOR UPDATE OF q`,[requestId,req.user.id]);if(!q.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Information request not found.'});}if(q.rows[0].status!=='open'){await client.query('ROLLBACK');return res.status(409).json({error:'This information request is no longer open.'});}
-    await client.query(`INSERT INTO growth_information_responses(request_id,application_id,response_text,response_data,responded_by) VALUES($1,$2,$3,$4::jsonb,$5)`,[requestId,q.rows[0].application_id,responseText||null,JSON.stringify(responseData),req.user.id]);await client.query(`UPDATE growth_information_requests SET status='responded',responded_at=now() WHERE id=$1`,[requestId]);await client.query(`UPDATE growth_applications SET status='under_review',updated_at=now() WHERE id=$1 AND status='information_requested'`,[q.rows[0].application_id]);await client.query('COMMIT');return res.status(201).json({responded:true});
+  const requestId=asId(req.params.id),responseText=String(req.body?.responseText||'').trim(),responseData=(req.body?.responseData&&typeof req.body.responseData==='object'&&!Array.isArray(req.body.responseData))?req.body.responseData:{};
+  if(!requestId||(!responseText&&!Object.keys(responseData).length))return res.status(400).json({error:'Provide a response.'});const client=await pool.connect();
+  try{await client.query('BEGIN');const q=await client.query(`SELECT q.id,q.application_id,q.status,a.status AS application_status FROM growth_information_requests q JOIN growth_applications a ON a.id=q.application_id WHERE q.id=$1 AND a.user_id=$2 FOR UPDATE OF q,a`,[requestId,req.user.id]);if(!q.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Information request not found.'});}if(q.rows[0].status!=='open'){await client.query('ROLLBACK');return res.status(409).json({error:'This information request is no longer open.'});}
+    await client.query(`INSERT INTO growth_information_responses(request_id,application_id,response_text,response_data,responded_by) VALUES($1,$2,$3,$4::jsonb,$5)`,[requestId,q.rows[0].application_id,responseText||null,JSON.stringify(responseData),req.user.id]);await client.query(`UPDATE growth_information_requests SET status='responded',responded_at=now() WHERE id=$1`,[requestId]);
+    if(q.rows[0].application_status==='information_requested'){
+      await client.query(`UPDATE growth_applications SET status='under_review',updated_at=now() WHERE id=$1`,[q.rows[0].application_id]);
+      await client.query(`INSERT INTO growth_status_history(application_id,from_status,to_status,changed_by,note) VALUES($1,'information_requested','under_review',$2,'Member responded to information request')`,[q.rows[0].application_id,req.user.id]);
+    }
+    await client.query('COMMIT');return res.status(201).json({responded:true});
   }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}
 });
 
