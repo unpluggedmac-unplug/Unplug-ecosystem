@@ -10261,6 +10261,8 @@ function userRowHtml(u) {
       </div>
       <div style="font-size:12px; color:#666;">
         ${escapeHtmlAdmin(u.email)} · joined ${new Date(u.created_at).toLocaleDateString()} · ${escapeHtmlAdmin(ownsLabel)}
+        · Representative: ${u.sales_consultant_name ? escapeHtmlAdmin(u.sales_consultant_name) : '<span style="color:var(--slate);">none</span>'}
+        ${canManageMembers ? `<a href="#" onclick="event.preventDefault(); linkUserConsultant(${u.id}, ${u.sales_consultant_id || 'null'})" style="margin-left:4px;">${u.sales_consultant_name ? 'change' : 'link'}</a>` : ''}
       </div>
     </div>
     <div class="grid-2">
@@ -10290,6 +10292,39 @@ function userRowHtml(u) {
       ? `<button class="reject" style="padding:5px 12px;" onclick="deleteUser(${u.id})">Delete account</button>`
       : `<button class="reject" disabled title="${escapeAttrAdmin(deleteTitle)}" style="padding:5px 12px; opacity:0.45; cursor:not-allowed;">Delete account</button>`}
   </div>`;
+}
+
+// Link (or change/unlink) which representative this member belongs to —
+// the single standing link everywhere else reads from (My Clients' Growth,
+// Clients' Agreements, the commission report). Independent of any specific
+// payment: an admin can set this before the member ever pays, and it's the
+// same field a confirmed referred payment updates automatically.
+async function linkUserConsultant(id, currentConsultantId) {
+  let consultants;
+  try {
+    consultants = (await api('/sales-consultants')).consultants || [];
+  } catch (e) { showToast(e.message, true); return; }
+  if (!consultants.length) { showToast('No representatives exist yet — add one in Representatives first.', true); return; }
+
+  const lines = consultants.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+  const unlinkOption = currentConsultantId ? '\n0. Unlink (no representative)' : '';
+  const pick = prompt(`Link this member to which representative?\n\n${lines}${unlinkOption}\n\nEnter a number:`);
+  if (pick === null) return;
+  if (pick.trim() === '0' && currentConsultantId) {
+    try {
+      await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ salesConsultantId: null }) });
+      showToast('Unlinked.');
+      loadUsers();
+    } catch (e) { showToast(e.message, true); }
+    return;
+  }
+  const chosen = consultants[Number(pick) - 1];
+  if (!chosen) { showToast('That was not one of the numbers listed.', true); return; }
+  try {
+    await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ salesConsultantId: chosen.id }) });
+    showToast(`Linked to ${chosen.name}.`);
+    loadUsers();
+  } catch (e) { showToast(e.message, true); }
 }
 
 async function toggleSuspendUser(id, currentlySuspended) {
@@ -10609,23 +10644,23 @@ const GROWTH_STATUS_LABELS_ADMIN = {
 async function loadConsultantGrowthClients(id, bodyEl) {
   const block = document.createElement('div');
   block.style.cssText = 'margin-top:22px;';
-  block.innerHTML = '<h4 style="font-size:13px; margin-bottom:8px;">Clients\' Growth Applications</h4><div class="loading-state">Loading…</div>';
+  block.innerHTML = '<h4 style="font-size:13px; margin-bottom:8px;">Their Members</h4><div class="loading-state">Loading…</div>';
   bodyEl.appendChild(block);
 
   try {
     const data = await api(`/admin/sales-consultants/${id}/growth-clients`);
-    const heading = '<h4 style="font-size:13px; margin-bottom:8px;">Clients\' Growth Applications</h4>';
+    const heading = '<h4 style="font-size:13px; margin-bottom:8px;">Their Members</h4>';
     const clients = data.clients || [];
     if (clients.length === 0) {
-      block.innerHTML = heading + '<div class="empty-state">No referred clients yet.</div>';
+      block.innerHTML = heading + '<div class="empty-state">No members linked to this representative yet.</div>';
       return;
     }
     const table = document.createElement('table');
-    table.innerHTML = '<tr><th>Client</th><th>Growth Application</th><th>Last activity</th></tr>';
+    table.innerHTML = '<tr><th>Member</th><th>Joined</th><th>Services used</th><th>Growth Application</th><th>Last activity</th></tr>';
     clients.forEach((c) => {
       const tr = document.createElement('tr');
       const statusText = c.application_id ? (GROWTH_STATUS_LABELS_ADMIN[c.status] || c.status) : 'Not started';
-      tr.innerHTML = `<td>${escapeHtmlAdmin(c.name)}<div style="color:var(--muted); font-size:11px;">${escapeHtmlAdmin(c.email)}</div></td><td>${statusText}</td><td>${c.updated_at ? new Date(c.updated_at).toLocaleDateString() : '—'}</td>`;
+      tr.innerHTML = `<td>${escapeHtmlAdmin(c.name)}<div style="color:var(--muted); font-size:11px;">${escapeHtmlAdmin(c.email)}</div></td><td>${c.joined_at ? new Date(c.joined_at).toLocaleDateString() : '—'}</td><td>${c.services_used_count || 0}</td><td>${statusText}</td><td>${c.updated_at ? new Date(c.updated_at).toLocaleDateString() : '—'}</td>`;
       table.appendChild(tr);
     });
     block.innerHTML = heading;

@@ -56,12 +56,16 @@ async function makeConsultant(name, userId) {
   );
   return r.rows[0].id;
 }
+// Also sets the payer's standing sales_consultant_id, matching what a real
+// confirmed payment does via applyPaymentEffectTracked (payments.js) — the
+// clients queries read that standing link now, not payment history.
 async function makeConfirmedPayment(payerUserId, consultantId) {
   await pool.query(
     `INSERT INTO payments (user_id, amount, method, gateway_reference, status, linked_type, linked_id, sales_consultant_id, confirmed_at)
      VALUES ($1,500,'eft',$2,'confirmed','profile_package',1,$3,now())`,
     [payerUserId, `ref-${_nextRef++}`, consultantId]
   );
+  await pool.query('UPDATE users SET sales_consultant_id = $1 WHERE id = $2', [consultantId, payerUserId]);
 }
 async function makeSignedAgreement(userId, title) {
   const agreement = await pool.query(
