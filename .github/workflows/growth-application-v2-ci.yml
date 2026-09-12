@@ -4,17 +4,27 @@ on:
   push:
     branches:
       - feature/growth-application-v2-20260912
+      - staging-control-centre
   pull_request:
     branches:
       - main
+      - staging-control-centre
     paths:
       - 'unplug-backend/db/migrations/202_growth_application_v2.sql'
+      - 'unplug-backend/db/migrations/203_growth_application_master_seed.sql'
+      - 'unplug-backend/db/migrations/204_growth_application_prefill.sql'
+      - 'unplug-backend/src/middleware/upload.js'
       - 'unplug-backend/src/routes/growthApplicationV2.js'
       - 'unplug-backend/src/routes/growthApplicationUpload.js'
       - 'unplug-backend/src/routes/growthAdmin.js'
       - 'unplug-backend/src/utils/staffPermissions.js'
       - 'unplug-backend/src/app.js'
       - 'unplug-backend/test/growthApplicationRelease.test.js'
+      - 'unplug-growth-application-v2.html'
+      - 'unplug-growth-applications-admin-v2.html'
+      - 'growth-integration.js'
+      - 'growth-private-upload-helper.js'
+      - 'scripts/build-growth-pages.js'
       - '.github/workflows/growth-application-v2-ci.yml'
   workflow_dispatch:
 
@@ -49,6 +59,7 @@ jobs:
       - name: Syntax check Growth V2 source
         run: |
           node --check src/app.js
+          node --check src/middleware/upload.js
           node --check src/routes/growthApplication.js
           node --check src/routes/growthApplicationV2.js
           node --check src/routes/growthApplicationUpload.js
