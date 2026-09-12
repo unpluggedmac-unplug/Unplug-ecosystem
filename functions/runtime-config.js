@@ -37,6 +37,19 @@ export async function onRequest({ env, request }) {
     ' s.async=false;',
     ' s.setAttribute("data-unplug-account-tools","true");',
     ' (document.head||document.documentElement).appendChild(s);',
+    '})();',
+    '',
+    '// A standalone portal can contain already-loaded private order/payment data.',
+    '// When its shared Sign Out control clears the token, reload that SAME portal',
+    '// so authenticated DOM state disappears too. The magazine shell and Member',
+    '// Dashboard own their own richer account/logout lifecycle and are excluded.',
+    '(function(){',
+    ' window.addEventListener("unplug:auth-changed",function(e){',
+    '  if (!e || !e.detail || e.detail.user) return;',
+    '  var p=String(location.pathname||"").toLowerCase();',
+    '  if (p.indexOf("unplug-admin-dashboard")!==-1 || p.indexOf("unplug-agreements-admin")!==-1 || p.indexOf("unplug-member-dashboard")!==-1 || p.indexOf("unplug-magazine")!==-1 || p==="/" || p.slice(-10)==="/index.html") return;',
+    '  location.reload();',
+    ' });',
     '})();'
   );
 
