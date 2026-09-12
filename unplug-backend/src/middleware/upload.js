@@ -11,7 +11,9 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB — generous for normal site photos, still bounded
-const MAX_GROWTH_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // Growth Application locked requirement
+const MAX_GROWTH_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // historical Growth image limit
+const MAX_GROWTH_FILE_SIZE_BYTES = 10 * 1024 * 1024; // Growth V2 images/documents
+const ALLOWED_GROWTH_FILE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -37,13 +39,26 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE_BYTES },
 });
 
-// Growth Application deliberately allows up to 10MB per image. Keep this
-// separate from the normal uploader so a Growth requirement does not silently
-// loosen every other image endpoint on the site.
+// Historical Growth image uploader retained for compatibility with the legacy
+// Growth page. V2 uses uploadGrowthFile below so CVs and company profiles can
+// be accepted without loosening the site-wide image uploader.
 const uploadGrowthImage = multer({
   storage,
   fileFilter,
   limits: { fileSize: MAX_GROWTH_IMAGE_SIZE_BYTES },
+});
+
+function growthFileFilter(req, file, cb) {
+  if (!ALLOWED_GROWTH_FILE_MIME_TYPES.includes(file.mimetype)) {
+    return cb(new Error(`File type ${file.mimetype} is not allowed. Upload a JPEG, PNG, WEBP or PDF.`));
+  }
+  cb(null, true);
+}
+
+const uploadGrowthFile = multer({
+  storage,
+  fileFilter: growthFileFilter,
+  limits: { fileSize: MAX_GROWTH_FILE_SIZE_BYTES },
 });
 
 // Magazine edition PDFs need their own uploader: the image filter above would
@@ -108,8 +123,8 @@ function verifySignature(file, allowedMimes) {
 }
 
 module.exports = {
-  upload, uploadGrowthImage, uploadPdf, uploadProof, verifySignature,
-  ALLOWED_MIME_TYPES, ALLOWED_PROOF_MIME_TYPES,
-  UPLOAD_DIR, MAX_FILE_SIZE_BYTES, MAX_GROWTH_IMAGE_SIZE_BYTES,
+  upload, uploadGrowthImage, uploadGrowthFile, uploadPdf, uploadProof, verifySignature,
+  ALLOWED_MIME_TYPES, ALLOWED_GROWTH_FILE_MIME_TYPES, ALLOWED_PROOF_MIME_TYPES,
+  UPLOAD_DIR, MAX_FILE_SIZE_BYTES, MAX_GROWTH_IMAGE_SIZE_BYTES, MAX_GROWTH_FILE_SIZE_BYTES,
   MAX_PDF_SIZE_BYTES, MAX_PROOF_SIZE_BYTES,
 };
