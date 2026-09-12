@@ -20,7 +20,11 @@ const PAGES = [
   'unplug-growth-application-v2.html',
   'unplug-growth-applications-admin-v2.html',
 ];
-const COPY = ['growth-integration.js', 'growth-private-upload-helper.js'];
+const COPY = [
+  'growth-integration.js',
+  'growth-private-upload-helper.js',
+  'growth-admin-builder-helper.js',
+];
 
 function hash(content) {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 10);
@@ -63,8 +67,11 @@ async function buildPage(file) {
   }
 
   if (file === 'unplug-growth-applications-admin-v2.html') {
-    const helper = '<script src="/growth-private-upload-helper.js" defer></script>';
-    html = html.includes('</body>') ? html.replace('</body>', `${helper}\n</body>`) : `${html}\n${helper}`;
+    const helpers = [
+      '<script src="/growth-private-upload-helper.js" defer></script>',
+      '<script src="/growth-admin-builder-helper.js" defer></script>',
+    ].join('\n');
+    html = html.includes('</body>') ? html.replace('</body>', `${helpers}\n</body>`) : `${html}\n${helpers}`;
   }
 
   fs.writeFileSync(path.join(OUT, file), html);
