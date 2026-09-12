@@ -18,6 +18,19 @@ test('Control Centre exposes the standalone Agreement Generator and exact requir
   assert.match(html, /Party A first, then Party B/);
 });
 
+test('advanced Control Centre enhancement exposes conditional rules, reordering, reminders and multi-signer administration', () => {
+  const js = read('media','scripts','agreement-generator-admin-enhancements.js');
+  assert.match(js, /Field order & conditional fields/);
+  assert.match(js, /Move up/);
+  assert.match(js, /Conditional clauses & exclusions/);
+  assert.match(js, /Reminder days/);
+  assert.match(js, /Party B signers/);
+  assert.match(js, /Guardian/);
+  assert.match(js, /Authorised business representative/);
+  assert.match(js, /Override reference/);
+  assert.match(js, /Assign staff/);
+});
+
 test('secure Party B browser flow includes save/resume, OTP, all signature modes, uploads and PDF download', () => {
   const html = read('unplug-agreement-generator.html');
   for (const phrase of [
@@ -27,6 +40,9 @@ test('secure Party B browser flow includes save/resume, OTP, all signature modes
   assert.match(html, /POPIA notice/);
   assert.match(html, /Party B — Individual/);
   assert.match(html, /Party B — Business/);
+  const enhancement = read('media','scripts','agreement-generator-signer-enhancements.js');
+  assert.match(enhancement, /Agreement details are frozen/);
+  assert.match(enhancement, /Signing progress/);
 });
 
 test('release packager always includes both Agreement Generator pages', () => {
@@ -35,30 +51,47 @@ test('release packager always includes both Agreement Generator pages', () => {
   assert.match(build, /unplug-agreement-generator-admin\.html/);
 });
 
-test('runtime Control Centre navigation points to Agreement Generator while legacy agreement page remains in repo', () => {
+test('runtime Control Centre navigation and enhancement scripts point to Agreement Generator while legacy agreement page remains in repo', () => {
   const runtime = read('functions', 'runtime-config.js');
   assert.match(runtime, /Agreement Generator/);
   assert.match(runtime, /unplug-agreement-generator-admin\.html/);
+  assert.match(runtime, /agreement-generator-admin-enhancements\.js/);
+  assert.match(runtime, /agreement-generator-signer-enhancements\.js/);
+  assert.match(runtime, /Edit Form/);
   assert.ok(fs.existsSync(path.join(ROOT, 'unplug-agreements-admin.html')));
   assert.ok(fs.existsSync(path.join(ROOT, 'unplug-agreement.html')));
 });
 
 test('migration is additive: it creates lifecycle structures but never truncates or drops signed agreement data', () => {
   const migration = read('unplug-backend','db','migrations','202_agreement_generator.sql');
+  const multi = read('unplug-backend','db','migrations','205_agreement_multi_signer_tokens.sql');
   assert.match(migration, /CREATE TABLE IF NOT EXISTS agreement_audit_log/i);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS agreement_form_versions/i);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS agreement_signatures/i);
-  assert.doesNotMatch(migration, /\bTRUNCATE\b/i);
-  assert.doesNotMatch(migration, /\bDROP\s+TABLE\b/i);
-  assert.doesNotMatch(migration, /\bDELETE\s+FROM\s+agreement_submissions\b/i);
-  assert.doesNotMatch(migration, /\bALTER\s+TABLE\s+signed_agreements\b/i);
+  assert.match(multi, /signing_token/i);
+  for (const sql of [migration,multi]) {
+    assert.doesNotMatch(sql, /\bTRUNCATE\b/i);
+    assert.doesNotMatch(sql, /\bDROP\s+TABLE\b/i);
+    assert.doesNotMatch(sql, /\bDELETE\s+FROM\s+agreement_submissions\b/i);
+    assert.doesNotMatch(sql, /\bALTER\s+TABLE\s+signed_agreements\b/i);
+  }
 });
 
 test('signed-agreement protection is implemented as archive/supersede/reopen, not hard delete', () => {
-  const route = read('unplug-backend','src','routes','agreementGenerator.js');
+  const route = read('unplug-backend','src','routes','agreementGeneratorRecordAdmin.js');
   assert.match(route, /signed_agreement_superseded/);
   assert.match(route, /superseded_by_id/);
   assert.match(route, /agreement_archived/);
   assert.match(route, /agreement_restored/);
   assert.doesNotMatch(route, /DELETE FROM agreement_submissions/i);
+});
+
+test('public multi-signer flow uses signer-specific tokens and freezes shared content after the first signature', () => {
+  const route = read('unplug-backend','src','routes','agreementGeneratorPartyB.js');
+  const service = read('unplug-backend','src','utils','agreementGeneratorService.js');
+  assert.match(service, /resolveSignerAccess/);
+  assert.match(service, /hasAnySignature/);
+  assert.match(route, /contentLocked/);
+  assert.match(route, /party_b_signer_signed/);
+  assert.match(route, /allRequiredPartyBSigned/);
 });
