@@ -40,8 +40,11 @@
     group.appendChild(a);
   }
 
-  function addMemberJourneyLink() {
+  function addMemberJourneyLink(config) {
     if (!/unplug-member-dashboard\.html$/i.test(path)) return;
+    if (!config || config.site_visibility !== 'visible') return;
+    const enabled = (config.placements || []).some((p) => p.page_key === 'member_dashboard' && p.enabled === true);
+    if (!enabled) return;
     if (document.querySelector('[data-unplug-growth-journey-link]')) return;
     const sidebar = document.querySelector('.ms-sidebar');
     if (!sidebar) return;
@@ -161,10 +164,10 @@
 
   async function init() {
     addAdminLink();
-    addMemberJourneyLink();
     addResumeLinkControl();
     try {
       const config = await json('/growth-application/public-config');
+      addMemberJourneyLink(config);
       renderPlacement(config);
       await maybePromptMember(config);
     } catch (_) {
