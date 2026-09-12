@@ -368,6 +368,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
       <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
+      <button class="ms-navlink section-hidden" data-ms="myagreements" id="msMyAgreementsNav"><span>📄</span> My Agreements</button>
+      <button class="ms-navlink section-hidden" data-ms="myclients" id="msMyClientsNav"><span>🌱</span> My Clients' Growth</button>
       <a class="ms-navlink" href="unplug-magazine.html"><span>🌐</span> View Official Site</a>
       <button class="ms-navlink ms-logout" id="msLogout"><span>↩</span> Logout</button>
     </aside>
@@ -1211,6 +1213,30 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
     </section>
 
+    <!-- MY AGREEMENTS — sales-consultant self-service. Same gating as My
+         Referrals: only appears for role='consultant', since
+         /agreement-forms/consultant/mine is role-gated the same way. An
+         admin grants a consultant access to specific agreements first
+         (see the Agreements admin page); until then this list is empty. -->
+    <section class="ms-section section-hidden" data-ms-section="myagreements">
+    <div class="card">
+      <h2>My Agreements</h2>
+      <p class="sub">Agreements you've been given access to. Send a signing link straight to a client's email.</p>
+      <div id="myAgreementsContent"><div class="loading-state">Loading…</div></div>
+    </div>
+    </section>
+
+    <!-- MY CLIENTS' GROWTH — sales-consultant self-service. "Client" means
+         the same thing My Referrals already means by referral: a user whose
+         payment carries this consultant's sales_consultant_id. -->
+    <section class="ms-section section-hidden" data-ms-section="myclients">
+    <div class="card">
+      <h2>My Clients' Growth</h2>
+      <p class="sub">Where your referred clients stand on their Growth Application. Only shows people you've referred — not the full member base.</p>
+      <div id="myClientsContent"><div class="loading-state">Loading…</div></div>
+    </div>
+    </section>
+
     </div><!-- ms-main -->
   </div><!-- ms-shell -->
 
@@ -1850,6 +1876,10 @@ function enterMemberDashboard(user){
   if (CURRENT_USER && CURRENT_USER.role === 'consultant') {
     document.getElementById('msMyReferralsNav').classList.remove('section-hidden');
     loadMyReferrals();
+    document.getElementById('msMyAgreementsNav').classList.remove('section-hidden');
+    loadMyAgreements();
+    document.getElementById('msMyClientsNav').classList.remove('section-hidden');
+    loadMyClients();
   }
   setupSubmitGate();
   loadHighlightServices();
@@ -4723,6 +4753,93 @@ async function loadMyReferrals() {
     // message (see api(), no .status attached), so the 404 case is
     // distinguished by matching the backend's message text rather than
     // a status code.
+    el.innerHTML = /ask an admin/i.test(err.message || '')
+      ? '<p class="sub" style="margin:0;">Your account isn\'t linked to a consultant record yet — ask an admin to link it.</p>'
+      : `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(err.message)}</p>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// My Agreements — sales-consultant self-service, mirroring My Referrals.
+// The backend (GET /agreement-forms/consultant/mine) only ever returns
+// agreements an admin has explicitly granted this consultant access to
+// (agreement_consultant_access), so an empty list here is normal, not a bug.
+// ---------------------------------------------------------------------------
+async function loadMyAgreements() {
+  const el = document.getElementById('myAgreementsContent');
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/agreement-forms/consultant/mine');
+    const agreements = data.agreements || [];
+    el.innerHTML = agreements.length
+      ? agreements.map((a) => `
+        <div class="card" style="margin:0 0 14px; padding:14px;">
+          <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:baseline;">
+            <div>
+              <div style="font-weight:700;">${escapeHtmlM(a.title)}</div>
+              ${a.description ? `<div class="sub" style="margin:2px 0 0;">${escapeHtmlM(a.description)}</div>` : ''}
+            </div>
+            ${Number(a.amount) > 0 ? `<div style="font-size:13px; color:var(--slate);">R${Number(a.amount).toFixed(2)}</div>` : ''}
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+            <input type="text" placeholder="Client's name" id="agreementSendName-${a.id}" style="flex:1; min-width:140px; padding:7px 10px; font-size:13px;">
+            <input type="email" placeholder="Client's email" id="agreementSendEmail-${a.id}" style="flex:1; min-width:180px; padding:7px 10px; font-size:13px;">
+            <button class="btn btn-line" style="width:auto; padding:6px 14px;" data-agreement-send="${a.id}">Send link</button>
+          </div>
+        </div>`).join('')
+      : '<p class="sub" style="margin:0;">No agreements have been shared with you yet — ask an admin to grant access.</p>';
+
+    el.querySelectorAll('[data-agreement-send]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-agreement-send');
+        const name = document.getElementById(`agreementSendName-${id}`).value.trim();
+        const email = document.getElementById(`agreementSendEmail-${id}`).value.trim();
+        if (!email) { showToast('A client email is required.', true); return; }
+        btn.disabled = true;
+        try {
+          await api(`/agreement-forms/consultant/${id}/send-email`, {
+            method: 'POST',
+            body: JSON.stringify({ name, email }),
+          });
+          showToast('Agreement link sent.');
+        } catch (err) {
+          showToast(err.message || 'Could not send.', true);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    el.innerHTML = `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(err.message)}</p>`;
+  }
+}
+
+const GROWTH_STATUS_LABELS = {
+  new: 'New', under_review: 'Under review', contacted: 'Contacted',
+  in_progress: 'In progress', closed: 'Closed',
+};
+
+// My Clients' Growth — sales-consultant self-service, via
+// GET /growth-application/consultant/clients.
+async function loadMyClients() {
+  const el = document.getElementById('myClientsContent');
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  try {
+    const data = await api('/growth-application/consultant/clients');
+    const clients = data.clients || [];
+    el.innerHTML = clients.length
+      ? `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead><tr style="text-align:left; border-bottom:1px solid var(--paper-line);">
+            <th style="padding:6px;">Client</th><th style="padding:6px;">Growth Application</th><th style="padding:6px;">Last activity</th>
+          </tr></thead>
+          <tbody>${clients.map((c) => `<tr style="border-bottom:1px solid var(--paper-line);">
+            <td style="padding:6px;">${escapeHtmlM(c.name)}<div class="sub" style="margin:0;">${escapeHtmlM(c.email)}</div></td>
+            <td style="padding:6px;">${c.application_id ? escapeHtmlM(GROWTH_STATUS_LABELS[c.status] || c.status) : '<span class="sub">Not started</span>'}</td>
+            <td style="padding:6px; color:var(--slate);">${c.updated_at ? msDate(c.updated_at) : '—'}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>`
+      : '<p class="sub" style="margin:0;">No referred clients yet.</p>';
+  } catch (err) {
     el.innerHTML = /ask an admin/i.test(err.message || '')
       ? '<p class="sub" style="margin:0;">Your account isn\'t linked to a consultant record yet — ask an admin to link it.</p>'
       : `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(err.message)}</p>`;

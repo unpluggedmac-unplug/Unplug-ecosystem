@@ -907,7 +907,7 @@ router.post('/quote', requireAuth, async (req, res, next) => {
   }
 });
 
-const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok', 'sales_consultant', 'other'];
+const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok', 'sales_consultant', 'website', 'other'];
 
 router.post('/initiate', requireAuth, async (req, res, next) => {
   try {

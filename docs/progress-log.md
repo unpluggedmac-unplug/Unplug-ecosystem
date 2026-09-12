@@ -2941,3 +2941,46 @@ Full suite: **2206 passing, 0 failing** (down from 2208 by exactly the 2 net tes
 for `SUPABASE_`/`supabase` afterward: every remaining hit is one of the four deliberately-kept categories
 above.
 
+## 2026-09-12 — Agreement Forms & Growth Application: wiring the staff-facing half back to what already ships
+
+Both features' member-facing halves — the public Agreement page, "My Growth Journey," and the
+`unplug-agreements-admin`/`unplug-growth-applications-admin` control-centre pages — were already live and
+working. The actual gap, found by comparing the real deployed site against what the main
+`unplug-admin-dashboard` nav exposes: **the two control-centre pages were never linked from it.** They only
+worked if someone already knew the exact URL. Fixed with two plain `<a href>` entries under Directory &
+Business — no SPA `data-section` wiring needed since these are separate pages, not in-dashboard sections.
+
+**"Website" as a checkout referral source** was missing at every layer, not just the dropdown:
+`payments.referral_source`'s `CHECK` constraint (from `007_sales_consultants.sql`) didn't allow it either.
+New migration `197_referral_source_website.sql` widens the constraint; `REFERRAL_SOURCES` in both
+`orders.js` and `payments.js` (kept as two separate arrays — no shared constant existed to begin with) and
+the checkout dropdown all got the same addition.
+
+**Consultants had backend access to agreements they'd never been given a way to use.**
+`GET /agreement-forms/consultant/mine` and `POST /agreement-forms/consultant/:id/send-email` were real,
+role-gated, working routes with no caller anywhere in the codebase. Added a "My Agreements" section to the
+member dashboard (gated the same way "My Referrals" already is, by `role === 'consultant'`) that lists
+agreements a consultant has been granted access to (`agreement_consultant_access`, set by an admin from the
+Agreements control-centre page) and lets them email a signing link straight to a client.
+
+**No one — consultant or admin — could see how a consultant's referred clients were doing on their Growth
+Application.** Rather than inventing a new consultant↔client linking table, this reuses the referral
+attribution `/sales-consultants/me` already relies on: a "client" is a user with a **confirmed** payment
+carrying that consultant's `sales_consultant_id` (an unconfirmed/pending referral is deliberately excluded —
+same rule as commission). Two new endpoints, same query: `GET /growth-application/consultant/clients`
+(consultant's own view, new "My Clients' Growth" dashboard section) and
+`GET /admin/sales-consultants/:id/growth-clients` (admin's view, appended to the existing commission-report
+panel next to "Published by this consultant"). `growthApplicationConsultantClients.test.js` (6 tests) pins:
+auth required, role required, an empty list (not an error) when nothing's linked yet, a pending referral
+never leaking into the client list, and a 404 on an unknown consultant id.
+
+**Deliberately not changed:** the `consultant` role stays restricted to `@unplugnews.com` staff addresses
+(`admin.js`, `ASSIGNABLE_ROLES`) — a real, pre-existing security rule, confirmed with the user rather than
+loosened to fit a "promote any member" flow. Admins can still add any member to the `sales_consultants` table
+itself (checkout attribution + commission) exactly as before; only the *role* that unlocks dashboard access
+stays staff-only.
+
+Full suite: **2269 passing, 0 failing** (2263 existing + 6 new). Built and verified against `origin/main`
+directly, in an isolated worktree (`live-gaps-fix` branch) — not against this engagement's earlier parallel
+build, whose migration numbers collide with what's actually live.
+
