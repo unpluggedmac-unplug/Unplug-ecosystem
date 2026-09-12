@@ -23,8 +23,6 @@ export async function onRequest({ env, request }) {
     'window.UNPLUG_RUNTIME_CONFIG_ERROR=' + JSON.stringify(badStaging ? 'Staging frontend is not connected to an isolated staging API.' : '') + ';'
   ];
 
-  // Agreement Generator is a standalone Control Centre module. The older
-  // /agreements signed_agreements system remains separate and untouched.
   lines.push(
     '(function(){',
     ' function addAgreementAdminLink(){',
@@ -41,10 +39,19 @@ export async function onRequest({ env, request }) {
     ' if (document.readyState==="loading") document.addEventListener("DOMContentLoaded",addAgreementAdminLink,{once:true}); else addAgreementAdminLink();',
     '})();',
     '',
+    '(function(){',
+    ' function add(src,key){ if(document.querySelector("script[data-agreement-module=\""+key+"\"]")) return; var s=document.createElement("script"); s.src=src; s.defer=true; s.setAttribute("data-agreement-module",key); (document.head||document.documentElement).appendChild(s); }',
+    ' if(location.pathname.indexOf("unplug-agreement-generator-admin.html")!==-1) add("/media/scripts/agreement-generator-admin-enhancements.js?v=20260912-1","admin");',
+    ' if(location.pathname.indexOf("unplug-agreement-generator.html")!==-1) add("/media/scripts/agreement-generator-signer-enhancements.js?v=20260912-1","signer");',
+    '})();',
+    '',
     '// The older Agreement Forms admin page is retained for backwards-compatible',
     '// template preview/export controls. Protected blobs need an auth header.',
     '(function(){',
     ' if (location.pathname.indexOf("unplug-agreements-admin.html") === -1) return;',
+    ' function renameQuestions(){ document.querySelectorAll("button,a").forEach(function(el){ if(/^\\s*Questions\\s*$/i.test(el.textContent||"")) el.textContent="Edit Form"; }); }',
+    ' if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",renameQuestions,{once:true}); else renameQuestions();',
+    ' new MutationObserver(renameQuestions).observe(document.documentElement,{childList:true,subtree:true});',
     ' document.addEventListener("click", async function(e){',
     '  var preview=e.target && e.target.closest ? e.target.closest("#preview") : null;',
     '  var csv=e.target && e.target.closest ? e.target.closest("#csv") : null;',
