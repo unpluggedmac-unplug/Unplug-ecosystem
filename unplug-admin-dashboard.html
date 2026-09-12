@@ -382,6 +382,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="projects">Investor Projects</a>
         <a data-section="consultants">Sales Consultants</a>
+        <a href="/unplug-agreements-admin">Agreements</a>
+        <a href="/unplug-growth-applications-admin">Growth Applications</a>
       </div>
     </div>
 
@@ -10510,6 +10512,7 @@ async function loadConsultantReport(id, name) {
     if (!data.payments || data.payments.length === 0) {
       bodyEl.innerHTML = '<div class="empty-state">No confirmed sales attributed to this consultant yet.</div>';
       loadConsultantSubmissions(id, bodyEl);
+      loadConsultantGrowthClients(id, bodyEl);
       return;
     }
     const summary = document.createElement('p');
@@ -10528,8 +10531,46 @@ async function loadConsultantReport(id, name) {
     bodyEl.appendChild(summary);
     bodyEl.appendChild(table);
     loadConsultantSubmissions(id, bodyEl);
+    loadConsultantGrowthClients(id, bodyEl);
   } catch (err) {
     bodyEl.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// Clients' Growth Applications — where each of this consultant's referred
+// clients stands on their Growth Application, if they've started one. Same
+// "referred" definition as My Referrals/Clients: a confirmed payment carrying
+// this consultant's sales_consultant_id.
+const GROWTH_STATUS_LABELS_ADMIN = {
+  new: 'New', under_review: 'Under review', contacted: 'Contacted',
+  in_progress: 'In progress', closed: 'Closed',
+};
+async function loadConsultantGrowthClients(id, bodyEl) {
+  const block = document.createElement('div');
+  block.style.cssText = 'margin-top:22px;';
+  block.innerHTML = '<h4 style="font-size:13px; margin-bottom:8px;">Clients\' Growth Applications</h4><div class="loading-state">Loading…</div>';
+  bodyEl.appendChild(block);
+
+  try {
+    const data = await api(`/admin/sales-consultants/${id}/growth-clients`);
+    const heading = '<h4 style="font-size:13px; margin-bottom:8px;">Clients\' Growth Applications</h4>';
+    const clients = data.clients || [];
+    if (clients.length === 0) {
+      block.innerHTML = heading + '<div class="empty-state">No referred clients yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Client</th><th>Growth Application</th><th>Last activity</th></tr>';
+    clients.forEach((c) => {
+      const tr = document.createElement('tr');
+      const statusText = c.application_id ? (GROWTH_STATUS_LABELS_ADMIN[c.status] || c.status) : 'Not started';
+      tr.innerHTML = `<td>${escapeHtmlAdmin(c.name)}<div style="color:var(--muted); font-size:11px;">${escapeHtmlAdmin(c.email)}</div></td><td>${statusText}</td><td>${c.updated_at ? new Date(c.updated_at).toLocaleDateString() : '—'}</td>`;
+      table.appendChild(tr);
+    });
+    block.innerHTML = heading;
+    block.appendChild(table);
+  } catch (err) {
+    block.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
 }
 

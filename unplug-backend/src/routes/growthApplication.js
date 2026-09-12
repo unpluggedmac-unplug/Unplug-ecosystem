@@ -635,6 +635,52 @@ router.post('/admin/short-link', requireRole('admin'), async (req, res, next) =>
   } finally { client.release(); }
 });
 
+// GET /growth-application/consultant/clients — a consultant's own view of
+// their referred clients' Growth Applications. "Client" here means the same
+// thing /sales-consultants/me already means by "referral": a user whose
+// payment carries this consultant's sales_consultant_id. No separate
+// consultant<->client linking table exists (or is needed) — referral
+// attribution already is that link.
+router.get('/consultant/clients', requireRole('consultant'), async (req, res, next) => {
+  try {
+    const consultant = await pool.query(
+      'SELECT id FROM sales_consultants WHERE user_id = $1 AND active = true',
+      [req.user.id]
+    );
+    if (!consultant.rowCount) return res.json({ clients: [] });
+
+    const result = await pool.query(
+      `SELECT u.id AS user_id,
+              COALESCE(u.full_name, SPLIT_PART(u.email, '@', 1)) AS name,
+              u.email,
+              ga.id AS application_id,
+              ga.applicant_type,
+              ga.status,
+              ga.current_stage,
+              ga.submitted_at,
+              ga.updated_at
+         FROM (
+           SELECT DISTINCT p.user_id
+             FROM payments p
+            WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+         ) referred
+         JOIN users u ON u.id = referred.user_id
+         LEFT JOIN LATERAL (
+           SELECT * FROM growth_applications
+            WHERE user_id = referred.user_id
+            ORDER BY created_at DESC
+            LIMIT 1
+         ) ga ON true
+        ORDER BY u.full_name NULLS LAST, u.email ASC`,
+      [consultant.rows[0].id]
+    );
+
+    res.json({ clients: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/admin/preview', requireRole('admin'), (req, res) => {
   const type = APPLICANT_TYPES.has(String(req.query.type)) ? String(req.query.type) : 'individual';
   const view = String(req.query.view || 'quick_profile');
