@@ -14,34 +14,57 @@ function read(...parts) {
 }
 
 test('Growth migrations exist and remain additive', () => {
-  const m195 = fs.readFileSync(path.join(BACKEND, 'db/migrations/195_growth_application.sql'), 'utf8');
-  const m196 = fs.readFileSync(path.join(BACKEND, 'db/migrations/196_growth_application_stage_version.sql'), 'utf8');
-  const m202 = fs.readFileSync(path.join(BACKEND, 'db/migrations/202_growth_application_v2.sql'), 'utf8');
-  for (const sql of [m195, m196, m202]) {
-    assert.doesNotMatch(sql, /\bTRUNCATE\b/i);
-    assert.doesNotMatch(sql, /DROP\s+TABLE/i);
-    assert.doesNotMatch(sql, /DELETE\s+FROM\s+users/i);
+  const files = [
+    '195_growth_application.sql',
+    '196_growth_application_stage_version.sql',
+    '202_growth_application_v2.sql',
+    '203_growth_application_master_seed.sql',
+    '204_growth_application_prefill.sql',
+  ];
+  const sql = files.map((file) => fs.readFileSync(path.join(BACKEND, 'db/migrations', file), 'utf8'));
+  for (const body of sql) {
+    assert.doesNotMatch(body, /\bTRUNCATE\b/i);
+    assert.doesNotMatch(body, /DROP\s+TABLE/i);
+    assert.doesNotMatch(body, /DELETE\s+FROM\s+users/i);
   }
-  assert.match(m195, /CREATE TABLE IF NOT EXISTS growth_applications/i);
-  assert.match(m195, /growth_application_short_links/i);
-  assert.match(m196, /stage_schema_version/i);
-  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_form_versions/i);
-  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_application_answer_revisions/i);
-  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_information_requests/i);
-  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_assessments/i);
-  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_plans/i);
+  assert.match(sql[0], /CREATE TABLE IF NOT EXISTS growth_applications/i);
+  assert.match(sql[0], /growth_application_short_links/i);
+  assert.match(sql[1], /stage_schema_version/i);
+  assert.match(sql[2], /CREATE TABLE IF NOT EXISTS growth_form_versions/i);
+  assert.match(sql[2], /CREATE TABLE IF NOT EXISTS growth_application_answer_revisions/i);
+  assert.match(sql[2], /CREATE TABLE IF NOT EXISTS growth_information_requests/i);
+  assert.match(sql[2], /CREATE TABLE IF NOT EXISTS growth_assessments/i);
+  assert.match(sql[2], /CREATE TABLE IF NOT EXISTS growth_plans/i);
+  assert.match(sql[3], /Unplug Growth Application/);
+  assert.match(sql[3], /identity_profile/);
+  assert.match(sql[3], /declarations/);
+  assert.match(sql[4], /'prefill'/);
 });
 
-test('Quick Profile and Growth Assessment enforce every required intake field', () => {
+test('seeded Growth master covers the six core questions and ships a published usable version', () => {
+  const seed = fs.readFileSync(path.join(BACKEND, 'db/migrations/203_growth_application_master_seed.sql'), 'utf8');
+  assert.match(seed, /'published','Unplug Growth Application'/);
+  for (const step of [
+    'identity_profile','current_situation','goals_priorities','challenges_needs',
+    'credibility_visibility','portfolio_content','opportunities_collaboration',
+    'partnerships_sponsorship','commercial_readiness','contribution','privacy_permissions','declarations',
+  ]) assert.match(seed, new RegExp(step));
+  for (const key of [
+    'growth_display_name','growth_current_stage','growth_primary_goal','growth_biggest_challenge',
+    'growth_support_needs','growth_credibility_assets','growth_portfolio_exists','growth_opportunities_sought',
+    'growth_collaboration_interest','growth_sponsorship_interest','growth_funding_interest',
+    'growth_contribution_skills','growth_contact_permission','growth_no_guarantee_declaration',
+  ]) assert.match(seed, new RegExp(key));
+  assert.match(seed, /does not guarantee funding, employment, sponsorship, media coverage/i);
+});
+
+test('Quick Profile and Growth Assessment enforce every required legacy intake field', () => {
   const schema = schemaFor('individual');
   assert.equal(STAGE_SCHEMA_VERSION, '2026-09-11-intake-v1');
   assert.equal(schema.quick_profile.filter((field) => field.required).length, schema.quick_profile.length);
   assert.equal(schema.growth_assessment.filter((field) => field.required).length, schema.growth_assessment.length);
-
   const quick = {};
-  for (const field of schema.quick_profile) {
-    quick[field.key] = field.allow_unavailable ? { unavailable: true } : 'Complete answer';
-  }
+  for (const field of schema.quick_profile) quick[field.key] = field.allow_unavailable ? { unavailable: true } : 'Complete answer';
   assert.equal(validateStage('individual', 'quick_profile', quick).ok, true);
   delete quick.full_name;
   assert.equal(validateStage('individual', 'quick_profile', quick).ok, false);
@@ -66,7 +89,7 @@ test('backend mounts legacy Growth plus isolated V2 member/admin APIs', () => {
   assert.match(app, /app\.use\('\/grow',\s*growthApplicationRoutes\.shortLinkRouter\)/);
 });
 
-test('Growth uploads are member-only, private R2, 10MB and fail closed', () => {
+test('Growth uploads are member-only, private R2, verified PDF/image, 10MB and fail closed', () => {
   const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplicationUpload.js'), 'utf8');
   const upload = fs.readFileSync(path.join(BACKEND, 'src/middleware/upload.js'), 'utf8');
   assert.match(route, /requireAuth/);
@@ -77,14 +100,16 @@ test('Growth uploads are member-only, private R2, 10MB and fail closed', () => {
   assert.doesNotMatch(route, /uploadPublicBuffer/);
   assert.match(route, /growth\.sensitive/);
   assert.match(route, /external_sharing_allowed/);
-  assert.match(upload, /MAX_GROWTH_IMAGE_SIZE_BYTES = 10 \* 1024 \* 1024/);
+  assert.match(route, /ALLOWED_GROWTH_FILE_MIME_TYPES/);
+  assert.match(upload, /uploadGrowthFile/);
+  assert.match(upload, /application\/pdf/);
+  assert.match(upload, /MAX_GROWTH_FILE_SIZE_BYTES = 10 \* 1024 \* 1024/);
 });
 
 test('Growth V2 is member-only, resumable, append-only and status-only after submission', () => {
   const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplicationV2.js'), 'utf8');
   assert.match(route, /router\.use\(requireAuth\)/);
   assert.match(route, /req\.user\.role !== 'member'/);
-  assert.match(route, /status='draft'/);
   assert.match(route, /growth_application_answer_revisions/);
   assert.match(route, /revision_number/);
   assert.match(route, /growth_application_field_reopens/);
@@ -93,6 +118,32 @@ test('Growth V2 is member-only, resumable, append-only and status-only after sub
   assert.match(route, /informationRequests/);
   assert.match(route, /status='withdrawn'/);
   assert.doesNotMatch(route, /growth_assessments|growth_plans|internal_notes/);
+});
+
+test('Growth V2 prefills only reusable My Unplug/member account data as auditable revisions', () => {
+  const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplicationV2.js'), 'utf8');
+  assert.match(route, /my_unplug_profiles/);
+  assert.match(route, /mu_profile_skills/);
+  assert.match(route, /mu_profile_interests/);
+  assert.match(route, /growth_display_name/);
+  assert.match(route, /growth_email/);
+  assert.match(route, /growth_phone/);
+  assert.match(route, /'prefill'/);
+  assert.doesNotMatch(route, /profiles\s+p\s+ON/); // never prefill from paid Directory listings
+});
+
+test('Growth V2 conditional logic controls visible requirements server-side', () => {
+  const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplicationV2.js'), 'utf8');
+  assert.match(route, /function visibleByRules/);
+  assert.match(route, /case 'equals'/);
+  assert.match(route, /case 'not_equals'/);
+  assert.match(route, /case 'includes'/);
+  assert.match(route, /case 'truthy'/);
+  assert.match(route, /case 'not_empty'/);
+  assert.match(route, /requiredFields/);
+  assert.match(route, /fieldComplete/);
+  assert.match(route, /Complete all required visible fields before submitting/);
+  assert.match(route, /\['checkbox', 'consent', 'declaration'\]/);
 });
 
 test('Growth V2 separates ordinary and sensitive staff capabilities', () => {
@@ -109,18 +160,24 @@ test('Growth V2 separates ordinary and sensitive staff capabilities', () => {
   assert.doesNotMatch(migration, /'support', 'growth\.sensitive'/);
 });
 
-test('Growth V2 preserves stable form versions, field ids, selective sensitive fields and relational links', () => {
-  const sql = fs.readFileSync(path.join(BACKEND, 'db/migrations/202_growth_application_v2.sql'), 'utf8');
-  assert.match(sql, /UNIQUE\(form_id, version_number\)/i);
-  assert.match(sql, /UNIQUE\(version_id, field_key\)/i);
-  assert.match(sql, /sensitive_enabled/);
-  assert.match(sql, /allow_external_sharing/);
-  assert.match(sql, /growth_application_entity_links/);
-  assert.match(sql, /'agreement'/);
-  assert.match(sql, /'service_order'/);
+test('Growth V2 preserves stable form versions, expanded types, audiences and relational links', () => {
+  const base = fs.readFileSync(path.join(BACKEND, 'db/migrations/202_growth_application_v2.sql'), 'utf8');
+  const seed = fs.readFileSync(path.join(BACKEND, 'db/migrations/203_growth_application_master_seed.sql'), 'utf8');
+  assert.match(base, /UNIQUE\(form_id, version_number\)/i);
+  assert.match(base, /UNIQUE\(version_id, field_key\)/i);
+  assert.match(base, /sensitive_enabled/);
+  assert.match(base, /allow_external_sharing/);
+  assert.match(base, /growth_application_entity_links/);
+  assert.match(base, /'agreement'/);
+  assert.match(base, /'service_order'/);
+  assert.match(seed, /document_upload/);
+  assert.match(seed, /portfolio_upload/);
+  assert.match(seed, /declaration/);
+  assert.match(seed, /admin_only/);
+  assert.match(seed, /audience/);
 });
 
-test('Growth V2 master form builder exposes safe draft-edit and publish operations', () => {
+test('Growth V2 master form builder exposes safe draft-edit, conditional and audience operations', () => {
   const admin = fs.readFileSync(path.join(BACKEND, 'src/routes/growthAdmin.js'), 'utf8');
   assert.match(admin, /router\.post\('\/form\/versions'/);
   assert.match(admin, /router\.patch\('\/versions\/:id'/);
@@ -130,11 +187,14 @@ test('Growth V2 master form builder exposes safe draft-edit and publish operatio
   assert.match(admin, /router\.patch\('\/fields\/:id'/);
   assert.match(admin, /router\.post\('\/fields\/:id\/options'/);
   assert.match(admin, /router\.patch\('\/options\/:id'/);
+  assert.match(admin, /visibilityRules/);
+  assert.match(admin, /AUDIENCES/);
+  assert.match(admin, /document_upload/);
   assert.match(admin, /Published fields are immutable/);
   assert.match(admin, /router\.post\('\/versions\/:id\/publish'/);
 });
 
-test('final submission enforces legacy schema versions, all three stages, galleries and POPIA consent', () => {
+test('legacy final submission still enforces its schema versions, stages, galleries and POPIA consent', () => {
   const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplication.js'), 'utf8');
   assert.match(route, /question_bank_version !== QUESTION_BANK_VERSION/);
   assert.match(route, /stage_schema_version !== STAGE_SCHEMA_VERSION/);
@@ -177,6 +237,7 @@ test('production build packages legacy rollback pages plus both Growth V2 worksp
   assert.match(builder, /unplug-growth-application-v2\.html/);
   assert.match(builder, /unplug-growth-applications-admin-v2\.html/);
   assert.match(builder, /growth-integration\.js/);
+  assert.match(builder, /growth-private-upload-helper\.js/);
 });
 
 test('Growth integration routes member/admin journeys to V2 while retaining existing visibility controls', () => {
@@ -190,19 +251,24 @@ test('Growth integration routes member/admin journeys to V2 while retaining exis
   assert.match(integration, /addMemberJourneyLink\(config\)/);
   assert.match(integration, /site_visibility !== 'visible'/);
   assert.doesNotMatch(integration, /resume-link|applications\/me/);
-  for (const key of ['homepage','latest_news','directory','gallery','editions','top10','competitions']) {
-    assert.match(integration, new RegExp(key));
-  }
+  for (const key of ['homepage','latest_news','directory','gallery','editions','top10','competitions']) assert.match(integration, new RegExp(key));
 });
 
-test('Growth V2 member and admin HTML workspaces call only V2/admin APIs for core workflow', () => {
+test('Growth V2 member workspace renders conditional fields, declarations and private documents', () => {
   const member = read('unplug-growth-application-v2.html');
-  const admin = read('unplug-growth-applications-admin-v2.html');
   assert.match(member, /\/growth-application\/v2\/applications/);
   assert.match(member, /\/growth-application\/upload/);
+  assert.match(member, /function visibleByRules/);
+  assert.match(member, /visibility_rules/);
+  assert.match(member, /declaration/);
+  assert.match(member, /application\/pdf/);
   assert.match(member, /POPIA/);
   assert.match(member, /information-requests/);
   assert.doesNotMatch(member, /growth_assessments|growth_plans|internal_notes/);
+});
+
+test('Growth V2 admin workspace remains an internal assessment and builder surface', () => {
+  const admin = read('unplug-growth-applications-admin-v2.html');
   assert.match(admin, /\/growth-admin\/applications/);
   assert.match(admin, /Load sensitive data/);
   assert.match(admin, /\/growth-admin\/fields/);
