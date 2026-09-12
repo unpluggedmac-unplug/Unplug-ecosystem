@@ -4,6 +4,7 @@ const express = require('express');
 const fs = require('fs');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { hasPermission } = require('../utils/staffPermissions');
 const {
   uploadGrowthImage,
   verifySignature,
@@ -24,6 +25,24 @@ function requireMember(req, res, next) {
     return res.status(403).json({ error: 'Growth Applications are available to member accounts only.' });
   }
   return next();
+}
+
+async function requireGrowthSensitive(req, res, next) {
+  try {
+    if (req.user && req.user.role === 'admin') return next();
+    if (req.user && req.user.role === 'staff' && await hasPermission(req.user.id, 'growth.sensitive')) return next();
+    return res.status(403).json({ error: 'Sensitive Growth Application access is required.' });
+  } catch (err) { return next(err); }
+}
+
+async function streamPrivateUpload(row, res) {
+  const stored = await uploads.fetchPrivateObject(row.object_key);
+  if (!stored.ok) return res.status(502).json({ error: 'The stored file could not be retrieved.' });
+  const bytes = Buffer.from(await stored.arrayBuffer());
+  res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `inline; filename="${String(row.original_filename || 'growth-upload').replace(/["\r\n]/g, '')}"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.send(bytes);
 }
 
 // Growth Application media can contain personal/confidential material. It is
@@ -138,8 +157,20 @@ router.post('/', requireAuth, requireMember, (req, res) => {
   });
 });
 
-// Members may retrieve only their own Growth uploads. Staff/admin retrieval is
-// intentionally handled through the Growth Admin sensitive surface instead.
+// Super Admin or staff with the dedicated growth.sensitive capability can view
+// an applicant's private upload. This route never exposes the underlying R2 URL.
+router.get('/admin/:uploadId', requireAuth, requireGrowthSensitive, async (req, res, next) => {
+  const uploadId = intId(req.params.uploadId);
+  if (!uploadId) return res.status(400).json({ error: 'Invalid upload id.' });
+  try {
+    const result = await pool.query(
+      `SELECT object_key,mime_type,original_filename FROM growth_uploads WHERE id=$1`, [uploadId]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Growth upload not found.' });
+    return streamPrivateUpload(result.rows[0], res);
+  } catch (err) { return next(err); }
+});
+
+// Members may retrieve only their own Growth uploads.
 router.get('/:uploadId', requireAuth, requireMember, async (req, res, next) => {
   const uploadId = intId(req.params.uploadId);
   if (!uploadId) return res.status(400).json({ error: 'Invalid upload id.' });
@@ -152,13 +183,7 @@ router.get('/:uploadId', requireAuth, requireMember, async (req, res, next) => {
       [uploadId, req.user.id],
     );
     if (!result.rowCount) return res.status(404).json({ error: 'Growth upload not found.' });
-    const stored = await uploads.fetchPrivateObject(result.rows[0].object_key);
-    if (!stored.ok) return res.status(502).json({ error: 'The stored file could not be retrieved.' });
-    const bytes = Buffer.from(await stored.arrayBuffer());
-    res.setHeader('Content-Type', result.rows[0].mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${String(result.rows[0].original_filename || 'growth-upload').replace(/["\r\n]/g, '')}"`);
-    res.setHeader('Cache-Control', 'private, no-store');
-    return res.send(bytes);
+    return streamPrivateUpload(result.rows[0], res);
   } catch (err) { return next(err); }
 });
 
