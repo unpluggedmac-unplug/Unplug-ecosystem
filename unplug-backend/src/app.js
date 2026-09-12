@@ -238,6 +238,13 @@ app.use('/agreement-forms', require('./middleware/agreementPaymentPolicy'));
 app.use('/agreement-forms', agreementFormsRoutes.router);
 app.use('/a', agreementFormsRoutes.shortLinkRouter);
 app.use('/agreement-payments', require('./routes/agreementPayments'));
+
+// Growth V2 is a separate, versioned member/admin workflow. Mount it before
+// the legacy Growth router so /growth-application/v2 cannot be consumed by a
+// legacy parameter route. Agreement Forms and legacy Growth remain untouched.
+app.use('/growth-application/v2', require('./routes/growthApplicationV2'));
+app.use('/growth-admin', require('./routes/growthAdmin'));
+
 // Growth Application: a separate, member-only three-stage growth journey.
 // Historical /grow short codes remain valid when admin regenerates the current code.
 const growthApplicationRoutes = require('./routes/growthApplication');

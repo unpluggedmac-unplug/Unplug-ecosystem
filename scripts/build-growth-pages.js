@@ -1,7 +1,7 @@
 'use strict';
 
 // The legacy production builder has an explicit page allow-list. Keep Growth
-// packaging isolated here so these new pages cannot silently disappear from
+// packaging isolated here so Growth pages cannot silently disappear from
 // Cloudflare Pages output while the broader builder remains stable.
 const fs = require('fs');
 const path = require('path');
@@ -11,8 +11,20 @@ const esbuild = require('esbuild');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'dist');
 const ASSETS = path.join(OUT, 'assets');
-const PAGES = ['unplug-growth-application.html', 'unplug-growth-applications-admin.html'];
-const COPY = ['growth-integration.js'];
+
+// Keep legacy pages in the artifact as a rollback path during staged rollout.
+// V2 links point only to the V2 pages; legacy pages are not deleted here.
+const PAGES = [
+  'unplug-growth-application.html',
+  'unplug-growth-applications-admin.html',
+  'unplug-growth-application-v2.html',
+  'unplug-growth-applications-admin-v2.html',
+];
+const COPY = [
+  'growth-integration.js',
+  'growth-private-upload-helper.js',
+  'growth-admin-builder-helper.js',
+];
 
 function hash(content) {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 10);
@@ -52,6 +64,14 @@ async function buildPage(file) {
     });
     const url = writeAsset(`${base}-script${scriptIndex++}`, 'js', transformed.code);
     html = html.replace(match[0], `<script src="${url}" defer></script>`);
+  }
+
+  if (file === 'unplug-growth-applications-admin-v2.html') {
+    const helpers = [
+      '<script src="/growth-private-upload-helper.js" defer></script>',
+      '<script src="/growth-admin-builder-helper.js" defer></script>',
+    ].join('\n');
+    html = html.includes('</body>') ? html.replace('</body>', `${helpers}\n</body>`) : `${html}\n${helpers}`;
   }
 
   fs.writeFileSync(path.join(OUT, file), html);

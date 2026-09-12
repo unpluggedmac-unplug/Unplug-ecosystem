@@ -1,0 +1,103 @@
+name: Growth Application V2 CI
+
+on:
+  push:
+    branches:
+      - feature/growth-application-v2-20260912
+      - staging-control-centre
+  pull_request:
+    branches:
+      - main
+      - staging-control-centre
+    paths:
+      - 'unplug-backend/db/migrations/202_growth_application_v2.sql'
+      - 'unplug-backend/db/migrations/203_growth_application_master_seed.sql'
+      - 'unplug-backend/db/migrations/204_growth_application_prefill.sql'
+      - 'unplug-backend/src/middleware/upload.js'
+      - 'unplug-backend/src/routes/growthApplicationV2.js'
+      - 'unplug-backend/src/routes/growthApplicationUpload.js'
+      - 'unplug-backend/src/routes/growthAdmin.js'
+      - 'unplug-backend/src/utils/staffPermissions.js'
+      - 'unplug-backend/src/app.js'
+      - 'unplug-backend/test/growthApplicationRelease.test.js'
+      - 'unplug-growth-application-v2.html'
+      - 'unplug-growth-applications-admin-v2.html'
+      - 'growth-integration.js'
+      - 'growth-private-upload-helper.js'
+      - 'growth-admin-builder-helper.js'
+      - 'scripts/build-growth-pages.js'
+      - '.github/workflows/growth-application-v2-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: growth-application-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check Growth V2 source
+        run: |
+          node --check src/app.js
+          node --check src/middleware/upload.js
+          node --check src/routes/growthApplication.js
+          node --check src/routes/growthApplicationV2.js
+          node --check src/routes/growthApplicationUpload.js
+          node --check src/routes/growthAdmin.js
+          node --check src/utils/staffPermissions.js
+          node --check test/growthApplicationRelease.test.js
+          node --check ../growth-private-upload-helper.js
+          node --check ../growth-admin-builder-helper.js
+
+      - name: PostgreSQL migration sweep
+        run: node scripts/sweep-test-postgres.js
+
+      - name: Prepare text-search test fixture
+        run: node scripts/ensure-text-search.js
+
+      - name: Full backend test suite
+        shell: bash
+        run: |
+          set -o pipefail
+          find test -name '*.test.js' -print0 | sort -z | xargs -0 node --test --test-concurrency=1
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production frontend
+        run: npm run build
