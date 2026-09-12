@@ -1,3 +1,4 @@
+# Staging promotion gate: this workflow is intentionally runnable on staging-control-centre.
 name: Growth Application V2 CI
 
 on:
