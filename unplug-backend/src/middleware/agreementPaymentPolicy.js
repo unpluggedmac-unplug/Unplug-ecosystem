@@ -8,6 +8,7 @@
 //    payment-policy guard and then to routes/agreementForms.js exactly as before.
 
 const pool = require('../db');
+const agreementGeneratorSetup = require('../routes/agreementGeneratorSetup');
 const agreementGenerator = require('../routes/agreementGenerator');
 
 async function enforcePaymentPolicy(req, res, next) {
@@ -36,11 +37,11 @@ async function enforcePaymentPolicy(req, res, next) {
 }
 
 module.exports = function agreementFormsBridge(req, res, next) {
-  // Express routers call the supplied callback only when no generator route
-  // completed the request. That makes this a non-breaking extension: every old
-  // Agreement Forms route continues into the original policy and router.
-  agreementGenerator(req, res, (err) => {
-    if (err) return next(err);
-    return enforcePaymentPolicy(req, res, next);
+  agreementGeneratorSetup(req, res, (setupErr) => {
+    if (setupErr) return next(setupErr);
+    agreementGenerator(req, res, (generatorErr) => {
+      if (generatorErr) return next(generatorErr);
+      return enforcePaymentPolicy(req, res, next);
+    });
   });
 };
