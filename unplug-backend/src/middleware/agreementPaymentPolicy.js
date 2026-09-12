@@ -9,6 +9,7 @@
 
 const pool = require('../db');
 const agreementGeneratorSetup = require('../routes/agreementGeneratorSetup');
+const agreementGeneratorUpload = require('../routes/agreementGeneratorUpload');
 const agreementGenerator = require('../routes/agreementGenerator');
 
 async function enforcePaymentPolicy(req, res, next) {
@@ -39,9 +40,12 @@ async function enforcePaymentPolicy(req, res, next) {
 module.exports = function agreementFormsBridge(req, res, next) {
   agreementGeneratorSetup(req, res, (setupErr) => {
     if (setupErr) return next(setupErr);
-    agreementGenerator(req, res, (generatorErr) => {
-      if (generatorErr) return next(generatorErr);
-      return enforcePaymentPolicy(req, res, next);
+    agreementGeneratorUpload(req, res, (uploadErr) => {
+      if (uploadErr) return next(uploadErr);
+      agreementGenerator(req, res, (generatorErr) => {
+        if (generatorErr) return next(generatorErr);
+        return enforcePaymentPolicy(req, res, next);
+      });
     });
   });
 };
