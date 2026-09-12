@@ -308,7 +308,7 @@ test('Party B secure-link draft/resume, OTP, typed signature and submission lock
   assert.equal(record.status, 200);
   assert.equal(record.body.agreement.workflow_status, 'submitted');
   assert.ok(record.body.agreement.locked_at);
-  assert.ok(record.body.audit.some((x) => x.action === 'party_b_submitted_and_signed'));
+  assert.ok(record.body.audit.some((x) => x.action === 'party_b_signer_signed'));
 });
 
 test('completed PDF contains a real PDF response and support uploads fail closed when private R2 is unavailable', async () => {
@@ -323,8 +323,6 @@ test('completed PDF contains a real PDF response and support uploads fail closed
   const upload = await req('POST', `/agreement-forms/generator/access/${flow.accessToken}/items/999/upload`, {
     raw: true, body: form,
   });
-  // Locked agreements reject before accepting bytes; either lock (423) or
-  // fail-closed storage (503) is safe. It must never return a successful URL.
   assert.ok([423, 503].includes(upload.status));
 });
 
