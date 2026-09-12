@@ -45,18 +45,26 @@ function injectRuntimeIsolation(file, html) {
   if (!RUNTIME_ISOLATED_V2.has(file)) return html;
 
   // Growth V2 must never fall through to the production API when it is served
-  // from Cloudflare staging/preview. The runtime config sets the isolated API
-  // origin (or a fail-closed invalid origin), while unplug-shared renders the
-  // unmistakable UNPLUG STAGING ribbon. Keep both ahead of the page's own JS.
+  // from Cloudflare staging/preview. The host-scoped guard provides an
+  // independent fail-closed staging API/ribbon before runtime-config; the
+  // normal runtime config and shared layer remain authoritative afterwards.
+  const guard = '<script src="/media/scripts/staging-runtime-guard.js"></script>';
+  if (!html.includes('src="/media/scripts/staging-runtime-guard.js"')) {
+    html = html.replace('<head>', `<head>\n  ${guard}`);
+  }
   if (!html.includes('src="/runtime-config"')) {
-    html = html.replace('<head>', '<head>\n  <script src="/runtime-config"></script>');
+    html = html.replace(guard, `${guard}\n  <script src="/runtime-config"></script>`);
   }
   if (!html.includes('src="/unplug-shared.js"')) {
     html = html.replace('<script>', '<script src="/unplug-shared.js"></script>\n<script>');
   }
 
-  if (!html.includes('src="/runtime-config"') || !html.includes('src="/unplug-shared.js"')) {
-    throw new Error(`Growth V2 runtime isolation injection failed: ${file}`);
+  for (const required of [
+    'src="/media/scripts/staging-runtime-guard.js"',
+    'src="/runtime-config"',
+    'src="/unplug-shared.js"',
+  ]) {
+    if (!html.includes(required)) throw new Error(`Growth V2 runtime isolation injection failed: ${file} missing ${required}`);
   }
   return html;
 }
@@ -100,9 +108,14 @@ async function buildPage(file) {
     html = html.includes('</body>') ? html.replace('</body>', `${helpers}\n</body>`) : `${html}\n${helpers}`;
   }
 
-  if (RUNTIME_ISOLATED_V2.has(file)
-      && (!html.includes('src="/runtime-config"') || !html.includes('src="/unplug-shared.js"'))) {
-    throw new Error(`Packaged Growth V2 page lost runtime isolation: ${file}`);
+  if (RUNTIME_ISOLATED_V2.has(file)) {
+    for (const required of [
+      'src="/media/scripts/staging-runtime-guard.js"',
+      'src="/runtime-config"',
+      'src="/unplug-shared.js"',
+    ]) {
+      if (!html.includes(required)) throw new Error(`Packaged Growth V2 page lost runtime isolation: ${file} missing ${required}`);
+    }
   }
 
   fs.writeFileSync(path.join(OUT, file), html);
