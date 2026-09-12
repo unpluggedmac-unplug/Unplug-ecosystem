@@ -192,15 +192,17 @@ async function notifySubmission(submission, snapshot, pdf, partyBEmail) {
     ? submission.notification_config : form.notification_config);
   const delivery = asObject(submission.delivery_config && Object.keys(submission.delivery_config).length
     ? submission.delivery_config : form.delivery_config);
-  const recipients = Array.isArray(notify.recipients)
-    ? [...new Set(notify.recipients.filter(G.validEmail))] : [];
-  for (const to of recipients) {
-    await sendEmail({
-      to,
-      subject:`Agreement submitted — ${submission.reference}`,
-      text:`A completed agreement has been submitted.\n\n${form.title || submission.title_at_signing || 'Agreement'}\nReference: ${submission.reference}\nVersion: v${submission.agreement_version}`,
-      attachments:pdf ? [{ filename:`${submission.reference}.pdf`, content:pdf }] : undefined,
-    });
+  if (delivery.save_notify_unplug !== false) {
+    const recipients = Array.isArray(notify.recipients)
+      ? [...new Set(notify.recipients.filter(G.validEmail))] : [];
+    for (const to of recipients) {
+      await sendEmail({
+        to,
+        subject:`Agreement submitted — ${submission.reference}`,
+        text:`A completed agreement has been submitted.\n\n${form.title || submission.title_at_signing || 'Agreement'}\nReference: ${submission.reference}\nVersion: v${submission.agreement_version}`,
+        attachments:pdf ? [{ filename:`${submission.reference}.pdf`, content:pdf }] : undefined,
+      });
+    }
   }
   if (delivery.email_party_b && G.validEmail(partyBEmail)) {
     await sendEmail({
