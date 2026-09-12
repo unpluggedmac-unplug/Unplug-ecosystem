@@ -15,11 +15,16 @@ const FIELD_TYPES = new Set([
   'text','textarea','number','email','tel','date','url','select','multiselect','radio','checkbox','yes_no','upload',
 ]);
 const ENTITY_TYPES = new Set(['member','business','opportunity','service_order','campaign','agreement']);
+const PRIORITY_STATUSES = new Set(['identified','planned','in_progress','completed','dismissed']);
+const OPPORTUNITY_STATUSES = new Set(['identified','considering','actioned','completed','declined']);
+const PLAN_STATUSES = new Set(['draft','active','paused','completed','archived']);
+const PLAN_ITEM_STATUSES = new Set(['not_started','in_progress','blocked','completed','cancelled']);
 
 const asId = (v) => { const n = Number.parseInt(v, 10); return Number.isInteger(n) && n > 0 ? n : null; };
 const str = (v) => String(v == null ? '' : v).trim();
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const arr = (v) => (Array.isArray(v) ? v : []);
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k);
 
 async function getMaster(client = pool, lock = false) {
   const q = `SELECT id,slug,name,description,is_active,created_at,updated_at
@@ -122,14 +127,21 @@ router.get('/form', async (req, res, next) => {
 });
 
 router.get('/versions/:id', async (req, res, next) => {
-  const versionId = asId(req.params.id); if (!versionId) return res.status(400).json({ error: 'Invalid version id.' });
-  try { const v = await versionTree(versionId, false); return v ? res.json({ version: v }) : res.status(404).json({ error: 'Version not found.' }); }
-  catch (e) { return next(e); }
+  const versionId = asId(req.params.id);
+  if (!versionId) return res.status(400).json({ error: 'Invalid version id.' });
+  try {
+    const v = await versionTree(versionId, false);
+    return v ? res.json({ version: v }) : res.status(404).json({ error: 'Version not found.' });
+  } catch (e) { return next(e); }
 });
+
 router.get('/versions/:id/sensitive', async (req, res, next) => {
-  const versionId = asId(req.params.id); if (!versionId) return res.status(400).json({ error: 'Invalid version id.' });
-  try { const v = await versionTree(versionId, true); return v ? res.json({ version: v }) : res.status(404).json({ error: 'Version not found.' }); }
-  catch (e) { return next(e); }
+  const versionId = asId(req.params.id);
+  if (!versionId) return res.status(400).json({ error: 'Invalid version id.' });
+  try {
+    const v = await versionTree(versionId, true);
+    return v ? res.json({ version: v }) : res.status(404).json({ error: 'Version not found.' });
+  } catch (e) { return next(e); }
 });
 
 router.post('/form/versions', async (req, res, next) => {
@@ -137,7 +149,6 @@ router.post('/form/versions', async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Lock the single master row, then calculate MAX. PostgreSQL forbids FOR UPDATE on aggregate queries.
     const form = await getMaster(client, true);
     if (!form) throw new Error('Master Growth Application form not found.');
     const n = await client.query(`SELECT COALESCE(MAX(version_number),0)+1 AS n FROM growth_form_versions WHERE form_id=$1`, [form.id]);
@@ -177,6 +188,23 @@ router.post('/form/versions', async (req, res, next) => {
   finally { client.release(); }
 });
 
+router.patch('/versions/:id', async (req, res, next) => {
+  const versionId = asId(req.params.id);
+  if (!versionId) return res.status(400).json({ error: 'Invalid version id.' });
+  try {
+    const current = await pool.query(`SELECT * FROM growth_form_versions WHERE id=$1`, [versionId]);
+    if (!current.rowCount) return res.status(404).json({ error: 'Version not found.' });
+    if (current.rows[0].status !== 'draft') return res.status(409).json({ error: 'Published or retired versions are immutable. Create a new draft version to make changes.' });
+    const c = current.rows[0];
+    const r = await pool.query(
+      `UPDATE growth_form_versions SET title=$2,intro_text=$3,consent_text=$4 WHERE id=$1 RETURNING *`,
+      [versionId,has(req.body,'title')?(str(req.body.title)||c.title):c.title,
+        has(req.body,'introText')?(str(req.body.introText)||null):c.intro_text,
+        has(req.body,'consentText')?(str(req.body.consentText)||null):c.consent_text]);
+    return res.json({ version: r.rows[0] });
+  } catch (e) { return next(e); }
+});
+
 router.post('/versions/:id/steps', async (req, res, next) => {
   const versionId=asId(req.params.id), title=str(req.body?.title);
   const key=str(req.body?.stepKey).toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'');
@@ -186,6 +214,22 @@ router.post('/versions/:id/steps', async (req, res, next) => {
       SELECT $1,$2,$3,$4,$5,$6 WHERE EXISTS(SELECT 1 FROM growth_form_versions WHERE id=$1 AND status='draft') RETURNING *`,
       [versionId,key,title,str(req.body?.description)||null,Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:0,req.body?.enabled!==false]);
     return r.rowCount?res.status(201).json({step:r.rows[0]}):res.status(409).json({error:'Only draft versions can be edited.'});
+  }catch(e){return next(e);}
+});
+
+router.patch('/steps/:id', async (req, res, next) => {
+  const stepId=asId(req.params.id); if(!stepId)return res.status(400).json({error:'Invalid step id.'});
+  try{
+    const c=await pool.query(`SELECT s.*,v.status AS version_status FROM growth_form_steps s JOIN growth_form_versions v ON v.id=s.version_id WHERE s.id=$1`,[stepId]);
+    if(!c.rowCount)return res.status(404).json({error:'Step not found.'});
+    if(c.rows[0].version_status!=='draft')return res.status(409).json({error:'Only draft versions can be edited.'});
+    const s=c.rows[0];
+    const r=await pool.query(`UPDATE growth_form_steps SET title=$2,description=$3,display_order=$4,is_enabled=$5 WHERE id=$1 RETURNING *`,[
+      stepId,has(req.body,'title')?(str(req.body.title)||s.title):s.title,
+      has(req.body,'description')?(str(req.body.description)||null):s.description,
+      Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:s.display_order,
+      typeof req.body?.enabled==='boolean'?req.body.enabled:s.is_enabled]);
+    return res.json({step:r.rows[0]});
   }catch(e){return next(e);}
 });
 
@@ -208,6 +252,33 @@ router.post('/steps/:id/fields', async (req,res,next)=>{
   }catch(e){return next(e);}
 });
 
+router.patch('/fields/:id', async (req,res,next)=>{
+  const fieldId=asId(req.params.id); if(!fieldId)return res.status(400).json({error:'Invalid field id.'});
+  try{
+    const c=await pool.query(`SELECT f.*,v.status AS version_status FROM growth_form_fields f JOIN growth_form_versions v ON v.id=f.version_id WHERE f.id=$1`,[fieldId]);
+    if(!c.rowCount)return res.status(404).json({error:'Field not found.'});
+    const f=c.rows[0]; if(f.version_status!=='draft')return res.status(409).json({error:'Published fields are immutable. Create a new draft version.'});
+    const type=has(req.body,'fieldType')?str(req.body.fieldType):f.field_type;if(!FIELD_TYPES.has(type))return res.status(400).json({error:'Invalid field type.'});
+    const sensitive=typeof req.body?.sensitive==='boolean'?req.body.sensitive:f.sensitive;
+    const sensitiveEnabled=sensitive?(typeof req.body?.sensitiveEnabled==='boolean'?req.body.sensitiveEnabled:f.sensitive_enabled):false;
+    let enabled=typeof req.body?.enabled==='boolean'?req.body.enabled:f.is_enabled;if(sensitive&&!sensitiveEnabled)enabled=false;
+    let applicantTypes=f.applicant_types;if(has(req.body,'applicantTypes')){applicantTypes=arr(req.body.applicantTypes).filter(x=>['individual','business'].includes(x));if(!applicantTypes.length)return res.status(400).json({error:'At least one applicant type is required.'});}
+    const r=await pool.query(`UPDATE growth_form_fields SET label=$2,help_text=$3,placeholder=$4,field_type=$5,display_order=$6,
+      is_required=$7,is_enabled=$8,sensitive=$9,sensitive_enabled=$10,confidential=$11,allow_external_sharing=$12,
+      applicant_types=$13::jsonb,validation_rules=$14::jsonb,visibility_rules=$15::jsonb WHERE id=$1 RETURNING *`,[
+      fieldId,has(req.body,'label')?(str(req.body.label)||f.label):f.label,
+      has(req.body,'helpText')?(str(req.body.helpText)||null):f.help_text,
+      has(req.body,'placeholder')?(str(req.body.placeholder)||null):f.placeholder,type,
+      Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:f.display_order,
+      typeof req.body?.required==='boolean'?req.body.required:f.is_required,enabled,sensitive,sensitiveEnabled,
+      typeof req.body?.confidential==='boolean'?req.body.confidential:f.confidential,
+      typeof req.body?.allowExternalSharing==='boolean'?req.body.allowExternalSharing:f.allow_external_sharing,
+      JSON.stringify(applicantTypes),JSON.stringify(has(req.body,'validationRules')?obj(req.body.validationRules):f.validation_rules),
+      JSON.stringify(has(req.body,'visibilityRules')?obj(req.body.visibilityRules):f.visibility_rules)]);
+    return res.json({field:r.rows[0]});
+  }catch(e){return next(e);}
+});
+
 router.post('/fields/:id/options', async(req,res,next)=>{
   const fieldId=asId(req.params.id),value=str(req.body?.value),label=str(req.body?.label);
   if(!fieldId||!value||!label)return res.status(400).json({error:'value and label are required.'});
@@ -215,6 +286,19 @@ router.post('/fields/:id/options', async(req,res,next)=>{
     SELECT f.id,$2,$3,$4,$5 FROM growth_form_fields f JOIN growth_form_versions v ON v.id=f.version_id
     WHERE f.id=$1 AND v.status='draft' RETURNING *`,[fieldId,value,label,Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:0,req.body?.enabled!==false]);
     return r.rowCount?res.status(201).json({option:r.rows[0]}):res.status(409).json({error:'Only draft fields can be edited.'});
+  }catch(e){return next(e);}
+});
+
+router.patch('/options/:id', async(req,res,next)=>{
+  const optionId=asId(req.params.id);if(!optionId)return res.status(400).json({error:'Invalid option id.'});
+  try{
+    const c=await pool.query(`SELECT o.*,v.status AS version_status FROM growth_form_field_options o JOIN growth_form_fields f ON f.id=o.field_id JOIN growth_form_versions v ON v.id=f.version_id WHERE o.id=$1`,[optionId]);
+    if(!c.rowCount)return res.status(404).json({error:'Option not found.'});const o=c.rows[0];if(o.version_status!=='draft')return res.status(409).json({error:'Only draft options can be edited.'});
+    const r=await pool.query(`UPDATE growth_form_field_options SET option_value=$2,option_label=$3,display_order=$4,is_enabled=$5 WHERE id=$1 RETURNING *`,[
+      optionId,has(req.body,'value')?(str(req.body.value)||o.option_value):o.option_value,
+      has(req.body,'label')?(str(req.body.label)||o.option_label):o.option_label,
+      Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:o.display_order,
+      typeof req.body?.enabled==='boolean'?req.body.enabled:o.is_enabled]);return res.json({option:r.rows[0]});
   }catch(e){return next(e);}
 });
 
@@ -242,46 +326,110 @@ router.get('/applications', async(req,res,next)=>{
     return res.json({applications:r.rows});
   }catch(e){return next(e);}
 });
-router.get('/applications/:id',async(req,res,next)=>{const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});
-  try{const d=await adminDetail(applicationId,false);return d?res.json(d):res.status(404).json({error:'Growth Application not found.'});}catch(e){return next(e);}});
-router.get('/applications/:id/sensitive',async(req,res,next)=>{const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});
-  try{const d=await adminDetail(applicationId,true);return d?res.json(d):res.status(404).json({error:'Growth Application not found.'});}catch(e){return next(e);}});
 
-router.post('/applications/:id/status',async(req,res,next)=>{const applicationId=asId(req.params.id),to=str(req.body?.status);if(!applicationId||!STATUSES.has(to))return res.status(400).json({error:'Valid status required.'});
+router.get('/applications/:id',async(req,res,next)=>{
+  const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});
+  try{const d=await adminDetail(applicationId,false);return d?res.json(d):res.status(404).json({error:'Growth Application not found.'});}catch(e){return next(e);}
+});
+
+router.get('/applications/:id/sensitive',async(req,res,next)=>{
+  const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});
+  try{const d=await adminDetail(applicationId,true);return d?res.json(d):res.status(404).json({error:'Growth Application not found.'});}catch(e){return next(e);}
+});
+
+router.post('/applications/:id/status',async(req,res,next)=>{
+  const applicationId=asId(req.params.id),to=str(req.body?.status);if(!applicationId||!STATUSES.has(to))return res.status(400).json({error:'Valid status required.'});
   const client=await pool.connect();try{await client.query('BEGIN');const old=await client.query(`SELECT status FROM growth_applications WHERE id=$1 FOR UPDATE`,[applicationId]);
     if(!old.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Growth Application not found.'});}
     await client.query(`UPDATE growth_applications SET status=$2,closed_at=CASE WHEN $2 IN('completed','closed') THEN now() ELSE closed_at END,updated_at=now() WHERE id=$1`,[applicationId,to]);
     await client.query(`INSERT INTO growth_status_history(application_id,from_status,to_status,changed_by,note) VALUES($1,$2,$3,$4,$5)`,[applicationId,old.rows[0].status,to,req.user.id,str(req.body?.note)||null]);
     await client.query('COMMIT');return res.json({application:{id:applicationId,status:to}});
-  }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}});
+  }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}
+});
 
-router.post('/applications/:id/reopen-field',async(req,res,next)=>{const applicationId=asId(req.params.id),fieldKey=str(req.body?.fieldKey);if(!applicationId||!fieldKey)return res.status(400).json({error:'fieldKey is required.'});
+router.post('/applications/:id/reopen-field',async(req,res,next)=>{
+  const applicationId=asId(req.params.id),fieldKey=str(req.body?.fieldKey);if(!applicationId||!fieldKey)return res.status(400).json({error:'fieldKey is required.'});
   try{const valid=await pool.query(`SELECT 1 FROM growth_applications a JOIN growth_form_fields f ON f.version_id=a.form_version_id WHERE a.id=$1 AND f.field_key=$2`,[applicationId,fieldKey]);if(!valid.rowCount)return res.status(400).json({error:'Field does not belong to this application.'});
+    const already=await pool.query(`SELECT id FROM growth_application_field_reopens WHERE application_id=$1 AND field_key=$2 AND closed_at IS NULL`,[applicationId,fieldKey]);
+    if(already.rowCount)return res.json({reopen:{id:already.rows[0].id,application_id:applicationId,field_key:fieldKey,already_open:true}});
     const r=await pool.query(`INSERT INTO growth_application_field_reopens(application_id,field_key,reason,opened_by) VALUES($1,$2,$3,$4) RETURNING *`,[applicationId,fieldKey,str(req.body?.reason)||null,req.user.id]);return res.status(201).json({reopen:r.rows[0]});
-  }catch(e){return next(e);}});
+  }catch(e){return next(e);}
+});
 
-router.post('/applications/:id/information-requests',async(req,res,next)=>{const applicationId=asId(req.params.id),requestText=str(req.body?.requestText);if(!applicationId||!requestText)return res.status(400).json({error:'requestText is required.'});
+router.post('/applications/:id/information-requests',async(req,res,next)=>{
+  const applicationId=asId(req.params.id),requestText=str(req.body?.requestText);if(!applicationId||!requestText)return res.status(400).json({error:'requestText is required.'});
   const client=await pool.connect();try{await client.query('BEGIN');const a=await client.query(`SELECT status FROM growth_applications WHERE id=$1 FOR UPDATE`,[applicationId]);if(!a.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Growth Application not found.'});}
     const r=await client.query(`INSERT INTO growth_information_requests(application_id,request_text,requested_fields,requested_by) VALUES($1,$2,$3::jsonb,$4) RETURNING *`,[applicationId,requestText,JSON.stringify(arr(req.body?.requestedFields)),req.user.id]);
     if(!['withdrawn','completed','closed'].includes(a.rows[0].status)){await client.query(`UPDATE growth_applications SET status='information_requested',updated_at=now() WHERE id=$1`,[applicationId]);await client.query(`INSERT INTO growth_status_history(application_id,from_status,to_status,changed_by,note) VALUES($1,$2,'information_requested',$3,'Additional information requested')`,[applicationId,a.rows[0].status,req.user.id]);}
     await client.query('COMMIT');return res.status(201).json({request:r.rows[0]});
-  }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}});
+  }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}
+});
 
-router.put('/applications/:id/assessment',async(req,res,next)=>{const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});
+router.patch('/information-requests/:id',async(req,res,next)=>{
+  const requestId=asId(req.params.id),status=str(req.body?.status);if(!requestId||!['closed','cancelled'].includes(status))return res.status(400).json({error:'status must be closed or cancelled.'});
+  try{const r=await pool.query(`UPDATE growth_information_requests SET status=$2,closed_at=CASE WHEN $2='closed' THEN now() ELSE closed_at END WHERE id=$1 RETURNING *`,[requestId,status]);return r.rowCount?res.json({request:r.rows[0]}):res.status(404).json({error:'Information request not found.'});}catch(e){return next(e);}
+});
+
+router.put('/applications/:id/assessment',async(req,res,next)=>{
+  const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});
   const names=['readinessScore','credibilityScore','exposureScore','opportunityScore','growthScore'];const scores=names.map(k=>req.body?.[k]==null?null:Number(req.body[k]));if(scores.some(x=>x!=null&&(!Number.isFinite(x)||x<0||x>100)))return res.status(400).json({error:'Scores must be between 0 and 100.'});
   try{const r=await pool.query(`INSERT INTO growth_assessments(application_id,strengths,challenges,readiness_score,credibility_score,exposure_score,opportunity_score,growth_score,internal_notes,assessed_by)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(application_id) DO UPDATE SET strengths=EXCLUDED.strengths,challenges=EXCLUDED.challenges,readiness_score=EXCLUDED.readiness_score,credibility_score=EXCLUDED.credibility_score,exposure_score=EXCLUDED.exposure_score,opportunity_score=EXCLUDED.opportunity_score,growth_score=EXCLUDED.growth_score,internal_notes=EXCLUDED.internal_notes,assessed_by=EXCLUDED.assessed_by,updated_at=now() RETURNING *`,
-    [applicationId,str(req.body?.strengths)||null,str(req.body?.challenges)||null,...scores,str(req.body?.internalNotes)||null,req.user.id]);return res.json({assessment:r.rows[0]});}catch(e){return next(e);}});
+    [applicationId,str(req.body?.strengths)||null,str(req.body?.challenges)||null,...scores,str(req.body?.internalNotes)||null,req.user.id]);return res.json({assessment:r.rows[0]});}catch(e){return next(e);}
+});
 
-router.post('/applications/:id/priorities',async(req,res,next)=>{const applicationId=asId(req.params.id),title=str(req.body?.title);if(!applicationId||!title)return res.status(400).json({error:'title required.'});try{const r=await pool.query(`INSERT INTO growth_priorities(application_id,title,detail,priority_order,created_by) VALUES($1,$2,$3,$4,$5) RETURNING *`,[applicationId,title,str(req.body?.detail)||null,Number.isInteger(req.body?.priorityOrder)?req.body.priorityOrder:0,req.user.id]);return res.status(201).json({priority:r.rows[0]});}catch(e){return next(e);}});
-router.post('/applications/:id/opportunities',async(req,res,next)=>{const applicationId=asId(req.params.id),title=str(req.body?.title);if(!applicationId||!title)return res.status(400).json({error:'title required.'});try{const r=await pool.query(`INSERT INTO growth_opportunities(application_id,title,detail,opportunity_type,internal_only,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[applicationId,title,str(req.body?.detail)||null,str(req.body?.opportunityType)||null,req.body?.internalOnly!==false,req.user.id]);return res.status(201).json({opportunity:r.rows[0]});}catch(e){return next(e);}});
+router.post('/applications/:id/priorities',async(req,res,next)=>{
+  const applicationId=asId(req.params.id),title=str(req.body?.title);if(!applicationId||!title)return res.status(400).json({error:'title required.'});
+  try{const r=await pool.query(`INSERT INTO growth_priorities(application_id,title,detail,priority_order,created_by) VALUES($1,$2,$3,$4,$5) RETURNING *`,[applicationId,title,str(req.body?.detail)||null,Number.isInteger(req.body?.priorityOrder)?req.body.priorityOrder:0,req.user.id]);return res.status(201).json({priority:r.rows[0]});}catch(e){return next(e);}
+});
 
-router.put('/applications/:id/growth-plan',async(req,res,next)=>{const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});const status=['draft','active','paused','completed','archived'].includes(req.body?.status)?req.body.status:'draft';
+router.patch('/priorities/:id',async(req,res,next)=>{
+  const priorityId=asId(req.params.id);if(!priorityId)return res.status(400).json({error:'Invalid priority id.'});
+  try{const c=await pool.query(`SELECT * FROM growth_priorities WHERE id=$1`,[priorityId]);if(!c.rowCount)return res.status(404).json({error:'Priority not found.'});const p=c.rows[0];const status=has(req.body,'status')?str(req.body.status):p.status;if(!PRIORITY_STATUSES.has(status))return res.status(400).json({error:'Invalid priority status.'});
+    const r=await pool.query(`UPDATE growth_priorities SET title=$2,detail=$3,priority_order=$4,status=$5,updated_at=now() WHERE id=$1 RETURNING *`,[priorityId,has(req.body,'title')?(str(req.body.title)||p.title):p.title,has(req.body,'detail')?(str(req.body.detail)||null):p.detail,Number.isInteger(req.body?.priorityOrder)?req.body.priorityOrder:p.priority_order,status]);return res.json({priority:r.rows[0]});}catch(e){return next(e);}
+});
+
+router.post('/applications/:id/opportunities',async(req,res,next)=>{
+  const applicationId=asId(req.params.id),title=str(req.body?.title);if(!applicationId||!title)return res.status(400).json({error:'title required.'});
+  try{const r=await pool.query(`INSERT INTO growth_opportunities(application_id,title,detail,opportunity_type,internal_only,created_by) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,[applicationId,title,str(req.body?.detail)||null,str(req.body?.opportunityType)||null,req.body?.internalOnly!==false,req.user.id]);return res.status(201).json({opportunity:r.rows[0]});}catch(e){return next(e);}
+});
+
+router.patch('/opportunities/:id',async(req,res,next)=>{
+  const opportunityId=asId(req.params.id);if(!opportunityId)return res.status(400).json({error:'Invalid opportunity id.'});
+  try{const c=await pool.query(`SELECT * FROM growth_opportunities WHERE id=$1`,[opportunityId]);if(!c.rowCount)return res.status(404).json({error:'Opportunity not found.'});const o=c.rows[0];const status=has(req.body,'status')?str(req.body.status):o.status;if(!OPPORTUNITY_STATUSES.has(status))return res.status(400).json({error:'Invalid opportunity status.'});
+    const r=await pool.query(`UPDATE growth_opportunities SET title=$2,detail=$3,opportunity_type=$4,internal_only=$5,status=$6,updated_at=now() WHERE id=$1 RETURNING *`,[opportunityId,has(req.body,'title')?(str(req.body.title)||o.title):o.title,has(req.body,'detail')?(str(req.body.detail)||null):o.detail,has(req.body,'opportunityType')?(str(req.body.opportunityType)||null):o.opportunity_type,typeof req.body?.internalOnly==='boolean'?req.body.internalOnly:o.internal_only,status]);return res.json({opportunity:r.rows[0]});}catch(e){return next(e);}
+});
+
+router.put('/applications/:id/growth-plan',async(req,res,next)=>{
+  const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});const status=PLAN_STATUSES.has(req.body?.status)?req.body.status:'draft';
   try{const r=await pool.query(`INSERT INTO growth_plans(application_id,objective,strategy,internal_notes,status,review_at,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$6,$7,$7)
-    ON CONFLICT(application_id) DO UPDATE SET objective=EXCLUDED.objective,strategy=EXCLUDED.strategy,internal_notes=EXCLUDED.internal_notes,status=EXCLUDED.status,review_at=EXCLUDED.review_at,updated_by=EXCLUDED.updated_by,updated_at=now() RETURNING *`,[applicationId,str(req.body?.objective)||null,str(req.body?.strategy)||null,str(req.body?.internalNotes)||null,status,req.body?.reviewAt||null,req.user.id]);return res.json({growthPlan:r.rows[0]});}catch(e){return next(e);}});
-router.post('/growth-plans/:id/items',async(req,res,next)=>{const planId=asId(req.params.id),title=str(req.body?.title);if(!planId||!title)return res.status(400).json({error:'title required.'});try{const r=await pool.query(`INSERT INTO growth_plan_items(plan_id,title,description,owner_user_id,due_date,display_order,status) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,[planId,title,str(req.body?.description)||null,asId(req.body?.ownerUserId),req.body?.dueDate||null,Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:0,['not_started','in_progress','blocked','completed','cancelled'].includes(req.body?.status)?req.body.status:'not_started']);return res.status(201).json({item:r.rows[0]});}catch(e){return next(e);}});
-router.post('/applications/:id/progress',async(req,res,next)=>{const applicationId=asId(req.params.id),updateText=str(req.body?.updateText);if(!applicationId||!updateText)return res.status(400).json({error:'updateText required.'});try{const r=await pool.query(`INSERT INTO growth_progress_updates(application_id,update_text,internal_only,created_by) VALUES($1,$2,$3,$4) RETURNING *`,[applicationId,updateText,req.body?.internalOnly!==false,req.user.id]);return res.status(201).json({progress:r.rows[0]});}catch(e){return next(e);}});
-router.put('/applications/:id/outcome',async(req,res,next)=>{const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});try{const r=await pool.query(`INSERT INTO growth_outcomes(application_id,outcome_summary,outcome_code,future_review_at,internal_notes,closed_by) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(application_id) DO UPDATE SET outcome_summary=EXCLUDED.outcome_summary,outcome_code=EXCLUDED.outcome_code,future_review_at=EXCLUDED.future_review_at,internal_notes=EXCLUDED.internal_notes,closed_by=EXCLUDED.closed_by,updated_at=now() RETURNING *`,[applicationId,str(req.body?.summary)||null,str(req.body?.code)||null,req.body?.futureReviewAt||null,str(req.body?.internalNotes)||null,req.user.id]);return res.json({outcome:r.rows[0]});}catch(e){return next(e);}});
-router.post('/applications/:id/entity-links',async(req,res,next)=>{const applicationId=asId(req.params.id),entityType=str(req.body?.entityType),entityId=str(req.body?.entityId);if(!applicationId||!ENTITY_TYPES.has(entityType)||!entityId)return res.status(400).json({error:'Valid entityType and entityId required.'});try{const r=await pool.query(`INSERT INTO growth_application_entity_links(application_id,entity_type,entity_id,relationship,created_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(application_id,entity_type,entity_id) DO UPDATE SET relationship=EXCLUDED.relationship RETURNING *`,[applicationId,entityType,entityId,str(req.body?.relationship)||null,req.user.id]);return res.status(201).json({link:r.rows[0]});}catch(e){return next(e);}});
+    ON CONFLICT(application_id) DO UPDATE SET objective=EXCLUDED.objective,strategy=EXCLUDED.strategy,internal_notes=EXCLUDED.internal_notes,status=EXCLUDED.status,review_at=EXCLUDED.review_at,updated_by=EXCLUDED.updated_by,updated_at=now() RETURNING *`,[applicationId,str(req.body?.objective)||null,str(req.body?.strategy)||null,str(req.body?.internalNotes)||null,status,req.body?.reviewAt||null,req.user.id]);return res.json({growthPlan:r.rows[0]});}catch(e){return next(e);}
+});
+
+router.post('/growth-plans/:id/items',async(req,res,next)=>{
+  const planId=asId(req.params.id),title=str(req.body?.title);if(!planId||!title)return res.status(400).json({error:'title required.'});
+  try{const r=await pool.query(`INSERT INTO growth_plan_items(plan_id,title,description,owner_user_id,due_date,display_order,status) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,[planId,title,str(req.body?.description)||null,asId(req.body?.ownerUserId),req.body?.dueDate||null,Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:0,PLAN_ITEM_STATUSES.has(req.body?.status)?req.body.status:'not_started']);return res.status(201).json({item:r.rows[0]});}catch(e){return next(e);}
+});
+
+router.patch('/growth-plan-items/:id',async(req,res,next)=>{
+  const itemId=asId(req.params.id);if(!itemId)return res.status(400).json({error:'Invalid item id.'});
+  try{const c=await pool.query(`SELECT * FROM growth_plan_items WHERE id=$1`,[itemId]);if(!c.rowCount)return res.status(404).json({error:'Plan item not found.'});const i=c.rows[0];const status=has(req.body,'status')?str(req.body.status):i.status;if(!PLAN_ITEM_STATUSES.has(status))return res.status(400).json({error:'Invalid item status.'});
+    const r=await pool.query(`UPDATE growth_plan_items SET title=$2,description=$3,owner_user_id=$4,due_date=$5,display_order=$6,status=$7,updated_at=now() WHERE id=$1 RETURNING *`,[itemId,has(req.body,'title')?(str(req.body.title)||i.title):i.title,has(req.body,'description')?(str(req.body.description)||null):i.description,has(req.body,'ownerUserId')?asId(req.body.ownerUserId):i.owner_user_id,has(req.body,'dueDate')?(req.body.dueDate||null):i.due_date,Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:i.display_order,status]);return res.json({item:r.rows[0]});}catch(e){return next(e);}
+});
+
+router.post('/applications/:id/progress',async(req,res,next)=>{
+  const applicationId=asId(req.params.id),updateText=str(req.body?.updateText);if(!applicationId||!updateText)return res.status(400).json({error:'updateText required.'});
+  try{const r=await pool.query(`INSERT INTO growth_progress_updates(application_id,update_text,internal_only,created_by) VALUES($1,$2,$3,$4) RETURNING *`,[applicationId,updateText,req.body?.internalOnly!==false,req.user.id]);return res.status(201).json({progress:r.rows[0]});}catch(e){return next(e);}
+});
+
+router.put('/applications/:id/outcome',async(req,res,next)=>{
+  const applicationId=asId(req.params.id);if(!applicationId)return res.status(400).json({error:'Invalid application id.'});
+  try{const r=await pool.query(`INSERT INTO growth_outcomes(application_id,outcome_summary,outcome_code,future_review_at,internal_notes,closed_by) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(application_id) DO UPDATE SET outcome_summary=EXCLUDED.outcome_summary,outcome_code=EXCLUDED.outcome_code,future_review_at=EXCLUDED.future_review_at,internal_notes=EXCLUDED.internal_notes,closed_by=EXCLUDED.closed_by,updated_at=now() RETURNING *`,[applicationId,str(req.body?.summary)||null,str(req.body?.code)||null,req.body?.futureReviewAt||null,str(req.body?.internalNotes)||null,req.user.id]);return res.json({outcome:r.rows[0]});}catch(e){return next(e);}
+});
+
+router.post('/applications/:id/entity-links',async(req,res,next)=>{
+  const applicationId=asId(req.params.id),entityType=str(req.body?.entityType),entityId=str(req.body?.entityId);if(!applicationId||!ENTITY_TYPES.has(entityType)||!entityId)return res.status(400).json({error:'Valid entityType and entityId required.'});
+  try{const r=await pool.query(`INSERT INTO growth_application_entity_links(application_id,entity_type,entity_id,relationship,created_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(application_id,entity_type,entity_id) DO UPDATE SET relationship=EXCLUDED.relationship RETURNING *`,[applicationId,entityType,entityId,str(req.body?.relationship)||null,req.user.id]);return res.status(201).json({link:r.rows[0]});}catch(e){return next(e);}
+});
 
 module.exports = router;
