@@ -23,6 +23,23 @@ export async function onRequest({ env, request }) {
     'window.UNPLUG_RUNTIME_CONFIG_ERROR=' + JSON.stringify(badStaging ? 'Staging frontend is not connected to an isolated staging API.' : '') + ';'
   ];
 
+  // Account/session controls and the Terms-to-checkout return flow are shared
+  // across every user-facing page. Loading them here means standalone portals
+  // (checkout, voting, forms, etc.) cannot accidentally omit Sign In / Sign Out
+  // or strand a customer on the policy page. The script self-excludes admin
+  // workspaces and pages that already own richer account controls.
+  lines.push(
+    '(function(){',
+    ' if (window.__unplugAccountToolsRequested) return;',
+    ' window.__unplugAccountToolsRequested=true;',
+    ' var s=document.createElement("script");',
+    ' s.src="/media/scripts/unplug-account-tools.js?v=20260912-1";',
+    ' s.async=false;',
+    ' s.setAttribute("data-unplug-account-tools","true");',
+    ' (document.head||document.documentElement).appendChild(s);',
+    '})();'
+  );
+
   // The Agreement builder is a separate admin workspace so the very large
   // Control Centre stays stable. Inject one ordinary same-origin link into the
   // Marketing & CRM group. It has no data-section attribute, so the existing
