@@ -1,3 +1,4 @@
+# Release gate for the reconciled Agreement Generator feature tree.
 name: Agreement Generator feature CI
 
 on:
