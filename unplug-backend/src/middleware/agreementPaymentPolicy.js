@@ -1,16 +1,17 @@
 // Agreement Forms bridge.
 //
-// 1) The standalone Agreement Generator is deliberately mounted INSIDE the
-//    existing /agreement-forms surface so the application keeps one Agreement
-//    Forms backend and the legacy /agreements signed_agreements system remains
-//    untouched.
-// 2) Requests the generator does not handle fall through to the original
-//    payment-policy guard and then to routes/agreementForms.js exactly as before.
+// The standalone Agreement Generator is mounted INSIDE the existing
+// /agreement-forms surface. Requests not handled by the generator continue to
+// the original Agreement Forms routes and payment policy. The legacy
+// /agreements signed_agreements system remains separate and untouched.
 
 const pool = require('../db');
 const agreementGeneratorSetup = require('../routes/agreementGeneratorSetup');
-const agreementGeneratorUpload = require('../routes/agreementGeneratorUpload');
 const agreementGenerator = require('../routes/agreementGenerator');
+const agreementGeneratorTemplateAdmin = require('../routes/agreementGeneratorTemplateAdmin');
+const agreementGeneratorRecordAdmin = require('../routes/agreementGeneratorRecordAdmin');
+const agreementGeneratorSignerUpload = require('../routes/agreementGeneratorSignerUpload');
+const agreementGeneratorPartyB = require('../routes/agreementGeneratorPartyB');
 
 async function enforcePaymentPolicy(req, res, next) {
   if (req.method !== 'POST' || !/^\/[^/]+\/sign\/?$/.test(req.path)) return next();
@@ -40,11 +41,20 @@ async function enforcePaymentPolicy(req, res, next) {
 module.exports = function agreementFormsBridge(req, res, next) {
   agreementGeneratorSetup(req, res, (setupErr) => {
     if (setupErr) return next(setupErr);
-    agreementGeneratorUpload(req, res, (uploadErr) => {
-      if (uploadErr) return next(uploadErr);
-      agreementGenerator(req, res, (generatorErr) => {
-        if (generatorErr) return next(generatorErr);
-        return enforcePaymentPolicy(req, res, next);
+    agreementGenerator(req, res, (metaErr) => {
+      if (metaErr) return next(metaErr);
+      agreementGeneratorTemplateAdmin(req, res, (templateErr) => {
+        if (templateErr) return next(templateErr);
+        agreementGeneratorRecordAdmin(req, res, (recordErr) => {
+          if (recordErr) return next(recordErr);
+          agreementGeneratorSignerUpload(req, res, (uploadErr) => {
+            if (uploadErr) return next(uploadErr);
+            agreementGeneratorPartyB(req, res, (partyBErr) => {
+              if (partyBErr) return next(partyBErr);
+              return enforcePaymentPolicy(req, res, next);
+            });
+          });
+        });
       });
     });
   });
