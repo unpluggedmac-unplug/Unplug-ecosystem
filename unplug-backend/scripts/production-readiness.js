@@ -50,6 +50,11 @@ r2Public ? ok('Persistent public upload storage configured (R2)') : fail('Comple
 const r2Private = ['R2_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY'].every(present);
 r2Private ? ok('Private R2 storage credentials are available for proofs/paid edition files') : fail('R2 private storage credentials are required for proofs/paid edition files');
 
+const backupPassphrase = String(env.UNPLUG_BACKUP_PASSPHRASE || '');
+backupPassphrase.length >= 16
+  ? ok('Encrypted production backups are enabled')
+  : fail('UNPLUG_BACKUP_PASSPHRASE is missing or shorter than 16 characters; production backups are disabled');
+
 present('UNPLUG_CLEANUP_SECRET') ? ok('UNPLUG_CLEANUP_SECRET is set') : warn('UNPLUG_CLEANUP_SECRET is missing; scheduled cleanup/email/recovery endpoints cannot be securely called');
 present('BIRTHDAY_CRON_SECRET') ? ok('BIRTHDAY_CRON_SECRET is set') : warn('BIRTHDAY_CRON_SECRET is missing; birthday scheduled delivery may not run securely');
 
