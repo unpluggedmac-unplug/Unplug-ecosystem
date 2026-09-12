@@ -6,6 +6,7 @@ const ALL_PERMISSIONS = [
   'approvals.view', 'approvals.manage',
   'pages.manage', 'media.manage',
   'members.view', 'members.manage',
+  'growth.view', 'growth.manage', 'growth.sensitive',
   'events.manage', 'competitions.manage', 'directory.manage',
   'advertising.manage', 'finance.view', 'finance.manage',
   'marketing.manage', 'crm.manage',
@@ -26,6 +27,13 @@ function permissionForRequest(req) {
   if (/\/admin\/notifications(?:\/|$)/.test(path)) return 'system.manage';
   if (/\/(security|backups|maintenance)(?:\/|$)/.test(path)
       || /\/admin\/(activity-log|redirects)(?:\/|$)/.test(path)) return 'system.manage';
+
+  // Growth Application is a separate Control Centre domain. Sensitive access
+  // is never implied by ordinary manage access and must be granted explicitly.
+  if (/\/growth-admin(?:\/|$)/.test(path)) {
+    if (/\/sensitive(?:\/|$)/.test(path)) return 'growth.sensitive';
+    return read ? 'growth.view' : 'growth.manage';
+  }
 
   if (/\/admin\/approval|\/change-requests|\/(comments|reviews)\/admin|\/pending(?:\/|$)/.test(path)) return read ? 'approvals.view' : 'approvals.manage';
   // Banner placements live under page-cms for historical reasons, but they are
@@ -99,6 +107,7 @@ async function hasPermission(userId, permission) {
     'approvals.view': 'approvals.manage',
     'members.view': 'members.manage',
     'finance.view': 'finance.manage',
+    'growth.view': 'growth.manage',
   };
   return implied[permission] ? access.permissions.includes(implied[permission]) : false;
 }
