@@ -329,9 +329,49 @@ router.post('/consultants/:id', requireRole('admin'), async (req, res, next) => 
     res.json({
       linked: userId !== null,
       message: userId === null
-        ? 'Consultant unlinked. Their record and past commissions are unchanged.'
-        : 'Consultant linked to that account.',
+        ? 'Representative unlinked. Their record and past commissions are unchanged.'
+        : 'Representative linked to that account.',
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /admin/links/promote-member { userId, commissionPct? }
+//
+// The one-step version of "add a consultant, then link it to an account":
+// picks an existing, signed-up member and creates their sales_consultants
+// record already linked to that account, in a single write. Does NOT touch
+// users.role — the 'consultant' role (dashboard access to agreements/growth
+// clients) stays a separate, deliberately-restricted grant via
+// /admin/staff, not something this shortcut can bypass.
+router.post('/promote-member', requireRole('admin'), async (req, res, next) => {
+  try {
+    const userId = Number(req.body.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: 'Choose a member to promote.' });
+    }
+    const commissionPct = req.body.commissionPct !== undefined && req.body.commissionPct !== ''
+      ? Math.max(0, Number(req.body.commissionPct) || 0)
+      : 10;
+
+    const user = await pool.query('SELECT id, email, full_name FROM users WHERE id = $1', [userId]);
+    if (user.rows.length === 0) return res.status(404).json({ error: 'That member account no longer exists.' });
+
+    const existing = await pool.query('SELECT id, name FROM sales_consultants WHERE user_id = $1', [userId]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: `${user.rows[0].email} is already a representative ("${existing.rows[0].name}").` });
+    }
+
+    const name = user.rows[0].full_name || user.rows[0].email;
+    const created = await pool.query(
+      `INSERT INTO sales_consultants (name, email, user_id, commission_pct) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [name, user.rows[0].email, userId, commissionPct]
+    );
+    await logActivity(req.user.id, 'consultant_promoted',
+      `Promoted member ${user.rows[0].email} to representative "${name}" (#${created.rows[0].id})`).catch(() => {});
+
+    res.status(201).json({ consultant: created.rows[0] });
   } catch (err) {
     next(err);
   }

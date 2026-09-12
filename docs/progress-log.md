@@ -2984,3 +2984,58 @@ Full suite: **2269 passing, 0 failing** (2263 existing + 6 new). Built and verif
 directly, in an isolated worktree (`live-gaps-fix` branch) — not against this engagement's earlier parallel
 build, whose migration numbers collide with what's actually live.
 
+## 2026-09-12 — Representative label, one-step promotion, agreement-signing status, personal visit link
+
+Follow-up to the same-day gap-closing pass above, addressing what was still partial or missing.
+
+**"Sales Consultant" → "Representative", user-facing text only.** Every place a customer or admin actually
+reads the word changed — the checkout referral option and its consultant-picker label, the admin nav item and
+the whole "Representatives" section (headings, panel titles, search placeholders, toasts, empty-states, the
+`prompt()`/table-header strings in the account-linking flow), the Staff & Permissions role dropdown (which
+previously showed the raw value `consultant` verbatim — now shows "representative" via a small label map
+while the submitted `value` stays `consultant`), and the two matching error strings in the member dashboard.
+Deliberately NOT renamed: route paths, the `sales_consultants` table/columns, JS identifiers, the `role`
+column's actual value, and the `referral_source` CHECK constraint's `sales_consultant` value — all internal,
+already working, and renaming them buys nothing but migration risk. One existing test
+(`consultantFreePublishingAdminUi.test.js`) pinned the old "consultants only" wording verbatim and needed
+updating in the same commit — exactly the kind of test-following-behavior update this codebase's convention
+expects.
+
+**One-step "promote a member to Representative".** Previously: add a bare consultant record, then separately
+search-and-link it to an account — two admin actions for one outcome. New endpoint,
+`POST /admin/links/promote-member` (`adminProfileLinks.js`, alongside the existing directory/consultant
+linking routes it's the same shape of problem as), creates the `sales_consultants` row *already* pointing at
+`user_id` in one insert, refusing a double-promotion of the same member. A new "Promote a member to
+Representative" panel search-and-clicks straight to it; the original "Add a Representative" (no account yet)
+and "Link a representative to their member account" (existing record, no account) panels stay, for the cases
+this shortcut doesn't cover. Confirmed with the user beforehand: the `consultant` *role* (dashboard access)
+stays restricted to `@unplugnews.com` staff addresses regardless of this shortcut — promoting a member only
+ever creates the attribution/commission record, never grants the role.
+
+**Per-client agreement-signing status**, mirroring the Growth Application clients view from the same-day
+entry above almost exactly: `GET /agreement-forms/consultant/clients` (self) and
+`GET /admin/sales-consultants/:id/agreement-clients` (admin) both return, per referred client (same
+confirmed-payment definition as everywhere else), every `agreement_submissions` row for that user —
+agreement title, status, signed date. A client can have signed several agreements or none; `status='complete'`
+is what "signed" means here (`started`/`awaiting_payment` are provisional pay-before-sign rows, not a
+completed signature). Surfaced as a merged "Agreements signed" column right in the existing "My Clients'
+Growth" table (member dashboard) rather than a separate screen, and as a "Clients' Agreements" block appended
+to the admin commission-report panel next to the existing Growth Applications one.
+
+**Site visits via a personal tracked link.** A consultant has no dedicated `referral_code` the way a member
+does, so rather than building new tracking, this reuses the real first-party analytics
+(`analytics_sessions.campaign`) that `/analytics/track` already writes on every page view: their link is
+`{site}/?utm_source=representative&utm_campaign=consultant-<id>`, and `analyticsContext.js`'s existing
+`classifySource()` already turns that into a stored session tagged `campaign='consultant-<id>'` with no
+backend changes needed there. New endpoints `GET /sales-consultants/me/visits` (self) and
+`GET /admin/sales-consultants/:id/visits` (admin) count those sessions, total and last-30-days. The member
+dashboard's My Referrals panel gained a copyable "Your link" box plus the visit count; the admin commission
+report gained a matching "Site visits via their link" line.
+
+**Tests.** New file `representativeGaps.test.js`, 10 tests covering all three additions above (promote-member
+success/conflict/404/role-gate, agreement-clients self+admin view with a genuinely-unsigned client correctly
+showing an empty list, visits counting correctly and never leaking a *different* consultant's campaign tag
+into the total). Full suite: **2288 passing, 0 failing** — 10 new here plus whatever landed on `main` from
+other work merged in the meantime (Coming Soon Mode, an admin session-handoff fix); the 1 pre-existing test
+whose text-match needed updating for the rename is fixed, not counted as new.
+

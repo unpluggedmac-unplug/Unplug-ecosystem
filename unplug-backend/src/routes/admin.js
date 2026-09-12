@@ -1273,6 +1273,74 @@ router.get('/sales-consultants/:id/growth-clients', requireRole('admin'), async 
   }
 });
 
+// GET /admin/sales-consultants/:id/agreement-clients — admin view of the same
+// thing GET /agreement-forms/consultant/clients shows the consultant
+// themselves: which of their referred clients have signed which agreements.
+router.get('/sales-consultants/:id/agreement-clients', requireRole('admin'), async (req, res, next) => {
+  try {
+    const consultantResult = await pool.query('SELECT id, name FROM sales_consultants WHERE id = $1', [req.params.id]);
+    if (consultantResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Consultant not found.' });
+    }
+
+    const result = await pool.query(
+      `SELECT u.id AS user_id,
+              COALESCE(u.full_name, SPLIT_PART(u.email, '@', 1)) AS name,
+              u.email,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'agreement_title', s.title_at_signing,
+                    'status', s.status,
+                    'signed_at', s.signed_at,
+                    'reference', s.reference
+                  ) ORDER BY s.started_at DESC
+                ) FILTER (WHERE s.id IS NOT NULL), '[]'
+              ) AS submissions
+         FROM (
+           SELECT DISTINCT p.user_id
+             FROM payments p
+            WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+         ) referred
+         JOIN users u ON u.id = referred.user_id
+         LEFT JOIN agreement_submissions s ON s.user_id = referred.user_id
+        GROUP BY u.id, u.full_name, u.email
+        ORDER BY u.full_name NULLS LAST, u.email ASC`,
+      [req.params.id]
+    );
+
+    res.json({ consultant: consultantResult.rows[0], clients: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/sales-consultants/:id/visits — admin view of the same visit
+// counts GET /sales-consultants/me/visits shows the consultant themselves.
+router.get('/sales-consultants/:id/visits', requireRole('admin'), async (req, res, next) => {
+  try {
+    const consultantResult = await pool.query('SELECT id, name FROM sales_consultants WHERE id = $1', [req.params.id]);
+    if (consultantResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Consultant not found.' });
+    }
+    const campaign = `consultant-${req.params.id}`;
+    const result = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total_visits,
+         COUNT(*) FILTER (WHERE started_at >= now() - interval '30 days')::int AS visits_last_30_days
+       FROM analytics_sessions
+       WHERE campaign = $1`,
+      [campaign]
+    );
+    res.json({
+      consultant: consultantResult.rows[0], campaign,
+      totalVisits: result.rows[0].total_visits, visitsLast30Days: result.rows[0].visits_last_30_days,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /admin/notifications — unread-first feed. A sales-consultant-linked
 // payment automatically creates one of these (see payments.js) so the
 // admin doesn't have to go hunting through the full payments table.

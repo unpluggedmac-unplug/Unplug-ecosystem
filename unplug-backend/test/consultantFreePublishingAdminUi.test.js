@@ -29,11 +29,11 @@ test('EVERY ACCOUNT ROW HAS A FREE-PUBLISHING CHECKBOX, DEFAULTING TO THAT ACCOU
     'must reflect the server value per-account, not a hardcoded default');
 });
 
-test('THE LABEL IS HONEST THAT THIS ONLY MEANS ANYTHING FOR A CONSULTANT', () => {
+test('THE LABEL IS HONEST THAT THIS ONLY MEANS ANYTHING FOR A CONSULTANT (SHOWN AS "REPRESENTATIVE")', () => {
   const src = readAdmin();
   const idx = src.indexOf('class="u-free-publishing"');
   const nearby = src.slice(idx, idx + 250);
-  assert.match(nearby, /consultants only/i);
+  assert.match(nearby, /representatives only/i);
 });
 
 test('SAVING A ROW SENDS THE CHECKBOX\'S REAL STATE, EVERY TIME — NOT ONLY WHEN IT CHANGED', () => {
