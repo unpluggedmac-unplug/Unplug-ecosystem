@@ -4895,7 +4895,7 @@ async function loadAvailableAgreements() {
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;">
           <span class="sub">${Number(a.amount) > 0 ? `Amount: R${Number(a.amount).toFixed(2)}` : 'No payment required'}</span>
-          <a class="btn btn-line" style="width:auto;padding:7px 14px;text-decoration:none;" href="/unplug-agreement.html?slug=${encodeURIComponent(a.slug)}">View agreement</a>
+          <a class="btn btn-line" style="width:auto;padding:7px 14px;text-decoration:none;" href="/unplug-agreement.html?slug=${encodeURIComponent(a.slug)}">${escapeHtmlM(a.button_label || 'View agreement')}</a>
         </div>
       </div>`).join('');
   } catch (_) {

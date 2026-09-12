@@ -267,7 +267,7 @@ router.get('/', async (req, res, next) => {
     if (!page) return res.json({ agreements: [], publicDirectory: false });
     const r = await pool.query(
       `SELECT id, slug, title, description, category, version, short_code,
-              service_name, amount, payment_mode, closes_at
+              service_name, amount, payment_mode, closes_at, button_label
          FROM agreement_forms
         WHERE status = 'active' AND published = true
           AND (opens_at IS NULL OR opens_at <= now())
@@ -289,7 +289,7 @@ router.get('/member', requireAuth, async (req, res, next) => {
   try {
     const r = await pool.query(
       `SELECT id, slug, title, description, category, version, short_code,
-              service_name, amount, payment_mode, opens_at, closes_at
+              service_name, amount, payment_mode, opens_at, closes_at, button_label
          FROM agreement_forms
         WHERE status = 'active' AND member_visible = true
           AND (opens_at IS NULL OR opens_at <= now())
@@ -511,6 +511,7 @@ router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
     if (req.body.publicPages !== undefined) set('public_pages', JSON.stringify(sanitizePages(req.body.publicPages)));
     if (req.body.published !== undefined) set('published', !!req.body.published);
     if (req.body.memberVisible !== undefined) set('member_visible', !!req.body.memberVisible);
+    if (req.body.buttonLabel !== undefined) set('button_label', trim(req.body.buttonLabel, 80));
     if (req.body.opensAt !== undefined) set('opens_at', req.body.opensAt || null);
     if (req.body.closesAt !== undefined) set('closes_at', req.body.closesAt || null);
     if (req.body.reminderDays !== undefined) set('reminder_days', req.body.reminderDays === '' || req.body.reminderDays === null ? null : Math.max(0,Number(req.body.reminderDays)||0));
