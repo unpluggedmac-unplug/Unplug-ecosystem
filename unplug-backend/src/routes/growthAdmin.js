@@ -12,8 +12,14 @@ const STATUSES = new Set([
   'plan_in_progress','in_progress','completed','withdrawn','closed','contacted',
 ]);
 const FIELD_TYPES = new Set([
-  'text','textarea','number','email','tel','date','url','select','multiselect','radio','checkbox','yes_no','upload',
+  'text','short_text','textarea','long_text','rich_text','number','currency','percentage',
+  'email','tel','date','date_range','url','social_url','video_url','audio_url',
+  'select','multiselect','radio','checkbox','yes_no','tags','rating','scale',
+  'address','country','province','city','suburb','industry','category','skills','interests',
+  'upload','image_upload','document_upload','portfolio_upload','consent','declaration',
+  'heading','info','admin_only',
 ]);
+const AUDIENCES = new Set(['applicant','admin','both']);
 const ENTITY_TYPES = new Set(['member','business','opportunity','service_order','campaign','agreement']);
 const PRIORITY_STATUSES = new Set(['identified','planned','in_progress','completed','dismissed']);
 const OPPORTUNITY_STATUSES = new Set(['identified','considering','actioned','completed','declined']);
@@ -45,7 +51,7 @@ async function versionTree(versionId, includeSensitive = false) {
   const fields = await pool.query(
     `SELECT f.id,f.version_id,f.step_id,f.field_key,f.label,f.help_text,f.placeholder,
             f.field_type,f.display_order,f.is_required,f.is_enabled,f.sensitive,f.sensitive_enabled,
-            f.confidential,f.allow_external_sharing,f.applicant_types,f.validation_rules,f.visibility_rules,
+            f.confidential,f.allow_external_sharing,f.audience,f.applicant_types,f.validation_rules,f.visibility_rules,
             COALESCE(jsonb_agg(jsonb_build_object('id',o.id,'value',o.option_value,'label',o.option_label,
               'displayOrder',o.display_order,'enabled',o.is_enabled) ORDER BY o.display_order,o.id)
               FILTER (WHERE o.id IS NOT NULL),'[]'::jsonb) AS options
@@ -170,10 +176,10 @@ router.post('/form/versions', async (req, res, next) => {
         for (const f of oldFields.rows) {
           const nf = await client.query(
             `INSERT INTO growth_form_fields(version_id,step_id,field_key,label,help_text,placeholder,field_type,display_order,
-               is_required,is_enabled,sensitive,sensitive_enabled,confidential,allow_external_sharing,applicant_types,validation_rules,visibility_rules)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,$17::jsonb) RETURNING id`,
+               is_required,is_enabled,sensitive,sensitive_enabled,confidential,allow_external_sharing,audience,applicant_types,validation_rules,visibility_rules)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17::jsonb,$18::jsonb) RETURNING id`,
             [created.rows[0].id,ns.rows[0].id,f.field_key,f.label,f.help_text,f.placeholder,f.field_type,f.display_order,
-              f.is_required,f.is_enabled,f.sensitive,f.sensitive_enabled,f.confidential,f.allow_external_sharing,
+              f.is_required,f.is_enabled,f.sensitive,f.sensitive_enabled,f.confidential,f.allow_external_sharing,f.audience||'applicant',
               JSON.stringify(f.applicant_types),JSON.stringify(f.validation_rules),JSON.stringify(f.visibility_rules)]);
           await client.query(
             `INSERT INTO growth_form_field_options(field_id,option_value,option_label,display_order,is_enabled)
@@ -236,18 +242,20 @@ router.patch('/steps/:id', async (req, res, next) => {
 router.post('/steps/:id/fields', async (req,res,next)=>{
   const stepId=asId(req.params.id), label=str(req.body?.label), type=str(req.body?.fieldType);
   const key=str(req.body?.fieldKey).toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'');
+  const audience=AUDIENCES.has(req.body?.audience)?req.body.audience:'applicant';
   if(!stepId||!label||!key||!FIELD_TYPES.has(type))return res.status(400).json({error:'fieldKey, label and valid fieldType are required.'});
   const sensitive=req.body?.sensitive===true, sensitiveEnabled=sensitive&&req.body?.sensitiveEnabled===true;
   const enabled=sensitive&&!sensitiveEnabled?false:req.body?.enabled!==false;
   const types=arr(req.body?.applicantTypes).filter(x=>['individual','business'].includes(x)); if(!types.length)types.push('individual','business');
   try{
     const r=await pool.query(`INSERT INTO growth_form_fields(version_id,step_id,field_key,label,help_text,placeholder,field_type,display_order,
-      is_required,is_enabled,sensitive,sensitive_enabled,confidential,allow_external_sharing,applicant_types,validation_rules,visibility_rules)
-      SELECT s.version_id,s.id,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb
+      is_required,is_enabled,sensitive,sensitive_enabled,confidential,allow_external_sharing,audience,applicant_types,validation_rules,visibility_rules)
+      SELECT s.version_id,s.id,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,$17::jsonb
       FROM growth_form_steps s JOIN growth_form_versions v ON v.id=s.version_id WHERE s.id=$1 AND v.status='draft' RETURNING *`,
       [stepId,key,label,str(req.body?.helpText)||null,str(req.body?.placeholder)||null,type,
         Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:0,req.body?.required===true,enabled,sensitive,sensitiveEnabled,
-        req.body?.confidential===true,req.body?.allowExternalSharing===true,JSON.stringify(types),JSON.stringify(obj(req.body?.validationRules)),JSON.stringify(obj(req.body?.visibilityRules))]);
+        req.body?.confidential===true,req.body?.allowExternalSharing===true,audience,JSON.stringify(types),
+        JSON.stringify(obj(req.body?.validationRules)),JSON.stringify(obj(req.body?.visibilityRules))]);
     return r.rowCount?res.status(201).json({field:r.rows[0]}):res.status(409).json({error:'Only draft versions can be edited.'});
   }catch(e){return next(e);}
 });
@@ -259,20 +267,21 @@ router.patch('/fields/:id', async (req,res,next)=>{
     if(!c.rowCount)return res.status(404).json({error:'Field not found.'});
     const f=c.rows[0]; if(f.version_status!=='draft')return res.status(409).json({error:'Published fields are immutable. Create a new draft version.'});
     const type=has(req.body,'fieldType')?str(req.body.fieldType):f.field_type;if(!FIELD_TYPES.has(type))return res.status(400).json({error:'Invalid field type.'});
+    const audience=has(req.body,'audience')&&AUDIENCES.has(req.body.audience)?req.body.audience:(f.audience||'applicant');
     const sensitive=typeof req.body?.sensitive==='boolean'?req.body.sensitive:f.sensitive;
     const sensitiveEnabled=sensitive?(typeof req.body?.sensitiveEnabled==='boolean'?req.body.sensitiveEnabled:f.sensitive_enabled):false;
     let enabled=typeof req.body?.enabled==='boolean'?req.body.enabled:f.is_enabled;if(sensitive&&!sensitiveEnabled)enabled=false;
     let applicantTypes=f.applicant_types;if(has(req.body,'applicantTypes')){applicantTypes=arr(req.body.applicantTypes).filter(x=>['individual','business'].includes(x));if(!applicantTypes.length)return res.status(400).json({error:'At least one applicant type is required.'});}
     const r=await pool.query(`UPDATE growth_form_fields SET label=$2,help_text=$3,placeholder=$4,field_type=$5,display_order=$6,
       is_required=$7,is_enabled=$8,sensitive=$9,sensitive_enabled=$10,confidential=$11,allow_external_sharing=$12,
-      applicant_types=$13::jsonb,validation_rules=$14::jsonb,visibility_rules=$15::jsonb WHERE id=$1 RETURNING *`,[
+      audience=$13,applicant_types=$14::jsonb,validation_rules=$15::jsonb,visibility_rules=$16::jsonb WHERE id=$1 RETURNING *`,[
       fieldId,has(req.body,'label')?(str(req.body.label)||f.label):f.label,
       has(req.body,'helpText')?(str(req.body.helpText)||null):f.help_text,
       has(req.body,'placeholder')?(str(req.body.placeholder)||null):f.placeholder,type,
       Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:f.display_order,
       typeof req.body?.required==='boolean'?req.body.required:f.is_required,enabled,sensitive,sensitiveEnabled,
       typeof req.body?.confidential==='boolean'?req.body.confidential:f.confidential,
-      typeof req.body?.allowExternalSharing==='boolean'?req.body.allowExternalSharing:f.allow_external_sharing,
+      typeof req.body?.allowExternalSharing==='boolean'?req.body.allowExternalSharing:f.allow_external_sharing,audience,
       JSON.stringify(applicantTypes),JSON.stringify(has(req.body,'validationRules')?obj(req.body.validationRules):f.validation_rules),
       JSON.stringify(has(req.body,'visibilityRules')?obj(req.body.visibilityRules):f.visibility_rules)]);
     return res.json({field:r.rows[0]});
