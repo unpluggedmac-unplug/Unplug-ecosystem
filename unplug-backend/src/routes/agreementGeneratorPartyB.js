@@ -105,8 +105,10 @@ router.post('/generator/access/:token/submit', publicSubmitLimiter, (req,res,nex
     const snapshot=await S.snapshotForSubmission(s,client);if(!snapshot)throw Object.assign(new Error('Agreement definition unavailable.'),{statusCode:404});const contentLocked=await S.hasAnySignature(s.id,client);
     const draft={...S.asObject(s.draft_data),...(!contentLocked?S.asObject(req.body):{})},partyBType=p?p.party_type:(req.body.partyBType||s.party_b_type||draft.partyBType),fixed=snapshot.form&&snapshot.form.signer_type;
     if(['individual','business'].includes(fixed)&&partyBType!==fixed)throw Object.assign(new Error(`This agreement requires Party B to be ${fixed}.`),{statusCode:400});if(!G.PARTY_B_TYPES.includes(partyBType))throw Object.assign(new Error('Choose whether Party B is an Individual or Business.'),{statusCode:400});
-    const declarations=S.asObject(req.body.declarationsAccepted||draft.declarationsAccepted);let answers;
-    if(contentLocked){answers=S.asObject(s.answers);}else{answers=G.validateAnswers(snapshot,partyBType,{...S.asObject(draft.answers),...S.asObject(req.body.answers)},declarations);await S.validateRequiredItems(snapshot,answers,s.id,client);}
+    const declarations=S.asObject(req.body.declarationsAccepted||draft.declarationsAccepted);
+    const answerSource=contentLocked?S.asObject(s.answers):{...S.asObject(draft.answers),...S.asObject(req.body.answers)};
+    const answers=G.validateAnswers(snapshot,partyBType,answerSource,declarations);
+    await S.validateRequiredItems(snapshot,answers,s.id,client);
     const signerName=G.trim(req.body.signerName||(p&&p.legal_name)||draft.signerName||s.signer_name,200),signerEmail=G.trim(req.body.signerEmail||(p&&p.email)||draft.signerEmail||s.signer_email,255);if(!signerName)throw Object.assign(new Error('Signer name is required.'),{statusCode:400});if(signerEmail&&!G.validEmail(signerEmail))throw Object.assign(new Error('Signer email is not valid.'),{statusCode:400});
     const signatureType=G.SIGNATURE_TYPES.includes(req.body.signatureType)?req.body.signatureType:null;if(!signatureType)throw Object.assign(new Error('Choose typed, drawn or uploaded signature.'),{statusCode:400});let signatureText=null,signatureUrl=null;if(signatureType==='typed'){signatureText=G.trim(req.body.signatureText||signerName,500);if(!signatureText)throw Object.assign(new Error('Type your signature.'),{statusCode:400});}else signatureUrl=await G.storePrivateSignature(req.body.signatureDataUrl,'party-b');
     let party=p;
