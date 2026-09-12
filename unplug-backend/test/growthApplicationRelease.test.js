@@ -16,7 +16,8 @@ function read(...parts) {
 test('Growth migrations exist and remain additive', () => {
   const m195 = fs.readFileSync(path.join(BACKEND, 'db/migrations/195_growth_application.sql'), 'utf8');
   const m196 = fs.readFileSync(path.join(BACKEND, 'db/migrations/196_growth_application_stage_version.sql'), 'utf8');
-  for (const sql of [m195, m196]) {
+  const m202 = fs.readFileSync(path.join(BACKEND, 'db/migrations/202_growth_application_v2.sql'), 'utf8');
+  for (const sql of [m195, m196, m202]) {
     assert.doesNotMatch(sql, /\bTRUNCATE\b/i);
     assert.doesNotMatch(sql, /DROP\s+TABLE/i);
     assert.doesNotMatch(sql, /DELETE\s+FROM\s+users/i);
@@ -24,6 +25,11 @@ test('Growth migrations exist and remain additive', () => {
   assert.match(m195, /CREATE TABLE IF NOT EXISTS growth_applications/i);
   assert.match(m195, /growth_application_short_links/i);
   assert.match(m196, /stage_schema_version/i);
+  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_form_versions/i);
+  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_application_answer_revisions/i);
+  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_information_requests/i);
+  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_assessments/i);
+  assert.match(m202, /CREATE TABLE IF NOT EXISTS growth_plans/i);
 });
 
 test('Quick Profile and Growth Assessment enforce every required intake field', () => {
@@ -52,23 +58,69 @@ test('Growth intake schema contains exactly six social channels and two 10-image
   assert.ok(schema.galleries.every((gallery) => gallery.max_bytes_each === 10 * 1024 * 1024));
 });
 
-test('backend mounts Growth API and stable short-link namespace', () => {
+test('backend mounts legacy Growth plus isolated V2 member/admin APIs', () => {
   const app = fs.readFileSync(path.join(BACKEND, 'src/app.js'), 'utf8');
+  assert.match(app, /app\.use\('\/growth-application\/v2',\s*require\('\.\/routes\/growthApplicationV2'\)\)/);
+  assert.match(app, /app\.use\('\/growth-admin',\s*require\('\.\/routes\/growthAdmin'\)\)/);
   assert.match(app, /app\.use\('\/growth-application',\s*growthApplicationRoutes\.router\)/);
   assert.match(app, /app\.use\('\/grow',\s*growthApplicationRoutes\.shortLinkRouter\)/);
 });
 
-test('Growth upload is member-only, 10MB and fails closed without R2', () => {
+test('Growth uploads are member-only, private R2, 10MB and fail closed', () => {
   const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplicationUpload.js'), 'utf8');
   const upload = fs.readFileSync(path.join(BACKEND, 'src/middleware/upload.js'), 'utf8');
   assert.match(route, /requireAuth/);
-  assert.match(route, /if \(!uploads\.r2Configured\)/);
+  assert.match(route, /req\.user\.role !== 'member'/);
+  assert.match(route, /if \(!uploads\.r2PrivateConfigured\)/);
   assert.match(route, /status\(503\)/);
-  assert.match(route, /uploadPublicBuffer/);
+  assert.match(route, /uploadPrivateBuffer/);
+  assert.doesNotMatch(route, /uploadPublicBuffer/);
+  assert.match(route, /growth\.sensitive/);
+  assert.match(route, /external_sharing_allowed/);
   assert.match(upload, /MAX_GROWTH_IMAGE_SIZE_BYTES = 10 \* 1024 \* 1024/);
 });
 
-test('final submission enforces schema versions, all three stages, galleries and POPIA consent', () => {
+test('Growth V2 is member-only, resumable, append-only and status-only after submission', () => {
+  const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplicationV2.js'), 'utf8');
+  assert.match(route, /router\.use\(requireAuth\)/);
+  assert.match(route, /req\.user\.role !== 'member'/);
+  assert.match(route, /status='draft'/);
+  assert.match(route, /growth_application_answer_revisions/);
+  assert.match(route, /revision_number/);
+  assert.match(route, /growth_application_field_reopens/);
+  assert.match(route, /Only fields specifically reopened by Unplug/);
+  assert.match(route, /POPIA consent is required before submission/);
+  assert.match(route, /informationRequests/);
+  assert.match(route, /status='withdrawn'/);
+  assert.doesNotMatch(route, /growth_assessments|growth_plans|internal_notes/);
+});
+
+test('Growth V2 separates ordinary and sensitive staff capabilities', () => {
+  const permissions = fs.readFileSync(path.join(BACKEND, 'src/utils/staffPermissions.js'), 'utf8');
+  const admin = fs.readFileSync(path.join(BACKEND, 'src/routes/growthAdmin.js'), 'utf8');
+  const migration = fs.readFileSync(path.join(BACKEND, 'db/migrations/202_growth_application_v2.sql'), 'utf8');
+  assert.match(permissions, /'growth\.view'/);
+  assert.match(permissions, /'growth\.manage'/);
+  assert.match(permissions, /'growth\.sensitive'/);
+  assert.match(permissions, /\/growth-admin/);
+  assert.match(admin, /\/sensitive/);
+  assert.match(migration, /'support', 'growth\.view'/);
+  assert.match(migration, /'support', 'growth\.manage'/);
+  assert.doesNotMatch(migration, /'support', 'growth\.sensitive'/);
+});
+
+test('Growth V2 preserves stable form versions, field ids, selective sensitive fields and relational links', () => {
+  const sql = fs.readFileSync(path.join(BACKEND, 'db/migrations/202_growth_application_v2.sql'), 'utf8');
+  assert.match(sql, /UNIQUE\(form_id, version_number\)/i);
+  assert.match(sql, /UNIQUE\(version_id, field_key\)/i);
+  assert.match(sql, /sensitive_enabled/);
+  assert.match(sql, /allow_external_sharing/);
+  assert.match(sql, /growth_application_entity_links/);
+  assert.match(sql, /'agreement'/);
+  assert.match(sql, /'service_order'/);
+});
+
+test('final submission enforces legacy schema versions, all three stages, galleries and POPIA consent', () => {
   const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplication.js'), 'utf8');
   assert.match(route, /question_bank_version !== QUESTION_BANK_VERSION/);
   assert.match(route, /stage_schema_version !== STAGE_SCHEMA_VERSION/);
@@ -80,7 +132,7 @@ test('final submission enforces schema versions, all three stages, galleries and
   assert.match(route, /popia_consent !== true/);
 });
 
-test('pipeline requires messages for Contacted/In progress/Closed and a private closed reason', () => {
+test('legacy pipeline requires messages for Contacted/In progress/Closed and a private closed reason', () => {
   const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplication.js'), 'utf8');
   assert.match(route, /MESSAGE_STATUSES = new Set\(\['contacted', 'in_progress', 'closed'\]\)/);
   assert.match(route, /An applicant-facing message is required/);
