@@ -41,8 +41,12 @@ jobs:
           node --check src/routes/agreementForms.js
           node --check src/routes/agreementGenerator.js
           node --check src/routes/agreementGeneratorSetup.js
-          node --check src/routes/agreementGeneratorUpload.js
+          node --check src/routes/agreementGeneratorTemplateAdmin.js
+          node --check src/routes/agreementGeneratorRecordAdmin.js
+          node --check src/routes/agreementGeneratorSignerUpload.js
+          node --check src/routes/agreementGeneratorPartyB.js
           node --check src/utils/agreementGenerator.js
+          node --check src/utils/agreementGeneratorService.js
           node --check src/utils/agreementDocument.js
           node --check src/utils/staffPermissions.js
           node --check test/agreementGenerator.test.js
