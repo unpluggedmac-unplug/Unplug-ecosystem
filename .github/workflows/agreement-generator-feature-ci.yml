@@ -51,6 +51,7 @@ jobs:
           node --check src/utils/staffPermissions.js
           node --check test/agreementGenerator.test.js
           node --check test/agreementGeneratorMultiSigner.test.js
+          node --check test/agreementGeneratorApprovedVersion.test.js
           node --check test/agreementGeneratorRelease.test.js
 
       - name: PostgreSQL migration sweep
@@ -60,7 +61,7 @@ jobs:
         run: node scripts/ensure-text-search.js
 
       - name: Agreement Generator targeted tests
-        run: node --test --test-concurrency=1 test/agreementGeneratorRelease.test.js test/agreementGenerator.test.js test/agreementGeneratorMultiSigner.test.js
+        run: node --test --test-concurrency=1 test/agreementGeneratorRelease.test.js test/agreementGenerator.test.js test/agreementGeneratorMultiSigner.test.js test/agreementGeneratorApprovedVersion.test.js
 
       - name: Full backend test suite
         shell: bash
