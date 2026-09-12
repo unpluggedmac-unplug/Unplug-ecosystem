@@ -15,6 +15,8 @@ const ASSETS = path.join(OUT, 'assets');
 const PAGES = [
   'unplug-agreement.html',
   'unplug-agreements-admin.html',
+  'unplug-agreement-generator.html',
+  'unplug-agreement-generator-admin.html',
   '404.html',
   'not-found.html',
 ];
