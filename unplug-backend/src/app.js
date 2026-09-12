@@ -64,15 +64,41 @@ const seoRoutes = require('./routes/seo');
 
 const app = express();
 
-// Render terminates TLS in front of this process. Trust only the nearest proxy hop.
+// Render terminates TLS in front of this process. Trust exactly the nearest
+// proxy hop rather than every address supplied through X-Forwarded-For.
+// `true` is deliberately avoided: express-rate-limit rejects that permissive
+// mode because a forged forwarded chain can otherwise bypass IP throttles.
 app.set('trust proxy', 1);
+
+// Makes the caller's address available to anything running during the request,
+// without threading `req` through every function that might want it. The audit
+// log reads it from here: logActivity is called from seventy-eight places, and
+// editing all of them to pass an address is how some of them get missed — and
+// a log with unexplained holes is worse than one with none.
 app.use(require('./middleware/requestContext').middleware);
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+// Development remains convenient, but a production API must never silently
+// become cross-origin-open because one Render variable was forgotten.
 const corsOrigin = allowedOrigins.length ? allowedOrigins : (process.env.NODE_ENV === 'production' ? false : true);
 app.use(cors({ origin: corsOrigin }));
-
-// Mail webhooks verify signatures against raw bytes, so they bypass only the JSON parser.
+// 512kb. The largest honest JSON payload is a long article with its gallery
+// list; uploads are multipart and handled by multer, which has its own larger
+// limits. Express defaults to 100kb, which a long article can exceed — so this
+// is raised deliberately rather than left to chance, and bounded deliberately
+// rather than left open.
+//
+// THE MAIL PROVIDER'S WEBHOOKS ARE EXEMPTED FROM THIS PARSER, deliberately.
+//
+// Their signature is computed over the RAW REQUEST BYTES. Once express.json()
+// has parsed the body and it has been re-serialised, key order and whitespace
+// have changed, and a perfectly correct secret then verifies as wrong — the
+// most confusing way this can possibly fail, because everything looks right.
+// routes/emailWebhooks.js brings its own express.raw().
+//
+// Skipping the parser rather than mounting the route above it keeps the
+// webhook BEHIND the access-control and WAF middleware further down, so it is
+// exempt from one parser rather than from every guard on the server.
 const jsonParser = express.json({ limit: require('./middleware/wafLite').MAX_JSON_BYTES });
 app.use((req, res, next) => {
   if (req.path.startsWith('/email/webhooks')) return next();
@@ -80,11 +106,29 @@ app.use((req, res, next) => {
 });
 app.use(securityHeaders);
 app.use(requestLogger);
+
+// Reads the bearer token (if any) on every request and attaches req.user.
+// Individual routes then use requireAuth / requireRole to enforce access.
 app.use(attachUser);
+
+// AFTER attachUser, so an account block follows the person rather than the
+// machine they happen to be using, and BEFORE every route, so a refused
+// request costs a cached lookup instead of a query.
+//
+// Order between these two matters as well: the access list is consulted first,
+// so an address on the allow list is never refused by a pattern. Somebody
+// exempted has been exempted deliberately, and a filter second-guessing that
+// is how an admin gets locked out mid-incident.
 app.use(require('./middleware/accessControl').middleware);
 app.use(require('./middleware/wafLite').middleware);
 
+// Health stays reachable regardless — an uptime check must not be able to trip
+// a filter and report the site down when it is fine.
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// Readiness is deliberately stronger than /health: it proves the process can
+// reach PostgreSQL before a deployment is considered ready to serve traffic.
+// No credentials or infrastructure details are returned.
 app.get('/health/ready', async (req, res) => {
   try {
     const pool = require('./db');
@@ -96,13 +140,18 @@ app.get('/health/ready', async (req, res) => {
   }
 });
 
+// What the mail provider tells us after a send: delivered, bounced,
+// complained. Unauthenticated because Resend cannot log in — but every request
+// is verified against a shared signing secret, and unsigned requests are
+// refused outright. It parses its own raw body (see the exemption above).
 app.use('/email/webhooks', require('./routes/emailWebhooks'));
+
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/admin/staff', require('./routes/adminStaff'));
 app.use('/admin/business-reports', require('./routes/adminBusinessReports'));
 app.use('/admin/checkout-health', require('./routes/adminCheckoutHealth'));
-app.use('/', profileRoutes);
+app.use('/', profileRoutes); // exposes /directory and /profiles/*
 app.use('/gallery', galleryRoutes);
 app.use('/payments', paymentRoutes);
 app.use('/articles', articleRoutes);
@@ -112,7 +161,7 @@ app.use('/admin/tags', require('./routes/adminTags'));
 app.use('/share-cards', require('./routes/shareCards'));
 app.use('/events', eventRoutes);
 app.use('/birthdays', birthdayRoutes);
-app.use('/', competitionRoutes);
+app.use('/', competitionRoutes); // exposes /competitions, /entries/:id/vote, /top10
 app.use('/investors', investorRoutes);
 app.use('/projects', projectRoutes);
 app.use('/ad-banners', adBannerRoutes);
@@ -120,14 +169,26 @@ app.use('/marketplace', marketplaceRoutes);
 app.use('/highlights', highlightRoutes);
 app.use('/sales-consultants', salesConsultantRoutes);
 app.use('/uploads', uploadRoutes);
+// Which stored images have responsive versions. Public and cacheable — the
+// frontend asks once and treats a late or missing answer as "originals only".
 app.use('/images', imageRoutes);
 app.use('/maintenance', maintenanceRoutes);
 app.use('/security', securityRoutes);
 app.use('/spam', spamRoutes);
 app.use('/backups', backupRoutes);
 app.use('/crm', crmRoutes);
+// Public and unauthenticated on purpose: somebody unsubscribing is holding a
+// link from an email, not a password.
 app.use('/email', emailRoutes);
+// The other half: the composer, the campaigns, the automations and the
+// reporting. Admin-only, mounted under /admin so the split between "anybody
+// holding an unsubscribe link" and "an administrator" is visible in the path
+// rather than only inside the file.
 app.use('/admin/email', require('./routes/emailCampaigns'));
+// Serves the actual uploaded files back out (GET /uploads/<filename>).
+// Mounting static alongside the POST-only uploadRoutes above is safe —
+// express.static only ever handles GET/HEAD, so it never intercepts the
+// POST / route registered just above it.
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/agreements', agreementRoutes);
 app.use('/admin/content', require('./routes/adminContent'));
@@ -141,28 +202,48 @@ app.use('/shoutouts', shoutoutRoutes);
 app.use('/search', searchRoutes);
 app.use('/deaf-community', deafCommunityRoutes);
 app.use('/newsletter', newsletterRoutes);
+// Reader popups: the public feed and event counter, plus the admin's controls.
+// The feed is identical for everybody and cached for a minute — it is asked
+// for on every page view, and this instance sleeps when idle.
 app.use('/popups', require('./routes/popups'));
+// Site Buttons: the always-visible floating CTA stack (distinct from Popups,
+// which interrupt) — the public feed, plus the admin's controls.
 app.use('/site-buttons', require('./routes/siteButtons'));
+// Testimonials: real quotes only (TRUST-003) — the public feed, plus the
+// admin's controls.
 app.use('/testimonials', require('./routes/testimonials'));
+// Impact Makers: a digital recognition gallery of people, brands, sponsors,
+// partners and organisations — the public feed, the homepage teaser's data
+// source, plus the admin's add/edit/reorder/feature/status controls.
 app.use('/impact-makers', require('./routes/impactMakers'));
+// The social feed: hand-entered posts. No API call to Meta anywhere — see
+// routes/social.js for why (Basic Display was switched off in Dec 2024).
 app.use('/social', require('./routes/social'));
+// The form builder: admin-composed forms, and the answers people give them.
+// Mounted AFTER /social so nothing here can shadow an existing route — a form
+// slug is arbitrary text an admin types.
 app.use('/forms', require('./routes/forms'));
-
-// Agreement Forms remain a separate domain from Growth Applications.
+// Agreement Forms: admin-built agreements anyone can be sent a link to sign.
+// This is intentionally NOT /agreements, which remains the older four-type
+// signed_agreements system. Payment policy has its own bridge because option C
+// allows an admin to choose member-only or guest EFT per agreement.
 const agreementFormsRoutes = require('./routes/agreementForms');
 app.use('/agreement-forms', require('./middleware/agreementPaymentPolicy'));
 app.use('/agreement-forms', agreementFormsRoutes.router);
 app.use('/a', agreementFormsRoutes.shortLinkRouter);
 app.use('/agreement-payments', require('./routes/agreementPayments'));
 
-// Growth V2 is mounted before the legacy Growth router. This lets the new,
-// versioned member/admin workflow coexist while staging validation is completed.
+// Growth V2 is a separate, versioned member/admin workflow. Mount it before
+// the legacy Growth router so /growth-application/v2 cannot be consumed by a
+// legacy parameter route. Agreement Forms and legacy Growth remain untouched.
 app.use('/growth-application/v2', require('./routes/growthApplicationV2'));
 app.use('/growth-admin', require('./routes/growthAdmin'));
+
+// Growth Application: a separate, member-only three-stage growth journey.
+// Historical /grow short codes remain valid when admin regenerates the current code.
 const growthApplicationRoutes = require('./routes/growthApplication');
 app.use('/growth-application', growthApplicationRoutes.router);
 app.use('/grow', growthApplicationRoutes.shortLinkRouter);
-
 app.use('/privacy', require('./routes/privacy'));
 app.use('/sasl', require('./routes/sasl'));
 app.use('/public-settings', publicSettingsRoutes);
@@ -184,7 +265,7 @@ app.use('/reviews', reviewRoutes);
 app.use('/claims', claimRoutes);
 app.use('/directory', directoryMapRoutes);
 app.use('/page-cms', pageCmsRoutes);
-app.use('/', sitemapRoutes);
+app.use('/', sitemapRoutes); // exposes /sitemap.xml and /robots.txt
 app.use('/participation', participationRoutes);
 app.use('/interactions', interactionRoutes);
 app.use('/follows', followRoutes);
@@ -193,15 +274,39 @@ app.use('/profile-analytics', profileAnalyticsRoutes);
 app.use('/badges', badgeRoutes);
 app.use('/orders', orderRoutes);
 app.use('/my-unplug', myUnplugRoutes);
+// The My Unplug menu (spec §4). One shape for every "something I submitted",
+// so My Articles / Events / Listings / Advertising / Competitions are the same
+// list with a filter rather than five separate pages. See utils/mySubmissions.js.
 app.use('/my', require('./routes/mySubmissions'));
+
+// SEO: sitemaps, robots.txt, redirect lookup and the 404 log.
+//
+// Mounted at the ROOT rather than under a prefix, because /sitemap.xml and
+// /robots.txt are addresses crawlers ask for by name — they cannot be moved
+// under /seo/. The admin and lookup endpoints inside carry their own paths.
 app.use('/', seoRoutes);
 
+// Catches any request that didn't match a route above, so the API always
+// responds with clean JSON — never Express's default HTML error page,
+// which would be confusing for a frontend to handle.
 app.use((req, res) => {
   res.status(404).json({ error: `No route matches ${req.method} ${req.path}.` });
 });
 
+// Centralized error handler — keeps error responses consistent and avoids
+// leaking stack traces to clients.
 app.use((err, req, res, next) => {
   console.error(err);
+
+  // The admin is told about it as well as the log. A 500 that only reaches
+  // the server log is a fault nobody finds until a reader reports it.
+  //
+  // RATE LIMITED BY THE DEDUPE KEY, and that is the important part. A broken
+  // endpoint can throw thousands of times a minute; without rolling the same
+  // fault into one row, the error would flood the notification list and hide
+  // everything else — the outage would erase the very screen you would use to
+  // notice it. The key is the route plus the message, so a genuinely
+  // different fault still gets its own row.
   const where = (req.method || 'GET') + ' ' + (req.route && req.route.path
     ? (req.baseUrl || '') + req.route.path
     : (req.originalUrl || '').split('?')[0]);
@@ -212,11 +317,23 @@ app.use((err, req, res, next) => {
     plural: `Something failed on ${where} (%n times)`,
     detail: reason,
     link: 'notifications',
+    // Same route + same message = same problem, however many times it fires.
     dedupeKey: 'err:' + where + ':' + reason.slice(0, 60),
   });
+
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
+// Birthday greetings.
+//
+// Checked hourly rather than once a day: on a free instance the process is
+// restarted often and sleeps when idle, so a once-daily timer would simply
+// miss most days. The send is idempotent (one greeting per person per year),
+// so checking often costs a cheap query and sends nothing extra.
+//
+// This still only fires while the instance is awake. For a guarantee, point
+// an external scheduler at POST /birthdays/send-greetings with
+// BIRTHDAY_CRON_SECRET — see OPERATIONS.md.
 const { sendDueBirthdayEmails } = require('./utils/birthdayMailer');
 const BIRTHDAY_CHECK_MS = 60 * 60 * 1000;
 setInterval(() => {
@@ -225,16 +342,33 @@ setInterval(() => {
     .catch((err) => console.error('[birthday] check failed:', err.message));
 }, BIRTHDAY_CHECK_MS);
 
+// Database hygiene: expired tokens and analytics past their retention window,
+// then VACUUM ANALYZE. Same shape as the birthday check above, and same
+// caveat — this only fires while the instance is awake, so POST
+// /maintenance/cleanup with UNPLUG_CLEANUP_SECRET is there for a scheduler
+// that wants a guarantee. Running it twice in a day removes nothing extra.
 const { runCleanup } = require('./utils/databaseCleanup');
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 setInterval(() => {
   runCleanup({})
     .then((r) => {
-      if (r.rowsRemoved) console.log(`[cleanup] removed ${r.rowsRemoved} expired row(s) in ${r.ms}ms`);
+      if (r.rowsRemoved) {
+        console.log(`[cleanup] removed ${r.rowsRemoved} expired row(s) in ${r.ms}ms`);
+      }
     })
     .catch((err) => console.error('[cleanup] failed:', err.message));
 }, CLEANUP_INTERVAL_MS);
 
+// Nightly backup. Same in-process pattern as the others, with the same caveat:
+// it only fires while the instance is awake, so POST /backups/run with
+// UNPLUG_CLEANUP_SECRET is there for a scheduler that wants a guarantee.
+//
+// SILENT UNLESS CONFIGURED. With no passphrase set this logs once and stops
+// trying, rather than writing an error every night that everybody learns to
+// scroll past. A backup system nobody trusts the logs of is not one anybody
+// checks.
+// The monthly record of activity, emailed on the 1st. Checks hourly and keeps
+// the month it last sent in `settings`, so a restart does not resend it.
 require('./utils/activityReportScheduler').start();
 
 const backupRunner = require('./utils/backupRunner');
@@ -255,9 +389,38 @@ setInterval(() => {
     .catch((err) => console.error('[backup] failed:', err.message));
 }, BACKUP_INTERVAL_MS);
 
+// Participation engine: rankings + daily homepage recalculation. No
+// pg_cron on this Postgres, so this runs the same way the birthday
+// check above does — an in-process interval, not a database job.
 require('./utils/participationScheduler').start();
+
+// Scheduled campaigns and drip automations, every five minutes.
+//
+// Same caveat as everything else here — it only fires while the instance is
+// awake — but with a different consequence, so it is worth saying plainly: a
+// missed tick DELAYS a send, it never loses one and it never sends twice. Each
+// tick claims work by moving its status forward in the same statement that
+// finds it, so the next tick picks up whatever is still due and nothing else.
+// POST /admin/email/tick with UNPLUG_CLEANUP_SECRET is there for an external
+// scheduler that wants sends to happen at the minute they were set for.
 require('./utils/emailScheduler').start();
 
+// Checkout recovery: two reminders, a day and three days after a checkout
+// stalls, then it stops. Hourly rather than every five minutes — the
+// thresholds are measured in days, so landing within the hour is close enough
+// and it keeps the query off a sleeping instance the rest of the time.
+// OFF UNLESS EXPLICITLY SWITCHED ON, and it stays that way until somebody
+// decides otherwise.
+//
+// This is the same rule popups and email automations follow, for the same
+// reason and with more at stake: everything this sends goes to somebody who
+// was about to give the magazine money. A half-finished version of it running
+// unattended does not produce a bug report, it produces a customer who got a
+// strange email about their order.
+//
+// Set UNPLUG_CHECKOUT_RECOVERY=on to enable it. POST /orders/recovery-run with
+// UNPLUG_CLEANUP_SECRET runs one pass by hand regardless, which is how to
+// watch it work before trusting it to a timer.
 if (process.env.UNPLUG_CHECKOUT_RECOVERY === 'on') {
   require('./utils/checkoutRecovery').start();
   console.log('[recovery] checkout reminders are ON');
@@ -266,6 +429,8 @@ if (process.env.UNPLUG_CHECKOUT_RECOVERY === 'on') {
 const port = process.env.PORT || 4000;
 app.listen(port, () => {
   console.log(`Unplug backend listening on port ${port}`);
+  // Also run shortly after boot, so a restart during the day still catches
+  // anyone whose birthday it is.
   setTimeout(() => {
     sendDueBirthdayEmails()
       .then((r) => { if (r && r.sent) console.log(`[birthday] sent ${r.sent} greeting(s) for ${r.date}`); })
