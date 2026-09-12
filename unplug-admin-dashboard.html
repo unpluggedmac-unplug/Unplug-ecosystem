@@ -10307,10 +10307,9 @@ async function linkUserConsultant(id, currentConsultantId) {
   if (!consultants.length) { showToast('No representatives exist yet — add one in Representatives first.', true); return; }
 
   const lines = consultants.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
-  const unlinkOption = currentConsultantId ? '\n0. Unlink (no representative)' : '';
-  const pick = prompt(`Link this member to which representative?\n\n${lines}${unlinkOption}\n\nEnter a number:`);
+  const pick = prompt(`Link this member to which representative?\n\n0. None\n${lines}\n\nEnter a number:`);
   if (pick === null) return;
-  if (pick.trim() === '0' && currentConsultantId) {
+  if (pick.trim() === '0') {
     try {
       await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ salesConsultantId: null }) });
       showToast('Unlinked.');
