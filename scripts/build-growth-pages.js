@@ -1,7 +1,7 @@
 'use strict';
 
 // The legacy production builder has an explicit page allow-list. Keep Growth
-// packaging isolated here so these new pages cannot silently disappear from
+// packaging isolated here so Growth pages cannot silently disappear from
 // Cloudflare Pages output while the broader builder remains stable.
 const fs = require('fs');
 const path = require('path');
@@ -11,7 +11,15 @@ const esbuild = require('esbuild');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'dist');
 const ASSETS = path.join(OUT, 'assets');
-const PAGES = ['unplug-growth-application.html', 'unplug-growth-applications-admin.html'];
+
+// Keep legacy pages in the artifact as a rollback path during staged rollout.
+// V2 links point only to the V2 pages; legacy pages are not deleted here.
+const PAGES = [
+  'unplug-growth-application.html',
+  'unplug-growth-applications-admin.html',
+  'unplug-growth-application-v2.html',
+  'unplug-growth-applications-admin-v2.html',
+];
 const COPY = ['growth-integration.js'];
 
 function hash(content) {
