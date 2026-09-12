@@ -120,6 +120,20 @@ test('Growth V2 preserves stable form versions, field ids, selective sensitive f
   assert.match(sql, /'service_order'/);
 });
 
+test('Growth V2 master form builder exposes safe draft-edit and publish operations', () => {
+  const admin = fs.readFileSync(path.join(BACKEND, 'src/routes/growthAdmin.js'), 'utf8');
+  assert.match(admin, /router\.post\('\/form\/versions'/);
+  assert.match(admin, /router\.patch\('\/versions\/:id'/);
+  assert.match(admin, /router\.post\('\/versions\/:id\/steps'/);
+  assert.match(admin, /router\.patch\('\/steps\/:id'/);
+  assert.match(admin, /router\.post\('\/steps\/:id\/fields'/);
+  assert.match(admin, /router\.patch\('\/fields\/:id'/);
+  assert.match(admin, /router\.post\('\/fields\/:id\/options'/);
+  assert.match(admin, /router\.patch\('\/options\/:id'/);
+  assert.match(admin, /Published fields are immutable/);
+  assert.match(admin, /router\.post\('\/versions\/:id\/publish'/);
+});
+
 test('final submission enforces legacy schema versions, all three stages, galleries and POPIA consent', () => {
   const route = fs.readFileSync(path.join(BACKEND, 'src/routes/growthApplication.js'), 'utf8');
   assert.match(route, /question_bank_version !== QUESTION_BANK_VERSION/);
@@ -146,7 +160,7 @@ test('public Growth config never exposes the private current short code', () => 
   assert.doesNotMatch(publicBlock, /growth_application_short_code|current_short_code|shortCode/);
 });
 
-test('Cloudflare resolves persistent Growth short links and only redirects same-origin', () => {
+test('Cloudflare resolves persistent legacy Growth short links and only redirects same-origin', () => {
   const fn = read('functions', '[[path]].js');
   assert.match(fn, /\^\\\/grow\\\/\(/);
   assert.match(fn, /growth-application\/entry-access/);
@@ -154,28 +168,46 @@ test('Cloudflare resolves persistent Growth short links and only redirects same-
   assert.match(fn, /Response\.redirect\(target\.toString\(\), 302\)/);
 });
 
-test('production build explicitly packages both Growth pages and the integration asset', () => {
+test('production build packages legacy rollback pages plus both Growth V2 workspaces', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.match(pkg.scripts.build, /build-growth-pages\.js/);
   const builder = read('scripts', 'build-growth-pages.js');
   assert.match(builder, /unplug-growth-application\.html/);
   assert.match(builder, /unplug-growth-applications-admin\.html/);
+  assert.match(builder, /unplug-growth-application-v2\.html/);
+  assert.match(builder, /unplug-growth-applications-admin-v2\.html/);
   assert.match(builder, /growth-integration\.js/);
 });
 
-test('Growth integration covers admin, member journey, resume links, member popup and public placements', () => {
+test('Growth integration routes member/admin journeys to V2 while retaining existing visibility controls', () => {
   const integration = read('growth-integration.js');
+  assert.match(integration, /MEMBER_V2 = '\/unplug-growth-application-v2\.html'/);
+  assert.match(integration, /ADMIN_V2 = '\/unplug-growth-applications-admin-v2\.html'/);
   assert.match(integration, /Growth Applications/);
   assert.match(integration, /My Growth Journey/);
-  assert.match(integration, /Show my resume link/);
-  assert.match(integration, /resume-link/);
-  assert.match(integration, /applications\/me/);
+  assert.match(integration, /growth-application\/v2\/applications/);
   assert.match(integration, /member_dashboard/);
   assert.match(integration, /addMemberJourneyLink\(config\)/);
   assert.match(integration, /site_visibility !== 'visible'/);
+  assert.doesNotMatch(integration, /resume-link|applications\/me/);
   for (const key of ['homepage','latest_news','directory','gallery','editions','top10','competitions']) {
     assert.match(integration, new RegExp(key));
   }
+});
+
+test('Growth V2 member and admin HTML workspaces call only V2/admin APIs for core workflow', () => {
+  const member = read('unplug-growth-application-v2.html');
+  const admin = read('unplug-growth-applications-admin-v2.html');
+  assert.match(member, /\/growth-application\/v2\/applications/);
+  assert.match(member, /\/growth-application\/upload/);
+  assert.match(member, /POPIA/);
+  assert.match(member, /information-requests/);
+  assert.doesNotMatch(member, /growth_assessments|growth_plans|internal_notes/);
+  assert.match(admin, /\/growth-admin\/applications/);
+  assert.match(admin, /Load sensitive data/);
+  assert.match(admin, /\/growth-admin\/fields/);
+  assert.match(admin, /\/growth-admin\/versions/);
+  assert.match(admin, /Growth Plan/);
 });
 
 test('admin preview remains clearly labelled and does not store placeholder data', () => {
