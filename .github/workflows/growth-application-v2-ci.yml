@@ -24,6 +24,7 @@ on:
       - 'unplug-growth-applications-admin-v2.html'
       - 'growth-integration.js'
       - 'growth-private-upload-helper.js'
+      - 'growth-admin-builder-helper.js'
       - 'scripts/build-growth-pages.js'
       - '.github/workflows/growth-application-v2-ci.yml'
   workflow_dispatch:
@@ -66,6 +67,8 @@ jobs:
           node --check src/routes/growthAdmin.js
           node --check src/utils/staffPermissions.js
           node --check test/growthApplicationRelease.test.js
+          node --check ../growth-private-upload-helper.js
+          node --check ../growth-admin-builder-helper.js
 
       - name: PostgreSQL migration sweep
         run: node scripts/sweep-test-postgres.js
