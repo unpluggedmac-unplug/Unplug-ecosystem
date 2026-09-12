@@ -23,10 +23,8 @@ export async function onRequest({ env, request }) {
     'window.UNPLUG_RUNTIME_CONFIG_ERROR=' + JSON.stringify(badStaging ? 'Staging frontend is not connected to an isolated staging API.' : '') + ';'
   ];
 
-  // The Agreement builder is a separate admin workspace so the very large
-  // Control Centre stays stable. Inject one ordinary same-origin link into the
-  // Marketing & CRM group. It has no data-section attribute, so the existing
-  // section router correctly treats it as normal navigation.
+  // Agreement Generator is a standalone Control Centre module. The older
+  // /agreements signed_agreements system remains separate and untouched.
   lines.push(
     '(function(){',
     ' function addAgreementAdminLink(){',
@@ -35,18 +33,16 @@ export async function onRequest({ env, request }) {
     '  var group=document.querySelector(".nav-group[data-group=marketing] .nav-group-items");',
     '  if (!group) return;',
     '  var a=document.createElement("a");',
-    '  a.href="/unplug-agreements-admin.html";',
-    '  a.textContent="Agreements";',
+    '  a.href="/unplug-agreement-generator-admin.html";',
+    '  a.textContent="Agreement Generator";',
     '  a.setAttribute("data-unplug-agreements-link","true");',
     '  group.appendChild(a);',
     ' }',
     ' if (document.readyState==="loading") document.addEventListener("DOMContentLoaded",addAgreementAdminLink,{once:true}); else addAgreementAdminLink();',
     '})();',
     '',
-    '// Agreement admin exports/previews are protected API endpoints. Browsers',
-    '// do not attach a bearer token to a plain href/window.open request, so',
-    '// intercept these two controls in capture phase and fetch the blob with',
-    '// the existing admin token instead. This preserves server-side auth.',
+    '// The older Agreement Forms admin page is retained for backwards-compatible',
+    '// template preview/export controls. Protected blobs need an auth header.',
     '(function(){',
     ' if (location.pathname.indexOf("unplug-agreements-admin.html") === -1) return;',
     ' document.addEventListener("click", async function(e){',
