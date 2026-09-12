@@ -17,7 +17,7 @@ test('gateway callbacks fail closed when verification secrets are missing', () =
 
 test('production startup validates core environment and CORS fails closed', () => {
   assert.match(app, /require\('\.\/utils\/validateEnv'\)\(\)/);
-  assert.match(app, /process\.env\.NODE_ENV === 'production' \? false : true/);
+  assert.match(app, /buildCorsOrigin\(process\.env\.CORS_ORIGINS/);
   assert.match(app, /app\.get\('\/health\/ready'/);
   assert.match(app, /SELECT 1/);
 });
