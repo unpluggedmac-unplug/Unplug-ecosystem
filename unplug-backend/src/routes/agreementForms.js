@@ -776,6 +776,53 @@ router.post('/consultant/:id/send-email', requireRole('consultant'), async(req,r
   try{const c=await pool.query('SELECT id FROM sales_consultants WHERE user_id=$1 AND active=true',[req.user.id]);if(!c.rowCount)return res.status(403).json({error:'No active consultant profile is linked to this account.'});const a=await getAgreementById(req.params.id);if(!a||!(effectiveState(a).active&&a.published))return res.status(404).json({error:'That agreement is not available.'});const grant=await pool.query('SELECT 1 FROM agreement_consultant_access WHERE agreement_id=$1 AND sales_consultant_id=$2',[a.id,c.rows[0].id]);if(!grant.rowCount)return res.status(403).json({error:'You do not have access to send this agreement.'});const link=await sendAgreementLink({agreement:a,to:req.body.email,recipientName:req.body.name,senderUserId:req.user.id,consultantId:c.rows[0].id});res.json({sent:true,link});}catch(err){if(err.statusCode)return res.status(err.statusCode).json({error:err.message});next(err);}
 });
 
+// GET /agreement-forms/consultant/clients — which of a consultant's referred
+// clients have signed which agreements. Same "referred" definition as the
+// Growth Application clients view: a user with a CONFIRMED payment carrying
+// this consultant's sales_consultant_id. A client can appear with zero, one,
+// or several submissions — nothing here is scoped to agreements this
+// consultant themself has access to send; it's simply what their clients
+// have signed, anywhere on the site.
+router.get('/consultant/clients', requireRole('consultant'), async (req, res, next) => {
+  try {
+    const consultant = await pool.query(
+      'SELECT id FROM sales_consultants WHERE user_id = $1 AND active = true',
+      [req.user.id]
+    );
+    if (!consultant.rowCount) return res.json({ clients: [] });
+
+    const result = await pool.query(
+      `SELECT u.id AS user_id,
+              COALESCE(u.full_name, SPLIT_PART(u.email, '@', 1)) AS name,
+              u.email,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'agreement_title', s.title_at_signing,
+                    'status', s.status,
+                    'signed_at', s.signed_at,
+                    'reference', s.reference
+                  ) ORDER BY s.started_at DESC
+                ) FILTER (WHERE s.id IS NOT NULL), '[]'
+              ) AS submissions
+         FROM (
+           SELECT DISTINCT p.user_id
+             FROM payments p
+            WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+         ) referred
+         JOIN users u ON u.id = referred.user_id
+         LEFT JOIN agreement_submissions s ON s.user_id = referred.user_id
+        GROUP BY u.id, u.full_name, u.email
+        ORDER BY u.full_name NULLS LAST, u.email ASC`,
+      [consultant.rows[0].id]
+    );
+
+    res.json({ clients: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---------------------------------------------------------------------------
 // On-site links / gates metadata. Actual required-gate enforcement is wired into
 // each target service route separately; this table is not a magic global switch.
