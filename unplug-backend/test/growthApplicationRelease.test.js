@@ -129,7 +129,7 @@ test('Growth V2 prefills only reusable My Unplug/member account data as auditabl
   assert.match(route, /growth_email/);
   assert.match(route, /growth_phone/);
   assert.match(route, /'prefill'/);
-  assert.doesNotMatch(route, /profiles\s+p\s+ON/); // never prefill from paid Directory listings
+  assert.doesNotMatch(route, /(?:FROM|JOIN)\s+profiles\s+p\b/i); // never prefill from paid Directory listings
 });
 
 test('Growth V2 conditional logic controls visible requirements server-side', () => {
@@ -238,6 +238,7 @@ test('production build packages legacy rollback pages plus both Growth V2 worksp
   assert.match(builder, /unplug-growth-applications-admin-v2\.html/);
   assert.match(builder, /growth-integration\.js/);
   assert.match(builder, /growth-private-upload-helper\.js/);
+  assert.match(builder, /growth-admin-builder-helper\.js/);
 });
 
 test('Growth integration routes member/admin journeys to V2 while retaining existing visibility controls', () => {
@@ -265,6 +266,16 @@ test('Growth V2 member workspace renders conditional fields, declarations and pr
   assert.match(member, /POPIA/);
   assert.match(member, /information-requests/);
   assert.doesNotMatch(member, /growth_assessments|growth_plans|internal_notes/);
+});
+
+test('Growth V2 admin builder helper edits audiences and conditional rules without rewriting the admin page', () => {
+  const helper = read('growth-admin-builder-helper.js');
+  assert.match(helper, /gaAudience/);
+  assert.match(helper, /visibilityRules/);
+  assert.match(helper, /growth-admin/);
+  assert.match(helper, /not_equals/);
+  assert.match(helper, /not_empty/);
+  assert.match(helper, /document_upload/);
 });
 
 test('Growth V2 admin workspace remains an internal assessment and builder surface', () => {
