@@ -54,6 +54,10 @@ body{ min-height:100vh; }
 
 <div class="wrap">
 
+  <!-- Agreements an admin has placed on this page (GET /agreement-forms?page=checkout).
+       Public, no sign-in required to see it; hidden entirely if none are placed here. -->
+  <div class="card" id="checkoutAgreementsCard" style="display:none;"></div>
+
   <!-- STEP 0: connect + sign in -->
   <div class="card" id="loginCard">
     <div class="step-label" data-step-for="loginCard"></div>
@@ -402,6 +406,26 @@ document.getElementById('profileTypeOptions').addEventListener('click', (e) => {
   updateSecondCategoryVisibility();
 });
 const api = UnplugAPI.api;
+
+// Agreements an admin has placed on the checkout page. Public and anonymous —
+// no sign-in required to see it, since a visitor may not have signed in yet.
+function escapeHtmlCheckout(v) { return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+async function loadCheckoutAgreements() {
+  const card = document.getElementById('checkoutAgreementsCard');
+  try {
+    const data = await fetch(UnplugAPI.getApiBase() + '/agreement-forms?page=checkout').then((r) => r.json());
+    const agreements = data.agreements || [];
+    if (!agreements.length) return;
+    card.innerHTML = agreements.map((a) => `
+      <div style="margin-bottom:10px;">
+        <strong>${escapeHtmlCheckout(a.title)}</strong>
+        ${a.description ? `<p class="sub" style="margin:4px 0;">${escapeHtmlCheckout(a.description)}</p>` : ''}
+        <a class="btn btn-line" style="width:auto; display:inline-block; padding:8px 16px; text-decoration:none;" href="/unplug-agreement.html?slug=${encodeURIComponent(a.slug)}">View &amp; sign agreement</a>
+      </div>`).join('');
+    card.style.display = '';
+  } catch (e) { /* not critical to checkout — fail silently */ }
+}
+loadCheckoutAgreements();
 
 function showError(id, message) {
   const el = document.getElementById(id);

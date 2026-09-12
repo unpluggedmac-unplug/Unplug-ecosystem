@@ -220,9 +220,16 @@ async function anySubmissionCount(agreementId, client = pool) {
   return r.rows[0].n;
 }
 
+// Controlled placement list, matching the Growth Application pattern
+// (growth_application_placements): an admin can only pick a page that a real
+// button actually renders on, never a free-text key nothing consumes. Start
+// small (checkout only) rather than a page nothing wires up yet.
+const PUBLIC_PAGE_KEYS = new Set(['checkout']);
 function sanitizePages(value) {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean))].slice(0, 50);
+  return [...new Set(value.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean))]
+    .filter((x) => PUBLIC_PAGE_KEYS.has(x))
+    .slice(0, 50);
 }
 
 function csvCell(value) {
