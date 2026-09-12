@@ -183,7 +183,19 @@ async function requiredPartyBSignaturesComplete(submissionId, client = pool) {
 async function renderPdfForSubmission(submission, client = pool) {
   const snapshot = await snapshotForSubmission(submission, client);
   if (!snapshot) return null;
-  return generateAgreementDocument({ submission, fields:Array.isArray(snapshot.fields) ? snapshot.fields : [], client });
+  const answers = asObject(submission.answers);
+  const clauses = (Array.isArray(snapshot.clauses) ? snapshot.clauses : [])
+    .filter((clause) => G.clauseApplies(clause, answers))
+    .map((clause) => ({
+      title: clause.title || clause.block_name || 'Agreement clause',
+      bodyHtml: clause.body_html || clause.block_body_html || '',
+    }));
+  return generateAgreementDocument({
+    submission,
+    fields:Array.isArray(snapshot.fields) ? snapshot.fields : [],
+    clauses,
+    client,
+  });
 }
 
 async function notifySubmission(submission, snapshot, pdf, partyBEmail) {
