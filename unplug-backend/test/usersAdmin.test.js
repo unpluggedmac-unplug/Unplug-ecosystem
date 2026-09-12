@@ -235,6 +235,59 @@ test('a lookalike domain is refused, not just a missing @unplugnews.com suffix',
   assert.equal(r.status, 400);
 });
 
+// ----------------------------------- one-off consultant-role domain exception
+//
+// The domain rule stays for everyone by default (confirmed with the user
+// rather than loosened generally) — this is the deliberate, per-account
+// escape hatch: an admin can explicitly approve one non-staff account.
+
+test('a non-staff email is still refused by default even with the exception column present', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (790, 'exception-test-1@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  const r = await req('PATCH', '/admin/users/790', { token: adminToken, body: { role: 'consultant' } });
+  assert.equal(r.status, 400);
+});
+
+test('granting the exception in the SAME request as the role change allows it through', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (791, 'exception-test-2@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  const r = await req('PATCH', '/admin/users/791', {
+    token: adminToken, body: { consultantDomainException: true, role: 'consultant' },
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.user.role, 'consultant');
+  assert.equal(r.body.user.consultant_domain_exception, true);
+});
+
+test('granting the exception FIRST, then the role change in a later request, also works', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (792, 'exception-test-3@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  const granted = await req('PATCH', '/admin/users/792', { token: adminToken, body: { consultantDomainException: true } });
+  assert.equal(granted.status, 200);
+  const r = await req('PATCH', '/admin/users/792', { token: adminToken, body: { role: 'consultant' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.user.role, 'consultant');
+});
+
+test('only a Super Admin can grant the exception — a staff token is refused', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (793, 'exception-test-4@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  const staffToken = require('jsonwebtoken').sign({ id: 2, email: 'staff@test.com', role: 'staff' }, process.env.JWT_SECRET);
+  const r = await req('PATCH', '/admin/users/793', { token: staffToken, body: { consultantDomainException: true } });
+  assert.equal(r.status, 403);
+});
+
+test('GET /admin/users carries the exception flag, same as free-publishing', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (794, 'exception-test-5@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  await req('PATCH', '/admin/users/794', { token: adminToken, body: { consultantDomainException: true } });
+  const list = await req('GET', '/admin/users?q=exception-test-5@example.com', { token: adminToken });
+  assert.equal(list.status, 200);
+  const found = list.body.users.find((u) => u.id === 794);
+  assert.ok(found);
+  assert.equal(found.consultant_domain_exception, true);
+});
+
 // -------------------------------------------------- per-consultant toggle
 //
 // Free publishing used to be all-or-nothing for the whole 'consultant' role.
