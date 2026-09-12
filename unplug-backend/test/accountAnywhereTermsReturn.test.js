@@ -33,6 +33,16 @@ test('standalone user portals can sign in and sign out without replacing existin
   assert.match(src, /unplug-admin-dashboard/);
 });
 
+test('standalone sign-out fully reloads the same portal so authenticated page state is cleared', () => {
+  const src = read(RUNTIME);
+  assert.match(src, /addEventListener\("unplug:auth-changed"/);
+  assert.match(src, /if \(!e \|\| !e\.detail \|\| e\.detail\.user\) return/);
+  assert.match(src, /location\.reload\(\)/);
+  assert.match(src, /unplug-member-dashboard/);
+  assert.match(src, /unplug-magazine/);
+  assert.match(src, /unplug-admin-dashboard/);
+});
+
 test('checkout and bulk-vote portals still expose the same mandatory Terms gate', () => {
   for (const file of [CHECKOUT, VOTE]) {
     const src = read(file);
