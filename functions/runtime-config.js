@@ -60,7 +60,7 @@ export async function onRequest({ env, request }) {
     '})();',
     '',
     '(function(){',
-    ' function add(src,key){ if(document.querySelector("script[data-agreement-module=\""+key+"\"]")) return; var s=document.createElement("script"); s.src=src; s.defer=true; s.setAttribute("data-agreement-module",key); (document.head||document.documentElement).appendChild(s); }',
+    ' function add(src,key){ if(document.querySelector(\'script[data-agreement-module="\'+key+\'"]\')) return; var s=document.createElement("script"); s.src=src; s.defer=true; s.setAttribute("data-agreement-module",key); (document.head||document.documentElement).appendChild(s); }',
     ' if(location.pathname.indexOf("unplug-agreement-generator-admin.html")!==-1) add("/media/scripts/agreement-generator-admin-enhancements.js?v=20260912-1","admin");',
     ' if(location.pathname.indexOf("unplug-agreement-generator.html")!==-1) add("/media/scripts/agreement-generator-signer-enhancements.js?v=20260912-1","signer");',
     '})();',
