@@ -420,7 +420,7 @@ async function loadCheckoutAgreements() {
       <div style="margin-bottom:10px;">
         <strong>${escapeHtmlCheckout(a.title)}</strong>
         ${a.description ? `<p class="sub" style="margin:4px 0;">${escapeHtmlCheckout(a.description)}</p>` : ''}
-        <a class="btn btn-line" style="width:auto; display:inline-block; padding:8px 16px; text-decoration:none;" href="/unplug-agreement.html?slug=${encodeURIComponent(a.slug)}">View &amp; sign agreement</a>
+        <a class="btn btn-line" style="width:auto; display:inline-block; padding:8px 16px; text-decoration:none;" href="/unplug-agreement.html?slug=${encodeURIComponent(a.slug)}">${escapeHtmlCheckout(a.button_label || 'View & sign agreement')}</a>
       </div>`).join('');
     card.style.display = '';
   } catch (e) { /* not critical to checkout — fail silently */ }

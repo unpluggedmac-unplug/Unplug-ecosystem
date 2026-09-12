@@ -3086,3 +3086,20 @@ enforcement (checkout kept, `homepage`/an arbitrary string dropped), the `page=c
 active+published+placed agreements (not drafts, not agreements placed elsewhere), and no-`page=` returning
 empty rather than everything. Full suite: **2295 passing, 0 failing.**
 
+## 2026-09-12 — Agreement Forms: admin-controlled button label
+
+Small, direct follow-up: the checkout/member-dashboard signing button always said the same fixed text
+("View & sign agreement" / "View agreement") no matter what the agreement was — read oddly for something
+like a sponsorship deal, where "Sponsor Our Homepage" fits the actual pitch better. New nullable
+`button_label` column (migration `200_agreement_button_label.sql`), a plain `set()` in the PATCH route (not
+`material()` — this is presentational, not a legal term of the agreement, so it doesn't bump `version` the
+way editing rules/terms does), a "Button label" field in the admin editor, and both feeds that render a
+signing button (`GET /agreement-forms?page=X` and `GET /agreement-forms/member`) now select and return it.
+Blank falls back to the original fixed text everywhere, so every existing agreement keeps behaving exactly
+as before.
+
+**Tests.** New file `agreementButtonLabel.test.js`, 4 tests: a set label comes back through the public page
+feed, the same through the member-dashboard feed, a blank label returns `null` rather than `''`, and clearing
+a previously-set label back to blank actually clears it (not just ignored). Full suite: **2299 passing, 0
+failing.**
+
