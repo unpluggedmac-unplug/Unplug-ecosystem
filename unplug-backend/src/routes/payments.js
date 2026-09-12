@@ -1140,6 +1140,14 @@ async function applyPaymentEffectTracked(payment) {
         [payment.id]
       );
     }
+    // A confirmed referral is the freshest signal of who a member's
+    // consultant actually is, so it always wins here — this is the one
+    // place every confirmed payment passes through regardless of gateway,
+    // manual EFT, or which route (payments.js/orders.js) triggered it. Best
+    // effort: never let this secondary link break the payment itself.
+    if (payment && payment.sales_consultant_id && payment.user_id) {
+      await pool.query('UPDATE users SET sales_consultant_id = $1 WHERE id = $2', [payment.sales_consultant_id, payment.user_id]).catch(() => {});
+    }
     return true;
   } catch (err) {
     if (payment && payment.id) {

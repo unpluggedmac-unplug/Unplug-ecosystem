@@ -50,6 +50,7 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
     const result = await pool.query(
       `SELECT u.id, u.email, u.phone, u.role, u.created_at, u.full_name, u.member_type,
               u.is_suspended, u.suspended_reason, u.free_publishing_enabled,
+              u.sales_consultant_id, sc.name AS sales_consultant_name,
               -- Credit is a SUM of the ledger, not a stored column, so it is
               -- computed here rather than trusted from anywhere else.
               (SELECT COALESCE(SUM(amount), 0) FROM account_credits ac WHERE ac.user_id = u.id)::numeric AS credit_balance,
@@ -58,6 +59,7 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
               (SELECT COUNT(*) FROM events e WHERE e.organizer_user_id = u.id AND e.status = 'approved')::int AS published_events,
               (SELECT COUNT(*) FROM payments pm WHERE pm.user_id = u.id AND pm.status = 'confirmed')::int    AS confirmed_payments
          FROM users u
+         LEFT JOIN sales_consultants sc ON sc.id = u.sales_consultant_id
          ${whereClause}
         ORDER BY u.created_at DESC
         LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}`,
@@ -136,6 +138,21 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
       return res.status(400).json({ error: 'You cannot suspend the account you are signed in with.' });
     }
 
+    let consultantForLog = null;
+    if (b.salesConsultantId !== undefined) {
+      if (b.salesConsultantId === null || b.salesConsultantId === '') {
+        consultantForLog = null;
+      } else {
+        const consultantId = Number(b.salesConsultantId);
+        if (!Number.isInteger(consultantId)) {
+          return res.status(400).json({ error: 'A valid consultant is required, or null to unlink.' });
+        }
+        const consultant = await pool.query('SELECT id, name FROM sales_consultants WHERE id = $1', [consultantId]);
+        if (!consultant.rowCount) return res.status(404).json({ error: 'That representative record no longer exists.' });
+        consultantForLog = consultant.rows[0];
+      }
+    }
+
     // Sales/consultant access is deliberately a ROLE (granted here, revocable
     // later) rather than a live email-domain check on every request — see the
     // comment in 046_consultant_role.sql for why: a pure domain check would
@@ -162,12 +179,13 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     // and accepted unconditionally anyway, same as every other column here,
     // since it does nothing for any other role.
     if (b.freePublishingEnabled !== undefined) put('free_publishing_enabled', !!b.freePublishingEnabled);
+    if (b.salesConsultantId !== undefined) put('sales_consultant_id', consultantForLog ? consultantForLog.id : null);
     if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
     vals.push(id);
     const result = await pool.query(
       `UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason, free_publishing_enabled`,
+       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason, free_publishing_enabled, sales_consultant_id`,
       vals
     );
 
@@ -181,11 +199,14 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
       roleChanged ? 'user_role_changed'
         : b.isSuspended !== undefined ? (b.isSuspended ? 'user_suspended' : 'user_unsuspended')
         : b.freePublishingEnabled !== undefined ? 'user_free_publishing_toggled'
+        : b.salesConsultantId !== undefined ? 'user_consultant_linked'
         : 'user_edited',
       roleChanged
         ? `${target.rows[0].email} (#${id}): ${target.rows[0].role} → ${b.role}`
         : b.freePublishingEnabled !== undefined
         ? `${target.rows[0].email} (#${id}): free publishing ${b.freePublishingEnabled ? 'enabled' : 'disabled'}`
+        : b.salesConsultantId !== undefined
+        ? `${target.rows[0].email} (#${id}): ${consultantForLog ? `linked to representative "${consultantForLog.name}"` : 'unlinked from their representative'}`
         : `${target.rows[0].email} (#${id})`
     );
 
@@ -1245,6 +1266,8 @@ router.get('/sales-consultants/:id/growth-clients', requireRole('admin'), async 
       `SELECT u.id AS user_id,
               COALESCE(u.full_name, SPLIT_PART(u.email, '@', 1)) AS name,
               u.email,
+              u.created_at AS joined_at,
+              (SELECT COUNT(*) FROM payments p2 WHERE p2.user_id = u.id AND p2.status = 'confirmed')::int AS services_used_count,
               ga.id AS application_id,
               ga.applicant_type,
               ga.status,
@@ -1252,9 +1275,9 @@ router.get('/sales-consultants/:id/growth-clients', requireRole('admin'), async 
               ga.submitted_at,
               ga.updated_at
          FROM (
-           SELECT DISTINCT p.user_id
-             FROM payments p
-            WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+           -- Direct standing link (users.sales_consultant_id), not derived
+           -- from payment history — see 201_member_consultant_link.sql.
+           SELECT id AS user_id FROM users WHERE sales_consultant_id = $1
          ) referred
          JOIN users u ON u.id = referred.user_id
          LEFT JOIN LATERAL (
@@ -1298,9 +1321,9 @@ router.get('/sales-consultants/:id/agreement-clients', requireRole('admin'), asy
                 ) FILTER (WHERE s.id IS NOT NULL), '[]'
               ) AS submissions
          FROM (
-           SELECT DISTINCT p.user_id
-             FROM payments p
-            WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+           -- Direct standing link (users.sales_consultant_id), not derived
+           -- from payment history — see 201_member_consultant_link.sql.
+           SELECT id AS user_id FROM users WHERE sales_consultant_id = $1
          ) referred
          JOIN users u ON u.id = referred.user_id
          LEFT JOIN agreement_submissions s ON s.user_id = referred.user_id

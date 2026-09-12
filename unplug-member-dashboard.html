@@ -370,7 +370,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
       <button class="ms-navlink section-hidden" data-ms="myagreements" id="msMyAgreementsNav"><span>📄</span> My Agreements</button>
       <button class="ms-navlink section-hidden" data-ms="availableagreements" id="msAvailableAgreementsNav"><span>📝</span> Available Agreements</button>
-      <button class="ms-navlink section-hidden" data-ms="myclients" id="msMyClientsNav"><span>🌱</span> My Clients' Growth</button>
+      <button class="ms-navlink section-hidden" data-ms="myclients" id="msMyClientsNav"><span>🌱</span> My Clients</button>
       <a class="ms-navlink" href="unplug-magazine.html"><span>🌐</span> View Official Site</a>
       <button class="ms-navlink ms-logout" id="msLogout"><span>↩</span> Logout</button>
     </aside>
@@ -1242,8 +1242,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
          payment carries this consultant's sales_consultant_id. -->
     <section class="ms-section section-hidden" data-ms-section="myclients">
     <div class="card">
-      <h2>My Clients' Growth</h2>
-      <p class="sub">Where your referred clients stand on their Growth Application and which agreements they've signed. Only shows people you've referred — not the full member base.</p>
+      <h2>My Clients</h2>
+      <p class="sub">Everyone an admin has linked to you, or who referred themselves to you at checkout — with where they stand on their Growth Application, which agreements they've signed, and how many paid services they've used. Not the full member base.</p>
       <div id="myClientsContent"><div class="loading-state">Loading…</div></div>
     </div>
     </section>
@@ -4987,16 +4987,18 @@ async function loadMyClients() {
     el.innerHTML = clients.length
       ? `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead><tr style="text-align:left; border-bottom:1px solid var(--paper-line);">
-            <th style="padding:6px;">Client</th><th style="padding:6px;">Growth Application</th><th style="padding:6px;">Agreements signed</th><th style="padding:6px;">Last activity</th>
+            <th style="padding:6px;">Client</th><th style="padding:6px;">Joined</th><th style="padding:6px;">Services used</th><th style="padding:6px;">Growth Application</th><th style="padding:6px;">Agreements signed</th><th style="padding:6px;">Last activity</th>
           </tr></thead>
           <tbody>${clients.map((c) => `<tr style="border-bottom:1px solid var(--paper-line);">
             <td style="padding:6px;">${escapeHtmlM(c.name)}<div class="sub" style="margin:0;">${escapeHtmlM(c.email)}</div></td>
+            <td style="padding:6px; color:var(--slate);">${c.joined_at ? msDate(c.joined_at) : '—'}</td>
+            <td style="padding:6px;">${c.services_used_count || 0}</td>
             <td style="padding:6px;">${c.application_id ? escapeHtmlM(GROWTH_STATUS_LABELS[c.status] || c.status) : '<span class="sub">Not started</span>'}</td>
             <td style="padding:6px;">${agreementsSummary(agreementsByUser.get(c.user_id))}</td>
             <td style="padding:6px; color:var(--slate);">${c.updated_at ? msDate(c.updated_at) : '—'}</td>
           </tr>`).join('')}</tbody>
         </table></div>`
-      : '<p class="sub" style="margin:0;">No referred clients yet.</p>';
+      : '<p class="sub" style="margin:0;">No members linked to you yet.</p>';
   } catch (err) {
     el.innerHTML = /ask an admin/i.test(err.message || '')
       ? '<p class="sub" style="margin:0;">Your account isn\'t linked to a representative record yet — ask an admin to link it.</p>'
