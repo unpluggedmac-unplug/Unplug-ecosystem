@@ -7,7 +7,7 @@
       "staging": {
         "project": "unplug-staging",
         "branch": "staging-control-centre",
-        "previewBranchPrefixes": ["hotfix/", "feature/"]
+        "previewBranchPolicy": "all-non-production"
       },
       "production": {
         "project": "unplug-magazine",

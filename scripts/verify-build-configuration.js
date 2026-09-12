@@ -35,17 +35,17 @@ requireText(frontend.outputDirectory, 'dist', 'Cloudflare build output directory
 const targets = frontend.targets || {};
 requireText(targets.staging && targets.staging.project, 'unplug-staging', 'Cloudflare staging project');
 requireText(targets.staging && targets.staging.branch, 'staging-control-centre', 'Cloudflare staging branch');
+requireText(targets.staging && targets.staging.previewBranchPolicy, 'all-non-production', 'Cloudflare preview branch policy');
 requireText(targets.production && targets.production.project, 'unplug-magazine', 'Cloudflare production project');
 requireText(targets.production && targets.production.branch, 'main', 'Cloudflare production branch');
 
 const deploymentBranch = process.env.CF_PAGES_BRANCH || process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || '';
 const deploymentUrl = process.env.CF_PAGES_URL || '';
-function targetMatchesBranch(targetName, value) {
-  if (!value) return false;
-  if (value.branch === deploymentBranch) return true;
-  return targetName === 'staging' && (value.previewBranchPrefixes || []).some(prefix => deploymentBranch.startsWith(prefix));
-}
-const deploymentTarget = Object.entries(targets).find(([targetName, value]) => targetMatchesBranch(targetName, value));
+const deploymentTarget = deploymentBranch === (targets.production && targets.production.branch)
+  ? ['production', targets.production]
+  : deploymentBranch
+    ? ['staging', targets.staging]
+    : undefined;
 
 if (process.env.CF_PAGES === '1') {
   if (!deploymentTarget) {
