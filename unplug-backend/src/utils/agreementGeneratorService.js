@@ -132,9 +132,15 @@ async function approvedVersionForCreate(formId, client = pool) {
   const formResult = await client.query('SELECT * FROM agreement_forms WHERE id=$1', [formId]);
   if (!formResult.rowCount) return { form:null, version:null };
   const form = formResult.rows[0];
-  if (!['approved','published'].includes(form.approval_status)) return { form, version:null };
+
+  // A newer Draft or Legal Review must never disable the last Approved /
+  // Published definition. New individual agreements always use the latest
+  // approved immutable snapshot until a newer version itself is approved.
   let version = await G.latestApprovedVersion(formId, client);
-  if (!version) {
+  if (version) return { form, version };
+
+  // Bootstrap a snapshot only when the current definition itself is approved.
+  if (['approved','published'].includes(form.approval_status)) {
     await G.ensureVersionSnapshot(formId, null, client, form.approval_status);
     version = await G.latestApprovedVersion(formId, client);
   }
@@ -216,13 +222,25 @@ async function notifySubmission(submission, snapshot, pdf, partyBEmail) {
       });
     }
   }
-  if (delivery.email_party_b && G.validEmail(partyBEmail)) {
-    await sendEmail({
-      to:partyBEmail,
-      subject:`${form.title || 'Agreement'} — ${submission.reference}`,
-      text:`Thank you. Your agreement has been submitted to Unplug.\nReference: ${submission.reference}\nVersion: v${submission.agreement_version}`,
-      attachments:pdf ? [{ filename:`${submission.reference}.pdf`, content:pdf }] : undefined,
-    });
+  if (delivery.email_party_b) {
+    const partyBRecipients = new Set();
+    if (G.validEmail(partyBEmail)) partyBRecipients.add(String(partyBEmail).toLowerCase());
+    if (submission.id) {
+      const partyRows = await pool.query(
+        `SELECT email FROM agreement_submission_parties
+          WHERE submission_id=$1 AND party_side='party_b' AND email IS NOT NULL`,
+        [submission.id]
+      );
+      for (const row of partyRows.rows) if (G.validEmail(row.email)) partyBRecipients.add(String(row.email).toLowerCase());
+    }
+    for (const to of partyBRecipients) {
+      await sendEmail({
+        to,
+        subject:`${form.title || 'Agreement'} — ${submission.reference}`,
+        text:`Thank you. Your agreement has been submitted to Unplug.\nReference: ${submission.reference}\nVersion: v${submission.agreement_version}`,
+        attachments:pdf ? [{ filename:`${submission.reference}.pdf`, content:pdf }] : undefined,
+      });
+    }
   }
 }
 
