@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "2026-09-12.2",
+  "frontend": {
+    "provider": "cloudflare-pages",
+    "targets": {
+      "staging": {
+        "project": "unplug-staging",
+        "branch": "staging-control-centre",
+        "previewBranchPolicy": "all-non-production"
+      },
+      "production": {
+        "project": "unplug-magazine",
+        "branch": "main"
+      }
+    },
+    "rootDirectory": "",
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "supportedNodeMajors": [20, 22, 24],
+    "pipelineSteps": [
+      "node build.js",
+      "node scripts/build-release-pages.js",
+      "node scripts/build-growth-pages.js",
+      "node scripts/verify-dist-assets.js"
+    ],
+    "requiredArtifactFiles": [
+      "unplug-magazine.html",
+      "unplug-admin-dashboard.html",
+      "unplug-member-dashboard.html",
+      "unplug-checkout.html",
+      "unplug-vote.html",
+      "unplug-agreement.html",
+      "unplug-growth-application.html",
+      "unplug-site-buttons.js",
+      "unplug-shared.css",
+      "_headers",
+      "_redirects"
+    ]
+  },
+  "backend": {
+    "provider": "render",
+    "rootDirectory": "unplug-backend",
+    "staging": {
+      "service": "Unplug-ecosystem-staging",
+      "branch": "staging-control-centre",
+      "buildCommand": "npm ci --omit=dev && npm run preflight:staging",
+      "startCommand": "npm start",
+      "healthCheckPath": "/health/ready"
+    },
+    "production": {
+      "service": "Unplug-ecosystem",
+      "branch": "main",
+      "recommendedBuildCommand": "npm ci --omit=dev && npm run preflight",
+      "startCommand": "npm start",
+      "recommendedHealthCheckPath": "/health/ready"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+/* Shared across every Unplug frontend (Admin Dashboard, Checkout, Member
+   Dashboard) — colors, fonts, and the handful of components (buttons,
+   fields, error banners, toast, tables) that were previously copy-pasted
+   into each file independently. Page-specific layout (sidebars, panels,
+   tier cards, etc.) stays inline in each page. */
+
+:root{
+  --ink:#272626; --slate:#454545; --black:#0f0e0e;
+  --cream:#ffffff; --paper:#f1f0ef; --paper-line: rgba(15,14,14,0.14);
+  --red:#d20709; --maroon:#721415; --green:#2e7d32;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{ font-family:'Inter',sans-serif; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+h1,h2,h3{ font-family:'Playfair Display', serif; }
+
+.field{ margin-bottom:16px; }
+.field label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); margin-bottom:6px; }
+.field input, .field select, .field textarea{ width:100%; border:1px solid var(--paper-line); padding:10px 12px; font-size:14px; font-family:'Inter',sans-serif; background:#fff; }
+.field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media(max-width:560px){ .field-row{ grid-template-columns:1fr; } }
+
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; border:1px solid var(--ink); cursor:pointer; background:none; color:var(--ink); }
+.btn-solid{ background:var(--red); color:#fff; border-color:var(--red); }
+.btn-solid:disabled{ opacity:0.5; cursor:not-allowed; }
+.btn-line:hover{ background:var(--ink); color:#fff; }
+
+.error-banner{ background:rgba(210,7,9,0.08); border:1px solid var(--red); color:var(--maroon); padding:10px 12px; font-size:12.5px; margin-bottom:16px; display:none; }
+.error-banner.show{ display:block; }
+.success-banner{ background:rgba(46,125,50,0.08); border:1px solid var(--green); color:var(--green); padding:12px 14px; font-size:13px; margin-bottom:16px; display:none; }
+.success-banner.show{ display:block; }
+
+.toast{ position:fixed; bottom:20px; right:20px; background:var(--ink); color:#fff; padding:12px 18px; font-size:13px; z-index:999; display:none; }
+.toast.show{ display:block; }
+.toast.error{ background:var(--maroon); }
+
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+th{ text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--slate); padding:9px 10px; border-bottom:2px solid var(--ink); }
+td{ padding:10px; border-bottom:1px solid var(--paper-line); }
+.empty-state{ padding:16px 0; color:var(--slate); font-size:13px; }
+.loading-state{ padding:16px 0; color:var(--slate); font-size:13px; }
+
+.section-hidden{ display:none; }
+
+.instructions-box{ background:var(--paper); border:1px solid var(--paper-line); padding:16px; font-size:13px; line-height:1.7; }
+.instructions-box .ref{ font-family:'Courier New',monospace; background:#fff; padding:3px 8px; border:1px solid var(--paper-line); display:inline-block; }
+
+.status-pill{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:3px 9px; border-radius:20px; display:inline-block; }
+.status-pill.awaiting_payment{ background:rgba(210,7,9,0.1); color:var(--red); }
+.status-pill.pending{ background:rgba(210,7,9,0.1); color:var(--red); }
+.status-pill.approved{ background:rgba(46,125,50,0.1); color:var(--green); }
+.status-pill.rejected{ background:rgba(114,20,21,0.1); color:var(--maroon); }
+
+.row-actions{ display:flex; gap:6px; }
+.row-actions button{ font-size:10px; font-weight:700; text-transform:uppercase; padding:5px 9px; border:1px solid var(--ink); background:none; cursor:pointer; }
+.row-actions button.approve{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.row-actions button.reject{ color:var(--red); border-color:var(--red); }

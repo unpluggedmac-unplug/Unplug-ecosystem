@@ -21,6 +21,7 @@ function run(script, overrides = {}) {
     R2_SECRET_ACCESS_KEY: 'test-secret',
     R2_BUCKET: 'test-public',
     R2_PUBLIC_URL: 'https://cdn.example.test',
+    UNPLUG_BACKUP_PASSPHRASE: 'test-only-backup-passphrase',
     UNPLUG_ENV: 'staging',
     NODE_ENV: 'production',
     ADMIN_PASSWORD_RESET: 'false',
@@ -72,4 +73,15 @@ test('production readiness catches UNPLUG_DISABLE_RATE_LIMITS=1', () => {
   });
   assert.notEqual(r.status, 0);
   assert.match(r.stdout + r.stderr, /UNPLUG_DISABLE_RATE_LIMITS must not be enabled/);
+});
+
+test('production readiness refuses to deploy while encrypted backups are disabled', () => {
+  const r = run('production-readiness.js', {
+    SITE_URL: 'https://www.unplugnews.com',
+    PUBLIC_API_URL: 'https://unplug-ecosystem.onrender.com',
+    CORS_ORIGINS: 'https://www.unplugnews.com',
+    UNPLUG_BACKUP_PASSPHRASE: '',
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stdout + r.stderr, /production backups are disabled/);
 });

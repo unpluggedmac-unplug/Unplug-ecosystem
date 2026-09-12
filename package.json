@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Unplug Magazine frontend — static pages plus a production build step.",
   "scripts": {
-    "build": "node build.js && node scripts/build-release-pages.js && node scripts/build-growth-pages.js",
+    "verify:build-config": "node scripts/verify-build-configuration.js",
+    "build": "node scripts/verify-build-configuration.js && node build.js && node scripts/build-release-pages.js && node scripts/build-growth-pages.js && node scripts/verify-dist-assets.js && node scripts/verify-build-configuration.js --artifact",
     "serve:src": "python -m http.server 4173",
     "serve:dist": "cd dist && python -m http.server 4174",
     "staging:check": "node scripts/staging-frontend-check.js",

@@ -1,0 +1,62 @@
+name: Frontend production hotfix CI
+
+on:
+  push:
+    branches:
+      - hotfix/frontend-runtime-csp-20260912
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-hotfix-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build production dist and enforce closure/CSP checks
+        run: npm run build
+      - name: Assert critical repaired assets exist in dist
+        run: |
+          test -s dist/unplug-site-buttons.js
+          test -s dist/unplug-shared.css
+          test -s dist/unplug-magazine.html
+          test -s dist/unplug-checkout.html
+          test -s dist/unplug-vote.html
+          echo "Critical repaired dist assets are present."
+
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Syntax check backend entrypoint
+        run: node --check src/app.js
+      - name: PostgreSQL migration sweep
+        run: node scripts/sweep-test-postgres.js
+      - name: Prepare text-search test fixture
+        run: node scripts/ensure-text-search.js
+      - name: Full backend test suite
+        shell: bash
+        run: |
+          set -o pipefail
+          find test -name '*.test.js' -print0 | sort -z | xargs -0 node --test --test-concurrency=1

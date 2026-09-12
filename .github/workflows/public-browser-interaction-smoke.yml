@@ -1,0 +1,193 @@
+name: Public production browser interaction smoke
+
+on:
+  push:
+    branches:
+      - hotfix/**
+  workflow_dispatch:
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright for isolated browser smoke
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Test live public interactions
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const context = await browser.newContext({
+              viewport: { width: 390, height: 844 },
+              locale: 'en-ZA',
+            });
+            const page = await context.newPage();
+
+            const consoleErrors = [];
+            const pageErrors = [];
+            const failedRequests = [];
+            const responses = [];
+
+            page.on('console', msg => {
+              if (msg.type() === 'error') consoleErrors.push(msg.text());
+            });
+            page.on('pageerror', err => pageErrors.push(String(err)));
+            page.on('requestfailed', req => {
+              const url = req.url();
+              if (url.includes('unplugnews.com') || url.includes('unplug-ecosystem.onrender.com')) {
+                failedRequests.push(`${req.method()} ${url} :: ${req.failure()?.errorText || 'failed'}`);
+              }
+            });
+            page.on('response', res => {
+              const url = res.url();
+              if (url.includes('unplug-ecosystem.onrender.com')) responses.push({ url, status: res.status() });
+            });
+
+            function pass(name, detail='') { console.log(`PASS ${name}${detail ? ' :: '+detail : ''}`); }
+            function fail(name, detail='') { throw new Error(`FAIL ${name}${detail ? ' :: '+detail : ''}`); }
+
+            const main = await page.goto('https://www.unplugnews.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+            if (!main || main.status() !== 200) fail('homepage HTTP', String(main && main.status()));
+            pass('homepage HTTP', '200');
+
+            await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+            await page.waitForTimeout(1200);
+
+            const title = await page.title();
+            if (!/Unplug Magazine/i.test(title)) fail('homepage title', title);
+            pass('homepage title', title);
+
+            // Prove the restored fixed-path Site Buttons asset independently.
+            // Chromium can cancel a duplicate page request during navigation;
+            // that is benign only when this direct request has already proved
+            // the production asset exists and contains real JavaScript.
+            const siteButtonsAsset = await page.request.get('https://www.unplugnews.com/unplug-site-buttons.js');
+            const siteButtonsBody = await siteButtonsAsset.text();
+            if (siteButtonsAsset.status() !== 200 || siteButtonsBody.length < 100) {
+              fail('Site Buttons production asset', `status=${siteButtonsAsset.status()} bytes=${siteButtonsBody.length}`);
+            }
+            pass('Site Buttons production asset', `status=200 bytes=${siteButtonsBody.length}`);
+
+            // FIRST-VISIT GATE: this is the exact Visit Site / Sign Up / Sign In
+            // experience reported missing by the owner. New browser context = new session.
+            const overlay = page.locator('#welcomeOverlay');
+            await overlay.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {});
+            if (!(await overlay.isVisible().catch(() => false))) fail('welcome gate visible');
+            for (const id of ['#welcomeVisit', '#welcomeJoin', '#welcomeSignin']) {
+              if (!(await page.locator(id).isVisible().catch(() => false))) fail(`welcome action visible ${id}`);
+            }
+            pass('welcome gate + Visit/Sign Up/Sign In actions visible');
+
+            await page.locator('#welcomeVisit').click();
+            await page.waitForTimeout(300);
+            if (await overlay.isVisible().catch(() => false)) fail('Visit Site dismisses welcome gate');
+            pass('Visit Site button works');
+
+            // Consent may be shown immediately after the welcome gate. Decline is a
+            // local browser preference only and avoids any analytics opt-in during smoke.
+            const decline = page.locator('#consentDecline');
+            if (await decline.isVisible().catch(() => false)) {
+              await decline.click();
+              await page.waitForTimeout(250);
+              pass('consent handoff works');
+            } else {
+              pass('consent handoff not blocking');
+            }
+
+            // MOBILE MENU: use the exact production control and verify JS changes state.
+            const navToggle = page.locator('#navToggle');
+            if (!(await navToggle.isVisible().catch(() => false))) fail('mobile menu toggle visible');
+            await navToggle.click();
+            await page.waitForTimeout(250);
+            const mainNav = page.locator('#mainNav');
+            const navClass = await mainNav.getAttribute('class');
+            if (!navClass || !navClass.split(/\s+/).includes('open')) fail('mobile menu opens', navClass || '(no class)');
+            if (!(await mainNav.isVisible().catch(() => false))) fail('opened mobile nav visible');
+            pass('mobile menu opens');
+
+            // Expand a real mega-menu group and ensure its panel becomes visible.
+            const trigger = mainNav.locator('.nav-trigger').first();
+            if (!(await trigger.isVisible().catch(() => false))) fail('navigation group trigger visible');
+            await trigger.click();
+            await page.waitForTimeout(200);
+            const expanded = await trigger.getAttribute('aria-expanded');
+            if (expanded !== 'true') fail('navigation group expands', `aria-expanded=${expanded}`);
+            const group = trigger.locator('xpath=..');
+            const panel = group.locator('.nav-panel');
+            if (!(await panel.isVisible().catch(() => false))) fail('navigation panel visible after click');
+            pass('navigation group/panel interaction works');
+
+            // Click the first safe in-site menu item and confirm the SPA/router responds.
+            const item = panel.locator('.nav-item').first();
+            if (await item.isVisible().catch(() => false)) {
+              const label = (await item.innerText()).trim().replace(/\s+/g,' ').slice(0,80);
+              await item.click();
+              await page.waitForTimeout(600);
+              const activePages = await page.locator('.page.active').count();
+              if (activePages < 1) fail('public navigation activates content', label);
+              pass('public navigation click works', label);
+            } else {
+              fail('safe public nav item available');
+            }
+
+            // API/data layer: these calls are expected during normal public use.
+            await page.waitForTimeout(2500);
+            const relevant = responses.filter(r =>
+              /\/(public-settings|popups\/active|site-buttons|articles|analytics\/public-stats)(\?|$)/.test(r.url)
+            );
+            console.log('Observed relevant API responses:', JSON.stringify(relevant, null, 2));
+            const badApi = relevant.filter(r => r.status >= 400);
+            if (badApi.length) fail('public API responses', JSON.stringify(badApi));
+            if (!relevant.some(r => /\/public-settings/.test(r.url))) fail('public-settings request observed');
+            pass('public data/API responses');
+
+            const text = (await page.locator('body').innerText()).trim();
+            if (text.length < 800) fail('page has meaningful rendered content', `body chars=${text.length}`);
+            pass('meaningful rendered content', `body chars=${text.length}`);
+
+            // First-party runtime failures are release blockers. Filter only known
+            // harmless browser noise; do not suppress application errors.
+            const seriousConsole = consoleErrors.filter(x =>
+              !/favicon|Failed to load resource.*404/i.test(x) &&
+              !/^The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy\.$/.test(x)
+            );
+            if (pageErrors.length) fail('page JavaScript exceptions', pageErrors.join(' | '));
+            // Impression telemetry is deliberately best-effort and uses
+            // keepalive. Chromium may still report those POSTs as ERR_ABORTED
+            // when this smoke intentionally navigates to another SPA page.
+            // Ignore only that exact navigation-abort shape; every other
+            // first-party request failure remains a release blocker.
+            const abortedTelemetry = failedRequests.filter(x =>
+              /POST https:\/\/unplug-ecosystem\.onrender\.com\/ad-banners\/\d+\/event :: net::ERR_ABORTED$/.test(x)
+            );
+            const verifiedAssetAborts = failedRequests.filter(x =>
+              x === 'GET https://www.unplugnews.com/unplug-site-buttons.js :: net::ERR_ABORTED'
+            );
+            const nonBlockingRequests = new Set([...abortedTelemetry, ...verifiedAssetAborts]);
+            const blockingRequests = failedRequests.filter(x => !nonBlockingRequests.has(x));
+            if (abortedTelemetry.length) {
+              console.log(`INFO ignored ${abortedTelemetry.length} best-effort advert telemetry request(s) aborted by navigation`);
+            }
+            if (verifiedAssetAborts.length) {
+              console.log(`INFO ignored ${verifiedAssetAborts.length} duplicate Site Buttons request aborted after direct HTTP verification`);
+            }
+            if (blockingRequests.length) fail('first-party failed requests', blockingRequests.join(' | '));
+            if (seriousConsole.length) fail('browser console errors', seriousConsole.join(' | '));
+            pass('no blocking browser/runtime errors');
+
+            console.log('PUBLIC BROWSER INTERACTION SMOKE PASSED');
+            await browser.close();
+          })().catch(err => {
+            console.error(err && err.stack || err);
+            process.exit(1);
+          });
+          NODE
