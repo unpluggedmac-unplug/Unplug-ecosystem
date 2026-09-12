@@ -22,6 +22,47 @@ async function loadSubmission(id, client = pool) {
   return r.rows[0] || null;
 }
 
+async function resolveSignerAccess(token, client = pool) {
+  if (!token || String(token).length < 20) return null;
+  const direct = await client.query('SELECT * FROM agreement_submissions WHERE signing_token=$1', [String(token)]);
+  if (direct.rowCount) return { submission:direct.rows[0], party:null, accessKind:'agreement' };
+  const party = await client.query(`SELECT p.*,s.agreement_id,s.user_id AS submission_user_id,s.reference,s.signing_token AS agreement_signing_token,
+      s.workflow_status,s.locked_at,s.access_method,s.party_a_signed_at,s.party_b_signed_at
+      FROM agreement_submission_parties p JOIN agreement_submissions s ON s.id=p.submission_id
+      WHERE p.signing_token=$1 AND p.party_side='party_b'`, [String(token)]);
+  if (!party.rowCount) return null;
+  const submission = await loadSubmission(party.rows[0].submission_id, client);
+  return { submission, party:party.rows[0], accessKind:'party' };
+}
+
+function assertSignerAccess(access, req, { allowLocked = false } = {}) {
+  if (!access || !access.submission) {
+    const err = new Error('This private agreement link is not valid.'); err.statusCode = 404; throw err;
+  }
+  const { submission, party } = access;
+  const method = submission.access_method || 'private_link';
+  if (method === 'member_login') {
+    if (!req.user) {
+      const err = new Error('Sign in to your Unplug account to continue this agreement.'); err.statusCode = 401; throw err;
+    }
+    const requiredUser = party && party.member_user_id ? party.member_user_id : submission.user_id;
+    if (requiredUser && Number(requiredUser) !== Number(req.user.id)) {
+      const err = new Error('This agreement is assigned to another member account.'); err.statusCode = 403; throw err;
+    }
+  }
+  if (!allowLocked && submission.locked_at) {
+    const err = new Error('This submitted agreement is locked. An administrator must reopen it before it can be changed.'); err.statusCode = 423; throw err;
+  }
+  if (party && party.signed_at) {
+    const err = new Error('This signer has already signed the agreement.'); err.statusCode = 409; throw err;
+  }
+}
+
+async function hasAnySignature(submissionId, client = pool) {
+  const r = await client.query('SELECT 1 FROM agreement_signatures WHERE submission_id=$1 LIMIT 1', [submissionId]);
+  return r.rowCount > 0;
+}
+
 async function requireInstanceAccess(req, res, next) {
   try {
     const submission = await loadSubmission(req.params.id);
@@ -172,8 +213,8 @@ async function notifySubmission(submission, snapshot, pdf, partyBEmail) {
 }
 
 module.exports = {
-  asObject, asArray, cleanRichText, loadSubmission, requireInstanceAccess,
-  ensureFormShortCode, snapshotForSubmission, bumpTemplateVersion,
-  approvedVersionForCreate, validateRequiredItems, requiredPartyBSignaturesComplete,
-  renderPdfForSubmission, notifySubmission,
+  asObject, asArray, cleanRichText, loadSubmission, resolveSignerAccess, assertSignerAccess,
+  hasAnySignature, requireInstanceAccess, ensureFormShortCode, snapshotForSubmission,
+  bumpTemplateVersion, approvedVersionForCreate, validateRequiredItems,
+  requiredPartyBSignaturesComplete, renderPdfForSubmission, notifySubmission,
 };
