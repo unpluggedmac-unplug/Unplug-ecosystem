@@ -381,7 +381,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <a data-section="dirprofiles">Directory Profiles</a>
         <a data-section="claims">Listing Claims <span id="claimsBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></a>
         <a data-section="projects">Investor Projects</a>
-        <a data-section="consultants">Sales Consultants</a>
+        <a data-section="consultants">Representatives</a>
         <a href="/unplug-agreements-admin">Agreements</a>
         <a href="/unplug-growth-applications-admin">Growth Applications</a>
       </div>
@@ -1026,17 +1026,17 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- SALES CONSULTANTS -->
     <div class="admin-section" id="section-consultants">
-      <div class="main-head"><div><h1>Sales Consultants</h1><p>Add consultants here — they'll appear in the "How did you hear about us?" dropdown at checkout. Click a name to see their attributed sales and commission.</p></div></div>
+      <div class="main-head"><div><h1>Representatives</h1><p>Add representatives here — they'll appear in the "How did you hear about us?" dropdown at checkout. Click a name to see their attributed sales and commission.</p></div></div>
 
       <div class="panel">
-        <div class="panel-head"><h3>Link a consultant to their member account</h3></div>
+        <div class="panel-head"><h3>Link a representative to their member account</h3></div>
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin:0 0 12px; line-height:1.6;">
-            The consultant record and the person's own account stay separate — this only says which account belongs to which consultant, so their referrals can be attributed.
-            A consultant with no account is normal, and unlinking never affects past commissions.
+            The representative record and the person's own account stay separate — this only says which account belongs to which representative, so their referrals can be attributed.
+            A representative with no account is normal, and unlinking never affects past commissions.
           </p>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <input id="clSearch" placeholder="Search consultants by name or email…" style="flex:1; min-width:240px; padding:7px 10px; font-size:13px;">
+            <input id="clSearch" placeholder="Search representatives by name or email…" style="flex:1; min-width:240px; padding:7px 10px; font-size:13px;">
             <button class="btn btn-line" id="clSearchBtn" style="width:auto; padding:6px 14px;">Search</button>
           </div>
           <div id="clBody" style="margin-top:12px;">Loading…</div>
@@ -1044,8 +1044,23 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h3>Add a Consultant</h3></div>
+        <div class="panel-head"><h3>Promote a member to Representative</h3></div>
         <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin:0 0 12px; line-height:1.6;">
+            Search for an existing, signed-up member and make them a representative in one step — this creates the representative record already linked to their account.
+          </p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input id="promoteSearch" placeholder="Search members by name or email…" style="flex:1; min-width:240px; padding:7px 10px; font-size:13px;">
+            <button class="btn btn-line" id="promoteSearchBtn" style="width:auto; padding:6px 14px;">Search</button>
+          </div>
+          <div id="promoteBody" style="margin-top:12px;">Search for a member to promote.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Add a Representative</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin:0 0 12px;">Use this for a representative with no Unplug account yet — link one later once they sign up.</p>
           <div class="form-row">
             <div><label for="consultantName">Name</label><input id="consultantName" placeholder="e.g. Thabo Nkosi"></div>
             <div><label for="consultantEmail">Email</label><input id="consultantEmail" placeholder="thabo@unplugnews.com"></div>
@@ -1055,7 +1070,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         </div>
       </div>
       <div class="panel">
-        <div class="panel-head"><h3>All Consultants</h3></div>
+        <div class="panel-head"><h3>All Representatives</h3></div>
         <div class="panel-body" id="consultantsBody" style="padding:0;"></div>
       </div>
       <div class="panel" id="consultantReportPanel" style="display:none;">
@@ -5436,10 +5451,10 @@ async function loadConsultantLinks() {
   try {
     const data = await api('/admin/links/consultants' + (q ? `?q=${encodeURIComponent(q)}` : ''));
     const rows = data.consultants || [];
-    if (!rows.length) { body.innerHTML = '<div class="empty-state">No consultants match that.</div>'; return; }
+    if (!rows.length) { body.innerHTML = '<div class="empty-state">No representatives match that.</div>'; return; }
     const table = document.createElement('table');
     const head = document.createElement('tr');
-    head.innerHTML = '<th>Consultant</th><th>Record email</th><th>Linked account</th><th></th>';
+    head.innerHTML = '<th>Representative</th><th>Record email</th><th>Linked account</th><th></th>';
     table.appendChild(head);
     rows.forEach((c) => {
       const tr = document.createElement('tr');
@@ -5463,7 +5478,7 @@ async function loadConsultantLinks() {
 
 // Never matched on name automatically — the admin picks the exact account.
 async function clStartLink(consultant) {
-  const q = prompt(`Link consultant "${consultant.name}" to which account?\n\nType part of their email or name to search:`);
+  const q = prompt(`Link representative "${consultant.name}" to which account?\n\nType part of their email or name to search:`);
   if (q === null || !q.trim()) return;
   let members;
   try {
@@ -5500,6 +5515,47 @@ async function clUnlink(consultant) {
 
 document.getElementById('clSearchBtn').addEventListener('click', loadConsultantLinks);
 document.getElementById('clSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadConsultantLinks(); });
+
+// --- Promote an existing member to Representative, in one step -------------
+async function loadPromoteCandidates() {
+  const body = document.getElementById('promoteBody');
+  body.innerHTML = '<div class="loading-state">Loading…</div>';
+  const q = document.getElementById('promoteSearch').value.trim();
+  if (!q) { body.innerHTML = 'Search for a member to promote.'; return; }
+  try {
+    const data = await api(`/admin/links/members?q=${encodeURIComponent(q)}`);
+    const rows = data.members || [];
+    if (!rows.length) { body.innerHTML = '<div class="empty-state">No members match that.</div>'; return; }
+    const table = document.createElement('table');
+    const head = document.createElement('tr');
+    head.innerHTML = '<th>Name</th><th>Email</th><th>Role</th><th></th>';
+    table.appendChild(head);
+    rows.forEach((m) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtmlAdmin(m.full_name || '—')}</td><td>${escapeHtmlAdmin(m.email)}</td><td>${escapeHtmlAdmin(m.role)}</td><td><button class="btn btn-line" style="width:auto; padding:5px 12px;">Make Representative</button></td>`;
+      tr.querySelector('button').addEventListener('click', () => promoteMember(m));
+      table.appendChild(tr);
+    });
+    body.innerHTML = '';
+    body.appendChild(table);
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+  }
+}
+async function promoteMember(member) {
+  const pct = prompt(`Make "${member.full_name || member.email}" a representative.\n\nCommission %:`, '10');
+  if (pct === null) return;
+  try {
+    await api('/admin/links/promote-member', {
+      method: 'POST', body: JSON.stringify({ userId: member.id, commissionPct: pct }),
+    });
+    showToast('Representative added and linked.');
+    loadPromoteCandidates();
+    loadConsultants();
+  } catch (err) { showToast(err.message, true); }
+}
+document.getElementById('promoteSearchBtn').addEventListener('click', loadPromoteCandidates);
+document.getElementById('promoteSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadPromoteCandidates(); });
 
 // ---------------------------------------------------------------------------
 // CANCELLATIONS — members asking to stop a service they pay for.
@@ -10187,8 +10243,9 @@ function userRowHtml(u) {
   const roleLocked = isSelf || u.role === 'staff' || !canManageMembers;
   const credit = Number(u.credit_balance) || 0;
 
+  const roleLabel = (r) => (r === 'consultant' ? 'representative' : r);
   const roleOpts = (u.role === 'staff' ? ['staff'] : USER_ROLES).map((r) =>
-    `<option value="${r}"${u.role === r ? ' selected' : ''}>${r}</option>`).join('');
+    `<option value="${r}"${u.role === r ? ' selected' : ''}>${roleLabel(r)}</option>`).join('');
   const typeOpts = ['', 'individual', 'business'].map((t) =>
     `<option value="${t}"${(u.member_type || '') === t ? ' selected' : ''}>${t || '— not set —'}</option>`).join('');
 
@@ -10216,7 +10273,7 @@ function userRowHtml(u) {
     <div style="margin-bottom:10px;">
       <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
         <input type="checkbox" class="u-free-publishing"${u.free_publishing_enabled !== false ? ' checked' : ''}>
-        Free publishing enabled <span style="color:var(--slate); font-weight:400;">(consultants only — has no effect on any other role)</span>
+        Free publishing enabled <span style="color:var(--slate); font-weight:400;">(representatives only — has no effect on any other role)</span>
       </label>
     </div>
     ${canManageFinance ? `<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:10px;">
@@ -10442,7 +10499,7 @@ document.getElementById('addConsultantBtn').addEventListener('click', async () =
       method: 'POST',
       body: JSON.stringify({ name, email: email || undefined, commissionPct }),
     });
-    showToast('Consultant added.');
+    showToast('Representative added.');
     document.getElementById('consultantName').value = '';
     document.getElementById('consultantEmail').value = '';
     document.getElementById('consultantCommission').value = '10';
@@ -10461,7 +10518,7 @@ async function loadConsultants() {
     // referral totals, so one call replaces the plain list.
     const data = await api('/sales-consultants/performance');
     if (!data.consultants || data.consultants.length === 0) {
-      body.innerHTML = '<div class="empty-state">No consultants added yet.</div>';
+      body.innerHTML = '<div class="empty-state">No representatives added yet.</div>';
       return;
     }
     const table = document.createElement('table');
@@ -10484,7 +10541,7 @@ async function loadConsultants() {
       tr.querySelector('.row-actions button').addEventListener('click', async () => {
         try {
           await api(`/admin/sales-consultants/${c.id}`, { method: 'PATCH', body: JSON.stringify({ active: !c.active }) });
-          showToast(c.active ? 'Consultant deactivated.' : 'Consultant activated.');
+          showToast(c.active ? 'Representative deactivated.' : 'Representative activated.');
           loadConsultants();
         } catch (err) {
           showToast(err.message, true);
@@ -10510,9 +10567,11 @@ async function loadConsultantReport(id, name) {
   try {
     const data = await api(`/admin/sales-consultants/${id}/payments`);
     if (!data.payments || data.payments.length === 0) {
-      bodyEl.innerHTML = '<div class="empty-state">No confirmed sales attributed to this consultant yet.</div>';
+      bodyEl.innerHTML = '<div class="empty-state">No confirmed sales attributed to this representative yet.</div>';
       loadConsultantSubmissions(id, bodyEl);
       loadConsultantGrowthClients(id, bodyEl);
+      loadConsultantAgreementClients(id, bodyEl);
+      loadConsultantVisits(id, bodyEl);
       return;
     }
     const summary = document.createElement('p');
@@ -10532,6 +10591,8 @@ async function loadConsultantReport(id, name) {
     bodyEl.appendChild(table);
     loadConsultantSubmissions(id, bodyEl);
     loadConsultantGrowthClients(id, bodyEl);
+    loadConsultantAgreementClients(id, bodyEl);
+    loadConsultantVisits(id, bodyEl);
   } catch (err) {
     bodyEl.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
   }
@@ -10574,20 +10635,68 @@ async function loadConsultantGrowthClients(id, bodyEl) {
   }
 }
 
+// Clients' Agreements — which of this consultant's referred clients have
+// signed which agreements. Same "referred" definition as above.
+async function loadConsultantAgreementClients(id, bodyEl) {
+  const block = document.createElement('div');
+  block.style.cssText = 'margin-top:22px;';
+  block.innerHTML = '<h4 style="font-size:13px; margin-bottom:8px;">Clients\' Agreements</h4><div class="loading-state">Loading…</div>';
+  bodyEl.appendChild(block);
+
+  try {
+    const data = await api(`/admin/sales-consultants/${id}/agreement-clients`);
+    const heading = '<h4 style="font-size:13px; margin-bottom:8px;">Clients\' Agreements</h4>';
+    const clients = data.clients || [];
+    if (clients.length === 0) {
+      block.innerHTML = heading + '<div class="empty-state">No referred clients yet.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><th>Client</th><th>Agreements signed</th></tr>';
+    clients.forEach((c) => {
+      const tr = document.createElement('tr');
+      const signed = (c.submissions || []).filter((s) => s.status === 'complete');
+      const summary = signed.length ? signed.map((s) => escapeHtmlAdmin(s.agreement_title)).join(', ') : '<span style="color:var(--muted);">None signed</span>';
+      tr.innerHTML = `<td>${escapeHtmlAdmin(c.name)}<div style="color:var(--muted); font-size:11px;">${escapeHtmlAdmin(c.email)}</div></td><td>${summary}</td>`;
+      table.appendChild(tr);
+    });
+    block.innerHTML = heading;
+    block.appendChild(table);
+  } catch (err) {
+    block.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
+// Site visits via this representative's personal tracked link
+// (utm_source=representative&utm_campaign=consultant-<id>), the same
+// first-party analytics GET /sales-consultants/me/visits shows them.
+async function loadConsultantVisits(id, bodyEl) {
+  const block = document.createElement('div');
+  block.style.cssText = 'margin-top:22px;';
+  block.innerHTML = '<h4 style="font-size:13px; margin-bottom:8px;">Site visits via their link</h4><div class="loading-state">Loading…</div>';
+  bodyEl.appendChild(block);
+  try {
+    const data = await api(`/admin/sales-consultants/${id}/visits`);
+    block.innerHTML = `<h4 style="font-size:13px; margin-bottom:8px;">Site visits via their link</h4><p style="font-size:13px; margin:0;"><strong>${data.totalVisits}</strong> total &nbsp;·&nbsp; <strong>${data.visitsLast30Days}</strong> in the last 30 days</p>`;
+  } catch (err) {
+    block.innerHTML = `<div class="empty-state">Could not load: ${err.message}</div>`;
+  }
+}
+
 // Consultants publish free, so what they've put on the site is appended to the
 // commission report — sales and free publishing are the two halves of what a
 // consultant costs and earns.
 async function loadConsultantSubmissions(id, bodyEl) {
   const block = document.createElement('div');
   block.style.cssText = 'margin-top:22px;';
-  block.innerHTML = '<h4 style="font-size:13px; margin-bottom:8px;">Published by this consultant</h4><div class="loading-state">Loading…</div>';
+  block.innerHTML = '<h4 style="font-size:13px; margin-bottom:8px;">Published by this representative</h4><div class="loading-state">Loading…</div>';
   bodyEl.appendChild(block);
 
   try {
     const data = await api(`/sales-consultants/${id}/submissions`);
-    const heading = '<h4 style="font-size:13px; margin-bottom:8px;">Published by this consultant</h4>';
+    const heading = '<h4 style="font-size:13px; margin-bottom:8px;">Published by this representative</h4>';
     if (!data.linked) {
-      block.innerHTML = heading + '<div class="empty-state">No member account is linked to this consultant, so their submissions can\'t be attributed. Link one by giving the consultant record the same email address as their sign-in.</div>';
+      block.innerHTML = heading + '<div class="empty-state">No member account is linked to this representative, so their submissions can\'t be attributed. Link one by giving the representative record the same email address as their sign-in.</div>';
       return;
     }
     if (data.submissions.length === 0) {

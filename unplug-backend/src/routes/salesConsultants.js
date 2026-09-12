@@ -62,6 +62,33 @@ router.get('/me', requireAuth, async (req, res, next) => {
   }
 });
 
+// GET /sales-consultants/me/visits — site-visit counts for this consultant's
+// own personal tracked link. A consultant has no dedicated referral_code the
+// way a member does, so this reuses the existing UTM-based first-party
+// analytics (analytics_sessions) instead of inventing a second tracking
+// mechanism: their link tags utm_source=representative and
+// utm_campaign=consultant-<id>, and visits already land in analytics_sessions
+// via the normal /analytics/track path (see analyticsContext.js's classifySource).
+router.get('/me/visits', requireAuth, async (req, res, next) => {
+  try {
+    const c = await pool.query('SELECT id FROM sales_consultants WHERE user_id=$1 AND active=true', [req.user.id]);
+    if (!c.rowCount) return res.status(404).json({ error: 'No consultant record is linked to your account yet — ask an admin to link it.' });
+
+    const campaign = `consultant-${c.rows[0].id}`;
+    const result = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total_visits,
+         COUNT(*) FILTER (WHERE started_at >= now() - interval '30 days')::int AS visits_last_30_days
+       FROM analytics_sessions
+       WHERE campaign = $1`,
+      [campaign]
+    );
+    res.json({ campaign, totalVisits: result.rows[0].total_visits, visitsLast30Days: result.rows[0].visits_last_30_days });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /sales-consultants/performance — admin. Each consultant's referrals and
 // activity in one table.
 //

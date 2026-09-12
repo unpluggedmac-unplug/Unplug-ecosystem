@@ -2984,3 +2984,122 @@ Full suite: **2269 passing, 0 failing** (2263 existing + 6 new). Built and verif
 directly, in an isolated worktree (`live-gaps-fix` branch) — not against this engagement's earlier parallel
 build, whose migration numbers collide with what's actually live.
 
+## 2026-09-12 — Representative label, one-step promotion, agreement-signing status, personal visit link
+
+Follow-up to the same-day gap-closing pass above, addressing what was still partial or missing.
+
+**"Sales Consultant" → "Representative", user-facing text only.** Every place a customer or admin actually
+reads the word changed — the checkout referral option and its consultant-picker label, the admin nav item and
+the whole "Representatives" section (headings, panel titles, search placeholders, toasts, empty-states, the
+`prompt()`/table-header strings in the account-linking flow), the Staff & Permissions role dropdown (which
+previously showed the raw value `consultant` verbatim — now shows "representative" via a small label map
+while the submitted `value` stays `consultant`), and the two matching error strings in the member dashboard.
+Deliberately NOT renamed: route paths, the `sales_consultants` table/columns, JS identifiers, the `role`
+column's actual value, and the `referral_source` CHECK constraint's `sales_consultant` value — all internal,
+already working, and renaming them buys nothing but migration risk. One existing test
+(`consultantFreePublishingAdminUi.test.js`) pinned the old "consultants only" wording verbatim and needed
+updating in the same commit — exactly the kind of test-following-behavior update this codebase's convention
+expects.
+
+**One-step "promote a member to Representative".** Previously: add a bare consultant record, then separately
+search-and-link it to an account — two admin actions for one outcome. New endpoint,
+`POST /admin/links/promote-member` (`adminProfileLinks.js`, alongside the existing directory/consultant
+linking routes it's the same shape of problem as), creates the `sales_consultants` row *already* pointing at
+`user_id` in one insert, refusing a double-promotion of the same member. A new "Promote a member to
+Representative" panel search-and-clicks straight to it; the original "Add a Representative" (no account yet)
+and "Link a representative to their member account" (existing record, no account) panels stay, for the cases
+this shortcut doesn't cover. Confirmed with the user beforehand: the `consultant` *role* (dashboard access)
+stays restricted to `@unplugnews.com` staff addresses regardless of this shortcut — promoting a member only
+ever creates the attribution/commission record, never grants the role.
+
+**Per-client agreement-signing status**, mirroring the Growth Application clients view from the same-day
+entry above almost exactly: `GET /agreement-forms/consultant/clients` (self) and
+`GET /admin/sales-consultants/:id/agreement-clients` (admin) both return, per referred client (same
+confirmed-payment definition as everywhere else), every `agreement_submissions` row for that user —
+agreement title, status, signed date. A client can have signed several agreements or none; `status='complete'`
+is what "signed" means here (`started`/`awaiting_payment` are provisional pay-before-sign rows, not a
+completed signature). Surfaced as a merged "Agreements signed" column right in the existing "My Clients'
+Growth" table (member dashboard) rather than a separate screen, and as a "Clients' Agreements" block appended
+to the admin commission-report panel next to the existing Growth Applications one.
+
+**Site visits via a personal tracked link.** A consultant has no dedicated `referral_code` the way a member
+does, so rather than building new tracking, this reuses the real first-party analytics
+(`analytics_sessions.campaign`) that `/analytics/track` already writes on every page view: their link is
+`{site}/?utm_source=representative&utm_campaign=consultant-<id>`, and `analyticsContext.js`'s existing
+`classifySource()` already turns that into a stored session tagged `campaign='consultant-<id>'` with no
+backend changes needed there. New endpoints `GET /sales-consultants/me/visits` (self) and
+`GET /admin/sales-consultants/:id/visits` (admin) count those sessions, total and last-30-days. The member
+dashboard's My Referrals panel gained a copyable "Your link" box plus the visit count; the admin commission
+report gained a matching "Site visits via their link" line.
+
+**Tests.** New file `representativeGaps.test.js`, 10 tests covering all three additions above (promote-member
+success/conflict/404/role-gate, agreement-clients self+admin view with a genuinely-unsigned client correctly
+showing an empty list, visits counting correctly and never leaking a *different* consultant's campaign tag
+into the total). Full suite: **2288 passing, 0 failing** — 10 new here plus whatever landed on `main` from
+other work merged in the meantime (Coming Soon Mode, an admin session-handoff fix); the 1 pre-existing test
+whose text-match needed updating for the rename is fixed, not counted as new.
+
+## 2026-09-12 — Agreement Forms: templates, controlled placement, and a real visual redesign
+
+Requested directly: a template an agreement can be created *from* (so new agreements start from a known-good
+standard rather than blank), and admin control over where a real "sign this agreement" button appears on the
+site. Both turned out to be **half-built already** — real database schema, real backend logic, zero UI path
+to either — confirmed before writing anything, the same "verify what's actually there" discipline as every
+other feature this session.
+
+**Templates.** `agreement_templates`/`template_fields` (with 8 seeded built-ins — Sponsorship, Media
+Partnership, Freelance Service, etc.) and the copy-through logic in `POST /agreement-forms/admin` (accepts a
+`templateId`, copies the template's rules/terms/metadata as defaults and its fields onto the new agreement)
+already existed and already worked — the "+ New agreement" button just never sent `templateId`, only ever
+prompting for a bare name. Fixed by extending that button's existing `prompt()`-based flow (matching this
+page's established interaction style, not introducing a new modal system) to first list the real templates
+from the already-existing `GET /admin/templates/list` endpoint, or blank. Verified live: creating from
+"Sponsorship" brings across all 8 of its fields.
+
+**Controlled placement, not free text.** `agreement_forms.public_pages` + the admin's "Public placements"
+input + the feed endpoint (`GET /agreement-forms?page=X`) all existed and worked as *storable, queryable*
+data — but zero code anywhere on the actual site ever fetched that feed. Setting it changed nothing visible.
+Two decisions here, both deliberate: (1) `sanitizePages()` now enforces a real allow-list (currently just
+`checkout`) instead of accepting any string — the same safety pattern Growth Application's
+`growth_application_placements` already uses, so admin can never select a page nothing renders on; (2) built
+the actual consumer — `unplug-checkout.html` now fetches `GET /agreement-forms?page=checkout` and renders a
+real "View & sign agreement" card for anything active, published, and placed there. The free-text input in
+`unplug-agreements-admin.html` became a plain checkbox ("Show a 'Sign agreement' button on Checkout").
+Homepage and Directory are real candidates for the same treatment later — both live inside the large
+`unplug-magazine.html` SPA rather than a standalone file, which is more investigation than this pass's scope
+— logged here rather than silently dropped.
+
+**Visual redesign.** `unplug-agreements-admin.html` linked neither `/unplug-tokens.css` nor the site's Google
+Fonts (Playfair Display / Inter) — it defined its own unrelated colour palette (`--hot:#ff2f00`,
+`--paper:#ebe9e9`, Arial body text) entirely disconnected from the rest of the Control Centre. That's the
+whole reason it read as a different, less polished tool next to `unplug-admin-dashboard.html`. Fixed by
+linking the real tokens/fonts and rewriting the page's `<style>` block to the same visual vocabulary as the
+main dashboard — flat panels with hairline borders (no border-radius/shadow), Playfair Display headings,
+`--red`/`--ink`/`--cream`/`--slate`/`--green` tokens, the same active-row/pill/button treatment. Zero HTML
+structure or `<script>` logic touched — every `id`/class the JS depends on is unchanged; only how it looks.
+Confirmed `unplug-growth-applications-admin.html` was never affected by this — it already linked the shared
+tokens correctly, which is exactly why it never looked out of place.
+
+**Tests.** New file `agreementTemplatesAndPlacements.test.js`, 6 tests: template listing, create-from-template
+field/metadata copy-through, create-without-template still blank as before, `sanitizePages` allow-list
+enforcement (checkout kept, `homepage`/an arbitrary string dropped), the `page=checkout` feed returning only
+active+published+placed agreements (not drafts, not agreements placed elsewhere), and no-`page=` returning
+empty rather than everything. Full suite: **2295 passing, 0 failing.**
+
+## 2026-09-12 — Agreement Forms: admin-controlled button label
+
+Small, direct follow-up: the checkout/member-dashboard signing button always said the same fixed text
+("View & sign agreement" / "View agreement") no matter what the agreement was — read oddly for something
+like a sponsorship deal, where "Sponsor Our Homepage" fits the actual pitch better. New nullable
+`button_label` column (migration `200_agreement_button_label.sql`), a plain `set()` in the PATCH route (not
+`material()` — this is presentational, not a legal term of the agreement, so it doesn't bump `version` the
+way editing rules/terms does), a "Button label" field in the admin editor, and both feeds that render a
+signing button (`GET /agreement-forms?page=X` and `GET /agreement-forms/member`) now select and return it.
+Blank falls back to the original fixed text everywhere, so every existing agreement keeps behaving exactly
+as before.
+
+**Tests.** New file `agreementButtonLabel.test.js`, 4 tests: a set label comes back through the public page
+feed, the same through the member-dashboard feed, a blank label returns `null` rather than `''`, and clearing
+a previously-set label back to blank actually clears it (not just ignored). Full suite: **2299 passing, 0
+failing.**
+
