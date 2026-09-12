@@ -369,6 +369,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
       <button class="ms-navlink section-hidden" data-ms="myagreements" id="msMyAgreementsNav"><span>📄</span> My Agreements</button>
+      <button class="ms-navlink section-hidden" data-ms="availableagreements" id="msAvailableAgreementsNav"><span>📝</span> Available Agreements</button>
       <button class="ms-navlink section-hidden" data-ms="myclients" id="msMyClientsNav"><span>🌱</span> My Clients' Growth</button>
       <a class="ms-navlink" href="unplug-magazine.html"><span>🌐</span> View Official Site</a>
       <button class="ms-navlink ms-logout" id="msLogout"><span>↩</span> Logout</button>
@@ -1226,6 +1227,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
     </section>
 
+    <!-- AVAILABLE AGREEMENTS — active forms an admin chose to show to members.
+         This is separate from consultant-only "My Agreements" above. -->
+    <section class="ms-section section-hidden" data-ms-section="availableagreements">
+    <div class="card">
+      <h2>Available Agreements</h2>
+      <p class="sub">Forms your Unplug account can review and sign. Publicly listed agreements are controlled separately by the admin.</p>
+      <div id="availableAgreementsContent"><div class="loading-state">Loading…</div></div>
+    </div>
+    </section>
+
     <!-- MY CLIENTS' GROWTH — sales-consultant self-service. "Client" means
          the same thing My Referrals already means by referral: a user whose
          payment carries this consultant's sales_consultant_id. -->
@@ -1956,6 +1967,7 @@ function enterMemberDashboard(user){
   loadCredits();
   loadLeaderboard();
   loadMyAnalytics();
+  loadAvailableAgreements();
   if (CURRENT_USER && CURRENT_USER.role === 'consultant') {
     document.getElementById('msMyReferralsNav').classList.remove('section-hidden');
     loadMyReferrals();
@@ -4839,6 +4851,44 @@ async function loadMyReferrals() {
     el.innerHTML = /ask an admin/i.test(err.message || '')
       ? '<p class="sub" style="margin:0;">Your account isn\'t linked to a consultant record yet — ask an admin to link it.</p>'
       : `<p class="sub" style="margin:0; color:var(--red);">Could not load — ${escapeHtmlM(err.message)}</p>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Available Agreements — member-facing forms selected by an admin.
+// The backend feed is authenticated and only includes active, in-window forms
+// with member_visible=true; unpublished forms never enter the public feed.
+// ---------------------------------------------------------------------------
+async function loadAvailableAgreements() {
+  const nav = document.getElementById('msAvailableAgreementsNav');
+  const el = document.getElementById('availableAgreementsContent');
+  if (!nav || !el) return;
+  try {
+    const data = await api('/agreement-forms/member');
+    const agreements = data.agreements || [];
+    if (!agreements.length) {
+      nav.classList.add('section-hidden');
+      el.innerHTML = '<p class="sub" style="margin:0;">There are no agreements available to your account right now.</p>';
+      return;
+    }
+    nav.classList.remove('section-hidden');
+    el.innerHTML = agreements.map((a) => `
+      <div class="card" style="margin:0 0 14px; padding:14px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;">${escapeHtmlM(a.title)}</div>
+            ${a.description ? `<div class="sub" style="margin:2px 0 0;">${escapeHtmlM(a.description)}</div>` : ''}
+          </div>
+          ${a.category ? `<span class="pill">${escapeHtmlM(a.category)}</span>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <span class="sub">${Number(a.amount) > 0 ? `Amount: R${Number(a.amount).toFixed(2)}` : 'No payment required'}</span>
+          <a class="btn btn-line" style="width:auto;padding:7px 14px;text-decoration:none;" href="/unplug-agreement.html?slug=${encodeURIComponent(a.slug)}">View agreement</a>
+        </div>
+      </div>`).join('');
+  } catch (_) {
+    nav.classList.add('section-hidden');
+    el.innerHTML = '<p class="sub" style="margin:0;">Agreements are temporarily unavailable. Please try again shortly.</p>';
   }
 }
 

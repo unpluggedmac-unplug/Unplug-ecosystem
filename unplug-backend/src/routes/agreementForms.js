@@ -273,6 +273,28 @@ router.get('/', async (req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
+// Member dashboard feed. This is intentionally independent of public publication:
+// an admin can show an active agreement to signed-in members without placing it
+// on any public page.
+// GET /agreement-forms/member
+// ---------------------------------------------------------------------------
+router.get('/member', requireAuth, async (req, res, next) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, slug, title, description, category, version, short_code,
+              service_name, amount, payment_mode, opens_at, closes_at
+         FROM agreement_forms
+        WHERE status = 'active' AND member_visible = true
+          AND (opens_at IS NULL OR opens_at <= now())
+          AND (closes_at IS NULL OR closes_at > now())
+        ORDER BY title ASC`
+    );
+    res.set('Cache-Control', 'private, max-age=30');
+    res.json({ agreements: r.rows });
+  } catch (err) { next(err); }
+});
+
+// ---------------------------------------------------------------------------
 // Short link resolver. It resolves metadata; the frontend controls navigation.
 // GET /a/:code
 // ---------------------------------------------------------------------------
@@ -481,6 +503,7 @@ router.patch('/admin/:id', requireRole('admin'), async (req, res, next) => {
     }
     if (req.body.publicPages !== undefined) set('public_pages', JSON.stringify(sanitizePages(req.body.publicPages)));
     if (req.body.published !== undefined) set('published', !!req.body.published);
+    if (req.body.memberVisible !== undefined) set('member_visible', !!req.body.memberVisible);
     if (req.body.opensAt !== undefined) set('opens_at', req.body.opensAt || null);
     if (req.body.closesAt !== undefined) set('closes_at', req.body.closesAt || null);
     if (req.body.reminderDays !== undefined) set('reminder_days', req.body.reminderDays === '' || req.body.reminderDays === null ? null : Math.max(0,Number(req.body.reminderDays)||0));
