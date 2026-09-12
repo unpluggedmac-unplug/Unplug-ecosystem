@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/growth-application-v2-20260912
+      - staging-integration/growth-v2-20260912
       - staging-control-centre
   pull_request:
     branches:
@@ -13,6 +14,9 @@ on:
       - 'unplug-backend/db/migrations/202_growth_application_v2.sql'
       - 'unplug-backend/db/migrations/203_growth_application_master_seed.sql'
       - 'unplug-backend/db/migrations/204_growth_application_prefill.sql'
+      - 'unplug-backend/db/migrations/207_growth_application_v2.sql'
+      - 'unplug-backend/db/migrations/208_growth_application_master_seed.sql'
+      - 'unplug-backend/db/migrations/209_growth_application_prefill.sql'
       - 'unplug-backend/src/middleware/upload.js'
       - 'unplug-backend/src/routes/growthApplicationV2.js'
       - 'unplug-backend/src/routes/growthApplicationUpload.js'
