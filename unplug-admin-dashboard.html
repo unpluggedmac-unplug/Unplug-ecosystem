@@ -10278,6 +10278,12 @@ function userRowHtml(u) {
         Free publishing enabled <span style="color:var(--slate); font-weight:400;">(representatives only — has no effect on any other role)</span>
       </label>
     </div>
+    ${!/@unplugnews\.com$/i.test(u.email) ? `<div style="margin-bottom:10px;">
+      <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+        <input type="checkbox" class="u-consultant-exception"${u.consultant_domain_exception ? ' checked' : ''}${canManageMembers ? '' : ' disabled'}>
+        Allow consultant role for this account <span style="color:var(--slate); font-weight:400;">(a deliberate one-off exception — normally only @unplugnews.com addresses can be made a representative with dashboard access)</span>
+      </label>
+    </div>` : ''}
     ${canManageFinance ? `<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:10px;">
       <div class="field" style="margin-bottom:0;"><label>Account credit</label><div style="font-weight:700; font-size:15px;">R${credit.toFixed(2)}</div></div>
       <div class="field" style="margin-bottom:0;"><label>Adjust by (R)</label><input class="u-credit" type="number" step="0.01" placeholder="e.g. 50 or -50" style="width:130px;"></div>
@@ -10307,10 +10313,9 @@ async function linkUserConsultant(id, currentConsultantId) {
   if (!consultants.length) { showToast('No representatives exist yet — add one in Representatives first.', true); return; }
 
   const lines = consultants.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
-  const unlinkOption = currentConsultantId ? '\n0. Unlink (no representative)' : '';
-  const pick = prompt(`Link this member to which representative?\n\n${lines}${unlinkOption}\n\nEnter a number:`);
+  const pick = prompt(`Link this member to which representative?\n\n0. None\n${lines}\n\nEnter a number:`);
   if (pick === null) return;
-  if (pick.trim() === '0' && currentConsultantId) {
+  if (pick.trim() === '0') {
     try {
       await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ salesConsultantId: null }) });
       showToast('Unlinked.');
@@ -10353,6 +10358,8 @@ async function saveUser(id) {
     memberType: row.querySelector('.u-type').value || null,
     freePublishingEnabled: row.querySelector('.u-free-publishing').checked,
   };
+  const exceptionCheckbox = row.querySelector('.u-consultant-exception');
+  if (exceptionCheckbox) payload.consultantDomainException = exceptionCheckbox.checked;
   // Only send the role when it is actually editable, so a disabled control
   // can't post its value back and trip the self-demotion guard.
   if (roleSel && !roleSel.disabled) payload.role = roleSel.value;
