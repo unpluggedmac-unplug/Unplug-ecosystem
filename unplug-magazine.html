@@ -12749,6 +12749,10 @@ function setupPosterCarousel(widget, listings) {
   }).catch(() => { /* fails open: the menus stay as they are */ });
 })();
 
+// Coming Soon mode (the site-wide "please check back later" overlay) lives in
+// unplug-shared.js, which this page already loads — see setupComingSoon
+// there. It runs automatically; nothing page-specific is needed here.
+
 // ---------------------------------------------------------------------------
 // The mega menu.
 //

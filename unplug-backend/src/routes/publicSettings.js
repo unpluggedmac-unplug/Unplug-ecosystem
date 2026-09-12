@@ -22,6 +22,12 @@ const PUBLIC_KEYS = [
   // admin has since chosen instead).
   'feature_edition_animation_effect',
   'feature_edition_transition_duration_ms',
+  // Coming Soon mode — the magazine checks this on every page load to decide
+  // whether to show the public a "please check back later" overlay instead
+  // of the site. See migration 197.
+  'coming_soon_active',
+  'coming_soon_heading',
+  'coming_soon_message',
 ];
 
 // GET /public-settings — returns a whitelisted subset of settings for the

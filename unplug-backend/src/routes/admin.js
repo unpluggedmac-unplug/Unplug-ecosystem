@@ -1230,6 +1230,49 @@ router.get('/sales-consultants/:id/payments', requireRole('admin'), async (req, 
   }
 });
 
+// GET /admin/sales-consultants/:id/growth-clients — admin view of the same
+// thing GET /growth-application/consultant/clients shows the consultant
+// themselves: their referred clients (payments.sales_consultant_id) and
+// where each stands on their Growth Application, if they've started one.
+router.get('/sales-consultants/:id/growth-clients', requireRole('admin'), async (req, res, next) => {
+  try {
+    const consultantResult = await pool.query('SELECT id, name FROM sales_consultants WHERE id = $1', [req.params.id]);
+    if (consultantResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Consultant not found.' });
+    }
+
+    const result = await pool.query(
+      `SELECT u.id AS user_id,
+              COALESCE(u.full_name, SPLIT_PART(u.email, '@', 1)) AS name,
+              u.email,
+              ga.id AS application_id,
+              ga.applicant_type,
+              ga.status,
+              ga.current_stage,
+              ga.submitted_at,
+              ga.updated_at
+         FROM (
+           SELECT DISTINCT p.user_id
+             FROM payments p
+            WHERE p.sales_consultant_id = $1 AND p.status = 'confirmed'
+         ) referred
+         JOIN users u ON u.id = referred.user_id
+         LEFT JOIN LATERAL (
+           SELECT * FROM growth_applications
+            WHERE user_id = referred.user_id
+            ORDER BY created_at DESC
+            LIMIT 1
+         ) ga ON true
+        ORDER BY u.full_name NULLS LAST, u.email ASC`,
+      [req.params.id]
+    );
+
+    res.json({ consultant: consultantResult.rows[0], clients: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /admin/notifications — unread-first feed. A sales-consultant-linked
 // payment automatically creates one of these (see payments.js) so the
 // admin doesn't have to go hunting through the full payments table.

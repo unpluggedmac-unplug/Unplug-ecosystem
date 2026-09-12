@@ -36,7 +36,7 @@ const CART_ELIGIBLE_TYPES = [
   'top10_entry', 'ad_banner',
 ];
 
-const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok', 'sales_consultant', 'other'];
+const REFERRAL_SOURCES = ['google', 'facebook', 'instagram', 'linkedin', 'tiktok', 'sales_consultant', 'website', 'other'];
 // The order reference: UNP- and ten characters. Spec §15 wants it unique,
 // searchable and immutable, and it is the string the customer puts on their
 // EFT. Generated in src/utils/reference.js, which is the one place that

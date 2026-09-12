@@ -446,3 +446,96 @@ window.UnplugSteps = (function () {
     },
   };
 })();
+
+
+// ---------------------------------------------------------------------------
+// Coming Soon mode — a site-wide "please check back later" overlay an admin
+// can switch on from the admin dashboard's Coming Soon Mode section, with no
+// deploy needed. Runs on every page that includes this file (the magazine,
+// Checkout, Vote — the Member Dashboard doesn't load this file, so it carries
+// its own copy of the same logic against its own local `api()`).
+//
+// NOT A SECURITY CONTROL: this hides the page in the browser only — the real
+// content and the API are both still there. A signed-in admin
+// (unplug_admin_token already in this browser, from the admin dashboard —
+// same origin, same localStorage) always sees the real site, so a change can
+// be checked before switching this back off for everyone else.
+//
+// FAILS OPEN, LAST ANSWER REMEMBERED: applied from localStorage immediately
+// so a returning visitor sees the overlay (or the real site) with no flash,
+// then reconciled with the server a moment later. If that request fails —
+// offline, or the Render backend cold-starting — whatever was just applied
+// is left exactly as is; a failed request must never be the reason a live
+// site looks like it is still under construction.
+// ---------------------------------------------------------------------------
+(function setupComingSoon() {
+  const CACHE_KEY = 'unplug_coming_soon';
+  const OVERLAY_ID = 'unplug-coming-soon-overlay';
+
+  function isAdmin() {
+    try { return Boolean(localStorage.getItem('unplug_admin_token')); }
+    catch (e) { return false; }
+  }
+
+  function show(heading, message) {
+    if (document.getElementById(OVERLAY_ID)) return;
+    const overlay = document.createElement('div');
+    overlay.id = OVERLAY_ID;
+    overlay.setAttribute('role', 'status');
+    overlay.setAttribute('aria-live', 'polite');
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:2147483000; '
+      + 'display:flex; align-items:center; justify-content:center; flex-direction:column; '
+      + 'text-align:center; padding:32px 20px; gap:12px; '
+      + 'background:var(--paper, #fdfaf6); overflow:auto;';
+
+    const h2 = document.createElement('h2');
+    h2.textContent = heading;
+    h2.style.cssText = 'font-family:var(--font-display, Georgia, serif); font-size:28px; color:var(--ink, #1a1a1a); margin:0;';
+
+    const p = document.createElement('p');
+    p.textContent = message;
+    p.style.cssText = 'color:var(--slate, #666); margin:0; max-width:48ch;';
+
+    overlay.appendChild(h2);
+    overlay.appendChild(p);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+  }
+
+  function hide() {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) overlay.remove();
+    document.body.style.overflow = '';
+  }
+
+  function apply(state) {
+    if (state && state.active && !isAdmin()) {
+      show(state.heading || "We'll be back shortly",
+        state.message || "We're currently working on the site. Please check back later.");
+    } else {
+      hide();
+    }
+  }
+
+  function run() {
+    // Immediately, from what the last visit learned.
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached !== null) apply(JSON.parse(cached));
+    } catch (e) { /* private mode, or nothing cached yet — just means no head start */ }
+
+    // Then the truth.
+    UnplugAPI.api('/public-settings').then((data) => {
+      const settings = (data && data.settings) || {};
+      const state = {
+        active: settings.coming_soon_active === 'true',
+        heading: settings.coming_soon_heading || '',
+        message: settings.coming_soon_message || '',
+      };
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+      apply(state);
+    }).catch(() => { /* fails open: whatever was just applied stays as is */ });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();
