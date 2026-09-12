@@ -77,10 +77,16 @@ app.set('trust proxy', 1);
 // a log with unexplained holes is worse than one with none.
 app.use(require('./middleware/requestContext').middleware);
 
-const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 // Development remains convenient, but a production API must never silently
 // become cross-origin-open because one Render variable was forgotten.
-const corsOrigin = allowedOrigins.length ? allowedOrigins : (process.env.NODE_ENV === 'production' ? false : true);
+// Staging additionally accepts only the immutable deployment host belonging to
+// the dedicated unplug-staging Pages project. Production never receives that
+// pattern allowance and remains exact-origin only.
+const { buildCorsOrigin } = require('./utils/corsOrigin');
+const corsOrigin = buildCorsOrigin(process.env.CORS_ORIGINS, {
+  nodeEnv: process.env.NODE_ENV,
+  unplugEnv: process.env.UNPLUG_ENV,
+});
 app.use(cors({ origin: corsOrigin }));
 // 512kb. The largest honest JSON payload is a long article with its gallery
 // list; uploads are multipart and handled by multer, which has its own larger
