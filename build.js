@@ -116,12 +116,19 @@ async function minifyJs(code, name) {
     target: ['es2018'],
     sourcefile: name,
   });
-  for (const w of out.warnings || []) console.warn(`  ! ${name}: ${w.text}`);
+  if (out.warnings && out.warnings.length) {
+    const detail = out.warnings.map((warning) => warning.text).join('; ');
+    throw new Error(`${name} produced a JavaScript build warning: ${detail}`);
+  }
   return out.code;
 }
 
 async function minifyCss(code, name) {
   const out = await esbuild.transform(code, { loader: 'css', minify: true, sourcefile: name });
+  if (out.warnings && out.warnings.length) {
+    const detail = out.warnings.map((warning) => warning.text).join('; ');
+    throw new Error(`${name} produced a CSS build warning: ${detail}`);
+  }
   return out.code;
 }
 
