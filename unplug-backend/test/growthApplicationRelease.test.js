@@ -119,6 +119,7 @@ test('Growth integration covers admin, member journey, resume links, member popu
   assert.match(integration, /resume-link/);
   assert.match(integration, /applications\/me/);
   assert.match(integration, /member_dashboard/);
+  assert.match(integration, /addMemberJourneyLink\(config\)/);
   assert.match(integration, /site_visibility !== 'visible'/);
   for (const key of ['homepage','latest_news','directory','gallery','editions','top10','competitions']) {
     assert.match(integration, new RegExp(key));
