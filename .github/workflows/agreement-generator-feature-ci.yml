@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/agreement-generator-20260912
+      - staging-control-centre
   workflow_dispatch:
 
 permissions:
