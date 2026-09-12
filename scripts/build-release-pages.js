@@ -20,6 +20,10 @@ const PAGES = [
   '404.html',
   'not-found.html',
 ];
+const RUNTIME_ISOLATED_GENERATOR = new Set([
+  'unplug-agreement-generator.html',
+  'unplug-agreement-generator-admin.html',
+]);
 
 function hash(content) {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 10);
@@ -32,11 +36,40 @@ function writeAsset(base, ext, content) {
   return `/assets/${name}`;
 }
 
+function injectRuntimeIsolation(file, html) {
+  if (!RUNTIME_ISOLATED_GENERATOR.has(file)) return html;
+
+  // Defence in depth. /runtime-config is still the normal source of truth, but
+  // the host-scoped guard makes the release-candidate pages fail closed even if
+  // runtime-config is delayed/blocked/omitted. It is a no-op on production.
+  const guard = '<script src="/media/scripts/staging-runtime-guard.js"></script>';
+  if (!html.includes('src="/media/scripts/staging-runtime-guard.js"')) {
+    html = html.replace('<head>', `<head>\n  ${guard}`);
+  }
+  if (!html.includes('src="/runtime-config"')) {
+    html = html.replace(guard, `${guard}\n  <script src="/runtime-config"></script>`);
+  }
+  if (!html.includes('src="/unplug-shared.js"')) {
+    html = html.replace('<script>', '<script src="/unplug-shared.js"></script>\n<script>');
+  }
+
+  for (const required of [
+    'src="/media/scripts/staging-runtime-guard.js"',
+    'src="/runtime-config"',
+    'src="/unplug-shared.js"',
+  ]) {
+    if (!html.includes(required)) throw new Error(`Agreement Generator runtime isolation injection failed: ${file} missing ${required}`);
+  }
+  return html;
+}
+
 async function packagePage(file) {
   const src = path.join(ROOT, file);
   if (!fs.existsSync(src)) throw new Error(`Missing required release page: ${file}`);
   let html = fs.readFileSync(src, 'utf8');
   const base = file.replace(/\.html$/, '').replace(/[^a-z0-9_-]+/gi, '-');
+
+  html = injectRuntimeIsolation(file, html);
 
   let styleIndex = 0;
   for (const match of [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]) {
@@ -61,6 +94,16 @@ async function packagePage(file) {
     });
     const url = writeAsset(`${base}-script${scriptIndex++}`, 'js', transformed.code);
     html = html.replace(match[0], `<script src="${url}" defer></script>`);
+  }
+
+  if (RUNTIME_ISOLATED_GENERATOR.has(file)) {
+    for (const required of [
+      'src="/media/scripts/staging-runtime-guard.js"',
+      'src="/runtime-config"',
+      'src="/unplug-shared.js"',
+    ]) {
+      if (!html.includes(required)) throw new Error(`Packaged Agreement Generator page lost runtime isolation: ${file} missing ${required}`);
+    }
   }
 
   fs.writeFileSync(path.join(OUT, file), html);
