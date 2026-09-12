@@ -429,6 +429,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button type="button" class="nav-group-head"><span>Advanced / System</span><span class="chev">▶</span></button>
       <div class="nav-group-items">
         <a data-section="sitesettings">Site Settings</a>
+        <a data-section="backups">Backups</a>
         <a data-section="redirects">Redirects &amp; 404s</a>
         <a data-section="spam">Spam Filter</a>
       </div>
@@ -749,6 +750,32 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             </div>
             <button class="btn btn-solid" style="width:auto;" id="saveFeAnimBtn">Save</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BACKUPS -->
+    <div class="admin-section" id="section-backups">
+      <div class="main-head"><div><h1>Backups</h1>
+        <p>Check the encrypted off-site backup and create a fresh recovery checkpoint before a production release.</p>
+      </div></div>
+
+      <div class="panel">
+        <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <h3>Backup status</h3>
+          <button class="btn btn-line" style="width:auto;" id="backupRefreshBtn" type="button">Refresh</button>
+        </div>
+        <div class="panel-body" id="backupStatusBody"><div class="loading-state">Loading&hellip;</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Create recovery checkpoint</h3></div>
+        <div class="panel-body">
+          <p style="font-size:13px; color:var(--slate); margin-bottom:12px; max-width:760px;">
+            This creates a new database dump, encrypts it, proves it can be decrypted, and only then stores it in every configured destination. It never restores or replaces production data.
+          </p>
+          <button class="btn btn-solid" style="width:auto;" id="backupRunBtn" type="button">Create encrypted backup now</button>
+          <div id="backupRunNote" role="status" aria-live="polite" style="margin-top:10px; font-size:13px;"></div>
         </div>
       </div>
     </div>
@@ -3605,7 +3632,7 @@ const SECTION_PERMISSIONS = {
   payqueue:['finance.view','finance.manage'], checkouthealth:['finance.view','finance.manage'], payments:['finance.view','finance.manage'], cancellations:['finance.manage'], pricing:['finance.manage'], vouchers:['finance.manage'],
   crm:['crm.manage'], inquiries:['crm.manage'], emailmarketing:['marketing.manage'], forms:['crm.manage'],
   analytics:['analytics.view'], unplugpanalytics:['analytics.view'], activitylog:['system.manage'], notifications:['system.manage'],
-  sitesettings:['system.manage'], redirects:['system.manage'], spam:['system.manage']
+  sitesettings:['system.manage'], backups:['system.manage'], redirects:['system.manage'], spam:['system.manage']
 };
 function hasAdminPermission(...permissions) {
   if (!CURRENT_ACCESS) return false;
@@ -4206,6 +4233,7 @@ document.querySelectorAll('[data-section]').forEach((link) => {
     if (section === 'deafjobs') loadDeafJobs();
     if (section === 'deafpassports') loadDeafPassports();
     if (section === 'sitesettings') { loadSiteSettings(); loadFeaturedMembersAdmin(); }
+    if (section === 'backups') loadBackups();
     if (section === 'redirects') loadRedirects();
     if (section === 'halloffame') { loadHallOfFame(); populateHofUserPicker(); }
     if (section === 'birthdays') loadBirthdays();
@@ -9659,6 +9687,80 @@ async function loadSiteSettings() {
     showToast(err.message, true);
   }
 }
+
+function backupBytes(value) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 bytes';
+  if (bytes < 1024) return bytes + ' bytes';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function backupWhen(value) {
+  if (!value) return 'Unknown';
+  const when = new Date(value);
+  return Number.isNaN(when.getTime()) ? 'Unknown' : when.toLocaleString('en-ZA', { dateStyle:'medium', timeStyle:'short' });
+}
+
+async function loadBackups() {
+  const body = document.getElementById('backupStatusBody');
+  if (!body) return;
+  body.innerHTML = '<div class="loading-state">Checking encrypted backup storage&hellip;</div>';
+  try {
+    const data = await api('/backups');
+    const destinations = Array.isArray(data.destinations) ? data.destinations : [];
+    const rows = destinations.map((destination) => {
+      const newest = destination.newest || null;
+      const healthy = !destination.warning && !destination.error;
+      const detail = destination.error || destination.warning || (newest ? 'Encrypted backups available' : 'Configured, but no backup exists yet');
+      return '<tr>'
+        + '<td><strong>' + escapeHtmlAdmin(destination.provider || 'Unknown') + '</strong></td>'
+        + '<td><span class="status-pill ' + (healthy ? 'approved' : 'rejected') + '">' + (healthy ? 'Off-site' : 'Needs attention') + '</span></td>'
+        + '<td>' + Number(destination.count || 0).toLocaleString('en-ZA') + '</td>'
+        + '<td>' + (newest ? escapeHtmlAdmin(newest.key || '') + '<br><span style="font-size:12px; color:var(--slate);">' + backupWhen(newest.modified) + ' &middot; ' + backupBytes(newest.bytes) + '</span>' : '&mdash;') + '</td>'
+        + '<td style="font-size:12.5px; color:' + (healthy ? 'var(--slate)' : 'var(--red)') + ';">' + escapeHtmlAdmin(detail) + '</td>'
+        + '</tr>';
+    }).join('');
+
+    body.innerHTML = '<div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);">'
+      + '<span class="status-pill ' + (data.offsite ? 'approved' : 'rejected') + '">'
+      + (data.offsite ? 'Encrypted off-site backup configured' : 'No durable off-site backup') + '</span>'
+      + (data.note ? '<p style="font-size:12.5px; color:var(--red); margin:10px 0 0;">' + escapeHtmlAdmin(data.note) + '</p>' : '')
+      + '</div>'
+      + '<div style="overflow:auto;"><table><thead><tr><th>Destination</th><th>Status</th><th>Copies</th><th>Newest checkpoint</th><th>Details</th></tr></thead><tbody>'
+      + (rows || '<tr><td colspan="5" style="padding:16px; color:var(--red);">No backup destination was reported.</td></tr>')
+      + '</tbody></table></div>';
+  } catch (err) {
+    body.innerHTML = '<p style="padding:16px; color:var(--red);">' + escapeHtmlAdmin(err.message || 'Could not load backup status.') + '</p>';
+  }
+}
+
+document.getElementById('backupRefreshBtn').addEventListener('click', loadBackups);
+document.getElementById('backupRunBtn').addEventListener('click', async () => {
+  const button = document.getElementById('backupRunBtn');
+  const note = document.getElementById('backupRunNote');
+  button.disabled = true;
+  button.textContent = 'Creating and verifying…';
+  note.style.color = 'var(--slate)';
+  note.textContent = 'Creating the encrypted recovery checkpoint. Keep this page open.';
+  try {
+    const report = await api('/backups/run', { method:'POST' });
+    const stored = (report.destinations || []).filter((destination) => destination.ok);
+    const failed = (report.destinations || []).filter((destination) => !destination.ok);
+    note.style.color = failed.length ? 'var(--red)' : 'var(--green)';
+    note.textContent = 'Verified ' + report.filename + ': ' + Number(report.rows || 0).toLocaleString('en-ZA')
+      + ' rows encrypted (' + backupBytes(report.encryptedBytes) + ') and stored in '
+      + stored.map((destination) => destination.provider).join(', ')
+      + (failed.length ? '. Warning: ' + failed.map((destination) => destination.provider + ' failed').join(', ') + '.' : '.');
+    await loadBackups();
+  } catch (err) {
+    note.style.color = 'var(--red)';
+    note.textContent = err.message || 'The backup could not be created.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Create encrypted backup now';
+  }
+});
 document.getElementById('rdAddBtn').addEventListener('click', async () => {
   const fromPath = document.getElementById('rdFrom').value.trim();
   const toUrl = document.getElementById('rdTo').value.trim();
