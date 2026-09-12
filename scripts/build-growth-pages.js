@@ -25,6 +25,10 @@ const COPY = [
   'growth-private-upload-helper.js',
   'growth-admin-builder-helper.js',
 ];
+const RUNTIME_ISOLATED_V2 = new Set([
+  'unplug-growth-application-v2.html',
+  'unplug-growth-applications-admin-v2.html',
+]);
 
 function hash(content) {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 10);
@@ -37,11 +41,33 @@ function writeAsset(base, ext, content) {
   return `/assets/${name}`;
 }
 
+function injectRuntimeIsolation(file, html) {
+  if (!RUNTIME_ISOLATED_V2.has(file)) return html;
+
+  // Growth V2 must never fall through to the production API when it is served
+  // from Cloudflare staging/preview. The runtime config sets the isolated API
+  // origin (or a fail-closed invalid origin), while unplug-shared renders the
+  // unmistakable UNPLUG STAGING ribbon. Keep both ahead of the page's own JS.
+  if (!html.includes('src="/runtime-config"')) {
+    html = html.replace('<head>', '<head>\n  <script src="/runtime-config"></script>');
+  }
+  if (!html.includes('src="/unplug-shared.js"')) {
+    html = html.replace('<script>', '<script src="/unplug-shared.js"></script>\n<script>');
+  }
+
+  if (!html.includes('src="/runtime-config"') || !html.includes('src="/unplug-shared.js"')) {
+    throw new Error(`Growth V2 runtime isolation injection failed: ${file}`);
+  }
+  return html;
+}
+
 async function buildPage(file) {
   const src = path.join(ROOT, file);
   if (!fs.existsSync(src)) throw new Error(`Missing Growth page: ${file}`);
   let html = fs.readFileSync(src, 'utf8');
   const base = file.replace(/\.html$/, '');
+
+  html = injectRuntimeIsolation(file, html);
 
   let styleIndex = 0;
   for (const match of [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]) {
@@ -72,6 +98,11 @@ async function buildPage(file) {
       '<script src="/growth-admin-builder-helper.js" defer></script>',
     ].join('\n');
     html = html.includes('</body>') ? html.replace('</body>', `${helpers}\n</body>`) : `${html}\n${helpers}`;
+  }
+
+  if (RUNTIME_ISOLATED_V2.has(file)
+      && (!html.includes('src="/runtime-config"') || !html.includes('src="/unplug-shared.js"'))) {
+    throw new Error(`Packaged Growth V2 page lost runtime isolation: ${file}`);
   }
 
   fs.writeFileSync(path.join(OUT, file), html);
