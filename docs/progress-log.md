@@ -3239,3 +3239,62 @@ claim depending on what the route under test actually reads. 2 new tests in `use
 Staff account can also be granted Representative access without its `role` changing — the direct proof that
 role and Representative access are now independent. Full suite: **2358 passing, 0 failing.**
 
+## 2026-09-13 — Control Centre navigation redesign: shipped, merged, verified live
+
+**What this was.** Implementation of the "UNPLUG Control Centre" handover doc — the admin dashboard's flat,
+ungrouped sidebar replaced with `media/scripts/admin-control-centre-hierarchy.js`, a real nav hierarchy
+(branches → nodes, mostly reusing existing `data-section` panels rather than building new ones). Most of
+the redesign's 40 open questions had already been answered by the time this portion started; the two left
+were resolved here: **Unplug Live** ships as six labelled "Coming Soon" placeholders rather than a half-built
+module, and **choice 14** — "should Party B be able to save and continue later?" — went with the recommended
+answer (auto-save drafts + a secure resume link + member-dashboard access), once the user supplied the actual
+question text from the original 40-item list.
+
+**Two real bugs found and fixed in the hierarchy script itself**, both from `syncPermissions()`'s
+visibility sweep only ever being able to *hide* a nav group, never show one again once async content (e.g.
+Agreement templates fetched over the network) arrived after the sweep's timing window — Agreements, Growth
+and Unplug Live groups could get permanently stuck hidden. Fixed with a bidirectional `g.hidden =
+shouldHide` plus a `setTimeout` fallback, and explicit `syncPermissions()` calls once Agreement/Growth
+counts finish hydrating. Separately, the old flat-sidebar `addAgreementAdminLink()` injector in
+`functions/runtime-config.js` was still running alongside the new hierarchy's own Agreement Generator link,
+producing two links on one page — the old injector was deleted outright rather than patched.
+
+**Choice 14, implemented end to end.** `agreementGeneratorPartyB.js`'s `GET /generator/member/agreements`
+now returns the real `signing_token` (single-signer or per-co-signer, scoped so no cross-signer token can
+leak), proven by a real HTTP + real Postgres test (`agreementGeneratorMemberDashboard.test.js`, 5 tests) that
+the token returned actually round-trips through `GET /generator/access/:token` and `PATCH .../draft` — not
+just that the dashboard shows a status. `unplug-member-dashboard.html` gained an "Agreements I'm Signing"
+section (hidden when empty, matching the page's existing pattern) with a real "Continue" link built from
+that token.
+
+**CI, twice.** My own duplicate-link removal broke `agreementGeneratorRelease.test.js`'s literal-text
+assertion (fixed by asserting the hierarchy script's own content instead of the deleted injector's). A
+second, unrelated CI failure turned out to be a genuine race condition in `forms.js` (a missing `await` on
+`capture.captureSubmission(...)`), fixed by a different concurrent session on this branch — confirmed as
+not my own regression before and after (my commits never touch `forms.js`; CI went 13/13 green immediately
+once that fix landed).
+
+**Shipped via PR #42 ("Staging control centre"), `staging-control-centre` → `main`, merged by the user**
+(no GitHub write access available this session — no `gh` CLI, no token, confirmed via a direct unauthenticated
+API call). Frontend auto-deployed via Cloudflare Pages on merge; backend required the user's manual
+"Deploy latest commit" click in Render (auto-deploy is off there), confirmed via `/health` and route parity
+before calling it live.
+
+**Full live-verification sweep, all of it — every nav group in the new hierarchy, checked against
+production** (`https://unplug-ecosystem.onrender.com`), not against staging or against the code: for each
+group, the hierarchy script's `data-section` value was traced through `unplug-admin-dashboard.html`'s
+`loadX()` functions to the real `api()` call, then curled for real. Members & Users, Checkout & Payments,
+Growth Applications (v1 + v2), Agreement Generator, Payment & Finance, Community & Gamification, Advertising
+& Marketing, Pages & Layout, Analytics & Reports, Top 10, Competitions, Impact Makers, Admin Tools, Danger
+Zone, Unplug Live, Dashboard, Content & Publishing, Forms, and Directory — every real endpoint came back
+`401` (correctly gated) or `200` (confirmed, each time, as a route deliberately left public in source — e.g.
+`/directory`, `/directory/categories`, `/news/categories`, `/editions/calendar`, `/competitions/top-10`,
+`/participation/leaderboard`, `/hall-of-fame`, `/impact-makers/categories` — never assumed from the status
+code alone). One early round of guessed Payment & Finance paths (`/orders`, `/admin/credits`, `/vouchers`,
+`/cancellations`, `/admin/business-reports`) 404'd purely from wrong bare paths, not broken endpoints —
+caught by re-checking the real route definitions rather than reporting them broken, and folded into the
+methodology used for every group after (real endpoint traced from source, never guessed, before curling).
+
+**Still open:** nothing new from this task specifically — Unplug Live remains intentionally unbuilt behind
+its "Coming Soon" placeholders until a future task takes it on.
+
