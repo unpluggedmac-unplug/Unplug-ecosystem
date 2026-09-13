@@ -9,6 +9,17 @@ var scheduled=0;
 
 function q(sel,root){return (root||document).querySelector(sel)}
 function qa(sel,root){return Array.prototype.slice.call((root||document).querySelectorAll(sel))}
+function txt(el,value){value=String(value==null?'':value);if(el&&el.textContent!==value)el.textContent=value}
+function clickNav(id){var el=q('#ccMemberNav [data-id="'+id+'"]');if(el)el.click()}
+
+function loadCss(){
+  if(q('link[data-member-control-centre-polish-css]'))return;
+  var link=document.createElement('link');
+  link.rel='stylesheet';
+  link.href='/media/styles/member-dashboard-control-centre-polish.css?v=20260913-1';
+  link.setAttribute('data-member-control-centre-polish-css','true');
+  (document.head||document.documentElement).appendChild(link);
+}
 
 function syncTopNotification(){
   var tree=q('#ccMemberTree');
@@ -44,12 +55,12 @@ function syncTopNotification(){
   var count=q('[data-polish-notification-count]',existing);
   var text=nativeCount?String(nativeCount.textContent||'').trim():'';
   var visible=!!text && !(nativeCount&&nativeCount.style&&nativeCount.style.display==='none') && !(nativeCount&&nativeCount.hidden);
-  if(count){count.textContent=text;count.hidden=!visible}
+  if(count){txt(count,text);if(count.hidden===visible)count.hidden=!visible}
 
   var sourceStar=q('[data-node="g-community"] [data-star="notifications"]',tree);
   var quickStar=q('[data-polish-notification-star]',existing);
   if(sourceStar&&quickStar){
-    quickStar.textContent=sourceStar.textContent||'☆';
+    txt(quickStar,sourceStar.textContent||'☆');
     quickStar.setAttribute('aria-label',(sourceStar.textContent==='★'?'Remove Notifications from favourites':'Favourite Notifications'));
   }
 
@@ -97,6 +108,66 @@ function patchHomeA11y(){
   });
 }
 
+function profilePercent(){
+  var el=q('#muCompletionPct');
+  var match=el&&String(el.textContent||'').match(/\d+/);
+  return match?Math.max(0,Math.min(100,+match[0])):0;
+}
+
+function syncProfileChecklist(){
+  var cards=q('#ccHomeCards');
+  if(!cards)return;
+  var host=q('#ccHomeProfileChecklist');
+  if(!host){
+    host=document.createElement('div');
+    host.id='ccHomeProfileChecklist';
+    host.className='cc-home-profile-checklist';
+    cards.insertAdjacentElement('afterend',host);
+  }
+  var pct=profilePercent();
+  var todo=q('#muCompletionTodo');
+  var raw=String(todo&&todo.textContent||'').trim();
+  var items=[];
+  if(/^Still to do:/i.test(raw)){
+    items=raw.replace(/^Still to do:\s*/i,'').split(/\s*·\s*/).filter(Boolean).map(function(item){return item.replace(/\s*\(\+\d+%\)\s*$/,'').trim()});
+  }
+  var signature=pct+'|'+items.join('|')+'|'+raw;
+  if(host.dataset.signature===signature)return;
+  host.dataset.signature=signature;
+  var rows=['<div class="cc-home-profile-item done"><b>✓</b><span>'+pct+'% of your My Unplug profile is complete.</span></div>'];
+  if(!items.length&&pct>=100)rows.push('<div class="cc-home-profile-item done"><b>✓</b><span>Your profile checklist is complete.</span></div>');
+  else items.slice(0,6).forEach(function(item){rows.push('<div class="cc-home-profile-item"><b>×</b><span>'+item.replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})+'</span></div>')});
+  host.innerHTML='<div class="cc-home-profile-checklist-head"><strong>Profile checklist</strong><button type="button">Open profile →</button></div><div class="cc-home-profile-list">'+rows.join('')+'</div>';
+  q('button',host).addEventListener('click',function(){clickNav('profile-completion')});
+}
+
+function syncGrowthBridge(){
+  var cards=q('#ccHomeCards');
+  if(!cards)return;
+  var host=q('#ccHomeGrowthBridge');
+  if(!host){
+    host=document.createElement('div');
+    host.id='ccHomeGrowthBridge';
+    host.className='cc-home-growth-bridge';
+    var checklist=q('#ccHomeProfileChecklist');
+    (checklist||cards).insertAdjacentElement('afterend',host);
+  }
+  var pct=profilePercent();
+  var score=String((q('#unplugScore')&&q('#unplugScore').textContent)||'—').trim();
+  var status=String((q('#unplugStatusBadge')&&q('#unplugStatusBadge').textContent)||'Your journey').trim();
+  var growthAvailable=!!q('#ccMemberNav [data-node="g-growth"]');
+  var signature=[pct,score,status,growthAvailable].join('|');
+  if(host.dataset.signature===signature)return;
+  host.dataset.signature=signature;
+  host.innerHTML='<div class="cc-home-growth-bridge-title"><strong>Your Unplug path</strong><span>Your identity, participation and growth work together.</span></div><div class="cc-home-path">'
+    +'<button type="button" class="cc-home-path-step '+(pct>=100?'is-complete':'')+'" data-polish-go="profile-completion"><small>1 · Identity</small><strong>'+pct+'% profile</strong><span>Build how people discover you.</span></button>'
+    +'<button type="button" class="cc-home-path-step '+(score!=='—'&&score!=='0'?'is-complete':'')+'" data-polish-go="journey-status"><small>2 · Participate</small><strong>'+status+'</strong><span>Score '+score+' · missions, badges and recognition.</span></button>'
+    +'<button type="button" class="cc-home-path-step '+(growthAvailable?'is-complete':'')+'" data-polish-go="'+(growthAvailable?'growth-overview':'browse-services')+'"><small>3 · Grow</small><strong>'+(growthAvailable?'Growth Journey':'Growth tools')+'</strong><span>'+(growthAvailable?'Continue your development journey.':'Explore what can help you grow.')+'</span></button>'
+    +'<button type="button" class="cc-home-path-step" data-polish-go="browse-services"><small>4 · Opportunities</small><strong>Take your next step</strong><span>Use Unplug services and opportunities.</span></button>'
+    +'</div>';
+  qa('[data-polish-go]',host).forEach(function(button){button.addEventListener('click',function(){clickNav(button.dataset.polishGo)})});
+}
+
 function patchSearch(){
   var search=q('#ccMemberSearch');
   var results=q('#ccMemberSearchResults');
@@ -136,19 +207,22 @@ function apply(){
   syncTopNotification();
   patchNavigationA11y();
   patchHomeA11y();
+  syncProfileChecklist();
+  syncGrowthBridge();
   patchSearch();
   patchModal();
 }
 
 function schedule(){
   if(scheduled)return;
-  scheduled=setTimeout(apply,30);
+  scheduled=setTimeout(apply,45);
 }
 
 function init(){
+  loadCss();
   apply();
   observer=new MutationObserver(schedule);
-  observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class','hidden','style']});
+  observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,characterData:true,attributeFilter:['class','hidden','style']});
   document.addEventListener('click',schedule,true);
 }
 
