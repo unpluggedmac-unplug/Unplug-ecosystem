@@ -638,3 +638,53 @@ test('A CAPPED SLOT STILL HAS A WIDTH — the grid-item collapse', () => {
       + 'or it collapses to 0x0 wherever it is a grid item');
   }
 });
+
+test('A MOBILE SIZE THE ADMIN CHOSE IS APPLIED EVEN WITH NO MOBILE ARTWORK', () => {
+  // The DEFAULT mobile size is gated on every banner in the slot having a
+  // mobile file, because otherwise the <picture> falls back to the wide
+  // desktop image and the squarer box letterboxes it — the original bug on a
+  // smaller screen.
+  //
+  // That gate is right for a default and wrong for an instruction. Six live
+  // leaderboards had no mobile artwork at all and rendered about 38px tall on
+  // a phone: proportionally correct, far too short to read. An admin setting a
+  // mobile size for one slot is choosing the letterboxing deliberately, so
+  // `mobileSet` separates the two cases and the public page honours it.
+  const { resolveAdSlotSizes, validateFormats } = require('../src/utils/adSlotFormats');
+
+  const untouched = resolveAdSlotSizes('{}')['news-leaderboard'];
+  assert.equal(untouched.mobileSet, false, 'an inherited default is not an instruction');
+
+  const chosen = resolveAdSlotSizes(JSON.stringify({
+    'news-leaderboard': { mobileW: 300, mobileH: 250 },
+  }))['news-leaderboard'];
+  assert.equal(chosen.mobileSet, true);
+  assert.deepEqual([chosen.mobileW, chosen.mobileH], [300, 250]);
+
+  // Half a pair is not a choice, and is refused rather than half-applied.
+  assert.ok(validateFormats({ 'news-leaderboard': { mobileW: 300 } }).error,
+    'a mobile width with no height must be refused, not treated as chosen');
+});
+
+test('the public payload carries the distinction, and the page acts on it', async () => {
+  await pool.query(`INSERT INTO ad_slots (slot_key, image_url, is_active)
+                    VALUES ('about-leaderboard', 'https://a.test/ab.jpg', true)`);
+  await api('PATCH', '/admin/settings/' + FORMATS_KEY,
+    { value: JSON.stringify({ 'about-leaderboard': { mobileW: 300, mobileH: 250 } }) }, adminToken);
+
+  const { body } = await api('GET', '/page-cms');
+  const s = body.adSlotSizes['about-leaderboard'];
+  assert.equal(s.mobileSet, true, 'the page cannot honour a choice it is not told about');
+  assert.deepEqual([s.mobileW, s.mobileH], [300, 250]);
+
+  // And the renderer must consult it, not only the artwork.
+  const html = fs.readFileSync(path.join(siteRoot, 'unplug-magazine.html'), 'utf8');
+  const gate = html.match(/if \(slotSize\.mobileW > 0[\s\S]{0,240}?\{/);
+  assert.ok(gate, 'the mobile-ratio gate has moved — re-check it still honours mobileSet');
+  assert.match(gate[0], /mobileSet\s*\|\|/,
+    'an admin-set mobile size must bypass the every-banner-has-artwork requirement');
+  assert.match(gate[0], /every\(\(b\) => b\.mobile_image_url\)/,
+    'and the artwork check must remain for slots still on the default');
+
+  await api('PATCH', '/admin/settings/' + FORMATS_KEY, { value: '{}' }, adminToken);
+});
