@@ -66,6 +66,7 @@ export async function onRequest({ env, request }) {
     ' addCss("/media/styles/member-dashboard-control-centre-help.css?v=20260913-1","data-member-control-centre-help-css");',
     ' addScript("/media/scripts/member-dashboard-control-centre.js?v=20260913-1","data-unplug-member-control-centre");',
     ' addScript("/media/scripts/member-dashboard-control-centre-polish.js?v=20260913-1","data-unplug-member-control-centre-polish");',
+    ' addScript("/media/scripts/member-dashboard-service-shortcuts.js?v=20260913-1","data-unplug-member-service-shortcuts");',
     '})();',
     '',
     '// Standalone Agreement Generator Control Centre module.',
