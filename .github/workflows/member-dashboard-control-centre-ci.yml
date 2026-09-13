@@ -11,6 +11,7 @@ on:
       - 'media/styles/member-dashboard-service-shortcuts.css'
       - 'unplug-backend/test/memberDashboardControlCentre*.test.js'
       - 'unplug-backend/test/memberDashboardServiceShortcuts.test.js'
+      - 'docs/proposals/member-dashboard-control-centre-HANDOVER.md'
       - '.github/workflows/member-dashboard-control-centre-ci.yml'
   pull_request:
     paths:
@@ -22,6 +23,7 @@ on:
       - 'media/styles/member-dashboard-service-shortcuts.css'
       - 'unplug-backend/test/memberDashboardControlCentre*.test.js'
       - 'unplug-backend/test/memberDashboardServiceShortcuts.test.js'
+      - 'docs/proposals/member-dashboard-control-centre-HANDOVER.md'
       - '.github/workflows/member-dashboard-control-centre-ci.yml'
 
 permissions:
