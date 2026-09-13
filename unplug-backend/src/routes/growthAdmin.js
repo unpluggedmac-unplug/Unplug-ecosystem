@@ -66,7 +66,8 @@ async function versionTree(versionId, includeSensitive = false) {
 async function latestAnswers(applicationId, includeSensitive = false) {
   const r = await pool.query(
     `SELECT DISTINCT ON (r.field_key) r.field_key,r.field_id,r.value_json,r.revision_number,r.created_at,
-            f.label,f.field_type,COALESCE(f.sensitive,false) AS sensitive,COALESCE(f.confidential,false) AS confidential
+            f.label,f.field_type,COALESCE(f.sensitive,false) AS sensitive,COALESCE(f.confidential,false) AS confidential,
+            COALESCE(f.allow_external_sharing,false) AS allow_external_sharing
        FROM growth_application_answer_revisions r
        LEFT JOIN growth_form_fields f ON f.id=r.field_id
       WHERE r.application_id=$1 ${includeSensitive ? '' : 'AND COALESCE(f.sensitive,false)=false'}
@@ -78,7 +79,7 @@ async function adminDetail(applicationId, includeSensitive = false) {
   const a = await pool.query(
     `SELECT a.id,a.user_id,a.applicant_email,a.applicant_type,a.status,a.form_version_id,
             a.completion_percent,a.last_saved_at,a.submitted_at,a.locked_at,a.withdrawn_at,a.withdrawn_reason,
-            a.external_sharing_allowed,a.external_sharing_consent_at,a.admin_notes,a.research_notes,a.closed_reason,
+            a.external_sharing_allowed,a.external_sharing_consent_at,a.field_sharing,a.admin_notes,a.research_notes,a.closed_reason,
             a.created_at,a.updated_at,u.email AS member_email
        FROM growth_applications a LEFT JOIN users u ON u.id=a.user_id WHERE a.id=$1`, [applicationId]);
   if (!a.rowCount) return null;

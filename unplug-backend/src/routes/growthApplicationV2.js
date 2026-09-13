@@ -62,7 +62,7 @@ async function owned(applicationId, userId, client = pool) {
   const result = await client.query(
     `SELECT id,user_id,applicant_email,applicant_type,status,form_version_id,completion_percent,last_saved_at,
             popia_consent,popia_consent_at,popia_consent_version,submitted_at,locked_at,withdrawn_at,
-            external_sharing_allowed,external_sharing_consent_at,created_at,updated_at
+            external_sharing_allowed,external_sharing_consent_at,field_sharing,created_at,updated_at
        FROM growth_applications WHERE id=$1 AND user_id=$2`,
     [applicationId, userId],
   );
@@ -400,6 +400,41 @@ router.patch('/applications/:id/external-sharing', async (req, res, next) => {
     return result.rowCount
       ? res.json(result.rows[0])
       : res.status(409).json({ error: 'External-sharing consent can only be changed while the application is a draft.' });
+  } catch (err) { return next(err); }
+});
+
+router.patch('/applications/:id/field-sharing', async (req, res, next) => {
+  const applicationId = asId(req.params.id);
+  const fieldKey = String(req.body?.fieldKey || '').trim();
+  if (!applicationId || !fieldKey || typeof req.body?.shareable !== 'boolean') {
+    return res.status(400).json({ error: 'Provide fieldKey and shareable=true or false.' });
+  }
+  try {
+    const application = await owned(applicationId, req.user.id);
+    if (!application) return res.status(404).json({ error: 'Growth Application not found.' });
+    if (application.status !== 'draft') {
+      return res.status(409).json({ error: 'Sharing choices can only be changed while the application is a draft.' });
+    }
+    // A member can only mark shareable a field admin has explicitly allowed
+    // to leave internal systems — this toggle can never override that ceiling.
+    const eligible = await pool.query(
+      `SELECT 1 FROM growth_form_fields
+        WHERE version_id=$1 AND field_key=$2 AND is_enabled=true
+          AND allow_external_sharing=true AND applicant_types ? $3`,
+      [application.form_version_id, fieldKey, application.applicant_type],
+    );
+    if (!eligible.rowCount) {
+      return res.status(400).json({ error: 'This field cannot be marked shareable.' });
+    }
+    const result = await pool.query(
+      `UPDATE growth_applications
+          SET field_sharing = field_sharing || jsonb_build_object($3::text, $4::boolean),
+              updated_at = now()
+        WHERE id=$1 AND user_id=$2
+        RETURNING field_sharing`,
+      [applicationId, req.user.id, fieldKey, req.body.shareable],
+    );
+    return res.json({ fieldSharing: result.rows[0].field_sharing });
   } catch (err) { return next(err); }
 });
 
