@@ -118,12 +118,20 @@ People I Follow / Followers / Saved Profiles / Reviews should only become dedica
 
 ### Account & Privacy
 - Account Settings
+- Login & Security
+- Communication Preferences
 - Your Data
 - Download My Data
 - View Official Site
 - Logout
 
-Existing Account Settings already contains password/sign-in controls, notification preferences and two-factor controls. Dedicated Login & Security / Communication Preferences subroutes may be added later only if they remain wired to these real controls.
+`Login & Security` and `Communication Preferences` are now convenience destinations, not new account systems. Both reuse the real existing Account Settings workspace:
+
+- Login & Security opens Account Settings and focuses the existing `#twoFactorContent` security area. The same native Account Settings page continues to contain the password/sign-in controls.
+- Communication Preferences opens Account Settings and focuses the existing `#notifPrefsContent` controls.
+- Search aliases such as password, security, 2FA, communication, preferences, notifications and email can find these destinations.
+
+No duplicate account API or parallel settings record has been introduced.
 
 ## Member Home
 
@@ -152,7 +160,7 @@ The new Home layer provides:
 - Accordion state is remembered in localStorage.
 - Favourites are remembered.
 - Last five recently used areas are remembered.
-- Search covers member navigation plus rendered services and submissions.
+- Search covers member navigation plus rendered services and submissions, with account convenience aliases added by the polish layer.
 - Breadcrumbs and Back-to-parent are provided.
 - Existing mobile sidebar/drawer behaviour is preserved.
 - Conditional Agreement / Referral / Client areas stay conditional.
@@ -169,6 +177,8 @@ The new Home layer provides:
 - Escape-to-close Quick Create;
 - keyboard focus styles in the polish CSS.
 
+The polish layer uses one controlled MutationObserver and avoids observing the ARIA attributes it writes itself, reducing the risk of self-triggering mutation loops.
+
 ## Files added
 
 - `media/scripts/member-dashboard-control-centre.js`
@@ -177,6 +187,7 @@ The new Home layer provides:
 - `media/styles/member-dashboard-control-centre-help.css`
 - `media/styles/member-dashboard-control-centre-polish.css`
 - `unplug-backend/test/memberDashboardControlCentre.test.js`
+- `unplug-backend/test/memberDashboardControlCentrePolish.test.js`
 - this handover file
 
 ## Shared file currently modified on this feature branch
@@ -192,7 +203,7 @@ While this member lane was being built, `staging-control-centre` continued movin
 - `functions/runtime-config.js`
 - `unplug-member-dashboard.html`
 
-At the latest comparison during this work, the member feature branch was behind staging and the branches had diverged.
+At the latest comparison on 2026-09-13, the Member branch and staging were still deliberately diverged: the feature branch was ahead with Member work and behind the moving staging/Admin lane. The latest staging head inspected was `31a9f69e656a53e893e6605a8759257a38828f4f`; its newest change was an Agreement Generator regression-test update, so no attempt was made to pull it into the Member lane while Claude is still working.
 
 **Do not overwrite the latest staging versions with the older feature-branch copies.**
 
@@ -205,7 +216,7 @@ When Claude finishes the Admin lane:
 5. resolve any member-page changes by preserving both current functionality and the Control Centre layer;
 6. then run tests and deploy to staging.
 
-## Regression test
+## Regression tests
 
 `unplug-backend/test/memberDashboardControlCentre.test.js` statically checks:
 
@@ -225,7 +236,20 @@ When Claude finishes the Admin lane:
 - mobile CSS;
 - reuse of Unplug brand tokens.
 
-The test is included by the backend's existing `node --test --test-concurrency=1 "test/**/*.test.js"` command.
+`unplug-backend/test/memberDashboardControlCentrePolish.test.js` adds focused checks for:
+
+- Login & Security reusing `#twoFactorContent`;
+- Communication Preferences reusing `#notifPrefsContent`;
+- no duplicate fetch/API layer in the convenience shortcuts;
+- account search aliases;
+- idempotent polish insertion;
+- one controlled MutationObserver;
+- mutation-safety around accessibility attributes;
+- existing profile completion as the checklist source;
+- the four-step Unplug Path;
+- responsive and keyboard-visible polish.
+
+Both tests are included by the backend's existing `node --test --test-concurrency=1 "test/**/*.test.js"` command.
 
 ## Status at handover
 
@@ -238,8 +262,10 @@ The test is included by the backend's existing `node --test --test-concurrency=1
 - ✅ Root-level Notifications quick access added while keeping Notifications inside Community.
 - ✅ Profile checklist added from existing completion state.
 - ✅ Growth + gamification/participation bridge added.
-- ✅ Accessibility polish added.
-- ✅ Regression test file added.
+- ✅ Login & Security convenience destination added using existing controls.
+- ✅ Communication Preferences convenience destination added using existing controls.
+- ✅ Accessibility and mutation-safety polish added.
+- ✅ Member-specific regression test files added.
 - 🟡 Full repository CI has not yet been confirmed on this branch.
 - 🟡 Browser/UI validation has not yet been completed.
 - 🟡 Latest staging changes have not yet been reconciled because the Admin lane is still moving.
