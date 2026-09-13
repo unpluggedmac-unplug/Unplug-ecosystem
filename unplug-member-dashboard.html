@@ -1204,7 +1204,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </section>
 
     <!-- MY REFERRALS — sales-consultant self-service. Nav link + this
-         section only appear for role='consultant' (see enterMemberDashboard),
+         section only appear for is_representative (see enterMemberDashboard),
          since /sales-consultants/me 404s for anyone else anyway. -->
     <section class="ms-section section-hidden" data-ms-section="myreferrals">
     <div class="card">
@@ -1215,8 +1215,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </section>
 
     <!-- MY AGREEMENTS — sales-consultant self-service. Same gating as My
-         Referrals: only appears for role='consultant', since
-         /agreement-forms/consultant/mine is role-gated the same way. An
+         Referrals: only appears for is_representative, since
+         /agreement-forms/consultant/mine is gated the same way. An
          admin grants a consultant access to specific agreements first
          (see the Agreements admin page); until then this list is empty. -->
     <section class="ms-section section-hidden" data-ms-section="myagreements">
@@ -1968,7 +1968,7 @@ function enterMemberDashboard(user){
   loadLeaderboard();
   loadMyAnalytics();
   loadAvailableAgreements();
-  if (CURRENT_USER && CURRENT_USER.role === 'consultant') {
+  if (CURRENT_USER && CURRENT_USER.is_representative) {
     document.getElementById('msMyReferralsNav').classList.remove('section-hidden');
     loadMyReferrals();
     document.getElementById('msMyAgreementsNav').classList.remove('section-hidden');
@@ -2742,11 +2742,11 @@ const SUBMIT_SERVICE_INFO = {
 let _abPrices = null; // set once /ad-banners/options loads (setupBannerFields)
 
 // Types that go through publishesFree() on the backend (see articles.js,
-// events.js, gallery.js) — an admin or consultant submitting one of these is
-// never charged, whatever the standard price shown to a paying member is.
+// events.js, gallery.js) — an admin or Representative submitting one of these
+// is never charged, whatever the standard price shown to a paying member is.
 const FREE_PUBLISH_TYPES = ['article', 'event', 'gallery'];
 function currentUserPublishesFree() {
-  return !!CURRENT_USER && ['admin', 'consultant'].includes(CURRENT_USER.role);
+  return !!CURRENT_USER && (CURRENT_USER.role === 'admin' || !!CURRENT_USER.is_representative);
 }
 
 // Hides everything about paying — method, credit, voucher, the live quote —

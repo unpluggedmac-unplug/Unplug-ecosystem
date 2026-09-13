@@ -12,7 +12,7 @@ function attachUser(req, res, next) {
   const token = header.slice('Bearer '.length);
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = payload; // { id, email, role }
+    req.user = payload; // { id, email, role, is_representative }
     const ctx = require('./requestContext').current();
     if (ctx) ctx.actorRole = payload.role === 'staff' ? 'staff' : (payload.role === 'admin' ? 'admin' : 'member');
   } catch (err) {
@@ -58,6 +58,21 @@ function requireRole(...allowedRoles) {
   };
 }
 
+// Requires Representative access — a flag independent of `role` (see
+// 210_representative_flag.sql), so a member, staff, or admin account can all
+// equally hold it. Unlike requireRole('admin'), being admin does NOT imply
+// this: Representative access must be granted explicitly, same as before
+// when it was gated by role === 'consultant'.
+function requireRepresentative(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  if (!req.user.is_representative) {
+    return res.status(403).json({ error: 'Representative access is required.' });
+  }
+  next();
+}
+
 // Super Admin means the actual account role in the database is `admin`. This
 // intentionally does NOT accept a staff capability: only Super Admin can grant
 // staff access, alter role templates, or create another unrestricted admin.
@@ -96,4 +111,4 @@ function requireOwnerOrAdmin(getOwnerId) {
   };
 }
 
-module.exports = { attachUser, requireAuth, requireRole, requireSuperAdmin, requireOwnerOrAdmin };
+module.exports = { attachUser, requireAuth, requireRole, requireRepresentative, requireSuperAdmin, requireOwnerOrAdmin };

@@ -41,7 +41,7 @@ let _nextUserId = 5000;
 let _nextRef = 1;
 async function makeUser(email) {
   const id = _nextUserId++;
-  await pool.query(`INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'x', 'consultant') ON CONFLICT DO NOTHING`, [id, email]);
+  await pool.query(`INSERT INTO users (id, email, password_hash, role, is_representative) VALUES ($1, $2, 'x', 'member', true) ON CONFLICT DO NOTHING`, [id, email]);
   return id;
 }
 async function makeConsultant(name, userId, commissionPct) {
@@ -114,7 +114,7 @@ test('GET /sales-consultants/me requires authentication', async () => {
 test('a signed-in user with no linked consultant record gets a clear 404, not empty data', async () => {
   const userId = await makeUser('unlinked@test.com');
   const jwt = require('jsonwebtoken');
-  const token = jwt.sign({ id: userId, email: 'unlinked@test.com', role: 'consultant' }, process.env.JWT_SECRET);
+  const token = jwt.sign({ id: userId, email: 'unlinked@test.com', role: 'member', is_representative: true }, process.env.JWT_SECRET);
 
   const { status, body } = await req('GET', '/sales-consultants/me', { token });
   assert.equal(status, 404);
@@ -131,7 +131,7 @@ test('a linked consultant sees their own confirmed revenue, commission, and rece
   await makePendingPayment(payer, consultantId, 1000);
 
   const jwt = require('jsonwebtoken');
-  const token = jwt.sign({ id: consultantUserId, email: 'linked@test.com', role: 'consultant' }, process.env.JWT_SECRET);
+  const token = jwt.sign({ id: consultantUserId, email: 'linked@test.com', role: 'member', is_representative: true }, process.env.JWT_SECRET);
 
   const { status, body } = await req('GET', '/sales-consultants/me', { token });
   assert.equal(status, 200);
@@ -157,7 +157,7 @@ test('a consultant cannot see another consultant\'s numbers through /me', async 
   await makeConfirmedPayment(payer, consultantB, 9000);
 
   const jwt = require('jsonwebtoken');
-  const tokenA = jwt.sign({ id: userA, email: 'a@test.com', role: 'consultant' }, process.env.JWT_SECRET);
+  const tokenA = jwt.sign({ id: userA, email: 'a@test.com', role: 'member', is_representative: true }, process.env.JWT_SECRET);
 
   const { body } = await req('GET', '/sales-consultants/me', { token: tokenA });
   assert.equal(body.consultant.name, 'Consultant A');

@@ -155,11 +155,11 @@ test('the weekly and monthly boards exclude admins too', async () => {
   }
 });
 
-test('members other than admins are untouched — investors, advertisers, consultants still rank', async () => {
+test('members other than admins are untouched — investors, advertisers, staff still rank', async () => {
   // The instruction was about admins. Everyone else is a real person who may
   // legitimately take part, so nothing else was quietly excluded.
   const ids = {};
-  for (const role of ['investor', 'advertiser', 'consultant']) {
+  for (const role of ['investor', 'advertiser', 'staff']) {
     ids[role] = await makeUser(role, 40);
   }
   await pool.query('SELECT recalculate_ranking($1)', ['overall']);

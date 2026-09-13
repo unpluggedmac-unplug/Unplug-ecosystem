@@ -51,7 +51,7 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
       `SELECT u.id, u.email, u.phone, u.role, u.created_at, u.full_name, u.member_type,
               u.is_suspended, u.suspended_reason, u.free_publishing_enabled,
               u.sales_consultant_id, sc.name AS sales_consultant_name,
-              u.consultant_domain_exception,
+              u.consultant_domain_exception, u.is_representative,
               -- Credit is a SUM of the ledger, not a stored column, so it is
               -- computed here rather than trusted from anywhere else.
               (SELECT COALESCE(SUM(amount), 0) FROM account_credits ac WHERE ac.user_id = u.id)::numeric AS credit_balance,
@@ -85,9 +85,11 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
 });
 
 // The roles an account can hold, and the two kinds of member. Kept here rather
-// than inline so the API and the CHECK constraint in 046_consultant_role.sql
-// can be compared at a glance.
-const ASSIGNABLE_ROLES = ['member', 'investor', 'advertiser', 'admin', 'consultant'];
+// than inline so the API and the CHECK constraint in 210_representative_flag.sql
+// can be compared at a glance. 'consultant' is retired as a role value —
+// Representative access is now the independent is_representative flag below,
+// so it can be granted to any of these roles rather than replacing them.
+const ASSIGNABLE_ROLES = ['member', 'investor', 'advertiser', 'admin'];
 const MEMBER_TYPES = ['individual', 'business'];
 
 // PATCH /admin/users/:id — edit an account's name, phone, role or member type.
@@ -104,7 +106,7 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid user id is required.' });
 
-    const target = await pool.query('SELECT id, email, role, consultant_domain_exception FROM users WHERE id = $1', [id]);
+    const target = await pool.query('SELECT id, email, role, consultant_domain_exception, is_representative FROM users WHERE id = $1', [id]);
     if (target.rowCount === 0) return res.status(404).json({ error: 'That account no longer exists.' });
 
     const b = req.body;
@@ -119,10 +121,17 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     if (b.role !== undefined && b.role !== target.rows[0].role && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only a Super Admin can change account roles.' });
     }
-    // Same restriction as the role change it exists to gate — granting this
-    // exception is exactly as sensitive as granting the role itself.
+    // Same restriction as the grant it exists to gate — granting this
+    // exception is exactly as sensitive as granting Representative access itself.
     if (b.consultantDomainException !== undefined && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only a Super Admin can grant the consultant-role domain exception.' });
+      return res.status(403).json({ error: 'Only a Super Admin can grant the Representative-access domain exception.' });
+    }
+    // Representative access is independent of role (see
+    // 210_representative_flag.sql) but is exactly as sensitive as a role
+    // change — it grants free publishing and a client-facing dashboard —
+    // so it carries the same Super-Admin-only restriction.
+    if (b.isRepresentative !== undefined && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only a Super Admin can grant Representative access.' });
     }
     if (b.memberType !== undefined && b.memberType !== null && b.memberType !== ''
         && !MEMBER_TYPES.includes(b.memberType)) {
@@ -159,24 +168,27 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
       }
     }
 
-    // Sales/consultant access is deliberately a ROLE (granted here, revocable
+    // Representative access is deliberately a GRANT (this flag, revocable
     // later) rather than a live email-domain check on every request — see the
-    // comment in 046_consultant_role.sql for why: a pure domain check would
-    // mean anyone who ever signed up with a company address keeps free
-    // publishing forever, even after leaving, since there'd be no role to take
-    // away. The domain restriction the brief asks for is enforced at the one
-    // moment it actually matters — the grant itself.
+    // comment in 210_representative_flag.sql / 046_consultant_role.sql for
+    // why: a pure domain check would mean anyone who ever signed up with a
+    // company address keeps free publishing forever, even after leaving,
+    // since there'd be no grant to take away. The domain restriction the
+    // brief asks for is enforced at the one moment it actually matters — the
+    // grant itself. It is independent of `role` (a Staff or Admin account can
+    // also be a Representative), so it is checked against is_representative
+    // rather than role.
     // consultant_domain_exception is the one-off escape hatch: an admin can
-    // explicitly approve a specific non-staff account for the role, without
-    // loosening the domain rule for everyone else. It has no effect on any
-    // other role and must already be set (or be set in this same request,
-    // checked below) before the grant is allowed.
+    // explicitly approve a specific non-staff account for Representative
+    // access, without loosening the domain rule for everyone else. It has no
+    // effect on anything else and must already be set (or be set in this
+    // same request, checked below) before the grant is allowed.
     const willHaveException = b.consultantDomainException !== undefined
       ? !!b.consultantDomainException
       : target.rows[0].consultant_domain_exception;
-    if (b.role === 'consultant' && !/@unplugnews\.com$/i.test(target.rows[0].email) && !willHaveException) {
+    if (b.isRepresentative === true && !/@unplugnews\.com$/i.test(target.rows[0].email) && !willHaveException) {
       return res.status(400).json({
-        error: 'Only an @unplugnews.com email address can be made a Sales Consultant. This account is ' + target.rows[0].email + ' — tick "Allow consultant role for this account" first if you mean to grant an exception.',
+        error: 'Only an @unplugnews.com email address can be granted Representative access. This account is ' + target.rows[0].email + ' — tick "Allow consultant role for this account" first if you mean to grant an exception.',
       });
     }
 
@@ -189,25 +201,29 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
     if (b.memberType !== undefined) put('member_type', b.memberType || null);
     if (b.isSuspended !== undefined) put('is_suspended', !!b.isSuspended);
     if (b.suspendedReason !== undefined) put('suspended_reason', String(b.suspendedReason).trim().slice(0, 300) || null);
-    // Only meaningful for role 'consultant' (see publishingRights.js) — stored
+    // Only meaningful for a Representative (see publishingRights.js) — stored
     // and accepted unconditionally anyway, same as every other column here,
-    // since it does nothing for any other role.
+    // since it does nothing for anyone without is_representative set.
     if (b.freePublishingEnabled !== undefined) put('free_publishing_enabled', !!b.freePublishingEnabled);
     if (b.salesConsultantId !== undefined) put('sales_consultant_id', consultantForLog ? consultantForLog.id : null);
     if (b.consultantDomainException !== undefined) put('consultant_domain_exception', !!b.consultantDomainException);
+    // Independent of role (210_representative_flag.sql) — an account can be
+    // Staff or Admin AND a Representative at the same time.
+    if (b.isRepresentative !== undefined) put('is_representative', !!b.isRepresentative);
     if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
 
     vals.push(id);
     const result = await pool.query(
       `UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason, free_publishing_enabled, sales_consultant_id, consultant_domain_exception`,
+       RETURNING id, email, phone, role, full_name, member_type, is_suspended, suspended_reason, free_publishing_enabled, sales_consultant_id, consultant_domain_exception, is_representative`,
       vals
     );
 
     // Granting or removing admin is the change most worth being able to trace
     // later, so it is called out rather than folded into a generic message.
-    // Same reasoning for the free-publishing toggle — it is real money
-    // (or the deliberate lack of it), so it gets its own trail too.
+    // Same reasoning for the free-publishing toggle and Representative grant
+    // — both are real money (or the deliberate lack of it), so they get their
+    // own trail too.
     const roleChanged = b.role !== undefined && b.role !== target.rows[0].role;
     logActivity(
       req.user.id,
@@ -216,6 +232,7 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
         : b.freePublishingEnabled !== undefined ? 'user_free_publishing_toggled'
         : b.salesConsultantId !== undefined ? 'user_consultant_linked'
         : b.consultantDomainException !== undefined ? 'user_consultant_domain_exception_toggled'
+        : b.isRepresentative !== undefined ? 'user_representative_toggled'
         : 'user_edited',
       roleChanged
         ? `${target.rows[0].email} (#${id}): ${target.rows[0].role} → ${b.role}`
@@ -225,6 +242,8 @@ router.patch('/users/:id', requireRole('admin'), async (req, res, next) => {
         ? `${target.rows[0].email} (#${id}): ${consultantForLog ? `linked to representative "${consultantForLog.name}"` : 'unlinked from their representative'}`
         : b.consultantDomainException !== undefined
         ? `${target.rows[0].email} (#${id}): consultant-role domain exception ${b.consultantDomainException ? 'granted' : 'revoked'}`
+        : b.isRepresentative !== undefined
+        ? `${target.rows[0].email} (#${id}): Representative access ${b.isRepresentative ? 'granted' : 'revoked'}`
         : `${target.rows[0].email} (#${id})`
     );
 

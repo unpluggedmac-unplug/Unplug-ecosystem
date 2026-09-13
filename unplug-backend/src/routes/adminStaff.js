@@ -163,6 +163,12 @@ router.post('/assign', requireSuperAdmin, async (req, res, next) => {
   } finally { client.release(); }
 });
 
+// Neither this route nor /assign above touches is_representative. Staffing
+// (or un-staffing) someone only ever swaps `role`; Representative access
+// (210_representative_flag.sql) is a separate flag that survives the whole
+// round-trip untouched — a Representative who is made Staff stays a
+// Representative the entire time, rather than losing that access until
+// un-staffed the way it used to work when 'consultant' was a role value.
 router.delete('/accounts/:userId', requireSuperAdmin, async (req, res, next) => {
   const client = await pool.connect();
   try {
@@ -173,7 +179,7 @@ router.delete('/accounts/:userId', requireSuperAdmin, async (req, res, next) => 
     const a = await client.query(
       `SELECT a.original_role, u.email, u.role FROM staff_assignments a JOIN users u ON u.id=a.user_id WHERE a.user_id=$1 FOR UPDATE`, [userId]);
     if (!a.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'That user has no staff assignment.' }); }
-    const restore = ['member','investor','advertiser','consultant'].includes(a.rows[0].original_role) ? a.rows[0].original_role : 'member';
+    const restore = ['member','investor','advertiser'].includes(a.rows[0].original_role) ? a.rows[0].original_role : 'member';
     await client.query('DELETE FROM staff_assignments WHERE user_id=$1', [userId]);
     await client.query('UPDATE users SET role=$1 WHERE id=$2', [restore, userId]);
     await client.query('COMMIT');
