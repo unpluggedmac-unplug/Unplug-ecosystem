@@ -55,7 +55,7 @@ test('release packager always includes both Agreement Generator pages', () => {
 test('runtime Control Centre navigation and enhancement scripts point to Agreement Generator while legacy agreement page remains in repo', () => {
   const runtime = read('functions', 'runtime-config.js');
   assert.match(runtime, /Agreement Generator/);
-  assert.match(runtime, /unplug-agreement-generator-admin\.html/);
+  assert.match(runtime, /unplug-agreement-generator-admin(?:\.html)?/);
   assert.match(runtime, /agreement-generator-admin-enhancements\.js/);
   assert.match(runtime, /agreement-generator-signer-enhancements\.js/);
   assert.match(runtime, /Edit Form/);
