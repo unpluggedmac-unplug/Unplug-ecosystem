@@ -107,6 +107,19 @@
 
   function adaptBannerSlot(slot) {
     if (!slot || !slot.classList.contains('ad-slot-filled')) return;
+    // A slot that knows its own advertised format sizes itself, and this must
+    // not touch it. This function predates that: it existed because every
+    // filled slot was locked to one 16:9 box regardless of the format sold,
+    // and following the active banner's own picture was the only shape
+    // information available. The slot now carries the real one (--ad-slot-ratio,
+    // from the server's AD_SLOT_SIZES via renderAdSlots), which is better on
+    // both counts — it is the size the advertiser actually bought and the empty
+    // placeholder advertises, and it is FIXED PER SLOT, where this is per
+    // banner and so moves the page every time the rotation advances.
+    //
+    // Staging then renders these exactly as production does, which is the point
+    // of checking anything here.
+    if (slot.style.getPropertyValue('--ad-slot-ratio').trim()) return;
     const img = activeBannerImage(slot);
     if (!img) return;
     const apply = function () {
