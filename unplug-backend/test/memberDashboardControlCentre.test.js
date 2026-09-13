@@ -8,6 +8,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const page = fs.readFileSync(path.join(ROOT, 'unplug-member-dashboard.html'), 'utf8');
 const script = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashboard-control-centre.js'), 'utf8');
+const polish = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashboard-control-centre-polish.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'media', 'styles', 'member-dashboard-control-centre.css'), 'utf8');
 const helpCss = fs.readFileSync(path.join(ROOT, 'media', 'styles', 'member-dashboard-control-centre-help.css'), 'utf8');
 const runtime = fs.readFileSync(path.join(ROOT, 'functions', 'runtime-config.js'), 'utf8');
@@ -34,12 +35,15 @@ const SOURCE_KEYS = [
 
 test('member control-centre JavaScript parses before browser execution', () => {
   assert.doesNotThrow(() => new Function(script));
+  assert.doesNotThrow(() => new Function(polish));
 });
 
 test('member enhancement is guarded so it cannot initialise on admin pages', () => {
   assert.match(script, /if\(!\/unplug-member-dashboard\/i\.test\(location\.pathname\)\)return/);
+  assert.match(polish, /if\(!\/unplug-member-dashboard\/i\.test\(location\.pathname\)\)return/);
   assert.match(runtime, /p\.indexOf\(\"unplug-member-dashboard\"\)===-1/);
   assert.match(runtime, /member-dashboard-control-centre\.js\?v=/);
+  assert.match(runtime, /member-dashboard-control-centre-polish\.js\?v=/);
   assert.match(runtime, /member-dashboard-control-centre\.css\?v=/);
 });
 
@@ -50,6 +54,7 @@ test('the existing dashboard remains the source of truth for member functions', 
   assert.match(script, /\.ms-navlink\[data-ms=/);
   assert.match(script, /x\.click\(\)/);
   assert.doesNotMatch(script, /fetch\(/, 'hierarchy should not duplicate backend data loading');
+  assert.doesNotMatch(polish, /fetch\(/, 'polish layer should not create a second data source');
 });
 
 test('all approved top-level member groups are represented', () => {
@@ -67,6 +72,13 @@ test('identity, journey, content, money and account children are grouped as appr
     'Account Settings', 'Your Data', 'Download My Data', 'View Official Site', 'Logout',
   ];
   for (const label of labels) assert.ok(script.includes(label), `missing hierarchy label: ${label}`);
+});
+
+test('notifications have root-level quick access and remain inside Community', () => {
+  assert.match(script, /id:'notifications',label:'Notifications'/);
+  assert.match(polish, /data-node=\"notifications-quick\"/);
+  assert.match(polish, /data-node=\"g-community\"\] \[data-id=\"notifications\"\]/);
+  assert.match(polish, /notifCountBadge/);
 });
 
 test('services stay compact and quick create is provided instead of listing every service in the tree', () => {
@@ -115,6 +127,15 @@ test('agreement status shortcuts filter only the already-rendered agreement work
   }
   assert.match(script, /cc-member-agreement-filter-note/);
   assert.match(script, /cc-member-filtered-out/);
+});
+
+test('accessibility polish covers expandable navigation, home panels, search and quick-create dialog', () => {
+  assert.match(polish, /aria-expanded/);
+  assert.match(polish, /aria-controls/);
+  assert.match(polish, /aria-current/);
+  assert.match(polish, /aria-modal/);
+  assert.match(polish, /aria-labelledby/);
+  assert.match(polish, /ev\.key!==?'Escape'|ev\.key==='Escape'/);
 });
 
 test('responsive member styling preserves the existing mobile drawer model', () => {
