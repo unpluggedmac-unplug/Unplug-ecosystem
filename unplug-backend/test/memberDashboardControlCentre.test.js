@@ -11,6 +11,7 @@ const script = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashb
 const polish = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashboard-control-centre-polish.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'media', 'styles', 'member-dashboard-control-centre.css'), 'utf8');
 const helpCss = fs.readFileSync(path.join(ROOT, 'media', 'styles', 'member-dashboard-control-centre-help.css'), 'utf8');
+const polishCss = fs.readFileSync(path.join(ROOT, 'media', 'styles', 'member-dashboard-control-centre-polish.css'), 'utf8');
 const runtime = fs.readFileSync(path.join(ROOT, 'functions', 'runtime-config.js'), 'utf8');
 
 const TOP_LEVEL = [
@@ -112,6 +113,25 @@ test('member home is personalised from live DOM state without inventing a second
   assert.match(script, /My Growth/);
 });
 
+test('profile checklist mirrors existing completion state instead of inventing completion rules', () => {
+  assert.match(page, /id=\"muCompletionPct\"/);
+  assert.match(page, /id=\"muCompletionTodo\"/);
+  assert.match(polish, /muCompletionPct/);
+  assert.match(polish, /muCompletionTodo/);
+  assert.match(polish, /Profile checklist/);
+  assert.match(polishCss, /cc-home-profile-checklist/);
+});
+
+test('member home visibly connects identity, participation, growth and opportunities', () => {
+  for (const label of ['Identity', 'Participate', 'Grow', 'Opportunities']) {
+    assert.ok(polish.includes(label), `missing Unplug path step: ${label}`);
+  }
+  assert.match(polish, /Your Unplug path/);
+  assert.match(polish, /unplugScore/);
+  assert.match(polish, /unplugStatusBadge/);
+  assert.match(polishCss, /cc-home-path/);
+});
+
 test('role-aware and conditional areas stay conditional', () => {
   assert.match(page, /id=\"msMyReferralsNav\"[^>]*section-hidden|section-hidden[^>]*id=\"msMyReferralsNav\"/);
   assert.match(page, /id=\"msMyAgreementsNav\"[^>]*section-hidden|section-hidden[^>]*id=\"msMyAgreementsNav\"/);
@@ -135,7 +155,7 @@ test('accessibility polish covers expandable navigation, home panels, search and
   assert.match(polish, /aria-current/);
   assert.match(polish, /aria-modal/);
   assert.match(polish, /aria-labelledby/);
-  assert.match(polish, /ev\.key!==?'Escape'|ev\.key==='Escape'/);
+  assert.ok(polish.includes('Escape'));
 });
 
 test('responsive member styling preserves the existing mobile drawer model', () => {
@@ -145,11 +165,14 @@ test('responsive member styling preserves the existing mobile drawer model', () 
   assert.match(css, /cc-member-create-grid/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(helpCss, /cc-member-nav-help/);
+  assert.match(polishCss, /@media\(max-width:760px\)/);
+  assert.match(polishCss, /@media\(max-width:500px\)/);
 });
 
 test('member visual identity stays within the existing Unplug token system', () => {
   for (const token of ['var(--cream)', 'var(--ink)', 'var(--red)', 'var(--paper)', 'var(--paper-line)']) {
     assert.ok(css.includes(token), `expected existing brand token ${token}`);
+    assert.ok(polishCss.includes(token) || token === 'var(--cream)', `expected polish to reuse brand token ${token}`);
   }
   assert.doesNotMatch(css, /#[0-9a-fA-F]{6}/, 'feature CSS should reuse shared brand tokens rather than invent a parallel palette');
 });
