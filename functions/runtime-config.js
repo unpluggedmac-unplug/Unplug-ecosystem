@@ -57,7 +57,7 @@ export async function onRequest({ env, request }) {
     '',
     '(function(){',
     ' function add(src,key){ if(document.querySelector(\'script[data-agreement-module="\'+key+\'"]\')) return; var s=document.createElement("script"); s.src=src; s.defer=true; s.setAttribute("data-agreement-module",key); (document.head||document.documentElement).appendChild(s); }',
-    ' if(location.pathname.indexOf("unplug-admin-dashboard")!==-1) add("/media/scripts/agreement-control-centre-forms-routefix.js?v=20260913-2","dashboard-forms");',
+    ' if(location.pathname.indexOf("unplug-admin-dashboard")!==-1) add("/media/scripts/agreement-control-centre-forms-routefix.js?v=20260913-3","dashboard-forms");',
     ' if(location.pathname.indexOf("unplug-agreement-generator-admin")!==-1) {',
     '  add("/media/scripts/agreement-generator-admin-enhancements.js?v=20260912-1","admin");',
     '  add("/media/scripts/agreement-generator-focus.js?v=20260913-1","admin-focus");',
