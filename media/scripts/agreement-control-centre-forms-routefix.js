@@ -9,11 +9,15 @@
   const MASTER_NAME = 'Agreement Details — Master';
   const PANEL_ID = 'agreementFormsControlCentrePanel';
   const API = String(window.UNPLUG_RUNTIME_API || localStorage.getItem('unplug_api_base') || 'https://unplug-ecosystem.onrender.com').replace(/\/$/, '');
-  const TOKEN = localStorage.getItem('unplug_admin_token') || localStorage.getItem('adminAccessToken') || localStorage.getItem('accessToken') || '';
   let presets = [];
   let templates = [];
   let loading = false;
 
+  function adminToken() {
+    try {
+      return localStorage.getItem('unplug_admin_token') || localStorage.getItem('adminAccessToken') || localStorage.getItem('accessToken') || '';
+    } catch (_) { return ''; }
+  }
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -21,9 +25,10 @@
   }
   function normal(value) { return String(value || '').trim().toLowerCase().replace(/\s+/g, ' '); }
   async function api(pathname, options) {
+    const token = adminToken();
     const opt = options || {};
     const response = await fetch(API + pathname, Object.assign({}, opt, {
-      headers: Object.assign({ 'Content-Type': 'application/json' }, TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}, opt.headers || {})
+      headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}, opt.headers || {})
     }));
     const type = response.headers.get('content-type') || '';
     const data = type.indexOf('json') !== -1 ? await response.json().catch(function () { return {}; }) : await response.text();
@@ -35,7 +40,8 @@
     return data;
   }
   async function protectedBlob(pathname) {
-    const response = await fetch(API + pathname, { headers: TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {} });
+    const token = adminToken();
+    const response = await fetch(API + pathname, { headers: token ? { Authorization: 'Bearer ' + token } : {} });
     if (!response.ok) {
       const data = await response.json().catch(function () { return {}; });
       throw new Error(data.error || 'Could not load that preview.');
@@ -177,7 +183,7 @@
     const panel = ensurePanel();
     if (!panel) return;
     const host = document.getElementById('afRouteList');
-    if (!TOKEN) { host.innerHTML = '<div class="empty-state">Sign in as an administrator to load agreement templates.</div>'; return; }
+    if (!adminToken()) { host.innerHTML = '<div class="empty-state">Sign in as an administrator to load agreement templates.</div>'; return; }
     loading = true;
     host.innerHTML = '<div class="loading-state">Loading agreement templates…</div>';
     try {
@@ -202,6 +208,7 @@
       const link = event.target && event.target.closest ? event.target.closest('[data-section="forms"]') : null;
       if (link) setTimeout(refresh, 0);
     });
+    window.addEventListener('unplug:auth-changed', function () { setTimeout(refresh, 0); });
     const forms = document.getElementById('section-forms');
     if (forms && forms.classList.contains('active')) refresh();
   }
