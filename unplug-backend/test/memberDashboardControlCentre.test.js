@@ -7,6 +7,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
 const page = fs.readFileSync(path.join(ROOT, 'unplug-member-dashboard.html'), 'utf8');
+const loader = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashboard-control-centre-loader.js'), 'utf8');
 const script = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashboard-control-centre.js'), 'utf8');
 const polish = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashboard-control-centre-polish.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'media', 'styles', 'member-dashboard-control-centre.css'), 'utf8');
@@ -35,17 +36,33 @@ const SOURCE_KEYS = [
 ];
 
 test('member control-centre JavaScript parses before browser execution', () => {
+  assert.doesNotThrow(() => new Function(loader));
   assert.doesNotThrow(() => new Function(script));
   assert.doesNotThrow(() => new Function(polish));
 });
 
-test('member enhancement is guarded so it cannot initialise on admin pages', () => {
+test('member enhancement is guarded and runtime has one isolated member integration point', () => {
+  assert.match(loader, /if\(!\/unplug-member-dashboard\/i\.test\(location\.pathname\)\)return/);
   assert.match(script, /if\(!\/unplug-member-dashboard\/i\.test\(location\.pathname\)\)return/);
   assert.match(polish, /if\(!\/unplug-member-dashboard\/i\.test\(location\.pathname\)\)return/);
   assert.match(runtime, /p\.indexOf\(\"unplug-member-dashboard\"\)===-1/);
-  assert.match(runtime, /member-dashboard-control-centre\.js\?v=/);
-  assert.match(runtime, /member-dashboard-control-centre-polish\.js\?v=/);
-  assert.match(runtime, /member-dashboard-control-centre\.css\?v=/);
+  assert.match(runtime, /member-dashboard-control-centre-loader\.js\?v=/);
+  assert.doesNotMatch(runtime, /member-dashboard-control-centre-polish\.js\?v=/);
+  assert.doesNotMatch(runtime, /member-dashboard-service-shortcuts\.js\?v=/);
+  assert.match(loader, /member-dashboard-control-centre\.css\?v=/);
+  assert.match(loader, /member-dashboard-control-centre-help\.css\?v=/);
+  assert.match(loader, /member-dashboard-control-centre\.js\?v=/);
+  assert.match(loader, /member-dashboard-control-centre-polish\.js\?v=/);
+  assert.match(loader, /member-dashboard-service-shortcuts\.js\?v=/);
+});
+
+test('member asset loader keeps execution order explicit', () => {
+  const core = loader.indexOf('member-dashboard-control-centre.js?v=');
+  const polishPos = loader.indexOf('member-dashboard-control-centre-polish.js?v=');
+  const services = loader.indexOf('member-dashboard-service-shortcuts.js?v=');
+  assert.ok(core > -1 && polishPos > core && services > polishPos);
+  assert.match(loader, /addEventListener\('load',finish/);
+  assert.match(loader, /addEventListener\('error',finish/);
 });
 
 test('the existing dashboard remains the source of truth for member functions', () => {
