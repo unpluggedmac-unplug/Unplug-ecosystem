@@ -5,6 +5,7 @@
 // which owns the older four-type signed_agreements system and is not modified.
 
 const express = require('express');
+const { IMAGE_SPECS, describe } = require('../utils/imageSpecs');
 const crypto = require('crypto');
 const pool = require('../db');
 const { requireAuth, requireRole, requireRepresentative } = require('../middleware/auth');
@@ -100,6 +101,15 @@ function publicDefinition(form, fields) {
     minAge: form.min_age,
     requireWitness: form.require_witness,
     requireCompanyStamp: form.require_company_stamp,
+    // The recommended size for the two things a signer can be asked to upload.
+    // Sent with the form rather than fetched from /image-specs, because this
+    // page is opened from a signing link by someone who may have no account at
+    // all — /image-specs is behind requireAuth on purpose and must stay there.
+    // Still one source: the numbers come from IMAGE_SPECS, not from here.
+    uploadSizes: {
+      signature: describe(IMAGE_SPECS.signature_image),
+      companyStamp: describe(IMAGE_SPECS.company_stamp),
+    },
     amount: form.amount === null ? null : Number(form.amount),
     paymentMode: form.payment_mode,
     service: {

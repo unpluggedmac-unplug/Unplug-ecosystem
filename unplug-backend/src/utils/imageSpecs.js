@@ -186,6 +186,50 @@ const IMAGE_SPECS = {
     w: 1200, h: 900, label: '4:3 landscape',
     note: 'The invitation block near the bottom of the homepage.',
   },
+
+  // --- uploads that never went through UnplugUpload at all ---------------
+  //
+  // The fields above are all rendered by UnplugUpload.fieldHtml, and a test
+  // fails the build if any of them stops naming a size. These six are raw
+  // <input type="file"> controls on their own pages, so that test could not
+  // see them and they quietly had no guidance at all — found by auditing every
+  // file input on the site rather than every fieldHtml call.
+
+  growth_gallery_photo: {
+    w: 1200, h: 1200, label: '1:1 square',
+    // .thumb is aspect-ratio:1 with object-fit:COVER, so this one genuinely
+    // crops — the only field in this group that does. A wide photo loses both
+    // ends.
+    note: 'Shown as a square in the application gallery, so keep the subject centred.',
+  },
+
+  // A business might reasonably submit a wide banner or a tall poster here and
+  // both are legitimate, so the orientation is theirs to choose — the same
+  // treatment as an article cover. Nothing crops these: they are stored for an
+  // admin to review, not rendered into a fixed box on the site.
+  growth_upload_landscape: {
+    w: 1600, h: 1200, label: '4:3 landscape',
+    note: 'Shown at its own shape when reviewed, so nothing is cropped.',
+  },
+  growth_upload_portrait: {
+    w: 1200, h: 1600, label: '3:4 portrait',
+    note: 'Shown at its own shape when reviewed, so nothing is cropped.',
+  },
+
+  signature_image: {
+    w: 1000, h: 320, label: 'wide strip',
+    // Drawn into the agreement PDF at fit:[250,80] (and [220,70] for a
+    // guardian) — PDFKit's `fit` contains rather than crops, so the ratio is
+    // guidance and the pixel count is really about staying sharp in print.
+    note: 'A signature is much wider than it is tall. A transparent PNG looks best on the page.',
+  },
+  company_stamp: {
+    w: 600, h: 600, label: '1:1 square',
+    // The PDF box is 180 x 110, but `fit` contains, so a square stamp sits in
+    // it at 110 x 110 with space either side and nothing is cut off. Square is
+    // what an actual company stamp is, and what a member is likely to have.
+    note: 'Round or square both work — the whole stamp always shows. A transparent PNG looks best.',
+  },
 };
 
 // AD BANNERS ARE NOT ONE SIZE, which is why every hardcoded number for them
