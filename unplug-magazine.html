@@ -633,7 +633,14 @@ section.home-section:last-of-type{ margin-bottom:0; }
 .ad-slot-filled{
   border:none; padding:0; position:relative; overflow:hidden;
   aspect-ratio:var(--ad-slot-ratio, 16/9); background:var(--paper);
-  max-width:var(--ad-slot-max-w, none); margin-left:auto; margin-right:auto;
+  /* width:100% is LOAD-BEARING — do not drop it as redundant.
+     The three homepage sponsor slots are grid items (.ad-card inside .grid-3),
+     and `margin-inline:auto` on a grid item turns off stretch alignment, so the
+     box sizes to its max-content instead of the track. Every child here is
+     position:absolute (.ad-slide), so max-content is ZERO and the slot collapses
+     to 0x0 — the banner vanishes entirely, which is worse than the letterboxing
+     this rule exists to fix. A definite width restores it and still centres. */
+  width:100%; max-width:var(--ad-slot-max-w, none); margin-left:auto; margin-right:auto;
 }
 .ad-slot-filled .ad-slide{
   position:absolute; inset:0;

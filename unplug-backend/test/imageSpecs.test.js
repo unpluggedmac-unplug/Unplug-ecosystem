@@ -613,3 +613,28 @@ test('THE SIZE GUIDANCE SURVIVES THE DATABASE BEING UNREACHABLE', async () => {
     await new Promise((resolve) => bare.close(resolve));
   }
 });
+
+test('A CAPPED SLOT STILL HAS A WIDTH — the grid-item collapse', () => {
+  // Found on the live site, not in a test: the three homepage sponsor slots are
+  // GRID ITEMS (.ad-card inside .grid-3). Capping the slot added
+  // `margin-inline:auto`, and an auto inline margin on a grid item turns OFF
+  // stretch alignment, so the box sizes to its max-content rather than the
+  // track. Every child of a filled slot is position:absolute (.ad-slide), so
+  // max-content is ZERO: all three slots collapsed to 0x0 and three paying
+  // advertisers' banners vanished from the homepage entirely — a worse outcome
+  // than the letterboxing the cap was added to fix.
+  //
+  // `width:100%` gives the box a definite width in any container and still
+  // centres within the cap. This test exists because nothing node-based can
+  // catch a layout collapse; the only guard available here is that the
+  // declaration cannot be quietly dropped as redundant.
+  const html = fs.readFileSync(path.join(siteRoot, 'unplug-magazine.html'), 'utf8');
+  const rule = html.match(/\.ad-slot-filled\{[\s\S]*?\n\}/)[0];
+  const capped = /max-width:\s*var\(--ad-slot-max-w/.test(rule);
+  const autoMargin = /margin-left:\s*auto/.test(rule);
+  if (capped || autoMargin) {
+    assert.match(rule, /(^|[;\s])width:\s*100%/,
+      'a slot that caps its width or centres itself MUST also state width:100%, '
+      + 'or it collapses to 0x0 wherever it is a grid item');
+  }
+});
