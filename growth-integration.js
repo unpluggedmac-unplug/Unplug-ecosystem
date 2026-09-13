@@ -28,7 +28,22 @@
   }
 
   function addAdminLink() {
-    if (!/unplug-admin-dashboard\.html$/i.test(path)) return;
+    if (!/^\/unplug-admin-dashboard(?:\.html)?\/?$/i.test(path)) return;
+
+    const legacySelector = 'a[href="/unplug-growth-applications-admin"],a[href="/unplug-growth-applications-admin.html"]';
+    document.querySelectorAll(legacySelector).forEach((a) => a.remove());
+
+    const v2Selector = 'a[href="/unplug-growth-applications-admin-v2"],a[href="/unplug-growth-applications-admin-v2.html"]';
+    const existing = Array.from(document.querySelectorAll(v2Selector));
+    if (existing.length) {
+      const keep = existing.shift();
+      keep.href = ADMIN_V2;
+      keep.textContent = 'Growth Applications';
+      keep.setAttribute('data-unplug-growth-admin-link', 'true');
+      existing.forEach((a) => a.remove());
+      return;
+    }
+
     if (document.querySelector('[data-unplug-growth-admin-link]')) return;
     const group = document.querySelector('.nav-group[data-group="marketing"] .nav-group-items')
       || document.querySelector('.nav-group-items')
