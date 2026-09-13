@@ -35,9 +35,14 @@ router.post('/generator/admin/templates', requireRole('admin'), async (req, res,
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const presetId = Number(req.body.presetId);
+    const rawPresetId = req.body.presetId;
+    const presetId = rawPresetId === null || rawPresetId === undefined || rawPresetId === ''
+      ? null : Number(rawPresetId);
     let preset = null;
-    if (Number.isInteger(presetId)) {
+    if (presetId !== null) {
+      if (!Number.isSafeInteger(presetId) || presetId <= 0) {
+        throw Object.assign(new Error('Invalid preset template.'), { statusCode: 400 });
+      }
       const p = await client.query('SELECT * FROM agreement_templates WHERE id=$1', [presetId]);
       preset = p.rows[0] || null;
       if (!preset) throw Object.assign(new Error('Preset template not found.'), { statusCode: 404 });

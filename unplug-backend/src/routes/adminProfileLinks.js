@@ -342,9 +342,11 @@ router.post('/consultants/:id', requireRole('admin'), async (req, res, next) => 
 // The one-step version of "add a consultant, then link it to an account":
 // picks an existing, signed-up member and creates their sales_consultants
 // record already linked to that account, in a single write. Does NOT touch
-// users.role — the 'consultant' role (dashboard access to agreements/growth
-// clients) stays a separate, deliberately-restricted grant via
-// /admin/staff, not something this shortcut can bypass.
+// users.is_representative — Representative access (the "My Clients" dashboard,
+// free publishing) stays a separate, deliberately-restricted grant via
+// PATCH /admin/users/:id (210_representative_flag.sql), not something this
+// shortcut can bypass. A sales_consultants record can exist — and earn
+// commission — with no account, or with an account that isn't a Representative.
 router.post('/promote-member', requireRole('admin'), async (req, res, next) => {
   try {
     const userId = Number(req.body.userId);

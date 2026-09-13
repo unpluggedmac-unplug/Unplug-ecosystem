@@ -10175,7 +10175,7 @@ async function loadAllPayments() {
 // Email is not editable here (it is the account's identity), and passwords are
 // never touched — an admin should not be able to set someone's password.
 // ---------------------------------------------------------------------------
-const USER_ROLES = ['member', 'investor', 'advertiser', 'consultant', 'admin'];
+const USER_ROLES = ['member', 'investor', 'advertiser', 'admin'];
 const USERS_PAGE_SIZE = 50;
 let _allUsers = [];
 let _usersTotal = 0;
@@ -10244,9 +10244,8 @@ function userRowHtml(u) {
   const roleLocked = isSelf || u.role === 'staff' || !canManageMembers;
   const credit = Number(u.credit_balance) || 0;
 
-  const roleLabel = (r) => (r === 'consultant' ? 'representative' : r);
   const roleOpts = (u.role === 'staff' ? ['staff'] : USER_ROLES).map((r) =>
-    `<option value="${r}"${u.role === r ? ' selected' : ''}>${roleLabel(r)}</option>`).join('');
+    `<option value="${r}"${u.role === r ? ' selected' : ''}>${r}</option>`).join('');
   const typeOpts = ['', 'individual', 'business'].map((t) =>
     `<option value="${t}"${(u.member_type || '') === t ? ' selected' : ''}>${t || '— not set —'}</option>`).join('');
 
@@ -10272,6 +10271,12 @@ function userRowHtml(u) {
       <div class="field"><label>Role${isSelf ? ' — you cannot change your own' : (u.role === 'staff' ? ' — managed in Staff & Permissions' : '')}</label>
         <select class="u-role"${roleLocked ? ' disabled style="opacity:0.6;"' : ''}>${roleOpts}</select></div>
       <div class="field"><label>Member type</label><select class="u-type"${canManageMembers ? '' : ' disabled'}>${typeOpts}</select></div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+        <input type="checkbox" class="u-is-representative"${u.is_representative ? ' checked' : ''}${canManageMembers ? '' : ' disabled'}>
+        Representative access <span style="color:var(--slate); font-weight:400;">(independent of role — a Member, Staff or Admin account can also be a Representative; grants My Clients and, below, free publishing)</span>
+      </label>
     </div>
     <div style="margin-bottom:10px;">
       <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
@@ -10361,6 +10366,8 @@ async function saveUser(id) {
   };
   const exceptionCheckbox = row.querySelector('.u-consultant-exception');
   if (exceptionCheckbox) payload.consultantDomainException = exceptionCheckbox.checked;
+  const repCheckbox = row.querySelector('.u-is-representative');
+  if (repCheckbox) payload.isRepresentative = repCheckbox.checked;
   // Only send the role when it is actually editable, so a disabled control
   // can't post its value back and trip the self-demotion guard.
   if (roleSel && !roleSel.disabled) payload.role = roleSel.value;

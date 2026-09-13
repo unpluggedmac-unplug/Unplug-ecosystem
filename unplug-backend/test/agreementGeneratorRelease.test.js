@@ -19,6 +19,22 @@ test('Control Centre exposes the standalone Agreement Generator and exact requir
   assert.match(html, /Party A first, then Party B/);
 });
 
+test('Agreement Generator restores the saved admin session before loading templates after refresh', () => {
+  const html = read('unplug-agreement-generator-admin.html');
+  assert.match(html, /function adminToken\(\)/, 'session token must be resolved when each request is made');
+  assert.match(html, /await api\('\/auth\/me'\)/, 'a refreshed page must validate the restored session first');
+  assert.match(html, /\['admin','staff'\]\.includes\(session\.user\.role\)/, 'restored sessions must remain role-gated');
+  assert.match(html, /Promise\.all\(\[api\('\/agreement-forms\/generator\/meta'\),loadPresets\(\),loadTemplates\(\)\]\)/,
+    'templates must load only after session restoration succeeds');
+  assert.match(html, /Could not load agreement templates\./, 'template failures must replace the Loading state');
+  assert.match(html, /Your Control Centre session has expired\. Please sign in again\./);
+  assert.doesNotMatch(html, /const TOKEN=/, 'a page-load token snapshot breaks late session restoration');
+
+  const enhancements = read('media','scripts','agreement-generator-admin-enhancements.js');
+  assert.match(enhancements, /const adminToken=\(\)=>/);
+  assert.doesNotMatch(enhancements, /const TOKEN=/);
+});
+
 test('advanced Control Centre enhancement exposes conditional rules, reordering, reminders and multi-signer administration', () => {
   const js = read('media','scripts','agreement-generator-admin-enhancements.js');
   assert.match(js, /Field order & conditional fields/);

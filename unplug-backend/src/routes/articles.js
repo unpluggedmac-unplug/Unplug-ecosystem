@@ -399,12 +399,12 @@ router.post('/', requireAuth, async (req, res, next) => {
     logSubmission(req.user.id, 'article_submitted',
       `Article "${(req.body.title || '(untitled)').toString().slice(0, 80)}"`);
 
-    // A consultant reaches 'pending' without spending a credit, so the credit
-    // wording would be wrong for them — telling someone they used a credit
-    // they still have is a small lie that costs trust.
+    // A Representative reaches 'pending' without spending a credit, so the
+    // credit wording would be wrong for them — telling someone they used a
+    // credit they still have is a small lie that costs trust.
     const messages = {
       approved: 'Published — this article is live on the site now.',
-      pending: req.user.role === 'consultant'
+      pending: req.user.is_representative
         ? 'Article submitted for approval — no payment needed.'
         : 'Article created using your free Article credit — submitted for approval, no payment needed.',
       awaiting_payment: 'Article created — call POST /payments/initiate with linkedType "article_publish" and this article\'s id (R95.00) to submit it for approval.',
