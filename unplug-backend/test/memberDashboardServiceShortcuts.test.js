@@ -8,13 +8,15 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 const page = fs.readFileSync(path.join(ROOT, 'unplug-member-dashboard.html'), 'utf8');
 const script = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashboard-service-shortcuts.js'), 'utf8');
+const loader = fs.readFileSync(path.join(ROOT, 'media', 'scripts', 'member-dashboard-control-centre-loader.js'), 'utf8');
 const css = fs.readFileSync(path.join(ROOT, 'media', 'styles', 'member-dashboard-service-shortcuts.css'), 'utf8');
 const runtime = fs.readFileSync(path.join(ROOT, 'functions', 'runtime-config.js'), 'utf8');
 
 test('service shortcut layer parses and is Member Dashboard only', () => {
   assert.doesNotThrow(() => new Function(script));
   assert.match(script, /if\(!\/unplug-member-dashboard\/i\.test\(location\.pathname\)\)return/);
-  assert.match(runtime, /member-dashboard-service-shortcuts\.js\?v=/);
+  assert.match(runtime, /member-dashboard-control-centre-loader\.js\?v=/);
+  assert.match(loader, /member-dashboard-service-shortcuts\.js\?v=/);
 });
 
 test('service shortcuts derive from the real rendered service catalogue', () => {
