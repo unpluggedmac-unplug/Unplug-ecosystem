@@ -272,6 +272,13 @@
           nodeSection('polls', 'Polls', '◉'),
           nodeSection('comments', 'Comments', '☷'),
           nodeSection('testimonials', 'Testimonials', '❝'),
+          // No dedicated data-section panel exists for this content type
+          // (confirmed absent from the admin dashboard) — it goes through
+          // the same Approval Centre queue every other pending content type
+          // does (adminApprovalQueue.js's 'share_card' type), same as this
+          // whole tree's convention of reusing existing views rather than
+          // inventing new ones.
+          nodeSection('queue', 'Seen & Heard / Share Cards', '❤'),
           nodeSection('sasl', 'SASL Videos', '▶'),
           nodeSection('deafjobs', 'Deaf Jobs', '◈'),
           nodeSection('deafpassports', 'Deaf Passports', '◇')
@@ -340,7 +347,13 @@
         nodeSection('tags', 'Categories', '#'),
         nodeSection('dirprofiles', 'Map / Location View', '⌖'),
         nodeSection('projects', 'Investor Projects', '◆'),
-        nodeSection('consultants', 'Representatives', '☏')
+        nodeSection('consultants', 'Representatives', '☏'),
+        // Same reasoning as Seen & Heard / Share Cards above: no dedicated
+        // panel exists for marketplace listings themselves (as distinct from
+        // Marketplace Placements, the rate card under Pages & Layout), so
+        // this reuses the Approval Centre queue (adminApprovalQueue.js's
+        // 'marketplace' type) rather than inventing a new view.
+        nodeSection('queue', 'Marketplace Listings', '▤')
       ]),
       branch('community', 'Community', '♟', { section: 'users' }, [
         nodeSection('users', 'Members & Users', '♟'),
