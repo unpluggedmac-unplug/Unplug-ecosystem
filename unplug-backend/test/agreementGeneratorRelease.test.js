@@ -70,14 +70,25 @@ test('release packager always includes both Agreement Generator pages', () => {
 
 test('runtime Control Centre navigation and enhancement scripts point to Agreement Generator while legacy agreement page remains in repo', () => {
   const runtime = read('functions', 'runtime-config.js');
-  const hierarchy = read('media', 'scripts', 'admin-control-centre-hierarchy.js');
-  assert.match(hierarchy, /Agreement Generator/);
+  // The literal label "Agreement Generator" itself now lives in the
+  // hierarchical Control Centre sidebar's own nav model
+  // (media/scripts/admin-control-centre-hierarchy.js), not runtime-config.js.
+  // runtime-config.js used to also inject a duplicate "Agreement Generator"
+  // link of its own into the pre-hierarchy flat sidebar — confirmed live as
+  // two separate links on one page — so that injector was removed rather
+  // than kept as a second source of the same label. What still belongs here
+  // is runtime-config.js loading the hierarchy script and the Agreement
+  // Generator enhancement scripts, which this keeps asserting.
+  assert.match(runtime, /admin-control-centre-hierarchy\.js/);
   assert.match(runtime, /unplug-agreement-generator-admin(?:\.html)?/);
   assert.match(runtime, /agreement-generator-admin-enhancements\.js/);
   assert.match(runtime, /agreement-generator-signer-enhancements\.js/);
   assert.match(runtime, /Edit Form/);
   assert.ok(fs.existsSync(path.join(ROOT, 'unplug-agreements-admin.html')));
   assert.ok(fs.existsSync(path.join(ROOT, 'unplug-agreement.html')));
+
+  const hierarchy = read('media', 'scripts', 'admin-control-centre-hierarchy.js');
+  assert.match(hierarchy, /Agreement Generator/, 'the hierarchy sidebar itself must still carry this label');
 });
 
 test('runtime-config emits syntactically valid browser JavaScript for staging', async () => {
