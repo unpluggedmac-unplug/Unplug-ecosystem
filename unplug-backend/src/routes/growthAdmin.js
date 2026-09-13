@@ -367,7 +367,25 @@ router.post('/versions/:id/publish', async(req,res,next)=>{
     if(!c.rows[0].steps||!c.rows[0].fields){await client.query('ROLLBACK');return res.status(400).json({error:'At least one enabled step and field are required.'});}
     await client.query(`UPDATE growth_form_versions SET status='retired',retired_at=now() WHERE form_id=$1 AND status='published'`,[v.rows[0].form_id]);
     const p=await client.query(`UPDATE growth_form_versions SET status='published',published_at=now(),published_by=$2 WHERE id=$1 RETURNING *`,[versionId,req.user.id]);
-    await client.query('COMMIT');return res.json({version:p.rows[0]});
+    // Only members with a draft already open, never every member — an open
+    // draft keeps working on the version it was started on, so this is a
+    // heads-up that something newer exists, not an action they must take.
+    const openDrafts=await client.query(`SELECT DISTINCT user_id FROM growth_applications WHERE status='draft'`);
+    await client.query('COMMIT');
+    for(const row of openDrafts.rows){
+      notifyMemberAsync({
+        userId: row.user_id,
+        type: 'growth_form_updated',
+        title: 'The Growth Application form has been updated',
+        body: 'Unplug has published a new version of the Growth Application. Your existing draft is unaffected and stays exactly as you left it, but you can start a fresh application on the new version if you would rather use that.',
+        linkUrl: '/unplug-growth-application-v2.html',
+        email: {
+          subject: 'The Growth Application form has been updated',
+          text: 'Unplug has published a new version of the Growth Application.\n\nYour existing draft is unaffected and stays exactly as you left it. If you would rather start fresh on the new version, open My Growth Journey: https://www.unplugnews.com/unplug-growth-application-v2.html',
+        },
+      });
+    }
+    return res.json({version:p.rows[0]});
   }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}
 });
 
