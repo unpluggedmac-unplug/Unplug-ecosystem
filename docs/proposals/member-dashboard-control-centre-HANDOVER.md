@@ -223,7 +223,15 @@ While this member lane was being built, `staging-control-centre` continued movin
 - `functions/runtime-config.js`
 - `unplug-member-dashboard.html`
 
-At the latest staging inspection during this work, the Member branch and staging were still deliberately diverged. The latest staging head inspected was `31a9f69e656a53e893e6605a8759257a38828f4f`; its newest change was an Agreement Generator regression-test update, so no attempt was made to pull it into the Member lane while Claude is still working.
+Latest staging inspection on 2026-09-13:
+
+- `staging-control-centre` head: `dc79964fc2af8169ffd4d6fa5fe345755eba14ea`
+- Member feature branch vs staging: **diverged**
+- Member branch: **27 commits ahead** of staging from the merge base
+- Member branch: **17 commits behind** staging
+- merge base: `df27ca28f9696c52e8ae8c632d60e80484303dc8`
+
+This divergence is expected while Claude continues the Admin lane. No attempt was made to merge or force-sync the branches.
 
 **Do not overwrite the latest staging versions with the older feature-branch copies.**
 
@@ -295,7 +303,14 @@ The first run exposed two test-definition issues rather than product-code syntax
 1. the test incorrectly banned all six-digit colours even though the existing dashboard already uses established neutral/hover shades;
 2. the service test expected direct `querySelector('.t')` even though the implementation deliberately uses the shared `q('.t', card)` helper.
 
-Both assertions were corrected. The next dedicated run (`34747075777`, head `db7b416eaa0ab2494d7abf55eb3f267097a22896`) completed successfully. A follow-up run was triggered after the service-modal listener cleanup; always use the latest completed Member CI run when assessing readiness.
+Both assertions were corrected.
+
+Green checkpoints:
+
+- run `34747075777`, head `db7b416eaa0ab2494d7abf55eb3f267097a22896` — **success**
+- follow-up run `34747162168`, head `abd43ad2f12a84779ae0d7924e195edca22787c0` after service-modal listener cleanup — **success**
+
+The latest Member code/test checkpoint therefore has a green dedicated Member regression gate.
 
 This dedicated workflow being green means the **Member-specific regression gate** passed. It does **not** by itself mean the entire repository, staging deployment or manual browser validation has passed.
 
@@ -317,8 +332,7 @@ This dedicated workflow being green means the **Member-specific regression gate*
 - ✅ Accessibility and mutation-safety polish added.
 - ✅ Member-specific regression test files added.
 - ✅ Dedicated Member Dashboard CI workflow added.
-- ✅ At least one completed dedicated Member CI run is green after the test-definition fixes.
-- 🟡 Latest follow-up Member CI should be confirmed after any subsequent code commit.
+- ✅ Latest dedicated Member code/test CI checkpoint is green.
 - 🟡 Full repository CI has not yet been confirmed on the final combined branch.
 - 🟡 Browser/UI validation has not yet been completed.
 - 🟡 Latest staging changes have not yet been reconciled because the Admin lane is still moving.
