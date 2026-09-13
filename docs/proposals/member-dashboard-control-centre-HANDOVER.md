@@ -25,7 +25,7 @@ The guiding product statement is:
 
 ## Implementation principle
 
-The current `unplug-member-dashboard.html` remains the source of truth for the member features, API calls and loaders. The Control Centre layer reorganises and activates those existing functions rather than creating a second member data model.
+The current `unplug-member-dashboard.html` remains the source of truth for member features, API calls and loaders. The Control Centre layer reorganises and activates those existing functions rather than creating a second member data model.
 
 The original `.ms-navlink[data-ms]` controls are retained and hidden as source controls after the hierarchy initialises. The new hierarchy calls those source controls so existing loaders, permissions, payment behaviour and member flows continue to run.
 
@@ -82,11 +82,24 @@ Current implementation routes these entries to the existing member Growth Journe
 Submission statuses remain inside the content views, per selection 12B; they are not expanded into another sidebar level.
 
 ### Services
-- Browse Services
+The compact service pattern selected by the user is now implemented:
+
+- View All Services
 - My Services
+- Favourite Services — dynamic, up to 8
+- Recent Services — dynamic, last 5
 - Create / Submit
 
-Individual services are intentionally not dumped into the sidebar. Members use Browse Services, Quick Create, favourites and Recently Used.
+Individual services are intentionally **not** dumped into the sidebar. Favourite and Recent Services are derived from the real rendered service catalogue in `#msServicesGrid`; no second service API/data source was created.
+
+Members can:
+
+- open the full existing service catalogue through View All Services;
+- open a Favourite Services modal;
+- explicitly manage favourite services using the currently rendered catalogue;
+- open the five most recently used services;
+- clear recent services;
+- continue using the existing native service cards/forms after selecting a shortcut.
 
 ### Money & Purchases
 - My Orders
@@ -125,7 +138,7 @@ People I Follow / Followers / Saved Profiles / Reviews should only become dedica
 - View Official Site
 - Logout
 
-`Login & Security` and `Communication Preferences` are now convenience destinations, not new account systems. Both reuse the real existing Account Settings workspace:
+`Login & Security` and `Communication Preferences` are convenience destinations, not new account systems. Both reuse the real existing Account Settings workspace:
 
 - Login & Security opens Account Settings and focuses the existing `#twoFactorContent` security area. The same native Account Settings page continues to contain the password/sign-in controls.
 - Communication Preferences opens Account Settings and focuses the existing `#notifPrefsContent` controls.
@@ -158,14 +171,15 @@ The new Home layer provides:
 - Branch title can open its overview.
 - Separate arrow expands/collapses children.
 - Accordion state is remembered in localStorage.
-- Favourites are remembered.
-- Last five recently used areas are remembered.
+- Navigation favourites are remembered.
+- Last five recently used dashboard areas are remembered.
+- Service favourites and recent services are stored separately from navigation favourites/recent areas.
 - Search covers member navigation plus rendered services and submissions, with account convenience aliases added by the polish layer.
 - Breadcrumbs and Back-to-parent are provided.
 - Existing mobile sidebar/drawer behaviour is preserved.
 - Conditional Agreement / Referral / Client areas stay conditional.
 
-## Accessibility work
+## Accessibility and lifecycle work
 
 `member-dashboard-control-centre-polish.js` adds:
 
@@ -179,15 +193,21 @@ The new Home layer provides:
 
 The polish layer uses one controlled MutationObserver and avoids observing the ARIA attributes it writes itself, reducing the risk of self-triggering mutation loops.
 
+The Favourite/Recent Services modal layer also uses dialog semantics, supports Escape/backdrop/close-button dismissal, and removes its document-level Escape listener whenever the modal is closed so repeated use does not accumulate global key handlers.
+
 ## Files added
 
 - `media/scripts/member-dashboard-control-centre.js`
 - `media/scripts/member-dashboard-control-centre-polish.js`
+- `media/scripts/member-dashboard-service-shortcuts.js`
 - `media/styles/member-dashboard-control-centre.css`
 - `media/styles/member-dashboard-control-centre-help.css`
 - `media/styles/member-dashboard-control-centre-polish.css`
+- `media/styles/member-dashboard-service-shortcuts.css`
 - `unplug-backend/test/memberDashboardControlCentre.test.js`
 - `unplug-backend/test/memberDashboardControlCentrePolish.test.js`
+- `unplug-backend/test/memberDashboardServiceShortcuts.test.js`
+- `.github/workflows/member-dashboard-control-centre-ci.yml`
 - this handover file
 
 ## Shared file currently modified on this feature branch
@@ -203,7 +223,7 @@ While this member lane was being built, `staging-control-centre` continued movin
 - `functions/runtime-config.js`
 - `unplug-member-dashboard.html`
 
-At the latest comparison on 2026-09-13, the Member branch and staging were still deliberately diverged: the feature branch was ahead with Member work and behind the moving staging/Admin lane. The latest staging head inspected was `31a9f69e656a53e893e6605a8759257a38828f4f`; its newest change was an Agreement Generator regression-test update, so no attempt was made to pull it into the Member lane while Claude is still working.
+At the latest staging inspection during this work, the Member branch and staging were still deliberately diverged. The latest staging head inspected was `31a9f69e656a53e893e6605a8759257a38828f4f`; its newest change was an Agreement Generator regression-test update, so no attempt was made to pull it into the Member lane while Claude is still working.
 
 **Do not overwrite the latest staging versions with the older feature-branch copies.**
 
@@ -214,7 +234,8 @@ When Claude finishes the Admin lane:
 3. re-apply only the Member Dashboard asset loader needed for these files;
 4. do not restore Admin runtime lines that staging intentionally removed;
 5. resolve any member-page changes by preserving both current functionality and the Control Centre layer;
-6. then run tests and deploy to staging.
+6. run the dedicated Member CI and the repository-wide required checks;
+7. only then deploy the combined state to staging for browser validation.
 
 ## Regression tests
 
@@ -234,7 +255,7 @@ When Claude finishes the Admin lane:
 - agreement status shortcuts;
 - accessibility hooks;
 - mobile CSS;
-- reuse of Unplug brand tokens.
+- anchoring to the existing Unplug design-token system.
 
 `unplug-backend/test/memberDashboardControlCentrePolish.test.js` adds focused checks for:
 
@@ -249,14 +270,41 @@ When Claude finishes the Admin lane:
 - the four-step Unplug Path;
 - responsive and keyboard-visible polish.
 
-Both tests are included by the backend's existing `node --test --test-concurrency=1 "test/**/*.test.js"` command.
+`unplug-backend/test/memberDashboardServiceShortcuts.test.js` checks:
+
+- member-only service-shortcut loading;
+- reuse of the real `#msServicesGrid .ms-service` catalogue;
+- no duplicate service fetch/API layer;
+- View All / Favourite / Recent compact navigation;
+- local persistence limits for favourites and recents;
+- explicit favourite-management UI;
+- accessible service dialogs;
+- cleanup of document-level modal keyboard handlers;
+- responsive shared-token styling.
+
+## Dedicated Member CI gate
+
+Workflow:
+
+`.github/workflows/member-dashboard-control-centre-ci.yml`
+
+It runs the three Member Dashboard regression suites whenever Member Control Centre/runtime/test paths change.
+
+The first run exposed two test-definition issues rather than product-code syntax failures:
+
+1. the test incorrectly banned all six-digit colours even though the existing dashboard already uses established neutral/hover shades;
+2. the service test expected direct `querySelector('.t')` even though the implementation deliberately uses the shared `q('.t', card)` helper.
+
+Both assertions were corrected. The next dedicated run (`34747075777`, head `db7b416eaa0ab2494d7abf55eb3f267097a22896`) completed successfully. A follow-up run was triggered after the service-modal listener cleanup; always use the latest completed Member CI run when assessing readiness.
+
+This dedicated workflow being green means the **Member-specific regression gate** passed. It does **not** by itself mean the entire repository, staging deployment or manual browser validation has passed.
 
 ## Status at handover
 
 - ✅ Separate Member Dashboard branch created.
 - ✅ Main hierarchical Member Dashboard layer added.
 - ✅ Member Home added.
-- ✅ Search / favourites / recent / breadcrumbs / Back added.
+- ✅ Search / navigation favourites / recent / breadcrumbs / Back added.
 - ✅ Quick Create added.
 - ✅ Conditional Agreement / Growth / Referral / Client behaviour preserved.
 - ✅ Root-level Notifications quick access added while keeping Notifications inside Community.
@@ -264,13 +312,18 @@ Both tests are included by the backend's existing `node --test --test-concurrenc
 - ✅ Growth + gamification/participation bridge added.
 - ✅ Login & Security convenience destination added using existing controls.
 - ✅ Communication Preferences convenience destination added using existing controls.
+- ✅ Favourite Services / Recent Services / View All Services compact pattern added.
+- ✅ Service shortcut modal lifecycle cleanup added.
 - ✅ Accessibility and mutation-safety polish added.
 - ✅ Member-specific regression test files added.
-- 🟡 Full repository CI has not yet been confirmed on this branch.
+- ✅ Dedicated Member Dashboard CI workflow added.
+- ✅ At least one completed dedicated Member CI run is green after the test-definition fixes.
+- 🟡 Latest follow-up Member CI should be confirmed after any subsequent code commit.
+- 🟡 Full repository CI has not yet been confirmed on the final combined branch.
 - 🟡 Browser/UI validation has not yet been completed.
 - 🟡 Latest staging changes have not yet been reconciled because the Admin lane is still moving.
 - ❌ Production merge/deploy has not started.
 
 ## Final shared release sequence
 
-`Member lane ready + Admin lane ready → reconcile latest staging → CI green → deploy staging → desktop/mobile UI validation → fix failures → approval → production merge/deploy → post-release live verification`
+`Member lane ready + Admin lane ready → reconcile latest staging → dedicated Member CI green → full required CI green → deploy staging → desktop/mobile UI validation → fix failures → approval → production merge/deploy → post-release live verification`
