@@ -28,35 +28,24 @@
   }
 
   function addAdminLink() {
-    if (!/unplug-admin-dashboard\.html$/i.test(path)) return;
+    if (!/^\/unplug-admin-dashboard(?:\.html)?\/?$/i.test(path)) return;
 
-    const legacy = document.querySelector(
-      'a[href="/unplug-growth-applications-admin"],a[href="/unplug-growth-applications-admin.html"]'
-    );
-    const canonical = document.querySelector(
-      'a[href="/unplug-growth-applications-admin-v2"],a[href="/unplug-growth-applications-admin-v2.html"]'
-    );
+    const legacySelector = 'a[href="/unplug-growth-applications-admin"],a[href="/unplug-growth-applications-admin.html"]';
+    document.querySelectorAll(legacySelector).forEach((a) => a.remove());
 
-    // Growth Application V2 is now the canonical admin workspace. Keep one
-    // visible Control Centre entry while leaving the legacy page/backend in
-    // place temporarily for rollback/history compatibility.
-    if (canonical) {
-      canonical.textContent = 'Growth Applications';
-      canonical.setAttribute('data-unplug-growth-admin-link', 'true');
-      if (legacy && legacy !== canonical) legacy.remove();
-      return;
-    }
-
-    if (legacy) {
-      legacy.href = ADMIN_V2;
-      legacy.textContent = 'Growth Applications';
-      legacy.setAttribute('data-unplug-growth-admin-link', 'true');
+    const v2Selector = 'a[href="/unplug-growth-applications-admin-v2"],a[href="/unplug-growth-applications-admin-v2.html"]';
+    const existing = Array.from(document.querySelectorAll(v2Selector));
+    if (existing.length) {
+      const keep = existing.shift();
+      keep.href = ADMIN_V2;
+      keep.textContent = 'Growth Applications';
+      keep.setAttribute('data-unplug-growth-admin-link', 'true');
+      existing.forEach((a) => a.remove());
       return;
     }
 
     if (document.querySelector('[data-unplug-growth-admin-link]')) return;
-    const group = document.querySelector('.nav-group[data-group="directory"] .nav-group-items')
-      || document.querySelector('.nav-group[data-group="marketing"] .nav-group-items')
+    const group = document.querySelector('.nav-group[data-group="marketing"] .nav-group-items')
       || document.querySelector('.nav-group-items')
       || document.querySelector('nav');
     if (!group) return;
