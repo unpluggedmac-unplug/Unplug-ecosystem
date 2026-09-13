@@ -40,8 +40,8 @@ async function req(method, urlPath, { token, body } = {}) {
 let _nextUserId = 11000;
 let _nextRef = 1;
 const jwt = require('jsonwebtoken');
-function tokenFor(id, email, role) {
-  return jwt.sign({ id, email, role }, process.env.JWT_SECRET);
+function tokenFor(id, email, role, isRepresentative) {
+  return jwt.sign({ id, email, role, is_representative: !!isRepresentative }, process.env.JWT_SECRET);
 }
 async function makeUser(email, role, fullName) {
   const id = _nextUserId++;
@@ -166,7 +166,7 @@ test('promote-member 404s on an unknown user id', async () => {
 // --- Agreement-signing status per client ------------------------------------
 
 test('GET /agreement-forms/consultant/clients shows which referred clients have signed which agreements', async () => {
-  const consultantUserId = await makeUser('consultant-agr@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-agr@test.com', 'member');
   const consultantId = await makeConsultant('Consultant Agr', consultantUserId);
   const signedClient = await makeUser('signed-client@test.com', 'member', 'Signed Client');
   const unsignedClient = await makeUser('unsigned-client@test.com', 'member', 'Unsigned Client');
@@ -174,7 +174,7 @@ test('GET /agreement-forms/consultant/clients shows which referred clients have 
   await makeConfirmedPayment(unsignedClient, consultantId);
   await makeSignedAgreement(signedClient, 'Sponsorship Agreement');
 
-  const { status, body } = await req('GET', '/agreement-forms/consultant/clients', { token: tokenFor(consultantUserId, 'consultant-agr@test.com', 'consultant') });
+  const { status, body } = await req('GET', '/agreement-forms/consultant/clients', { token: tokenFor(consultantUserId, 'consultant-agr@test.com', 'member', true) });
   assert.equal(status, 200);
   assert.equal(body.clients.length, 2);
   const signed = body.clients.find((c) => c.email === 'signed-client@test.com');
@@ -186,13 +186,13 @@ test('GET /agreement-forms/consultant/clients shows which referred clients have 
 });
 
 test('the admin equivalent (GET /admin/sales-consultants/:id/agreement-clients) shows the same data, admin-gated', async () => {
-  const consultantUserId = await makeUser('consultant-agr2@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-agr2@test.com', 'member');
   const consultantId = await makeConsultant('Consultant Agr2', consultantUserId);
   const client = await makeUser('agr-client-b@test.com', 'member');
   await makeConfirmedPayment(client, consultantId);
   await makeSignedAgreement(client, 'NDA');
 
-  const denied = await req('GET', `/admin/sales-consultants/${consultantId}/agreement-clients`, { token: tokenFor(consultantUserId, 'consultant-agr2@test.com', 'consultant') });
+  const denied = await req('GET', `/admin/sales-consultants/${consultantId}/agreement-clients`, { token: tokenFor(consultantUserId, 'consultant-agr2@test.com', 'member', true) });
   assert.equal(denied.status, 403);
 
   const adminId = await makeUser('admin-agr@test.com', 'admin');
@@ -205,29 +205,29 @@ test('the admin equivalent (GET /admin/sales-consultants/:id/agreement-clients) 
 // --- Site visits via a consultant's personal link ---------------------------
 
 test('GET /sales-consultants/me/visits counts sessions tagged with this consultant\'s campaign', async () => {
-  const consultantUserId = await makeUser('consultant-visits@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-visits@test.com', 'member');
   const consultantId = await makeConsultant('Consultant Visits', consultantUserId);
   await makeAnalyticsVisits(`consultant-${consultantId}`, 3);
   await makeAnalyticsVisits('consultant-999999', 5); // a different consultant's campaign — must not leak in
 
-  const { status, body } = await req('GET', '/sales-consultants/me/visits', { token: tokenFor(consultantUserId, 'consultant-visits@test.com', 'consultant') });
+  const { status, body } = await req('GET', '/sales-consultants/me/visits', { token: tokenFor(consultantUserId, 'consultant-visits@test.com', 'member', true) });
   assert.equal(status, 200);
   assert.equal(body.totalVisits, 3);
   assert.equal(body.campaign, `consultant-${consultantId}`);
 });
 
 test('GET /sales-consultants/me/visits 404s when no consultant record is linked', async () => {
-  const userId = await makeUser('no-consultant@test.com', 'consultant');
-  const { status } = await req('GET', '/sales-consultants/me/visits', { token: tokenFor(userId, 'no-consultant@test.com', 'consultant') });
+  const userId = await makeUser('no-consultant@test.com', 'member');
+  const { status } = await req('GET', '/sales-consultants/me/visits', { token: tokenFor(userId, 'no-consultant@test.com', 'member', true) });
   assert.equal(status, 404);
 });
 
 test('the admin equivalent (GET /admin/sales-consultants/:id/visits) shows the same count, admin-gated', async () => {
-  const consultantUserId = await makeUser('consultant-visits2@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-visits2@test.com', 'member');
   const consultantId = await makeConsultant('Consultant Visits2', consultantUserId);
   await makeAnalyticsVisits(`consultant-${consultantId}`, 2);
 
-  const denied = await req('GET', `/admin/sales-consultants/${consultantId}/visits`, { token: tokenFor(consultantUserId, 'consultant-visits2@test.com', 'consultant') });
+  const denied = await req('GET', `/admin/sales-consultants/${consultantId}/visits`, { token: tokenFor(consultantUserId, 'consultant-visits2@test.com', 'member', true) });
   assert.equal(denied.status, 403);
 
   const adminId = await makeUser('admin-visits@test.com', 'admin');

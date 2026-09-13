@@ -7,7 +7,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, requireRepresentative } = require('../middleware/auth');
 const { publicSubmitLimiter } = require('../middleware/rateLimit');
 const { generateUnique } = require('../utils/reference');
 const { sendEmail } = require('../utils/email');
@@ -775,12 +775,12 @@ router.post('/admin/:id/access', requireRole('admin'), async(req,res,next)=>{
 });
 router.delete('/admin/:id/access/:grantId', requireRole('admin'), async(req,res,next)=>{try{const r=await pool.query('DELETE FROM agreement_consultant_access WHERE id=$1 AND agreement_id=$2 RETURNING id',[req.params.grantId,req.params.id]);if(!r.rowCount)return res.status(404).json({error:'Access grant not found.'});res.json({deleted:true});}catch(err){next(err);}});
 
-router.get('/consultant/mine', requireRole('consultant'), async(req,res,next)=>{
+router.get('/consultant/mine', requireRepresentative, async(req,res,next)=>{
   try{const c=await pool.query('SELECT id FROM sales_consultants WHERE user_id=$1 AND active=true',[req.user.id]);if(!c.rowCount)return res.json({agreements:[]});const r=await pool.query(`SELECT a.id,a.slug,a.short_code,a.title,a.description,a.category,a.amount,a.payment_mode,a.service_name
     FROM agreement_consultant_access x JOIN agreement_forms a ON a.id=x.agreement_id
     WHERE x.sales_consultant_id=$1 AND a.status='active' AND a.published=true AND (a.opens_at IS NULL OR a.opens_at<=now()) AND (a.closes_at IS NULL OR a.closes_at>now()) ORDER BY a.title`,[c.rows[0].id]);res.json({agreements:r.rows});}catch(err){next(err);}
 });
-router.post('/consultant/:id/send-email', requireRole('consultant'), async(req,res,next)=>{
+router.post('/consultant/:id/send-email', requireRepresentative, async(req,res,next)=>{
   try{const c=await pool.query('SELECT id FROM sales_consultants WHERE user_id=$1 AND active=true',[req.user.id]);if(!c.rowCount)return res.status(403).json({error:'No active consultant profile is linked to this account.'});const a=await getAgreementById(req.params.id);if(!a||!(effectiveState(a).active&&a.published))return res.status(404).json({error:'That agreement is not available.'});const grant=await pool.query('SELECT 1 FROM agreement_consultant_access WHERE agreement_id=$1 AND sales_consultant_id=$2',[a.id,c.rows[0].id]);if(!grant.rowCount)return res.status(403).json({error:'You do not have access to send this agreement.'});const link=await sendAgreementLink({agreement:a,to:req.body.email,recipientName:req.body.name,senderUserId:req.user.id,consultantId:c.rows[0].id});res.json({sent:true,link});}catch(err){if(err.statusCode)return res.status(err.statusCode).json({error:err.message});next(err);}
 });
 
@@ -791,7 +791,7 @@ router.post('/consultant/:id/send-email', requireRole('consultant'), async(req,r
 // or several submissions — nothing here is scoped to agreements this
 // consultant themself has access to send; it's simply what their clients
 // have signed, anywhere on the site.
-router.get('/consultant/clients', requireRole('consultant'), async (req, res, next) => {
+router.get('/consultant/clients', requireRepresentative, async (req, res, next) => {
   try {
     const consultant = await pool.query(
       'SELECT id FROM sales_consultants WHERE user_id = $1 AND active = true',

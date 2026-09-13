@@ -3179,3 +3179,63 @@ granted via the same request as the role change, granted via an earlier request 
 succeeding later, a staff token refused (Super-Admin-only), and `GET /admin/users` carrying the flag. Full
 suite: **2311 passing, 0 failing.**
 
+## 2026-09-13 — Representative access decoupled from `role`: "representatives can have multi roles"
+
+**The ask.** Admin should be able to grant a member multiple roles — specifically, "representatives can have
+multi roles who has been granted access by admin." Until now `users.role` was a single exclusive value
+(`member`/`investor`/`advertiser`/`admin`/`consultant`/`staff`), so granting Staff access to a Representative
+actually **overwrote** their role to `'staff'` — silently suspending their Representative access (the My
+Clients dashboard, free publishing) until Staff access was later removed via `/admin/staff/accounts/:id`
+DELETE, which restored whatever role they held before. Confirmed the scope with the user first: rather than
+building a full many-to-many roles system, or narrowly wiring just Representative+Staff, the agreed approach
+was to decouple Representative access from `role` entirely — an independent grant any account (member, staff,
+or even admin) can hold, alongside whatever `role` it already has.
+
+**Schema.** New migration `210_representative_flag.sql`: adds `users.is_representative BOOLEAN NOT NULL
+DEFAULT false` (with a partial index), backfills every existing `role='consultant'` account to
+`is_representative=true` + `role='member'`, fixes up any `staff_assignments.original_role='consultant'` row to
+`'member'` (since a Staff round-trip can no longer revert into a retired role value), then narrows the
+`users_role_check` constraint to drop `'consultant'` — it is retired as a role value now that Representative
+access is its own flag.
+
+**Backend.** New `requireRepresentative` middleware (`middleware/auth.js`), checking `req.user.is_representative`
+rather than any role — used in place of `requireRole('consultant')` on the four routes that used to gate on it
+(`agreement-forms/consultant/mine`, `/consultant/:id/send-email`, `/consultant/clients`,
+`growth-application/consultant/clients`). `is_representative` is now embedded as its own JWT claim at every
+place a token is minted (`/auth/login`, `/auth/magic-link/consume`) and returned by `/auth/me`, alongside the
+existing `role`/`free_publishing_enabled` claims — same "takes effect at next sign-in" rule as any other grant.
+`publishingRights.js`'s `publishesFree()`/`statusForNewSubmission()` and `articles.js`'s submission-status
+message now check `user.is_representative` instead of `user.role === 'consultant'`. `admin.js`'s
+`PATCH /admin/users/:id` gained `isRepresentative` as a new field alongside (not replacing) `role`: the
+`@unplugnews.com`-only domain restriction and its `consultant_domain_exception` escape hatch now gate granting
+`isRepresentative: true` instead of `role: 'consultant'`, and it carries the same Super-Admin-only restriction
+as a role change. `ASSIGNABLE_ROLES` drops `'consultant'`. `adminStaff.js`'s Staff-assignment/removal routes
+never touch `is_representative` — this is the actual delivery of "multi roles": a Representative who is made
+Staff (or Admin) keeps their Representative access the entire time, rather than losing it until un-staffed.
+
+**Frontend.** `unplug-admin-dashboard.html`: the Role dropdown no longer offers `consultant`; a new
+"Representative access" checkbox (independent of role, explicitly labelled as such) sits above the existing
+"Free publishing enabled" checkbox it gates, wired into `saveUser()`. `unplug-member-dashboard.html`: the "My
+Clients" / "My Referrals" / "My Agreements" sections and their nav links, and the free-publishing UI check
+(`currentUserPublishesFree()`), all switched from `CURRENT_USER.role === 'consultant'` to
+`CURRENT_USER.is_representative`.
+
+**Verified live in a real browser** (throwaway embedded-Postgres preview server, real HTTP, real JWTs — not
+just the test suite): logged in as Super Admin, confirmed the Role dropdown has no `consultant` option and the
+new checkbox renders; toggled it on for a plain `@unplugnews.com` member and saved — confirmed via the real
+network response (`PATCH /admin/users/:id` → `is_representative:true, role:"member"` unchanged) and a re-fetch
+showing the checkbox still checked. Then signed in as that same now-representative account on the member
+dashboard and confirmed "My Clients", "My Referrals" and "My Agreements" all correctly unlock, with zero
+console errors.
+
+**Tests.** 8 existing test files updated to stop passing the now-invalid `role: 'consultant'` to either a raw
+DB insert (which the narrowed CHECK constraint would now reject) or a hand-signed JWT (`usersAdmin.test.js`,
+`consultantMemberLinking.test.js`, `representativeGaps.test.js`, `growthApplicationConsultantClients.test.js`,
+`salesConsultantsMe.test.js`, `freePublishing.test.js`, `consultantFreePublishingLogin.test.js`,
+`leaderboardExcludesAdmins.test.js`) — each now creates a `role:'member'` (or `'staff'`/`'admin'` where that
+was the point of the test) account and sets `is_representative:true` instead, either via a DB column or a JWT
+claim depending on what the route under test actually reads. 2 new tests in `usersAdmin.test.js`: granting
+`isRepresentative` is Super-Admin-only (staff token refused, mirroring the existing role-change test), and a
+Staff account can also be granted Representative access without its `role` changing — the direct proof that
+role and Representative access are now independent. Full suite: **2358 passing, 0 failing.**
+

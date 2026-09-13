@@ -64,13 +64,13 @@ before(async () => {
   }
 
   const jwt = require('jsonwebtoken');
-  await pool.query(`INSERT INTO users (id, email, password_hash, role)
-                    VALUES (1, 'admin@test.com', 'x', 'admin'),
-                           (2, 'rep@unplugnews.com', 'x', 'consultant'),
-                           (3, 'member@test.com', 'x', 'member')
+  await pool.query(`INSERT INTO users (id, email, password_hash, role, is_representative)
+                    VALUES (1, 'admin@test.com', 'x', 'admin', false),
+                           (2, 'rep@unplugnews.com', 'x', 'member', true),
+                           (3, 'member@test.com', 'x', 'member', false)
                     ON CONFLICT DO NOTHING`);
   adminToken = jwt.sign({ id: 1, email: 'admin@test.com', role: 'admin' }, process.env.JWT_SECRET);
-  consultantToken = jwt.sign({ id: 2, email: 'rep@unplugnews.com', role: 'consultant' }, process.env.JWT_SECRET);
+  consultantToken = jwt.sign({ id: 2, email: 'rep@unplugnews.com', role: 'member', is_representative: true }, process.env.JWT_SECRET);
   memberToken = jwt.sign({ id: 3, email: 'member@test.com', role: 'member' }, process.env.JWT_SECRET);
 
   const express = require('express');
@@ -201,10 +201,10 @@ test('a paying member with no gallery credit still owes for their bundle', async
 // person without demoting them out of the role — see
 // 176_consultant_free_publishing_toggle.sql and publishingRights.js.
 
-test('A CONSULTANT TOKEN WITH free_publishing_enabled:false IS BILLED LIKE A NORMAL MEMBER', async () => {
+test('A REPRESENTATIVE TOKEN WITH free_publishing_enabled:false IS BILLED LIKE A NORMAL MEMBER', async () => {
   const jwt = require('jsonwebtoken');
   const revokedToken = jwt.sign(
-    { id: 2, email: 'rep@unplugnews.com', role: 'consultant', free_publishing_enabled: false },
+    { id: 2, email: 'rep@unplugnews.com', role: 'member', is_representative: true, free_publishing_enabled: false },
     process.env.JWT_SECRET
   );
   const r = await req('POST', '/articles', {
@@ -222,7 +222,7 @@ test('AN OLDER TOKEN WITH NO free_publishing_enabled CLAIM AT ALL STILL PUBLISHE
   // guarantee is stated explicitly, not just an accidental side effect of
   // token construction elsewhere in this file.
   const jwt = require('jsonwebtoken');
-  const noClaimToken = jwt.sign({ id: 2, email: 'rep@unplugnews.com', role: 'consultant' }, process.env.JWT_SECRET);
+  const noClaimToken = jwt.sign({ id: 2, email: 'rep@unplugnews.com', role: 'member', is_representative: true }, process.env.JWT_SECRET);
   const r = await req('POST', '/articles', {
     token: noClaimToken,
     body: { title: 'Old Token Still Free', body: 'No free_publishing_enabled claim at all.', bodyFormat: 'text' },
@@ -235,7 +235,7 @@ test('AN OLDER TOKEN WITH NO free_publishing_enabled CLAIM AT ALL STILL PUBLISHE
 test('EXPLICITLY free_publishing_enabled:true BEHAVES IDENTICALLY TO NO CLAIM AT ALL', async () => {
   const jwt = require('jsonwebtoken');
   const explicitTrueToken = jwt.sign(
-    { id: 2, email: 'rep@unplugnews.com', role: 'consultant', free_publishing_enabled: true },
+    { id: 2, email: 'rep@unplugnews.com', role: 'member', is_representative: true, free_publishing_enabled: true },
     process.env.JWT_SECRET
   );
   const r = await req('POST', '/events', {
@@ -247,7 +247,7 @@ test('EXPLICITLY free_publishing_enabled:true BEHAVES IDENTICALLY TO NO CLAIM AT
   assert.match(r.body.message, /no payment needed/i);
 });
 
-test('THE TOGGLE HAS NO EFFECT ON AN ADMIN — admins publish free regardless, per FREE_PUBLISHING_ROLES', async () => {
+test('THE TOGGLE HAS NO EFFECT ON AN ADMIN — admins publish free regardless', async () => {
   const jwt = require('jsonwebtoken');
   const adminWithFlagOff = jwt.sign(
     { id: 1, email: 'admin@test.com', role: 'admin', free_publishing_enabled: false },

@@ -41,8 +41,8 @@ async function req(method, urlPath, { token, body } = {}) {
 let _nextUserId = 15000;
 let _nextRef = 1;
 const jwt = require('jsonwebtoken');
-function tokenFor(id, email, role) {
-  return jwt.sign({ id, email, role }, process.env.JWT_SECRET);
+function tokenFor(id, email, role, isRepresentative) {
+  return jwt.sign({ id, email, role, is_representative: !!isRepresentative }, process.env.JWT_SECRET);
 }
 async function makeUser(email, role) {
   const id = _nextUserId++;
@@ -102,7 +102,7 @@ after(async () => {
 
 test('an admin can link a member to a representative with no payment involved at all', async () => {
   const adminId = await makeUser('admin-link1@test.com', 'admin');
-  const consultantUserId = await makeUser('consultant-link1@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-link1@test.com');
   const consultantId = await makeConsultant('Consultant Link1', consultantUserId);
   const memberId = await makeUser('member-link1@test.com', 'member');
 
@@ -126,7 +126,7 @@ test('linking rejects an unknown consultant id', async () => {
 
 test('a member can be unlinked back to null', async () => {
   const adminId = await makeUser('admin-link3@test.com', 'admin');
-  const consultantUserId = await makeUser('consultant-link3@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-link3@test.com');
   const consultantId = await makeConsultant('Consultant Link3', consultantUserId);
   const memberId = await makeUser('member-link3@test.com', 'member');
   const adminToken = tokenFor(adminId, 'admin-link3@test.com', 'admin');
@@ -139,7 +139,7 @@ test('a member can be unlinked back to null', async () => {
 
 test('GET /admin/users returns the linked representative name for each member', async () => {
   const adminId = await makeUser('admin-link4@test.com', 'admin');
-  const consultantUserId = await makeUser('consultant-link4@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-link4@test.com');
   const consultantId = await makeConsultant('Consultant Link4', consultantUserId);
   const memberId = await makeUser('member-link4@test.com', 'member');
   const adminToken = tokenFor(adminId, 'admin-link4@test.com', 'admin');
@@ -155,7 +155,7 @@ test('GET /admin/users returns the linked representative name for each member', 
 
 test('a manually-linked member with NO payment history still shows up as a client', async () => {
   const adminId = await makeUser('admin-link5@test.com', 'admin');
-  const consultantUserId = await makeUser('consultant-link5@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-link5@test.com');
   const consultantId = await makeConsultant('Consultant Link5', consultantUserId);
   const memberId = await makeUser('member-link5@test.com', 'member');
   await req('PATCH', `/admin/users/${memberId}`, {
@@ -164,7 +164,7 @@ test('a manually-linked member with NO payment history still shows up as a clien
   });
 
   const { status, body } = await req('GET', '/growth-application/consultant/clients', {
-    token: tokenFor(consultantUserId, 'consultant-link5@test.com', 'consultant'),
+    token: tokenFor(consultantUserId, 'consultant-link5@test.com', 'member', true),
   });
   assert.equal(status, 200);
   assert.equal(body.clients.length, 1);
@@ -174,7 +174,7 @@ test('a manually-linked member with NO payment history still shows up as a clien
 
 test('confirming a real EFT payment referred by a consultant sets the payer\'s standing link automatically', async () => {
   const adminId = await makeUser('admin-link6@test.com', 'admin');
-  const consultantUserId = await makeUser('consultant-link6@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-link6@test.com');
   const consultantId = await makeConsultant('Consultant Link6', consultantUserId);
   const memberId = await makeUser('member-link6@test.com', 'member');
   const paymentId = await makePendingEftPayment(memberId, consultantId);
@@ -190,9 +190,9 @@ test('confirming a real EFT payment referred by a consultant sets the payer\'s s
 
 test('a later payment confirmed for a DIFFERENT consultant updates the standing link to the new one', async () => {
   const adminId = await makeUser('admin-link7@test.com', 'admin');
-  const consultantAUserId = await makeUser('consultant-link7a@test.com', 'consultant');
+  const consultantAUserId = await makeUser('consultant-link7a@test.com');
   const consultantAId = await makeConsultant('Consultant Link7A', consultantAUserId);
-  const consultantBUserId = await makeUser('consultant-link7b@test.com', 'consultant');
+  const consultantBUserId = await makeUser('consultant-link7b@test.com');
   const consultantBId = await makeConsultant('Consultant Link7B', consultantBUserId);
   const memberId = await makeUser('member-link7@test.com', 'member');
   const adminToken = tokenFor(adminId, 'admin-link7@test.com', 'admin');

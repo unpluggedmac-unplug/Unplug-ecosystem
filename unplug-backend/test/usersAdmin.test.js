@@ -200,29 +200,35 @@ test('an invalid role or member type is refused', async () => {
   assert.equal((await req('PATCH', `/admin/users/${MEMBER_ID}`, { token: adminToken, body: { memberType: 'charity' } })).status, 400);
 });
 
-// ------------------------------------------------------------- consultant role
+// ------------------------------------------------------- Representative access
+//
+// Representative access is an independent flag (is_representative,
+// 210_representative_flag.sql), not a role value — granting it never changes
+// `role`, which is exactly what lets a Staff or Admin account also be a
+// Representative.
 
-test('only an @unplugnews.com account can be made a Sales Consultant', async () => {
-  const r = await req('PATCH', `/admin/users/${MEMBER_ID}`, { token: adminToken, body: { role: 'consultant' } });
+test('only an @unplugnews.com account can be granted Representative access', async () => {
+  const r = await req('PATCH', `/admin/users/${MEMBER_ID}`, { token: adminToken, body: { isRepresentative: true } });
   assert.equal(r.status, 400);
   assert.match(r.body.error, /@unplugnews\.com/);
 
-  const still = await pool.query('SELECT role FROM users WHERE id = $1', [MEMBER_ID]);
-  assert.notEqual(still.rows[0].role, 'consultant', 'the role was changed despite the refusal');
+  const still = await pool.query('SELECT is_representative FROM users WHERE id = $1', [MEMBER_ID]);
+  assert.equal(still.rows[0].is_representative, false, 'the flag was set despite the refusal');
 });
 
-test('an @unplugnews.com account CAN be made a Sales Consultant', async () => {
+test('an @unplugnews.com account CAN be granted Representative access', async () => {
   await pool.query(`INSERT INTO users (id, email, password_hash, role)
                     VALUES (777, 'rep@unplugnews.com', 'x', 'member') ON CONFLICT DO NOTHING`);
-  const r = await req('PATCH', '/admin/users/777', { token: adminToken, body: { role: 'consultant' } });
+  const r = await req('PATCH', '/admin/users/777', { token: adminToken, body: { isRepresentative: true } });
   assert.equal(r.status, 200);
-  assert.equal(r.body.user.role, 'consultant');
+  assert.equal(r.body.user.is_representative, true);
+  assert.equal(r.body.user.role, 'member', 'granting Representative access must not change role');
 });
 
 test('the domain check is case-insensitive', async () => {
   await pool.query(`INSERT INTO users (id, email, password_hash, role)
                     VALUES (778, 'Rep2@UnplugNews.Com', 'x', 'member') ON CONFLICT DO NOTHING`);
-  const r = await req('PATCH', '/admin/users/778', { token: adminToken, body: { role: 'consultant' } });
+  const r = await req('PATCH', '/admin/users/778', { token: adminToken, body: { isRepresentative: true } });
   assert.equal(r.status, 200);
 });
 
@@ -231,11 +237,11 @@ test('a lookalike domain is refused, not just a missing @unplugnews.com suffix',
   // 'rep@unplugnews.com.evil.example' would pass.
   await pool.query(`INSERT INTO users (id, email, password_hash, role)
                     VALUES (779, 'rep@unplugnews.com.evil.example', 'x', 'member') ON CONFLICT DO NOTHING`);
-  const r = await req('PATCH', '/admin/users/779', { token: adminToken, body: { role: 'consultant' } });
+  const r = await req('PATCH', '/admin/users/779', { token: adminToken, body: { isRepresentative: true } });
   assert.equal(r.status, 400);
 });
 
-// ----------------------------------- one-off consultant-role domain exception
+// ------------------------------ one-off Representative-access domain exception
 //
 // The domain rule stays for everyone by default (confirmed with the user
 // rather than loosened generally) — this is the deliberate, per-account
@@ -244,29 +250,29 @@ test('a lookalike domain is refused, not just a missing @unplugnews.com suffix',
 test('a non-staff email is still refused by default even with the exception column present', async () => {
   await pool.query(`INSERT INTO users (id, email, password_hash, role)
                     VALUES (790, 'exception-test-1@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
-  const r = await req('PATCH', '/admin/users/790', { token: adminToken, body: { role: 'consultant' } });
+  const r = await req('PATCH', '/admin/users/790', { token: adminToken, body: { isRepresentative: true } });
   assert.equal(r.status, 400);
 });
 
-test('granting the exception in the SAME request as the role change allows it through', async () => {
+test('granting the exception in the SAME request as the Representative grant allows it through', async () => {
   await pool.query(`INSERT INTO users (id, email, password_hash, role)
                     VALUES (791, 'exception-test-2@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
   const r = await req('PATCH', '/admin/users/791', {
-    token: adminToken, body: { consultantDomainException: true, role: 'consultant' },
+    token: adminToken, body: { consultantDomainException: true, isRepresentative: true },
   });
   assert.equal(r.status, 200);
-  assert.equal(r.body.user.role, 'consultant');
+  assert.equal(r.body.user.is_representative, true);
   assert.equal(r.body.user.consultant_domain_exception, true);
 });
 
-test('granting the exception FIRST, then the role change in a later request, also works', async () => {
+test('granting the exception FIRST, then the Representative grant in a later request, also works', async () => {
   await pool.query(`INSERT INTO users (id, email, password_hash, role)
                     VALUES (792, 'exception-test-3@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
   const granted = await req('PATCH', '/admin/users/792', { token: adminToken, body: { consultantDomainException: true } });
   assert.equal(granted.status, 200);
-  const r = await req('PATCH', '/admin/users/792', { token: adminToken, body: { role: 'consultant' } });
+  const r = await req('PATCH', '/admin/users/792', { token: adminToken, body: { isRepresentative: true } });
   assert.equal(r.status, 200);
-  assert.equal(r.body.user.role, 'consultant');
+  assert.equal(r.body.user.is_representative, true);
 });
 
 test('only a Super Admin can grant the exception — a staff token is refused', async () => {
@@ -274,6 +280,14 @@ test('only a Super Admin can grant the exception — a staff token is refused', 
                     VALUES (793, 'exception-test-4@example.com', 'x', 'member') ON CONFLICT DO NOTHING`);
   const staffToken = require('jsonwebtoken').sign({ id: 2, email: 'staff@test.com', role: 'staff' }, process.env.JWT_SECRET);
   const r = await req('PATCH', '/admin/users/793', { token: staffToken, body: { consultantDomainException: true } });
+  assert.equal(r.status, 403);
+});
+
+test('only a Super Admin can grant Representative access — a staff token is refused', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (795, 'exception-test-6@unplugnews.com', 'x', 'member') ON CONFLICT DO NOTHING`);
+  const staffToken = require('jsonwebtoken').sign({ id: 2, email: 'staff@test.com', role: 'staff' }, process.env.JWT_SECRET);
+  const r = await req('PATCH', '/admin/users/795', { token: staffToken, body: { isRepresentative: true } });
   assert.equal(r.status, 403);
 });
 
@@ -288,27 +302,37 @@ test('GET /admin/users carries the exception flag, same as free-publishing', asy
   assert.equal(found.consultant_domain_exception, true);
 });
 
-// -------------------------------------------------- per-consultant toggle
+test('a Staff account can ALSO be granted Representative access — role and the flag are independent', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role)
+                    VALUES (796, 'staffrep@unplugnews.com', 'x', 'staff') ON CONFLICT DO NOTHING`);
+  const r = await req('PATCH', '/admin/users/796', { token: adminToken, body: { isRepresentative: true } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.user.is_representative, true);
+  assert.equal(r.body.user.role, 'staff', 'granting Representative access must not change an existing Staff role');
+});
+
+// -------------------------------------------------- per-representative toggle
 //
 // Free publishing used to be all-or-nothing for the whole 'consultant' role.
-// This lets an admin revoke it from one specific person without demoting
-// them out of the role entirely — see 176_consultant_free_publishing_toggle.sql.
+// This lets an admin revoke it from one specific person without removing
+// their Representative access entirely — see
+// 176_consultant_free_publishing_toggle.sql.
 
 test('A NEW ACCOUNT DEFAULTS TO free_publishing_enabled = TRUE — nothing changes until an admin explicitly turns it off', async () => {
   const row = await pool.query('SELECT free_publishing_enabled FROM users WHERE id = $1', [MEMBER_ID]);
   assert.equal(row.rows[0].free_publishing_enabled, true);
 });
 
-test('AN ADMIN CAN TURN OFF FREE PUBLISHING FOR ONE CONSULTANT, WITHOUT TOUCHING THEIR ROLE', async () => {
-  await pool.query(`INSERT INTO users (id, email, password_hash, role)
-                    VALUES (780, 'rep3@unplugnews.com', 'x', 'consultant') ON CONFLICT DO NOTHING`);
+test('AN ADMIN CAN TURN OFF FREE PUBLISHING FOR ONE REPRESENTATIVE, WITHOUT TOUCHING THEIR ACCESS', async () => {
+  await pool.query(`INSERT INTO users (id, email, password_hash, role, is_representative)
+                    VALUES (780, 'rep3@unplugnews.com', 'x', 'member', true) ON CONFLICT DO NOTHING`);
   const r = await req('PATCH', '/admin/users/780', { token: adminToken, body: { freePublishingEnabled: false } });
   assert.equal(r.status, 200);
   assert.equal(r.body.user.free_publishing_enabled, false);
-  assert.equal(r.body.user.role, 'consultant', 'the role itself must be untouched by this toggle');
+  assert.equal(r.body.user.is_representative, true, 'Representative access itself must be untouched by this toggle');
 
-  const row = await pool.query('SELECT role, free_publishing_enabled FROM users WHERE id = 780');
-  assert.equal(row.rows[0].role, 'consultant');
+  const row = await pool.query('SELECT is_representative, free_publishing_enabled FROM users WHERE id = 780');
+  assert.equal(row.rows[0].is_representative, true);
   assert.equal(row.rows[0].free_publishing_enabled, false);
 });
 

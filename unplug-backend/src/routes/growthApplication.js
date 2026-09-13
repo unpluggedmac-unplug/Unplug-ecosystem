@@ -4,7 +4,7 @@ const express = require('express');
 const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const pool = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, requireRepresentative } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
 const { QUESTION_BANK_VERSION, bank } = require('../data/growthApplicationQuestions');
 const { STAGE_SCHEMA_VERSION, schemaFor, validateStage } = require('../data/growthApplicationStages');
@@ -641,7 +641,7 @@ router.post('/admin/short-link', requireRole('admin'), async (req, res, next) =>
 // payment carries this consultant's sales_consultant_id. No separate
 // consultant<->client linking table exists (or is needed) — referral
 // attribution already is that link.
-router.get('/consultant/clients', requireRole('consultant'), async (req, res, next) => {
+router.get('/consultant/clients', requireRepresentative, async (req, res, next) => {
   try {
     const consultant = await pool.query(
       'SELECT id FROM sales_consultants WHERE user_id = $1 AND active = true',

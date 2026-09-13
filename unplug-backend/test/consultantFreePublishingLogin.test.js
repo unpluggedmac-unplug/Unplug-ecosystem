@@ -58,9 +58,9 @@ before(async () => {
 
   const passwordHash = await bcrypt.hash('correct-horse-battery-staple', 10);
   await pool.query(
-    `INSERT INTO users (id, email, password_hash, role, email_verified, free_publishing_enabled)
-     VALUES (901, 'toggled-off@unplugnews.com', $1, 'consultant', true, false),
-            (902, 'default-on@unplugnews.com', $1, 'consultant', true, true)
+    `INSERT INTO users (id, email, password_hash, role, is_representative, email_verified, free_publishing_enabled)
+     VALUES (901, 'toggled-off@unplugnews.com', $1, 'member', true, true, false),
+            (902, 'default-on@unplugnews.com', $1, 'member', true, true, true)
      ON CONFLICT DO NOTHING`,
     [passwordHash]
   );
@@ -93,6 +93,7 @@ test('A REAL LOGIN FOR A CONSULTANT WITH THE TOGGLE OFF ISSUES A TOKEN CARRYING 
 
   const claims = jwt.decode(login.body.token);
   assert.equal(claims.free_publishing_enabled, false, 'the real login route must embed the live column value, not omit it');
+  assert.equal(claims.is_representative, true, 'the real login route must embed Representative access as its own claim');
 
   const submit = await req('POST', '/articles', {
     token: login.body.token,
