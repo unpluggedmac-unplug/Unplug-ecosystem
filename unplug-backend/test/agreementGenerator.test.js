@@ -122,6 +122,31 @@ test('Agreement Details master and required presets are installed without enabli
   assert.equal(identity.rows[0].sensitive_type, 'identity_document');
 });
 
+test('admin can create both a custom blank template and a template from the master preset', async () => {
+  const adminId = await makeUser('agreement-preset-resolution@test.com', 'admin');
+  const token = tokenFor(adminId, 'agreement-preset-resolution@test.com', 'admin');
+
+  const blank = await req('POST', '/agreement-forms/generator/admin/templates', {
+    token,
+    body: { presetId: null, name: 'Custom Blank Resolution Test' },
+  });
+  assert.equal(blank.status, 201);
+  assert.equal(blank.body.form.template_id, null);
+  assert.equal(blank.body.fields.length, 0);
+
+  const master = await pool.query(
+    "SELECT id FROM agreement_templates WHERE name='Agreement Details — Master'"
+  );
+  assert.equal(master.rowCount, 1);
+  const fromMaster = await req('POST', '/agreement-forms/generator/admin/templates', {
+    token,
+    body: { presetId: String(master.rows[0].id), name: 'Master Resolution Test' },
+  });
+  assert.equal(fromMaster.status, 201);
+  assert.equal(fromMaster.body.form.template_id, master.rows[0].id);
+  assert.ok(fromMaster.body.fields.length > 0);
+});
+
 test('standalone generator is mounted under /agreement-forms and legacy /agreements data is not migrated', () => {
   const root = path.join(__dirname, '..', '..');
   const app = fs.readFileSync(path.join(root, 'unplug-backend', 'src', 'app.js'), 'utf8');
