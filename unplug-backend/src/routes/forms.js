@@ -192,7 +192,7 @@ router.post('/:slug', publicSubmitLimiter, attachUser, honeypot,
       // one person remains one contact rather than becoming a stranger every
       // time they fill something in.
       if (email) {
-        capture.captureSubmission({
+        await capture.captureSubmission({
           email,
           fullName,
           formName: form.name,
