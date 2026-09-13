@@ -43,6 +43,23 @@
   const numberTypes = new Set(['number','currency','percentage','rating','scale']);
   const textAliasTypes = new Set(['short_text','country','province','city','suburb','industry','category','date_range']);
 
+  // Recommended upload sizes, from the one server list the dashboards use.
+  // This is deliberately top-level in the workspace closure: loadApps() needs
+  // it before any field has rendered. Keep the lookup non-fatal so a temporary
+  // image-spec failure never blocks a member from opening or editing a draft.
+  let IMG_SPECS = null;
+  async function loadImageSpecs(){
+    if(IMG_SPECS)return IMG_SPECS;
+    try{const d=await api('/image-specs');IMG_SPECS=d.specs||{};return IMG_SPECS}
+    catch(_){return{}}
+  }
+  function specText(key){const s=IMG_SPECS&&IMG_SPECS[key];return s&&s.text?s.text:''}
+  function uploadSizeHint(){
+    const landscape=specText('growth_upload_landscape'),portrait=specText('growth_upload_portrait');
+    if(!landscape&&!portrait)return'';
+    return 'Landscape '+landscape+' or portrait '+portrait+' — whichever suits the picture.';
+  }
+
   function token(){try{return localStorage.getItem('unplug_auth_token')||''}catch(_){return''}}
   async function api(path, options={}){
     const headers=Object.assign({Accept:'application/json'},options.headers||{});const auth=token();if(auth)headers.Authorization='Bearer '+auth;
@@ -72,7 +89,7 @@
   function workspaceAuth(){$('#workspace').innerHTML='<div class="empty"><h2 class="section-title">Sign in to continue</h2><p class="muted">Growth Applications are available to Unplug members only.</p><a class="btn hot" href="/unplug-login.html">Sign in</a></div>'}
   function workspaceEmpty(){$('#heroPct').textContent='0%';$('#workspace').innerHTML='<div class="empty"><h2 class="section-title">Start your Growth Application</h2><p class="muted">Choose Individual or Business on the left. You can save and return as often as you need before submitting.</p></div>'}
   function workspaceError(error){$('#workspace').innerHTML=`<div class="notice"><b>Growth Journey unavailable</b><br>${esc(error.message)}</div>`}
-  async function loadApps(selectId){if(!token())return workspaceAuth();await loadImageSpecs();try{const data=await api('/growth-application/v2/applications');state.apps=data.applications||[];renderApps();const selected=selectId||(state.apps.find(app=>app.status==='draft')||state.apps[0])?.id;if(selected)await openApp(Number(selected));else workspaceEmpty()}catch(error){workspaceError(error)}}
+  async function loadApps(selectId){if(!token())return workspaceAuth();try{await loadImageSpecs();const data=await api('/growth-application/v2/applications');state.apps=data.applications||[];renderApps();const selected=selectId||(state.apps.find(app=>app.status==='draft')||state.apps[0])?.id;if(selected)await openApp(Number(selected));else workspaceEmpty()}catch(error){workspaceError(error)}}
   async function createApplication(type){try{const data=await api('/growth-application/v2/applications',{method:'POST',body:JSON.stringify({applicantType:type})});flash('Growth Application created. Your existing My Unplug details were prefilled where available.');await loadApps(data.application.id)}catch(error){flash(error.message,'error')}}
   async function openApp(id){state.current=id;renderApps();try{state.data=await api(`/growth-application/v2/applications/${id}`);state.step=0;renderWorkspace()}catch(error){workspaceError(error)}}
 
@@ -87,27 +104,7 @@
     if(arrayTypes.has(field.field_type))return wrapField(field,`<label>${esc(field.label)}${required}</label>${help}<input type="text" data-array-text="${esc(field.field_key)}" value="${esc(Array.isArray(value)?value.join(', '):(value||''))}" placeholder="Separate items with commas">`);
     if(field.field_type==='radio'||field.field_type==='yes_no'){const options=field.field_type==='yes_no'?[{value:'yes',label:'Yes'},{value:'no',label:'No'}]:(field.options||[]);return wrapField(field,`<label>${esc(field.label)}${required}</label>${help}${options.map(option=>`<label class="choice"><input type="radio" name="${esc(field.field_key)}" data-radio="${esc(field.field_key)}" value="${esc(option.value)}" ${value===option.value?'checked':''}> ${esc(option.label)}</label>`).join('')}`)}
     if(['checkbox','consent','declaration'].includes(field.field_type))return wrapField(field,`<label class="choice"><input type="checkbox" data-field="${esc(field.field_key)}" ${value===true?'checked':''}> <span>${esc(field.label)}${required}</span></label>${help}`);
-    
-// Recommended upload sizes, from the one server list the dashboards use. Never
-// fatal: if it does not load the fields show no hint, exactly as before.
-var IMG_SPECS = null;
-async function loadImageSpecs(){
-  if (IMG_SPECS) return IMG_SPECS;
-  try { const d = await api('/image-specs'); IMG_SPECS = d.specs || {}; }
-  catch (e) { return {}; }
-  return IMG_SPECS;
-}
-function specText(key){ const s = IMG_SPECS && IMG_SPECS[key]; return s && s.text ? s.text : ''; }
-// Nothing crops these — they are stored for an admin to read, not rendered into
-// a fixed box — so either orientation is genuinely fine and both are offered.
-// Stated as text rather than a live toggle: the page's CSP forbids inline event
-// handlers (script-src-attr 'none'), and a hint does not need interactivity.
-function uploadSizeHint(){
-  const l = specText('growth_upload_landscape'), p = specText('growth_upload_portrait');
-  if (!l && !p) return '';
-  return 'Landscape ' + l + ' or portrait ' + p + ' — whichever suits the picture.';
-}
-if(uploadTypes.has(field.field_type)){const uploaded=value&&typeof value==='object'&&value.uploadId;const accept=field.field_type==='image_upload'?'image/jpeg,image/png,image/webp':'image/jpeg,image/png,image/webp,application/pdf';return wrapField(field,`<label>${esc(field.label)}${required}</label>${help}<input type="file" data-upload="${esc(field.field_key)}" accept="${accept}">${(field.field_type==='image_upload'||field.field_type==='portfolio_upload')&&uploadSizeHint()?`<div class="help" style="margin-top:6px;">${esc(uploadSizeHint())}</div>`:''}<div class="upload-status">${uploaded?`Saved securely: ${esc(value.filename||'file')}`:'Private upload · maximum 10MB.'}</div>`)}
+    if(uploadTypes.has(field.field_type)){const uploaded=value&&typeof value==='object'&&value.uploadId;const accept=field.field_type==='image_upload'?'image/jpeg,image/png,image/webp':'image/jpeg,image/png,image/webp,application/pdf';return wrapField(field,`<label>${esc(field.label)}${required}</label>${help}<input type="file" data-upload="${esc(field.field_key)}" accept="${accept}">${(field.field_type==='image_upload'||field.field_type==='portfolio_upload')&&uploadSizeHint()?`<div class="help" style="margin-top:6px;">${esc(uploadSizeHint())}</div>`:''}<div class="upload-status">${uploaded?`Saved securely: ${esc(value.filename||'file')}`:'Private upload · maximum 10MB.'}</div>`)}
     const type=urlTypes.has(field.field_type)?'url':numberTypes.has(field.field_type)?'number':field.field_type==='email'?'email':field.field_type==='tel'?'tel':field.field_type==='date'?'date':'text';
     const displayValue=Array.isArray(value)?value.join(', '):(typeof value==='object'?'':value);
     return wrapField(field,`<label>${esc(field.label)}${required}</label>${help}<input type="${type}" data-field="${esc(field.field_key)}" value="${esc(displayValue)}" placeholder="${esc(field.placeholder||'')}">`);
