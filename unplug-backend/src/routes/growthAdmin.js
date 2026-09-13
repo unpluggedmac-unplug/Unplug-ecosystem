@@ -3,6 +3,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { notifyMemberAsync } = require('../utils/memberNotify');
 
 const router = express.Router();
 router.use(requireRole('admin'));
@@ -412,10 +413,23 @@ router.post('/applications/:id/reopen-field',async(req,res,next)=>{
 
 router.post('/applications/:id/information-requests',async(req,res,next)=>{
   const applicationId=asId(req.params.id),requestText=str(req.body?.requestText);if(!applicationId||!requestText)return res.status(400).json({error:'requestText is required.'});
-  const client=await pool.connect();try{await client.query('BEGIN');const a=await client.query(`SELECT status FROM growth_applications WHERE id=$1 FOR UPDATE`,[applicationId]);if(!a.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Growth Application not found.'});}
+  const client=await pool.connect();try{await client.query('BEGIN');const a=await client.query(`SELECT status,user_id FROM growth_applications WHERE id=$1 FOR UPDATE`,[applicationId]);if(!a.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Growth Application not found.'});}
     const r=await client.query(`INSERT INTO growth_information_requests(application_id,request_text,requested_fields,requested_by) VALUES($1,$2,$3::jsonb,$4) RETURNING *`,[applicationId,requestText,JSON.stringify(arr(req.body?.requestedFields)),req.user.id]);
     if(!['withdrawn','completed','closed'].includes(a.rows[0].status)){await client.query(`UPDATE growth_applications SET status='information_requested',updated_at=now() WHERE id=$1`,[applicationId]);await client.query(`INSERT INTO growth_status_history(application_id,from_status,to_status,changed_by,note) VALUES($1,$2,'information_requested',$3,'Additional information requested')`,[applicationId,a.rows[0].status,req.user.id]);}
-    await client.query('COMMIT');return res.status(201).json({request:r.rows[0]});
+    await client.query('COMMIT');
+    notifyMemberAsync({
+      userId: a.rows[0].user_id,
+      type: 'growth_information_requested',
+      title: 'Unplug needs more information on your Growth Application',
+      body: requestText,
+      linkUrl: '/unplug-growth-application-v2.html',
+      isStatusChange: true,
+      email: {
+        subject: 'Unplug needs more information on your Growth Application',
+        text: `Unplug has asked for more information on your Growth Application:\n\n${requestText}\n\nRespond here: https://www.unplugnews.com/unplug-growth-application-v2.html`,
+      },
+    });
+    return res.status(201).json({request:r.rows[0]});
   }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}
 });
 
