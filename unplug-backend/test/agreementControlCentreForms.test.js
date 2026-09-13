@@ -14,7 +14,7 @@ test('Forms & Submissions loads the Agreement Generator integration on the canon
   const integration = read('media/scripts/agreement-control-centre-forms-routefix.js');
 
   assert.match(runtime, /unplug-admin-dashboard/);
-  assert.match(runtime, /agreement-control-centre-forms-routefix\.js\?v=20260913-2/);
+  assert.match(runtime, /agreement-control-centre-forms-routefix\.js\?v=20260913-3/);
   assert.match(integration, /indexOf\('unplug-admin-dashboard'\)/);
   assert.match(integration, /agreementFormsControlCentrePanel/);
   assert.match(integration, /Agreement Templates/);
@@ -65,4 +65,12 @@ test('runtime route checks tolerate Cloudflare extensionless canonical URLs', ()
   assert.match(runtime, /unplug-admin-dashboard/);
   assert.match(runtime, /unplug-agreement-generator-admin/);
   assert.match(runtime, /unplug-agreements-admin/);
+});
+
+test('Forms & Submissions resolves the current admin token after an in-page sign-in', () => {
+  const integration = read('media/scripts/agreement-control-centre-forms-routefix.js');
+  assert.match(integration, /function adminToken\(\)/);
+  assert.doesNotMatch(integration, /const TOKEN\s*=/);
+  assert.match(integration, /window\.addEventListener\('unplug:auth-changed'/);
+  assert.match(integration, /if \(!adminToken\(\)\)/);
 });
