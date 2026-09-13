@@ -25,3 +25,22 @@ test('Growth V2 source still resolves API exclusively through runtime value befo
     assert.match(page, /window\.UNPLUG_RUNTIME_API/);
   }
 });
+
+test('Control Centre exposes one canonical Growth Applications entry routed to V2 while retaining legacy rollback files', () => {
+  const edge = fs.readFileSync(path.join(ROOT, 'functions', '[[path]].js'), 'utf8');
+  const integration = fs.readFileSync(path.join(ROOT, 'growth-integration.js'), 'utf8');
+
+  assert.match(edge, /unplug-growth-applications-admin-v2/);
+  assert.match(edge, /setInnerContent\('Growth Applications'\)/);
+  assert.match(edge, /data-unplug-growth-admin-link/);
+  assert.match(edge, /element\.remove\(\)/);
+  assert.match(edge, /unplug-admin-dashboard\(\?:\\\.html\)\?/);
+
+  assert.match(integration, /const ADMIN_V2 = '\/unplug-growth-applications-admin-v2\.html'/);
+  assert.match(integration, /legacySelector/);
+  assert.match(integration, /existing\.forEach\(\(a\) => a\.remove\(\)\)/);
+  assert.match(integration, /keep\.textContent = 'Growth Applications'/);
+
+  assert.equal(fs.existsSync(path.join(ROOT, 'unplug-growth-applications-admin.html')), true);
+  assert.equal(fs.existsSync(path.join(ROOT, 'unplug-growth-applications-admin-v2.html')), true);
+});
