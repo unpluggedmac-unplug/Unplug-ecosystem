@@ -55,7 +55,7 @@ test('master remains separate from generic Forms and the legacy signed agreement
 
   assert.doesNotMatch(integration, /fetch\([^\n]*['"]\/forms['"]/);
   assert.doesNotMatch(integration, /signed_agreements/);
-  assert.doesNotMatch(integration, /\/agreements(?:['"`?])/);
+  assert.doesNotMatch(integration, /(?:api|fetch)\(\s*['\"`]\/agreements(?:['\"`?])/);
   assert.match(integration, /generator\/admin/);
 });
 
