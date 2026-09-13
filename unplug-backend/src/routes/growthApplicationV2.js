@@ -274,6 +274,23 @@ router.post('/applications', async (req, res, next) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // A member can only ever have one draft per applicant type. Without this,
+    // a repeated tap on "+ Individual/Business application" (e.g. because the
+    // confirmation was not visible yet) silently created another draft each
+    // time. Returning the existing draft makes the endpoint idempotent, so no
+    // client-side click-guard can ever be enough on its own.
+    const existingDraft = await client.query(
+      `SELECT id,user_id,applicant_type,status,form_version_id,completion_percent,
+              last_saved_at,created_at,updated_at
+         FROM growth_applications
+        WHERE user_id=$1 AND applicant_type=$2 AND status='draft'
+        ORDER BY created_at DESC LIMIT 1`,
+      [req.user.id, type],
+    );
+    if (existingDraft.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(200).json({ application: existingDraft.rows[0], resumed: true });
+    }
     const active = await activeForm(type, client);
     if (!active) {
       await client.query('ROLLBACK');
@@ -565,6 +582,33 @@ router.post('/applications/:id/withdraw', async (req, res, next) => {
     );
     await client.query('COMMIT');
     return res.json({ application: { id: applicationId, status: 'withdrawn' } });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return next(err);
+  } finally { client.release(); }
+});
+
+router.delete('/applications/:id', async (req, res, next) => {
+  const applicationId = asId(req.params.id);
+  if (!applicationId) return res.status(400).json({ error: 'Invalid application id.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query(
+      `SELECT status FROM growth_applications WHERE id=$1 AND user_id=$2 FOR UPDATE`,
+      [applicationId, req.user.id],
+    );
+    if (!current.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Growth Application not found.' });
+    }
+    if (current.rows[0].status !== 'draft') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Only a draft that has not been submitted can be deleted. Withdraw a submitted application instead.' });
+    }
+    await client.query(`DELETE FROM growth_applications WHERE id=$1 AND user_id=$2`, [applicationId, req.user.id]);
+    await client.query('COMMIT');
+    return res.json({ deleted: true });
   } catch (err) {
     await client.query('ROLLBACK');
     return next(err);
