@@ -19,16 +19,36 @@ function isNotTheSite(pathname) { return NOT_THE_SITE.some((rule) => rule.test(p
 function withGrowthIntegration(response, pathname) {
   const type = String(response.headers.get('content-type') || '').toLowerCase();
   if (!type.includes('text/html')) return response;
-  const eligible = pathname === '/'
-    || /\/(?:index|unplug-magazine|unplug-member-dashboard|unplug-admin-dashboard|unplug-growth-application)\.html$/i.test(pathname);
+
+  const cleanPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
+  const isAdminDashboard = /^\/unplug-admin-dashboard(?:\.html)?$/i.test(cleanPath);
+  const eligible = cleanPath === '/'
+    || /^\/(?:index|unplug-magazine|unplug-member-dashboard|unplug-admin-dashboard|unplug-growth-application)(?:\.html)?$/i.test(cleanPath);
   if (!eligible) return response;
-  return new HTMLRewriter()
+
+  const rewriter = new HTMLRewriter()
+    .on('a', {
+      element(element) {
+        if (!isAdminDashboard) return;
+        const href = String(element.getAttribute('href') || '');
+        if (/^\/unplug-growth-applications-admin(?:\.html)?(?:[?#].*)?$/i.test(href)) {
+          element.remove();
+          return;
+        }
+        if (/^\/unplug-growth-applications-admin-v2(?:\.html)?(?:[?#].*)?$/i.test(href)) {
+          element.setAttribute('href', '/unplug-growth-applications-admin-v2');
+          element.setAttribute('data-unplug-growth-admin-link', 'true');
+          element.setInnerContent('Growth Applications');
+        }
+      },
+    })
     .on('body', {
       element(element) {
         element.append('<script src="/growth-integration.js" defer></script>', { html: true });
       },
-    })
-    .transform(response);
+    });
+
+  return rewriter.transform(response);
 }
 
 export async function onRequest(context) {
