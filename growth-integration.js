@@ -175,7 +175,8 @@
     function cleanStepLabels() {
       document.querySelectorAll('.step-tab').forEach((button) => {
         const text = String(button.textContent || '').trim();
-        button.textContent = text.replace(/^(\d+)\.\s+\1\.\s+/, '$1. ');
+        const cleaned = text.replace(/^(\d+)\.\s+\1\.\s+/, '$1. ');
+        if (cleaned !== text) button.textContent = cleaned;
       });
     }
 
