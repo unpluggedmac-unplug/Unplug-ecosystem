@@ -411,12 +411,12 @@
         nodeSection('impactmakers', 'Categories', '#')
       ]),
       branch('unplug-live', 'Unplug Live', '▶', null, [
-        nodeDisabled('live:events', 'Events', '◫', 'Unplug Live admin module is not connected in this dashboard yet'),
-        nodeDisabled('live:streams', 'Streams', '▶', 'Unplug Live admin module is not connected in this dashboard yet'),
-        nodeDisabled('live:tickets', 'Tickets / Orders', '▥', 'Unplug Live admin module is not connected in this dashboard yet'),
-        nodeDisabled('live:viewers', 'Viewers / Replays', '☺', 'Unplug Live admin module is not connected in this dashboard yet'),
-        nodeDisabled('live:organisers', 'Organisers / Payouts / Sponsors', '◆', 'Unplug Live admin module is not connected in this dashboard yet'),
-        nodeDisabled('live:settings', 'Settings', '⚙', 'Unplug Live admin module is not connected in this dashboard yet')
+        nodeDisabled('live:events', 'Events (Coming Soon)', '◫', 'Coming Soon — this admin module has not been built yet.'),
+        nodeDisabled('live:streams', 'Streams (Coming Soon)', '▶', 'Coming Soon — this admin module has not been built yet.'),
+        nodeDisabled('live:tickets', 'Tickets / Orders (Coming Soon)', '▥', 'Coming Soon — this admin module has not been built yet.'),
+        nodeDisabled('live:viewers', 'Viewers / Replays (Coming Soon)', '☺', 'Coming Soon — this admin module has not been built yet.'),
+        nodeDisabled('live:organisers', 'Organisers / Payouts / Sponsors (Coming Soon)', '◆', 'Coming Soon — this admin module has not been built yet.'),
+        nodeDisabled('live:settings', 'Settings (Coming Soon)', '⚙', 'Coming Soon — this admin module has not been built yet.')
       ]),
       branch('marketing', 'Marketing & CRM', '◎', { section: 'crm' }, [
         nodeSection('crm', 'Sales & CRM', '◎'),
@@ -772,14 +772,34 @@
         });
         document.querySelectorAll('[data-cc-admin-only-group="true"]').forEach(function (g) { g.hidden = true; });
       }
+      // Reversed each pass, not just set true: a group whose only content
+      // arrives asynchronously (Agreements' templates, e.g.) can genuinely
+      // look empty on an early pass, before that content has loaded. A
+      // one-way hide here would then hide it forever, since nothing ever
+      // reconsiders a group once marked hidden. Recomputing both directions
+      // every time means a group that gains content later becomes visible
+      // again on the next pass (see the explicit re-sync calls at the end of
+      // hydrateAgreementNavigation/hydrateGrowthCounts below, since neither
+      // one's DOM insertion is an attribute change the MutationObserver here
+      // would otherwise notice).
+      //
+      // The inline style is cleared explicitly, not left to `.hidden` alone:
+      // something upstream of this script (order not established, and not
+      // this script) sets `style.display:none` directly on these same
+      // elements, which the `hidden` IDL property does not touch or
+      // override. Setting style.display here is what actually makes a
+      // previously-empty-looking group reappear once it has content.
       document.querySelectorAll('.cc-nav-group,.cc-nav-branch').forEach(function (g) {
         var visibleLeaf = Array.from(g.querySelectorAll(':scope > .cc-group-items > .cc-nav-leaf-row, :scope > .cc-branch-items > .cc-nav-leaf-row')).some(function (r) { return !r.hidden && !r.classList.contains('cc-search-hidden'); });
         var visibleBranch = Array.from(g.querySelectorAll(':scope > .cc-group-items > .cc-nav-branch, :scope > .cc-branch-items > .cc-nav-branch')).some(function (r) { return !r.hidden; });
-        if (!visibleLeaf && !visibleBranch && !g.querySelector('.cc-disabled')) g.hidden = true;
+        var shouldHide = !visibleLeaf && !visibleBranch && !g.querySelector('.cc-disabled');
+        g.hidden = shouldHide;
+        g.style.display = shouldHide ? 'none' : '';
       });
     }
     setTimeout(syncPermissions, 80);
     setTimeout(syncPermissions, 600);
+    setTimeout(syncPermissions, 2500);
     new MutationObserver(function () { syncPermissions(); }).observe(sidebar, { attributes: true, subtree: true, attributeFilter: ['style', 'class'] });
 
     function setCount(key, value, tone) {
@@ -918,6 +938,14 @@
           });
         }
       } catch (_) {}
+      // The template/agreement fetch above is what the Agreements group's
+      // visibility actually depends on (see syncPermissions' comment) — this
+      // inserts new nodes via appendChild, which the style/class-only
+      // MutationObserver never sees, so nothing else would ever re-check the
+      // group once this resolves. Re-synced here regardless of success or
+      // failure: on failure the group's own static leaves (Overview, Agreement
+      // Generator, etc.) still keep it correctly visible.
+      syncPermissions();
     }
 
     async function hydrateGrowthCounts() {
@@ -929,6 +957,7 @@
         });
         setCount('growth:submitted', apps.filter(function (a) { return !!a.submitted_at; }).length, '');
       } catch (_) {}
+      syncPermissions();
     }
 
     function addOverviewCards() {
