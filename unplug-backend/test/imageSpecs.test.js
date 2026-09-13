@@ -688,3 +688,88 @@ test('the public payload carries the distinction, and the page acts on it', asyn
 
   await api('PATCH', '/admin/settings/' + FORMATS_KEY, { value: '{}' }, adminToken);
 });
+
+// ------------------------------------- uploads that never touch UnplugUpload
+//
+// Everything above guards fields rendered by UnplugUpload.fieldHtml. That
+// missed an entire category: raw <input type="file"> controls on their own
+// pages. An audit of every file input on the site found SIX accepting images
+// with no stated size at all — the growth application gallery and its two
+// upload fields, the agreement signature, and the company stamp — none of
+// which any existing test could see, because none of them calls fieldHtml.
+//
+// This is the guard for that category. It is deliberately about the PAGE
+// rather than the widget: wherever somebody can hand over an image, the page
+// has to tell them what shape to bring.
+
+const IMAGE_UPLOAD_PAGES = [
+  'unplug-admin-dashboard.html',
+  'unplug-member-dashboard.html',
+  'unplug-growth-application.html',
+  'unplug-growth-application-v2.html',
+  'unplug-agreement.html',
+];
+
+test('EVERY PAGE WITH A RAW IMAGE UPLOAD ALSO STATES A SIZE', () => {
+  // A page whose file input accepts images must resolve a size from the server
+  // somewhere — specText/imgSpecFull/uploadSizes are the three ways it is done.
+  // A page whose inputs are only PDFs or proof-of-payment needs nothing: a
+  // receipt has no right shape, and a PDF has no pixel dimensions at all.
+  const silent = [];
+  IMAGE_UPLOAD_PAGES.forEach((f) => {
+    const src = fs.readFileSync(path.join(siteRoot, f), 'utf8');
+    const inputs = src.match(/<input[^>]*type="file"[^>]*>/g) || [];
+    const acceptsImage = inputs.some((i) => /accept="[^"]*image\//.test(i));
+    if (!acceptsImage) return;
+    const statesASize = /specText\(|imgSpecFull\(|adSlotSpec\(|uploadSizes/.test(src);
+    if (!statesASize) silent.push(f);
+  });
+  assert.deepEqual(silent, [],
+    'these pages take an image upload and tell the person nothing about what shape to bring:\n  '
+    + silent.join('\n  '));
+});
+
+test('the new sizes are real, and each says which way round it goes', async () => {
+  const { body } = await api('GET', '/image-specs', null, memberToken);
+  const added = ['growth_gallery_photo', 'growth_upload_landscape',
+                 'growth_upload_portrait', 'signature_image', 'company_stamp'];
+  added.forEach((k) => {
+    const s = body.specs[k];
+    assert.ok(s, k + ' is missing');
+    assert.ok(Number.isInteger(s.w) && Number.isInteger(s.h), k + ' has no usable size');
+    assert.match(s.text, /\d+ × \d+px/, k + ' has no readable sentence');
+  });
+
+  // Orientation is the point of the growth pair — if they ever stop being a
+  // landscape/portrait flip of each other, offering a choice is meaningless.
+  const l = body.specs.growth_upload_landscape;
+  const p = body.specs.growth_upload_portrait;
+  assert.ok(l.w > l.h, 'the landscape option must be landscape');
+  assert.ok(p.h > p.w, 'the portrait option must be portrait');
+  assert.deepEqual([l.w, l.h], [p.h, p.w], 'the pair should be the same numbers flipped');
+
+  // A signature is always far wider than it is tall; a stamp is square.
+  assert.ok(body.specs.signature_image.w > body.specs.signature_image.h * 2);
+  assert.equal(body.specs.company_stamp.w, body.specs.company_stamp.h);
+});
+
+test('the signing page can state its sizes without an account', async () => {
+  // unplug-agreement.html is opened from a signing link by someone who may have
+  // no login at all, so it cannot call /image-specs — that stays behind
+  // requireAuth. The sizes therefore travel with the form definition instead,
+  // still sourced from IMAGE_SPECS rather than restated.
+  const { IMAGE_SPECS, describe } = require('../src/utils/imageSpecs');
+  const src = fs.readFileSync(path.join(siteRoot, 'unplug-backend', 'src', 'routes',
+    'agreementForms.js'), 'utf8');
+  assert.match(src, /uploadSizes:\s*\{/, 'the public form definition carries no upload sizes');
+  assert.match(src, /describe\(IMAGE_SPECS\.signature_image\)/,
+    'the signature size must come from IMAGE_SPECS, not be written out again here');
+  assert.match(src, /describe\(IMAGE_SPECS\.company_stamp\)/);
+
+  const page = fs.readFileSync(path.join(siteRoot, 'unplug-agreement.html'), 'utf8');
+  assert.match(page, /uploadSizes/, 'the signing page never reads the sizes it is sent');
+  // And it must not have quietly gained its own copy of a number.
+  assert.doesNotMatch(page, /\b\d{3,4}\s*[x×]\s*\d{3,4}\s*px/i,
+    'the signing page states a size of its own instead of using the one it is sent');
+  assert.ok(describe(IMAGE_SPECS.company_stamp).length > 10);
+});
