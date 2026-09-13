@@ -131,11 +131,21 @@ router.get('/generator/access/:token/pdf', async(req,res,next)=>{
   }catch(err){next(err);}
 });
 
+// Choice 14 (Control Centre redesign): Party B can save and continue later
+// via auto-save drafts + a secure resume link (both already existed here —
+// PATCH /generator/access/:token/draft, GET /generator/access/:token) or via
+// member-dashboard access, which needed this endpoint to actually return a
+// usable resume link. The LEFT JOIN is scoped to req.user.id, not just
+// party_side='party_b', so a multi-signer submission with other co-signers
+// never joins more than this member's own party row — one row per
+// submission, so no DISTINCT is needed and no other signer's token ever
+// leaks into this response.
 router.get('/generator/member/agreements', requireAuth, async(req,res,next)=>{
   try{
-    const r=await pool.query(`SELECT DISTINCT s.id,s.reference,s.workflow_status,s.agreement_version,s.started_at,s.submitted_at,s.signed_at,a.title,a.slug
+    const r=await pool.query(`SELECT s.id,s.reference,s.workflow_status,s.agreement_version,s.started_at,s.submitted_at,s.signed_at,
+        a.title,a.slug,COALESCE(p.signing_token,s.signing_token) AS signing_token
       FROM agreement_submissions s JOIN agreement_forms a ON a.id=s.agreement_id
-      LEFT JOIN agreement_submission_parties p ON p.submission_id=s.id AND p.party_side='party_b'
+      LEFT JOIN agreement_submission_parties p ON p.submission_id=s.id AND p.party_side='party_b' AND p.member_user_id=$1
       WHERE (s.user_id=$1 OR p.member_user_id=$1) AND s.access_method IN ('member_login','both') ORDER BY s.started_at DESC`,[req.user.id]);res.json({agreements:r.rows});
   }catch(err){next(err);}
 });

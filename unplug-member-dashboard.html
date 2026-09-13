@@ -370,6 +370,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
       <button class="ms-navlink section-hidden" data-ms="myagreements" id="msMyAgreementsNav"><span>📄</span> My Agreements</button>
       <button class="ms-navlink section-hidden" data-ms="availableagreements" id="msAvailableAgreementsNav"><span>📝</span> Available Agreements</button>
+      <button class="ms-navlink section-hidden" data-ms="signingrequests" id="msSigningRequestsNav"><span>✍</span> Agreements I'm Signing</button>
       <button class="ms-navlink section-hidden" data-ms="myclients" id="msMyClientsNav"><span>🌱</span> My Clients</button>
       <a class="ms-navlink" href="unplug-magazine.html"><span>🌐</span> View Official Site</a>
       <button class="ms-navlink ms-logout" id="msLogout"><span>↩</span> Logout</button>
@@ -1237,6 +1238,26 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </div>
     </section>
 
+    <!-- AGREEMENTS I'M SIGNING — Agreement Generator submissions where this
+         member is Party B, signed in via access_method 'member_login'/'both'
+         (GET /agreement-forms/generator/member/agreements). Separate from
+         both sections above: "My Agreements" is representative-only
+         (agreements a rep can SEND), "Available Agreements" is the older
+         Agreement Forms system's public listing; this is the newer Agreement
+         Generator's own drafts/in-progress/completed submissions, with a
+         resume link for anything not yet finished — the actual UI half of
+         "Party B can save and continue later" (auto-save + secure resume
+         link already existed server-side; only the member-dashboard view of
+         it was missing). Always visible, not gated: any member can end up as
+         Party B on an agreement, not just representatives. -->
+    <section class="ms-section section-hidden" data-ms-section="signingrequests">
+    <div class="card">
+      <h2>Agreements I'm Signing</h2>
+      <p class="sub">Agreement Generator forms you've started, saved, or completed. A saved draft picks up exactly where you left off.</p>
+      <div id="signingRequestsContent"><div class="loading-state">Loading…</div></div>
+    </div>
+    </section>
+
     <!-- MY CLIENTS' GROWTH — sales-consultant self-service. "Client" means
          the same thing My Referrals already means by referral: a user whose
          payment carries this consultant's sales_consultant_id. -->
@@ -1968,6 +1989,7 @@ function enterMemberDashboard(user){
   loadLeaderboard();
   loadMyAnalytics();
   loadAvailableAgreements();
+  loadSigningRequests();
   if (CURRENT_USER && CURRENT_USER.is_representative) {
     document.getElementById('msMyReferralsNav').classList.remove('section-hidden');
     loadMyReferrals();
@@ -4901,6 +4923,56 @@ async function loadAvailableAgreements() {
   } catch (_) {
     nav.classList.add('section-hidden');
     el.innerHTML = '<p class="sub" style="margin:0;">Agreements are temporarily unavailable. Please try again shortly.</p>';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Agreements I'm Signing — this member's own Agreement Generator submissions
+// (GET /agreement-forms/generator/member/agreements), where they are Party B
+// via access_method 'member_login'/'both'. Separate from the two sections
+// above: this is the newer Agreement Generator, not the older Agreement
+// Forms system. A submission still in draft/in_progress/sent gets a real
+// "Continue" link built from the signing_token the backend now returns —
+// the same token /unplug-agreement-generator.html already reads via
+// ?token=, so this is the exact resume link a private-link signer would
+// have gotten by email, just reachable from the dashboard instead. Hidden
+// like Available Agreements when empty: most members never end up as
+// Party B on anything, and an empty section is not worth a permanent nav
+// item.
+// ---------------------------------------------------------------------------
+async function loadSigningRequests() {
+  const nav = document.getElementById('msSigningRequestsNav');
+  const el = document.getElementById('signingRequestsContent');
+  if (!nav || !el) return;
+  const STATUS_LABEL = {
+    draft: 'Draft — not yet sent', sent: 'Sent, awaiting your action', in_progress: 'In progress — pick up where you left off',
+    submitted: 'Submitted', under_review: 'Under review', signed: 'Signed', completed: 'Completed', archived: 'Archived',
+  };
+  const RESUMABLE = new Set(['draft', 'sent', 'in_progress']);
+  try {
+    const data = await api('/agreement-forms/generator/member/agreements');
+    const agreements = data.agreements || [];
+    if (!agreements.length) {
+      nav.classList.add('section-hidden');
+      el.innerHTML = '<p class="sub" style="margin:0;">Nothing here yet — an Agreement Generator form you start using this account will appear here.</p>';
+      return;
+    }
+    nav.classList.remove('section-hidden');
+    el.innerHTML = agreements.map((a) => `
+      <div class="card" style="margin:0 0 14px; padding:14px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;">${escapeHtmlM(a.title)}</div>
+            <div class="sub" style="margin:2px 0 0;">${escapeHtmlM(STATUS_LABEL[a.workflow_status] || a.workflow_status)}${a.started_at ? ` · started ${new Date(a.started_at).toLocaleDateString()}` : ''}</div>
+          </div>
+          ${RESUMABLE.has(a.workflow_status) && a.signing_token
+            ? `<a class="btn btn-line" style="width:auto;padding:7px 14px;text-decoration:none;" href="/unplug-agreement-generator.html?token=${encodeURIComponent(a.signing_token)}">Continue</a>`
+            : ''}
+        </div>
+      </div>`).join('');
+  } catch (_) {
+    nav.classList.add('section-hidden');
+    el.innerHTML = '<p class="sub" style="margin:0;">Could not load right now. Please try again shortly.</p>';
   }
 }
 
