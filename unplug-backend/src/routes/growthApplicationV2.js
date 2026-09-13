@@ -602,9 +602,9 @@ router.delete('/applications/:id', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Growth Application not found.' });
     }
-    if (current.rows[0].status !== 'draft') {
+    if (!['draft', 'withdrawn'].includes(current.rows[0].status)) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Only a draft that has not been submitted can be deleted. Withdraw a submitted application instead.' });
+      return res.status(409).json({ error: 'Only a draft or a withdrawn application can be deleted. Withdraw a submitted application first.' });
     }
     await client.query(`DELETE FROM growth_applications WHERE id=$1 AND user_id=$2`, [applicationId, req.user.id]);
     await client.query('COMMIT');

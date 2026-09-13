@@ -211,6 +211,18 @@ router.patch('/versions/:id', async (req, res, next) => {
   } catch (e) { return next(e); }
 });
 
+router.delete('/versions/:id', async (req, res, next) => {
+  const versionId = asId(req.params.id);
+  if (!versionId) return res.status(400).json({ error: 'Invalid version id.' });
+  try {
+    const current = await pool.query(`SELECT status FROM growth_form_versions WHERE id=$1`, [versionId]);
+    if (!current.rowCount) return res.status(404).json({ error: 'Version not found.' });
+    if (current.rows[0].status !== 'draft') return res.status(409).json({ error: 'Only a draft version can be deleted. Published or retired versions must be kept for existing applications.' });
+    await pool.query(`DELETE FROM growth_form_versions WHERE id=$1`, [versionId]);
+    return res.json({ deleted: true });
+  } catch (e) { return next(e); }
+});
+
 router.post('/versions/:id/steps', async (req, res, next) => {
   const versionId=asId(req.params.id), title=str(req.body?.title);
   const key=str(req.body?.stepKey).toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'');
@@ -236,6 +248,17 @@ router.patch('/steps/:id', async (req, res, next) => {
       Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:s.display_order,
       typeof req.body?.enabled==='boolean'?req.body.enabled:s.is_enabled]);
     return res.json({step:r.rows[0]});
+  }catch(e){return next(e);}
+});
+
+router.delete('/steps/:id', async (req, res, next) => {
+  const stepId=asId(req.params.id); if(!stepId)return res.status(400).json({error:'Invalid step id.'});
+  try{
+    const c=await pool.query(`SELECT s.id,v.status AS version_status FROM growth_form_steps s JOIN growth_form_versions v ON v.id=s.version_id WHERE s.id=$1`,[stepId]);
+    if(!c.rowCount)return res.status(404).json({error:'Step not found.'});
+    if(c.rows[0].version_status!=='draft')return res.status(409).json({error:'Only draft versions can be edited.'});
+    await pool.query(`DELETE FROM growth_form_steps WHERE id=$1`,[stepId]);
+    return res.json({deleted:true});
   }catch(e){return next(e);}
 });
 
@@ -288,6 +311,17 @@ router.patch('/fields/:id', async (req,res,next)=>{
   }catch(e){return next(e);}
 });
 
+router.delete('/fields/:id', async (req, res, next) => {
+  const fieldId=asId(req.params.id); if(!fieldId)return res.status(400).json({error:'Invalid field id.'});
+  try{
+    const c=await pool.query(`SELECT f.id,v.status AS version_status FROM growth_form_fields f JOIN growth_form_versions v ON v.id=f.version_id WHERE f.id=$1`,[fieldId]);
+    if(!c.rowCount)return res.status(404).json({error:'Field not found.'});
+    if(c.rows[0].version_status!=='draft')return res.status(409).json({error:'Published fields are immutable. Create a new draft version.'});
+    await pool.query(`DELETE FROM growth_form_fields WHERE id=$1`,[fieldId]);
+    return res.json({deleted:true});
+  }catch(e){return next(e);}
+});
+
 router.post('/fields/:id/options', async(req,res,next)=>{
   const fieldId=asId(req.params.id),value=str(req.body?.value),label=str(req.body?.label);
   if(!fieldId||!value||!label)return res.status(400).json({error:'value and label are required.'});
@@ -295,6 +329,17 @@ router.post('/fields/:id/options', async(req,res,next)=>{
     SELECT f.id,$2,$3,$4,$5 FROM growth_form_fields f JOIN growth_form_versions v ON v.id=f.version_id
     WHERE f.id=$1 AND v.status='draft' RETURNING *`,[fieldId,value,label,Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:0,req.body?.enabled!==false]);
     return r.rowCount?res.status(201).json({option:r.rows[0]}):res.status(409).json({error:'Only draft fields can be edited.'});
+  }catch(e){return next(e);}
+});
+
+router.delete('/options/:id', async (req, res, next) => {
+  const optionId=asId(req.params.id);if(!optionId)return res.status(400).json({error:'Invalid option id.'});
+  try{
+    const c=await pool.query(`SELECT o.id,v.status AS version_status FROM growth_form_field_options o JOIN growth_form_fields f ON f.id=o.field_id JOIN growth_form_versions v ON v.id=f.version_id WHERE o.id=$1`,[optionId]);
+    if(!c.rowCount)return res.status(404).json({error:'Option not found.'});
+    if(c.rows[0].version_status!=='draft')return res.status(409).json({error:'Only draft options can be edited.'});
+    await pool.query(`DELETE FROM growth_form_field_options WHERE id=$1`,[optionId]);
+    return res.json({deleted:true});
   }catch(e){return next(e);}
 });
 
