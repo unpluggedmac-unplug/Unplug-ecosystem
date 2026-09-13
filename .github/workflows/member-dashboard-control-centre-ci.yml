@@ -1,0 +1,49 @@
+name: Member Dashboard Control Centre CI
+
+on:
+  push:
+    paths:
+      - 'unplug-member-dashboard.html'
+      - 'functions/runtime-config.js'
+      - 'media/scripts/member-dashboard-control-centre*.js'
+      - 'media/scripts/member-dashboard-service-shortcuts.js'
+      - 'media/styles/member-dashboard-control-centre*.css'
+      - 'media/styles/member-dashboard-service-shortcuts.css'
+      - 'unplug-backend/test/memberDashboardControlCentre*.test.js'
+      - 'unplug-backend/test/memberDashboardServiceShortcuts.test.js'
+      - '.github/workflows/member-dashboard-control-centre-ci.yml'
+  pull_request:
+    paths:
+      - 'unplug-member-dashboard.html'
+      - 'functions/runtime-config.js'
+      - 'media/scripts/member-dashboard-control-centre*.js'
+      - 'media/scripts/member-dashboard-service-shortcuts.js'
+      - 'media/styles/member-dashboard-control-centre*.css'
+      - 'media/styles/member-dashboard-service-shortcuts.css'
+      - 'unplug-backend/test/memberDashboardControlCentre*.test.js'
+      - 'unplug-backend/test/memberDashboardServiceShortcuts.test.js'
+      - '.github/workflows/member-dashboard-control-centre-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  member-dashboard-control-centre:
+    name: Member Dashboard regression checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Member Dashboard Control Centre tests
+        run: >-
+          node --test
+          unplug-backend/test/memberDashboardControlCentre.test.js
+          unplug-backend/test/memberDashboardControlCentrePolish.test.js
+          unplug-backend/test/memberDashboardServiceShortcuts.test.js
