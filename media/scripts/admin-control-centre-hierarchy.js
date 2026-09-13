@@ -237,7 +237,7 @@
     }
     function growthHref(params) {
       var q = new URLSearchParams(params || {});
-      return '/unplug-growth-applications-admin.html' + (q.toString() ? '?' + q.toString() : '');
+      return '/unplug-growth-applications-admin-v2.html' + (q.toString() ? '?' + q.toString() : '');
     }
 
     var model = [
@@ -324,14 +324,11 @@
           nodeHref(growthHref({ status: 'completed' }), 'Completed', '✓', { adminOnly: true, countKey: 'growth:closed', note: 'Mapped to the current Closed workflow status' }),
           nodeHref(growthHref({ status: 'archived' }), 'Archived', '□', { adminOnly: true, countKey: 'growth:closed', note: 'Mapped to the current Closed workflow status' })
         ]),
-        branch('growth-form', 'Application Form', '☷', { href: growthHref({ view: 'settings' }) }, [
-          nodeHref(growthHref({ view: 'settings', preview: 'quick_profile' }), 'Quick Profile', '1', { adminOnly: true }),
-          nodeHref(growthHref({ view: 'settings', preview: 'growth_assessment' }), 'Growth Assessment', '2', { adminOnly: true }),
-          nodeHref(growthHref({ view: 'settings', preview: 'deep_discovery' }), 'Deep Discovery', '3', { adminOnly: true }),
-          nodeHref(growthHref({ view: 'settings', preview: 'resume' }), 'Resume Page', '4', { adminOnly: true }),
-          nodeHref(growthHref({ view: 'settings', preview: 'pdf' }), 'PDF / Reports', 'PDF', { adminOnly: true }),
-          nodeHref(growthHref({ view: 'settings' }), 'Form Settings', '⚙', { adminOnly: true }),
-          nodeHref(growthHref({ view: 'settings' }), 'Placement & Visibility', '◫', { adminOnly: true })
+        branch('growth-form', 'Application Form', '☷', { href: growthHref({ tab: 'builder' }) }, [
+          nodeHref(growthHref({ tab: 'builder' }), 'Master Form Builder', '◆', { adminOnly: true }),
+          nodeHref(growthHref({ tab: 'builder' }), 'Steps & Fields', '☷', { adminOnly: true }),
+          nodeHref(growthHref({ tab: 'builder' }), 'Draft Versions', '○', { adminOnly: true }),
+          nodeHref(growthHref({ tab: 'builder' }), 'Published Version', '●', { adminOnly: true })
         ])
       ], { adminOnly: true }),
       branch('directory', 'Directory', '⌖', { section: 'dirprofiles' }, [
