@@ -48,12 +48,14 @@ test('favourite management is explicit rather than adding invalid nested buttons
   assert.doesNotMatch(script, /ms-service[^\n]{0,120}appendChild\([^\n]*button/i);
 });
 
-test('service shortcut dialogs are accessible and dismissible', () => {
+test('service shortcut dialogs are accessible, dismissible and clean up global handlers', () => {
   assert.match(script, /role="dialog"/);
   assert.match(script, /aria-modal="true"/);
   assert.match(script, /aria-labelledby/);
   assert.match(script, /aria-label="Close"/);
   assert.match(script, /Escape/);
+  assert.match(script, /__ccEscapeHandler/);
+  assert.match(script, /removeEventListener\('keydown',modal\.__ccEscapeHandler,true\)/);
   assert.match(css, /:focus-visible/);
 });
 
