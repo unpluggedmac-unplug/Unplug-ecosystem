@@ -21,7 +21,7 @@ test('service shortcuts derive from the real rendered service catalogue', () => 
   assert.match(page, /id="msServicesGrid"/);
   assert.match(page, /className='ms-service'/);
   assert.match(script, /#msServicesGrid \.ms-service/);
-  assert.match(script, /querySelector\('\.t'/);
+  assert.match(script, /q\('\.t',card\)/);
   assert.doesNotMatch(script, /fetch\(/, 'shortcut layer must not create a second service API');
 });
 
