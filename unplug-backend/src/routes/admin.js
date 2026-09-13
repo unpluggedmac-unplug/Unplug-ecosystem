@@ -1550,6 +1550,24 @@ router.patch('/settings/:key', requireRole('admin'), async (req, res, next) => {
         && !(Number.isInteger(Number(value)) && Number(value) > 0)) {
       return res.status(400).json({ error: 'feature_edition_transition_duration_ms must be a positive whole number of milliseconds.' });
     }
+    // The size each ad slot renders at. Validated rather than stored as typed:
+    // this drives a box on a public page, so a mistyped height is a wall of
+    // empty space on the live site, and an unknown slot key is a setting
+    // nothing would ever read. Normalised on the way in too, so what comes
+    // back out is the same shape every reader expects.
+    if (req.params.key === 'ad_slot_formats') {
+      const { validateFormats } = require('../utils/adSlotFormats');
+      const checked = validateFormats(value);
+      if (checked.error) return res.status(400).json({ error: checked.error });
+      const saved = await pool.query(
+        `UPDATE settings SET value = $1, updated_at = now() WHERE key = $2 RETURNING *`,
+        [checked.value, req.params.key]
+      );
+      if (saved.rows.length === 0) {
+        return res.status(404).json({ error: 'Setting "ad_slot_formats" does not exist.' });
+      }
+      return res.json({ setting: saved.rows[0] });
+    }
 
     const result = await pool.query(
       `UPDATE settings SET value = $1, updated_at = now() WHERE key = $2 RETURNING *`,

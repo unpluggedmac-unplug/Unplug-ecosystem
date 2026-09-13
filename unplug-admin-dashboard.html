@@ -6090,6 +6090,117 @@ function adBannerRowHtml() {
     <span class="ad-note" style="font-size:12px;color:var(--slate);margin-left:10px;"></span>`;
 }
 
+// ---------------------------------------------------------------------------
+// THE SIZE A SLOT RENDERS AT, AND CHANGING IT.
+//
+// The defaults live in the server's AD_SLOT_SIZES and are the standard
+// advertising formats — 728 x 90 leaderboard, 300 x 250 sponsor block. They are
+// what the empty placeholder on the public page advertises, what the buy form
+// recommends, and what the filled slot now actually draws the banner at.
+//
+// AD_SLOT_FORMATS below holds ONLY the slots an admin has overridden, exactly
+// as stored in settings.ad_slot_formats. Keeping the raw overrides (rather than
+// the resolved sizes) is what lets a slot go back to its default: an untouched
+// slot has no entry at all, instead of a copy of the default frozen into the
+// database where it would quietly stop following a later change to the source.
+// ---------------------------------------------------------------------------
+let AD_SLOT_FORMATS = null;
+
+async function loadAdSlotFormats(force) {
+  if (AD_SLOT_FORMATS && !force) return AD_SLOT_FORMATS;
+  try {
+    const d = await api('/admin/settings');
+    const row = (d.settings || []).find((r) => r.key === 'ad_slot_formats');
+    AD_SLOT_FORMATS = row && row.value ? (JSON.parse(row.value) || {}) : {};
+  } catch (e) {
+    AD_SLOT_FORMATS = {};   // not fatal: the slots simply show their defaults
+  }
+  return AD_SLOT_FORMATS;
+}
+
+// The whole object goes back each time, because it is one setting. Anything
+// left blank is removed rather than stored as a duplicate of the default.
+async function saveAdSlotFormat(slotKey, entry) {
+  const all = { ...(AD_SLOT_FORMATS || {}) };
+  if (entry && Object.keys(entry).length) all[slotKey] = entry;
+  else delete all[slotKey];
+  await api('/admin/settings/ad_slot_formats', {
+    method: 'PATCH', body: JSON.stringify({ value: JSON.stringify(all) }),
+  });
+  AD_SLOT_FORMATS = all;
+  // The resolved sizes drive every upload hint on this screen, so they have to
+  // be re-read or the hint would still quote the size the slot used to be.
+  IMG_SPECS = null;
+  await loadImageSpecs();
+}
+
+function adSlotFormatEditorHtml(slotKey) {
+  const o = (AD_SLOT_FORMATS && AD_SLOT_FORMATS[slotKey]) || {};
+  const cur = (AD_SLOT_SIZES && AD_SLOT_SIZES[slotKey]) || {};
+  const num = (v) => (v === undefined || v === null ? '' : v);
+  return `<div class="ad-format-editor" style="display:none;margin-top:10px;padding:12px;background:var(--paper);border:1px solid var(--paper-line);">
+    <div style="font-size:11.5px;color:var(--slate);margin-bottom:8px;line-height:1.5;">
+      The size this placement renders at on the public site. Leave blank to use the
+      standard format. Changing it also changes the size recommended to whoever
+      uploads the banner, so the two cannot disagree.
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+      <label style="font-size:11px;">Width<br><input type="number" class="afm-w" value="${num(o.w)}" placeholder="${num(cur.w)}" style="width:88px;"></label>
+      <label style="font-size:11px;">Height<br><input type="number" class="afm-h" value="${num(o.h)}" placeholder="${num(cur.h)}" style="width:88px;"></label>
+      <label style="font-size:11px;">Mobile width<br><input type="number" class="afm-mw" value="${num(o.mobileW)}" placeholder="${num(cur.mobileW)}" style="width:88px;"></label>
+      <label style="font-size:11px;">Mobile height<br><input type="number" class="afm-mh" value="${num(o.mobileH)}" placeholder="${num(cur.mobileH)}" style="width:88px;"></label>
+    </div>
+    <label style="display:block;font-size:11.5px;margin-top:10px;">
+      <input type="checkbox" class="afm-fit" ${cur.fit === false ? '' : 'checked'}>
+      Never draw this banner wider than its own size (centre it instead)
+    </label>
+    <div style="font-size:11px;color:var(--slate);margin:4px 0 10px 22px;line-height:1.5;">
+      Unticking lets the banner span the full column, which stretches the artwork
+      beyond the size it was supplied at.
+    </div>
+    <button class="btn btn-solid afm-save" style="width:auto;">Save format</button>
+    <button class="btn btn-line afm-reset" style="width:auto;margin-left:8px;">Reset to standard</button>
+  </div>`;
+}
+
+function wireAdSlotFormatEditor(wrap, slotKey, onSaved) {
+  const box = wrap.querySelector('.ad-format-editor');
+  const toggle = wrap.querySelector('.ad-format-toggle');
+  if (!box || !toggle) return;
+  toggle.addEventListener('click', () => {
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  });
+  const read = () => {
+    const n = (sel) => {
+      const raw = box.querySelector(sel).value.trim();
+      return raw === '' ? undefined : Number(raw);
+    };
+    const entry = {};
+    const w = n('.afm-w'), h = n('.afm-h');
+    if (w !== undefined || h !== undefined) { entry.w = w; entry.h = h; }
+    const mw = n('.afm-mw'), mh = n('.afm-mh');
+    if (mw !== undefined || mh !== undefined) { entry.mobileW = mw; entry.mobileH = mh; }
+    // Only stored when it differs from the default, so an untouched slot stays
+    // untouched in the database.
+    if (!box.querySelector('.afm-fit').checked) entry.fit = false;
+    return entry;
+  };
+  box.querySelector('.afm-save').addEventListener('click', async () => {
+    try {
+      await saveAdSlotFormat(slotKey, read());
+      showToast('Format saved for this placement.');
+      if (onSaved) onSaved();
+    } catch (err) { showToast(err.message, true); }
+  });
+  box.querySelector('.afm-reset').addEventListener('click', async () => {
+    try {
+      await saveAdSlotFormat(slotKey, null);
+      showToast('Back to the standard format.');
+      if (onSaved) onSaved();
+    } catch (err) { showToast(err.message, true); }
+  });
+}
+
 // A SPONSOR SLOT AND A LEADERBOARD ARE NOT THE SAME SHAPE. The server's image
 // specification is the source of truth for each placement.
 function adSlotSpec(slotKey) {
@@ -6216,6 +6327,11 @@ function renderAdCampaignSummary(all) {
 async function loadAdBanners() {
   const body = document.getElementById('adBannersBody');
   body.innerHTML = '<div class="loading-state">Loading campaigns…</div>';
+  // Both are needed before a slot can be drawn: the resolved sizes for what each
+  // placement currently renders at, and the raw overrides so the editor can show
+  // which of those an admin set rather than restating every default as an edit.
+  await loadImageSpecs();
+  await loadAdSlotFormats(true);
   let current = {};
   try { const data = await api('/page-cms/admin/ad-slots'); current = data.adSlots || {}; }
   catch (err) { body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`; return; }
@@ -6258,10 +6374,11 @@ async function loadAdBanners() {
     const liveCount = (current[slot.key] || []).filter((b) => adCampaignStatus(b) === 'live').length;
     const size = adSlotSpec(slot.key);
     wrap.innerHTML = `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
-      <div><div style="font-weight:700;font-size:14px;">${escapeHtmlAdmin(slot.label)}</div><div style="font-size:11.5px;color:var(--slate);margin-top:2px;">${size ? `${size.w} × ${size.h}px · ${size.label}` : slot.key}</div></div>
+      <div><div style="font-weight:700;font-size:14px;">${escapeHtmlAdmin(slot.label)}</div><div style="font-size:11.5px;color:var(--slate);margin-top:2px;">${size ? `${size.w} × ${size.h}px${size.label ? ' · ' + size.label : ''}${size.customised ? ' · custom' : ''}` : slot.key} <button type="button" class="ad-format-toggle" style="background:none;border:none;padding:0 0 0 6px;color:var(--red);font:inherit;font-size:11.5px;cursor:pointer;text-decoration:underline;">Change size</button></div></div>
       <div style="font-size:11px;color:${liveCount ? '#207544' : 'var(--slate)'};font-weight:700;">${liveCount ? `${liveCount} LIVE` : 'NO LIVE CAMPAIGN'}</div>
-    </div><div class="ad-rows"></div>${(!q && wantedStatus === 'all') ? '<button class="btn btn-line ad-add-row" style="width:auto;margin-top:6px;">+ New campaign in this placement</button>' : ''}`;
+    </div>${adSlotFormatEditorHtml(slot.key)}<div class="ad-rows"></div>${(!q && wantedStatus === 'all') ? '<button class="btn btn-line ad-add-row" style="width:auto;margin-top:6px;">+ New campaign in this placement</button>' : ''}`;
     body.appendChild(wrap);
+    wireAdSlotFormatEditor(wrap, slot.key, loadAdBanners);
     const rowsWrap = wrap.querySelector('.ad-rows');
     banners.forEach((banner) => {
       const row = document.createElement('div');

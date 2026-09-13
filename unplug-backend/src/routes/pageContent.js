@@ -1,5 +1,6 @@
 const express = require('express');
 const { SITE_IMAGES, splitKey, isKnownImageKey, isSafeImageUrl } = require('../utils/siteImages');
+const { loadAdSlotSizes } = require('../utils/adSlotFormats');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
 const { hasPermission } = require('../utils/staffPermissions');
@@ -159,7 +160,39 @@ router.get('/', async (req, res, next) => {
         display_duration_ms: a.display_duration_ms,
       });
     });
-    res.json({ content: contentMap, blocks: blocksByPage, adSlots });
+    // The SHAPE of each slot that has something in it. `.ad-slot-filled` sizes
+    // itself from this instead of a single 16:9 for every slot alike, so a sold
+    // 728 x 90 leaderboard renders as a leaderboard rather than a thin strip
+    // letterboxed inside a tall box — the empty placeholder sitting in that same
+    // slot already advertises "728x90 Leaderboard", and the buy form now
+    // recommends that size, so the filled slot was the one telling a different
+    // story. Sent from AD_SLOT_SIZES rather than restated in the stylesheet,
+    // because a size written down twice is exactly how these drifted apart
+    // before.
+    //
+    // It is the SLOT's ratio, never the individual banner's: several banners
+    // rotate in one slot, and a per-banner box would move the page every time
+    // one changed. That is what the fixed 16:9 was protecting, and it still
+    // holds — the box is now simply fixed at the right shape.
+    //
+    // `mobile` is ad_banner_mobile, the squarer file the <picture> swaps in
+    // below 640px; without it the slot would keep its wide desktop ratio and
+    // letterbox the mobile file instead.
+    // Resolved through adSlotFormats so an admin's own size for a slot is what
+    // renders, and so this agrees with the upload hint and the buy form, which
+    // resolve through the same place.
+    const resolved = await loadAdSlotSizes(pool);
+    const adSlotSizes = {};
+    Object.keys(adSlots).forEach((k) => {
+      const s = resolved[k];
+      if (!s) return; // unknown slot: the stylesheet keeps its own default
+      adSlotSizes[k] = {
+        w: s.w, h: s.h, label: s.label,
+        mobileW: s.mobileW, mobileH: s.mobileH,
+        fit: s.fit,
+      };
+    });
+    res.json({ content: contentMap, blocks: blocksByPage, adSlots, adSlotSizes });
   } catch (err) {
     next(err);
   }

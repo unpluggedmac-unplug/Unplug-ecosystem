@@ -1,0 +1,40 @@
+-- 211: Ad slot formats — let an admin set the size each ad slot renders at,
+-- instead of it being fixed in source.
+--
+-- Background. Every FILLED ad slot on the magazine used to be one
+-- `aspect-ratio:16/9` box with `object-fit:contain`, whatever format had been
+-- sold there. A 728 x 90 leaderboard therefore rendered as a thin strip
+-- floating in a tall empty box — while the EMPTY placeholder sitting in that
+-- same slot advertised "Advertisement — 728x90 Leaderboard", and the upload
+-- form recommended exactly that size. The empty slot promised one shape and
+-- the filled slot drew another.
+--
+-- The slot now renders at its real format (AD_SLOT_SIZES in
+-- src/utils/imageSpecs.js), and this setting lets an admin change that per
+-- slot without a deploy — sizes, the mobile size, and whether the slot may be
+-- drawn wider than the format it sells.
+--
+-- Same shape as coming_soon_mode (197) and unlisted_pages (146): a row in the
+-- generic settings table, edited through the existing
+-- GET/PATCH /admin/settings endpoints rather than a dedicated pair of routes.
+-- settings.value is TEXT (migration 146), so the JSON fits.
+--
+-- HOLDS ONLY WHAT AN ADMIN HAS CHANGED. '{}' means "every slot is on its
+-- default", which is why the seed is empty rather than a copy of
+-- AD_SLOT_SIZES: a second copy of those numbers in the database is exactly
+-- the drift this whole area has suffered from before (an ad banner once had
+-- three different sizes across two files, none of them a real slot size).
+-- Defaults stay readable in source, and a row here is visibly an override.
+--
+-- Shape, per slot key:
+--   { "news-leaderboard": { "w":728, "h":90,
+--                           "mobileW":300, "mobileH":250,
+--                           "fit":true } }
+-- All fields optional; anything absent falls through to the default. `fit` is
+-- whether the slot may be drawn wider than its own format — false lets a
+-- banner span the column, at the cost of upscaling the artwork.
+--
+-- ON CONFLICT DO NOTHING because every migration re-runs on every deploy: a
+-- re-run must never wipe the formats an admin has set.
+INSERT INTO settings (key, value) VALUES ('ad_slot_formats', '{}')
+  ON CONFLICT (key) DO NOTHING;

@@ -35,6 +35,7 @@ let pool;
 let server;
 let baseUrl;
 let memberToken;
+let adminToken;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-imgspec-'));
 const port = 46400 + (process.pid % 300); // bases are 400 apart so ranges cannot overlap
 
@@ -76,6 +77,8 @@ before(async () => {
   app.use(attachUser);
   app.use('/image-specs', require('../src/routes/imageSpecs'));
   app.use('/ad-banners', require('../src/routes/adBanners'));
+  app.use('/page-cms', require('../src/routes/pageContent'));
+  app.use('/admin', require('../src/routes/admin'));
   app.use((err, _req, res, _next) => res.status(500).json({ error: err.message }));
   await new Promise((resolve) => { server = app.listen(0, resolve); });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -83,6 +86,9 @@ before(async () => {
   await pool.query(`INSERT INTO users (id, email, full_name, password_hash, role)
                     VALUES (640001, 'spec@test.com', 'Spec Member', 'x', 'member')`);
   memberToken = jwt.sign({ id: 640001, email: 'spec@test.com', role: 'member' }, process.env.JWT_SECRET);
+  await pool.query(`INSERT INTO users (id, email, full_name, password_hash, role)
+                    VALUES (640002, 'specadmin@test.com', 'Spec Admin', 'x', 'admin')`);
+  adminToken = jwt.sign({ id: 640002, email: 'specadmin@test.com', role: 'admin' }, process.env.JWT_SECRET);
 });
 
 after(async () => {
@@ -275,4 +281,335 @@ test('the swappable site pictures use the same list, not their own numbers', () 
     assert.ok(values.includes(i.ratio),
       `${i.key} carries its own copy of a size instead of pointing at the list`);
   });
+});
+
+// ------------------------------------------- the shape of a slot once it sells
+//
+// The sizes above are what the buy form recommends and what the empty
+// placeholder on the page advertises. This section is about the other half of
+// the same promise: what the slot looks like once a banner is actually in it.
+//
+// It used to break that promise. Every filled slot was `aspect-ratio:16/9`
+// with `object-fit:contain`, one box for all of them, so a 728 x 90
+// leaderboard — sold as a leaderboard, uploaded as a leaderboard, and
+// advertised as "728x90 Leaderboard" by the placeholder that sat in that exact
+// spot until it sold — rendered as a thin strip floating in a tall empty box.
+// The empty slot promised one shape and the filled slot drew another.
+//
+// The 16:9 was not arbitrary and the fix had to keep what it was for: several
+// banners rotate through one slot, so the box must not resize per banner or
+// the page moves under the reader every few seconds. The ratio is therefore
+// still FIXED — just fixed per slot, at the format that slot sells, instead of
+// one guess for all of them.
+
+test('A SOLD SLOT IS SHAPED LIKE THE FORMAT IT SELLS', async () => {
+  await pool.query(`INSERT INTO ad_slots (slot_key, image_url, is_active)
+                    VALUES ('news-leaderboard', 'https://a.test/lead.jpg', true),
+                           ('home-sponsor-1',   'https://a.test/spon.jpg', true)`);
+  const { status, body } = await api('GET', '/page-cms');
+  assert.equal(status, 200);
+  assert.ok(body.adSlotSizes, 'the public payload carries no slot shapes at all');
+
+  const lead = body.adSlotSizes['news-leaderboard'];
+  const spon = body.adSlotSizes['home-sponsor-1'];
+  assert.deepEqual([lead.w, lead.h], [728, 90], 'a leaderboard must render as a leaderboard');
+  assert.deepEqual([spon.w, spon.h], [300, 250]);
+
+  // The specific bug: 16:9 for a 728 x 90 banner is over eight times too tall,
+  // and `contain` turns all of that into empty background.
+  assert.ok(Math.abs((lead.w / lead.h) - (16 / 9)) > 0.5,
+    'a leaderboard is nothing like 16:9 — that is what was letterboxing it');
+  assert.notDeepEqual([lead.w, lead.h], [spon.w, spon.h],
+    'one ratio cannot be right for both, which is why a single 16/9 was wrong');
+});
+
+test('THE RATIO IS THE SLOT\'S, NOT THE BANNER\'S', async () => {
+  // This is the property the old 16:9 had and that the fix must not lose.
+  // Three banners rotate in one slot; if the box followed each banner's own
+  // picture, the page would jump every time the carousel advanced. The size is
+  // therefore keyed by SLOT, and adding banners to a slot cannot change it.
+  const before = (await api('GET', '/page-cms')).body.adSlotSizes['gallery-sponsor'];
+  assert.equal(before, undefined, 'nothing sold in this slot yet');
+
+  await pool.query(`INSERT INTO ad_slots (slot_key, image_url, is_active) VALUES
+    ('gallery-sponsor', 'https://a.test/g1.jpg', true),
+    ('gallery-sponsor', 'https://a.test/g2.jpg', true),
+    ('gallery-sponsor', 'https://a.test/g3.jpg', true)`);
+
+  const { body } = await api('GET', '/page-cms');
+  assert.equal(body.adSlots['gallery-sponsor'].length, 3, 'three banners rotating here');
+  assert.deepEqual([body.adSlotSizes['gallery-sponsor'].w, body.adSlotSizes['gallery-sponsor'].h],
+    [300, 250], 'one shape for the slot, whatever is rotating through it');
+  assert.equal(Object.keys(body.adSlotSizes).filter((k) => k === 'gallery-sponsor').length, 1,
+    'one entry per slot, not one per banner');
+});
+
+test('the mobile file gets its own shape, because it is a different format', async () => {
+  // <source media="(max-width:640px)"> swaps in ad_banner_mobile, which is
+  // 300 x 250 — a wide leaderboard is unreadable on a phone. Without a mobile
+  // ratio the slot would keep its 728 x 90 box and letterbox that instead,
+  // which is the same bug moved to a smaller screen.
+  const { body } = await api('GET', '/page-cms');
+  const lead = body.adSlotSizes['news-leaderboard'];
+  const { IMAGE_SPECS } = require('../src/utils/imageSpecs');
+  assert.deepEqual([lead.mobileW, lead.mobileH],
+    [IMAGE_SPECS.ad_banner_mobile.w, IMAGE_SPECS.ad_banner_mobile.h],
+    'the mobile shape must come from ad_banner_mobile, not a second copy of it');
+  assert.notDeepEqual([lead.mobileW, lead.mobileH], [lead.w, lead.h],
+    'a leaderboard and its phone version are different shapes');
+});
+
+test('THE FILLED SLOT MATCHES THE EMPTY PLACEHOLDER STANDING IN IT', () => {
+  // The heart of it. Each empty slot on the public page advertises its format
+  // in words — "Advertisement - 728x90 Leaderboard". That text and the box the
+  // banner lands in are two statements of one number, which is precisely how
+  // ad sizes drifted into three different answers before. Whenever the
+  // placeholder names a size, it must be the size the slot renders at.
+  const { AD_SLOT_SIZES } = require('../src/utils/imageSpecs');
+  const html = fs.readFileSync(path.join(siteRoot, 'unplug-magazine.html'), 'utf8');
+  const disagreements = [];
+  const unknown = [];
+  for (const m of html.matchAll(/<div[^>]*data-ad-slot="([^"]+)"[^>]*>([\s\S]*?)<\/div>/g)) {
+    const [, key, inner] = m;
+    const spec = AD_SLOT_SIZES[key];
+    if (!spec) { unknown.push(key); continue; }
+    const stated = inner.match(/(\d{2,4})\s*[x\u00d7]\s*(\d{2,4})/);
+    if (!stated) continue; // some slots word it without a size; nothing to contradict
+    if (Number(stated[1]) !== spec.w || Number(stated[2]) !== spec.h) {
+      disagreements.push(`${key}: the page says ${stated[1]}x${stated[2]}, the slot renders ${spec.w}x${spec.h}`);
+    }
+  }
+  assert.deepEqual(unknown, [], 'slots on the page with no size on the server: ' + unknown.join(', '));
+  assert.deepEqual(disagreements, [],
+    'the empty slot promises one shape and the filled slot draws another:\n  ' + disagreements.join('\n  '));
+});
+
+test('NO SLOT SIZE IS WRITTEN DOWN A SECOND TIME IN THE STYLESHEET', () => {
+  // The fix would be self-defeating if it moved the numbers into the CSS: that
+  // is the same drift, one file over. `.ad-slot-filled` must take its shape
+  // from a custom property the server fills in, and the only ratio allowed to
+  // appear literally is the 16/9 fallback that preserves the old rendering for
+  // a slot the server says nothing about.
+  const html = fs.readFileSync(path.join(siteRoot, 'unplug-magazine.html'), 'utf8');
+  const rule = html.match(/\.ad-slot-filled\{[\s\S]*?\}/);
+  assert.ok(rule, '.ad-slot-filled is gone');
+  assert.match(rule[0], /aspect-ratio:\s*var\(--ad-slot-ratio/,
+    '.ad-slot-filled must take its shape from the slot, not state one');
+
+  const literals = [];
+  for (const m of html.matchAll(/\.ad-slot-filled[^{]*\{[^}]*aspect-ratio:\s*([^;]+);/g)) {
+    const value = m[1].trim();
+    if (/^var\(--ad-slot-ratio(-mobile)?,/.test(value)) continue;
+    literals.push(value);
+  }
+  assert.deepEqual(literals, [],
+    'these hardcode a banner shape instead of asking the slot: ' + literals.join(', '));
+});
+
+test('nothing else quietly overrides the slot\'s own shape', () => {
+  // The staging interaction layer used to set an inline aspect-ratio from the
+  // ACTIVE BANNER's own pixels, which both beats the stylesheet and is
+  // per-banner — the page movement this whole thing exists to prevent. It has
+  // to stand down for a slot that knows its own format, or staging renders
+  // these differently from production and verifying anything there is
+  // meaningless.
+  const js = fs.readFileSync(
+    path.join(siteRoot, 'media', 'scripts', 'unplug-image-interactions.js'), 'utf8');
+  const fn = js.match(/function adaptBannerSlot\(slot\)\{?[\s\S]*?\n  \}/);
+  assert.ok(fn, 'adaptBannerSlot is gone — check nothing else sets a banner ratio');
+  // Comments stripped first: a note SAYING it defers is not deferring, and an
+  // earlier version of this test passed on the comment alone after the guard
+  // itself had been deleted.
+  const code = fn[0].replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const guard = code.indexOf('--ad-slot-ratio');
+  const write = code.indexOf('style.aspectRatio');
+  assert.ok(guard !== -1,
+    'adaptBannerSlot must leave a slot that declares its own ratio alone');
+  assert.ok(write === -1 || guard < write,
+    'the check must come before it writes an aspect-ratio, or it writes anyway');
+  assert.match(code.slice(guard, write === -1 ? undefined : write), /\breturn\b/,
+    'the check must actually bail out, not merely read the property');
+});
+
+// --------------------------------------- the admin's say over a slot's format
+//
+// The standard formats above are defaults, not law. An admin can set a
+// different size for any slot without a deploy — and the reason this is worth
+// testing hard is that a size is the value this codebase has most often ended
+// up stating twice and then contradicting itself about. An override that only
+// reached the public page, while the upload form kept recommending the old
+// size, would recreate exactly that: somebody uploads 728 x 90 because the form
+// said so, into a slot the admin has made 970 x 250.
+
+const FORMATS_KEY = 'ad_slot_formats';
+
+async function setFormats(obj) {
+  return api('PATCH', '/admin/settings/' + FORMATS_KEY, { value: JSON.stringify(obj) }, adminToken);
+}
+
+test('the setting exists and starts empty, so every slot is on its default', async () => {
+  const r = await pool.query('SELECT value FROM settings WHERE key = $1', [FORMATS_KEY]);
+  assert.equal(r.rows.length, 1, 'migration 211 did not seed the setting');
+  // Empty rather than a copy of AD_SLOT_SIZES on purpose: a second copy of
+  // those numbers in the database is the drift this area keeps suffering from.
+  assert.deepEqual(JSON.parse(r.rows[0].value), {});
+});
+
+test('AN ADMIN CHANGES A SLOT AND EVERY PLACE THAT STATES A SIZE FOLLOWS', async () => {
+  const { status } = await setFormats({ 'news-leaderboard': { w: 970, h: 250 } });
+  assert.equal(status, 200);
+
+  // 1. what the public page renders the banner at
+  const pub = (await api('GET', '/page-cms')).body.adSlotSizes['news-leaderboard'];
+  assert.deepEqual([pub.w, pub.h], [970, 250]);
+
+  // 2. what the dashboards tell whoever uploads the banner
+  const hint = (await api('GET', '/image-specs', null, memberToken)).body.adSlots['news-leaderboard'];
+  assert.deepEqual([hint.w, hint.h], [970, 250]);
+
+  // 3. what the buy form quotes to whoever is paying for it
+  const buy = (await api('GET', '/ad-banners/options')).body.placements
+    .find((p) => p.key === 'news-leaderboard');
+  assert.deepEqual([buy.size.w, buy.size.h], [970, 250]);
+
+  // All three from one resolver — if they can disagree, the bug is back.
+  assert.equal(hint.text, buy.size.text, 'the upload hint and the buy form must word it identically');
+});
+
+test('a changed slot stops claiming to be the format it no longer is', async () => {
+  // "728 x 90 (Leaderboard)" is a standard format with a standard name. Once an
+  // admin sets 970 x 250 the number is theirs but the NAME would be a lie, so
+  // it is dropped rather than carried onto a size it does not describe.
+  const hint = (await api('GET', '/image-specs', null, memberToken)).body.adSlots['news-leaderboard'];
+  assert.equal(hint.label, null, 'a custom size must not keep the standard format\'s name');
+  assert.equal(hint.customised, true);
+  assert.doesNotMatch(hint.text, /Leaderboard/);
+
+  const untouched = (await api('GET', '/image-specs', null, memberToken)).body.adSlots['about-leaderboard'];
+  assert.equal(untouched.label, 'Leaderboard', 'an untouched slot keeps its name');
+  assert.equal(untouched.customised, false);
+});
+
+test('clearing an override puts the slot back on the standard format', async () => {
+  await setFormats({});
+  const { AD_SLOT_SIZES } = require('../src/utils/imageSpecs');
+  const hint = (await api('GET', '/image-specs', null, memberToken)).body.adSlots['news-leaderboard'];
+  assert.deepEqual([hint.w, hint.h], [AD_SLOT_SIZES['news-leaderboard'].w, AD_SLOT_SIZES['news-leaderboard'].h]);
+  assert.equal(hint.label, 'Leaderboard');
+  // And the override really is gone from the database, not stored as a copy of
+  // the default — which would silently stop following a later change in source.
+  const r = await pool.query('SELECT value FROM settings WHERE key = $1', [FORMATS_KEY]);
+  assert.deepEqual(JSON.parse(r.rows[0].value), {});
+});
+
+test('A MISTYPED SIZE IS REFUSED, NOT PUT ON THE PUBLIC SITE', async () => {
+  // This drives the height of a box on a live page: 7280 x 9 is a wall of empty
+  // space, and on a phone an unscrollable one. Each of these must come back as
+  // a 400 with a reason, and must not change what is stored.
+  const bad = [
+    [{ 'news-leaderboard': { w: 728 } }, 'a width with no height'],
+    [{ 'news-leaderboard': { w: 0, h: 90 } }, 'a zero width'],
+    [{ 'news-leaderboard': { w: 99999, h: 90 } }, 'a width past the limit'],
+    [{ 'news-leaderboard': { w: 72.5, h: 90 } }, 'a fractional width'],
+    [{ 'news-leaderboard': { w: '728px', h: 90 } }, 'a width with units in it'],
+    [{ 'not-a-real-slot': { w: 728, h: 90 } }, 'a slot that does not exist'],
+    [{ 'news-leaderboard': { w: 728, h: 90, fit: 'yes' } }, 'a non-boolean fit'],
+    [{ 'news-leaderboard': 'wide' }, 'a slot that is not an object'],
+  ];
+  for (const [payload, why] of bad) {
+    const { status, body } = await setFormats(payload);
+    assert.equal(status, 400, `${why} was accepted`);
+    assert.ok(body.error && body.error.length > 10, `${why} was refused without saying why`);
+  }
+  const r = await pool.query('SELECT value FROM settings WHERE key = $1', [FORMATS_KEY]);
+  assert.deepEqual(JSON.parse(r.rows[0].value), {}, 'a refused change must not have been stored');
+});
+
+test('only an admin can change what the public page renders', async () => {
+  assert.equal((await setFormats({})).status, 200);
+  const asMember = await api('PATCH', '/admin/settings/' + FORMATS_KEY,
+    { value: '{}' }, memberToken);
+  assert.ok(asMember.status === 401 || asMember.status === 403,
+    'a member changed an ad slot format, got ' + asMember.status);
+});
+
+test('a corrupt setting falls back to the defaults instead of breaking the page', async () => {
+  // Read on every public page load. Whatever is in that row, the magazine has
+  // to render — so parsing is forgiving on the way out and strict on the way in.
+  const { resolveAdSlotSizes } = require('../src/utils/adSlotFormats');
+  const { AD_SLOT_SIZES } = require('../src/utils/imageSpecs');
+  ['', 'not json at all', '[]', 'null', '{"news-leaderboard":{"w":"wide"}}'].forEach((raw) => {
+    const r = resolveAdSlotSizes(raw);
+    assert.deepEqual([r['news-leaderboard'].w, r['news-leaderboard'].h],
+      [AD_SLOT_SIZES['news-leaderboard'].w, AD_SLOT_SIZES['news-leaderboard'].h],
+      `"${raw}" should have fallen back to the default`);
+  });
+});
+
+// ------------------------------------------------------- scale, not just shape
+//
+// Getting the RATIO right is only half of it. A 300 x 250 stretched across a
+// 1240px column is a 1033px-tall slab of artwork upscaled four times over —
+// the right shape at a scale nobody bought, and no more honest than the 16:9
+// box it replaced.
+
+test('A SLOT IS NOT DRAWN WIDER THAN THE FORMAT IT SELLS', async () => {
+  const { body } = await api('GET', '/page-cms');
+  const lead = body.adSlotSizes['news-leaderboard'];
+  assert.equal(lead.fit, true, 'by default a banner renders at its own size, centred');
+
+  const html = fs.readFileSync(path.join(siteRoot, 'unplug-magazine.html'), 'utf8');
+  const rule = html.match(/\.ad-slot-filled\{[\s\S]*?\}/)[0];
+  assert.match(rule, /max-width:\s*var\(--ad-slot-max-w/,
+    'the slot must be able to cap its own width');
+  assert.match(rule, /margin-left:\s*auto/, 'and be centred when it does');
+});
+
+test('an admin can still let a banner span the column', async () => {
+  // Unticking the box is a deliberate choice to stretch the artwork, so it has
+  // to survive the round trip rather than being normalised away.
+  const { status } = await setFormats({ 'news-leaderboard': { fit: false } });
+  assert.equal(status, 200);
+  const { body } = await api('GET', '/page-cms');
+  assert.equal(body.adSlotSizes['news-leaderboard'].fit, false);
+  await setFormats({});
+});
+
+test('THE SIZE GUIDANCE SURVIVES THE DATABASE BEING UNREACHABLE', async () => {
+  // Regression. This endpoint was pure data until ad slot formats became
+  // admin-editable; adding the settings lookup coupled it to the database and
+  // two existing tests — which mount it in a bare app with no database at all —
+  // started getting Express's HTML error page instead of JSON.
+  //
+  // Serving the standard formats is the correct answer here, not a 500: it is
+  // what every slot used before an override was possible, the caller is
+  // read-only, and the dashboards already treat missing guidance as survivable
+  // rather than fatal. The backend also sleeps on Render's free tier, so a
+  // failed query is ordinary.
+  const express = require('express');
+  const { resolveAdSlotSizes, loadAdSlotSizes } = require('../src/utils/adSlotFormats');
+  const { AD_SLOT_SIZES } = require('../src/utils/imageSpecs');
+
+  const brokenPool = { query: () => Promise.reject(new Error('no database here')) };
+  const fallback = await loadAdSlotSizes(brokenPool);
+  assert.deepEqual(fallback, resolveAdSlotSizes(null), 'a failed lookup must give the standard formats');
+  assert.deepEqual([fallback['news-leaderboard'].w, fallback['news-leaderboard'].h],
+    [AD_SLOT_SIZES['news-leaderboard'].w, AD_SLOT_SIZES['news-leaderboard'].h]);
+
+  // And end to end: the route mounted with no database still answers in JSON,
+  // which is exactly the shape the two orientation tests rely on.
+  const app = express();
+  app.use((req, _res, next) => { req.user = { id: 1, role: 'member' }; next(); });
+  app.use('/image-specs', require('../src/routes/imageSpecs'));
+  const bare = await new Promise((resolve) => { const x = app.listen(0, () => resolve(x)); });
+  try {
+    const res = await fetch(`http://127.0.0.1:${bare.address().port}/image-specs`);
+    assert.equal(res.status, 200, 'the hint endpoint must not 500 when a settings row cannot be read');
+    const parsed = await res.json();
+    assert.ok(parsed.specs.article_cover_landscape, 'the image specs are still served');
+    assert.deepEqual([parsed.adSlots['news-leaderboard'].w, parsed.adSlots['news-leaderboard'].h],
+      [AD_SLOT_SIZES['news-leaderboard'].w, AD_SLOT_SIZES['news-leaderboard'].h]);
+  } finally {
+    await new Promise((resolve) => bare.close(resolve));
+  }
 });
