@@ -68,17 +68,24 @@ function navLeaf(id,label,icon,count){
   return wrap;
 }
 
-function closeModal(modal){if(modal&&modal.isConnected)modal.remove()}
+function closeModal(modal){
+  if(!modal)return;
+  if(modal.__ccEscapeHandler){
+    document.removeEventListener('keydown',modal.__ccEscapeHandler,true);
+    modal.__ccEscapeHandler=null;
+  }
+  if(modal.isConnected)modal.remove();
+}
 function modalShell(id,kicker,title,description){
-  var old=q('#'+id);if(old)old.remove();
+  var old=q('#'+id);if(old)closeModal(old);
   var modal=document.createElement('div');
   modal.id=id;modal.className='cc-member-modal cc-service-modal';
   modal.innerHTML='<div class="cc-member-modal-card" role="dialog" aria-modal="true" aria-labelledby="'+id+'Title"><div class="cc-member-modal-head"><div><span>'+escapeHtml(kicker)+'</span><h2 id="'+id+'Title">'+escapeHtml(title)+'</h2></div><button type="button" data-close aria-label="Close">×</button></div><p>'+escapeHtml(description)+'</p><div class="cc-service-modal-body"></div></div>';
   document.body.appendChild(modal);
   var close=q('[data-close]',modal);close.addEventListener('click',function(){closeModal(modal)});
   modal.addEventListener('click',function(ev){if(ev.target===modal)closeModal(modal)});
-  function esc(ev){if(ev.key==='Escape'){document.removeEventListener('keydown',esc,true);closeModal(modal)}}
-  document.addEventListener('keydown',esc,true);
+  modal.__ccEscapeHandler=function(ev){if(ev.key==='Escape')closeModal(modal)};
+  document.addEventListener('keydown',modal.__ccEscapeHandler,true);
   setTimeout(function(){try{close.focus()}catch(_){}},0);
   return modal;
 }
