@@ -38,9 +38,11 @@ async function req(method, urlPath, { token, body } = {}) {
 
 let _nextUserId = 9000;
 let _nextRef = 1;
-async function makeUser(email, role) {
+async function makeUser(email, role, isRepresentative) {
   const id = _nextUserId++;
-  await pool.query(`INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'x', $3) ON CONFLICT DO NOTHING`, [id, email, role || 'member']);
+  await pool.query(
+    `INSERT INTO users (id, email, password_hash, role, is_representative) VALUES ($1, $2, 'x', $3, $4) ON CONFLICT DO NOTHING`,
+    [id, email, role || 'member', !!isRepresentative]);
   return id;
 }
 async function makeConsultant(name, userId) {
@@ -113,25 +115,25 @@ test('GET /growth-application/consultant/clients requires authentication', async
   assert.equal(status, 401);
 });
 
-test('a non-consultant role is rejected', async () => {
+test('an account without Representative access is rejected', async () => {
   const memberId = await makeUser('plain-member@test.com', 'member');
   const jwt = require('jsonwebtoken');
-  const token = jwt.sign({ id: memberId, email: 'plain-member@test.com', role: 'member' }, process.env.JWT_SECRET);
+  const token = jwt.sign({ id: memberId, email: 'plain-member@test.com', role: 'member', is_representative: false }, process.env.JWT_SECRET);
   const { status } = await req('GET', '/growth-application/consultant/clients', { token });
   assert.equal(status, 403);
 });
 
-test('a consultant with no linked sales_consultants record sees an empty list, not an error', async () => {
-  const userId = await makeUser('unlinked-consultant@test.com', 'consultant');
+test('a representative with no linked sales_consultants record sees an empty list, not an error', async () => {
+  const userId = await makeUser('unlinked-consultant@test.com', 'member', true);
   const jwt = require('jsonwebtoken');
-  const token = jwt.sign({ id: userId, email: 'unlinked-consultant@test.com', role: 'consultant' }, process.env.JWT_SECRET);
+  const token = jwt.sign({ id: userId, email: 'unlinked-consultant@test.com', role: 'member', is_representative: true }, process.env.JWT_SECRET);
   const { status, body } = await req('GET', '/growth-application/consultant/clients', { token });
   assert.equal(status, 200);
   assert.deepEqual(body.clients, []);
 });
 
-test('a consultant sees their referred clients, with and without a started Growth Application', async () => {
-  const consultantUserId = await makeUser('consultant-a@test.com', 'consultant');
+test('a representative sees their referred clients, with and without a started Growth Application', async () => {
+  const consultantUserId = await makeUser('consultant-a@test.com', 'member', true);
   const consultantId = await makeConsultant('Consultant A', consultantUserId);
 
   const clientWithApp = await makeUser('client-with-app@test.com');
@@ -149,7 +151,7 @@ test('a consultant sees their referred clients, with and without a started Growt
   );
 
   const jwt = require('jsonwebtoken');
-  const token = jwt.sign({ id: consultantUserId, email: 'consultant-a@test.com', role: 'consultant' }, process.env.JWT_SECRET);
+  const token = jwt.sign({ id: consultantUserId, email: 'consultant-a@test.com', role: 'member', is_representative: true }, process.env.JWT_SECRET);
   const { status, body } = await req('GET', '/growth-application/consultant/clients', { token });
   assert.equal(status, 200);
   assert.equal(body.clients.length, 2);
@@ -165,16 +167,16 @@ test('a consultant sees their referred clients, with and without a started Growt
 });
 
 test('the admin equivalent (GET /admin/sales-consultants/:id/growth-clients) shows the same data, gated to admins', async () => {
-  const consultantUserId = await makeUser('consultant-b@test.com', 'consultant');
+  const consultantUserId = await makeUser('consultant-b@test.com', 'member', true);
   const consultantId = await makeConsultant('Consultant B', consultantUserId);
   const client = await makeUser('client-b@test.com');
   await makeConfirmedPayment(client, consultantId);
   await makeGrowthApplication(client, 'contacted');
 
   const jwt = require('jsonwebtoken');
-  const consultantToken = jwt.sign({ id: consultantUserId, email: 'consultant-b@test.com', role: 'consultant' }, process.env.JWT_SECRET);
+  const consultantToken = jwt.sign({ id: consultantUserId, email: 'consultant-b@test.com', role: 'member', is_representative: true }, process.env.JWT_SECRET);
   const denied = await req('GET', `/admin/sales-consultants/${consultantId}/growth-clients`, { token: consultantToken });
-  assert.equal(denied.status, 403, 'a consultant must not read this admin-only route');
+  assert.equal(denied.status, 403, 'a representative must not read this admin-only route');
 
   const adminId = await makeUser('admin-a@test.com', 'admin');
   const adminToken = jwt.sign({ id: adminId, email: 'admin-a@test.com', role: 'admin' }, process.env.JWT_SECRET);
