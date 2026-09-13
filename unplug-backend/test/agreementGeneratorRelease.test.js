@@ -23,6 +23,7 @@ test('Agreement Generator identifies templates by their admin name, not only the
   const html = read('unplug-agreement-generator-admin.html');
   assert.match(html, /esc\(t\.name\|\|t\.title\)/);
   assert.match(html, /currentTemplate\.name\|\|currentTemplate\.title/);
+  assert.match(html, /t\.title&&t\.title!==t\.name/);
   assert.match(html, /Agreement title:/);
 });
 
