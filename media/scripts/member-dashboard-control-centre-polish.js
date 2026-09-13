@@ -6,11 +6,13 @@ window.__unplugMemberCCPolish=true;
 
 var observer=null;
 var scheduled=0;
+var accountShortcut='';
 
 function q(sel,root){return (root||document).querySelector(sel)}
 function qa(sel,root){return Array.prototype.slice.call((root||document).querySelectorAll(sel))}
 function txt(el,value){value=String(value==null?'':value);if(el&&el.textContent!==value)el.textContent=value}
 function clickNav(id){var el=q('#ccMemberNav [data-id="'+id+'"]');if(el)el.click()}
+function focusSelector(selector){setTimeout(function(){var el=q(selector);if(!el)return;try{el.scrollIntoView({behavior:'smooth',block:'center'})}catch(_){el.scrollIntoView()}},120)}
 
 function loadCss(){
   if(q('link[data-member-control-centre-polish-css]'))return;
@@ -69,6 +71,61 @@ function syncTopNotification(){
     var isActive=source.classList.contains('active');
     quick.classList.toggle('active',isActive);
     if(isActive)quick.setAttribute('aria-current','page');else quick.removeAttribute('aria-current');
+  }
+}
+
+function accountLeaf(id,label,icon){
+  var wrap=document.createElement('div');
+  wrap.className='cc-member-node cc-member-leaf';
+  wrap.dataset.node=id;
+  wrap.style.setProperty('--cc-depth',1);
+  wrap.innerHTML='<div class="cc-member-leaf-row"><button type="button" class="cc-member-nav-action" data-id="'+id+'" data-account-shortcut="'+id+'"><span class="cc-member-icon">'+icon+'</span><span class="cc-member-label">'+label+'</span></button></div>';
+  return wrap;
+}
+
+function setAccountContext(label){
+  var crumb=q('#ccMemberContext .cc-member-crumb');
+  var strong=crumb&&q('strong',crumb);
+  if(strong)txt(strong,label);
+}
+
+function clearAccountShortcut(){
+  qa('#ccMemberNav [data-account-shortcut]').forEach(function(button){button.classList.remove('active');button.removeAttribute('aria-current')});
+}
+
+function openAccountShortcut(id,label,selector){
+  var base=q('#ccMemberNav [data-id="account-settings"]');
+  if(base)base.click();
+  setTimeout(function(){
+    accountShortcut=id;
+    clearAccountShortcut();
+    if(base){base.classList.remove('active');base.removeAttribute('aria-current')}
+    var custom=q('#ccMemberNav [data-account-shortcut="'+id+'"]');
+    if(custom){custom.classList.add('active');custom.setAttribute('aria-current','page')}
+    setAccountContext(label);
+    focusSelector(selector);
+  },70);
+}
+
+function syncAccountShortcuts(){
+  var account=q('#ccMemberTree [data-node="g-account"]');
+  var children=account&&q(':scope > .cc-member-children',account);
+  if(!children)return;
+  var baseNode=q('[data-node="account-settings"]',children);
+  if(!q('[data-node="login-security"]',children)){
+    var security=accountLeaf('login-security','Login & Security','◆');
+    if(baseNode&&baseNode.nextSibling)children.insertBefore(security,baseNode.nextSibling);else children.appendChild(security);
+    q('[data-account-shortcut="login-security"]',security).addEventListener('click',function(){openAccountShortcut('login-security','Login & Security','#twoFactorContent')});
+  }
+  if(!q('[data-node="communication-preferences"]',children)){
+    var prefs=accountLeaf('communication-preferences','Communication Preferences','●');
+    var securityNode=q('[data-node="login-security"]',children);
+    if(securityNode&&securityNode.nextSibling)children.insertBefore(prefs,securityNode.nextSibling);else children.appendChild(prefs);
+    q('[data-account-shortcut="communication-preferences"]',prefs).addEventListener('click',function(){openAccountShortcut('communication-preferences','Communication Preferences','#notifPrefsContent')});
+  }
+  if(accountShortcut){
+    var active=q('[data-account-shortcut="'+accountShortcut+'"]',children);
+    if(active){active.classList.add('active');active.setAttribute('aria-current','page')}
   }
 }
 
@@ -168,6 +225,34 @@ function syncGrowthBridge(){
   qa('[data-polish-go]',host).forEach(function(button){button.addEventListener('click',function(){clickNav(button.dataset.polishGo)})});
 }
 
+function addSearchShortcut(results,id,label,parent){
+  if(q('[data-polish-search="'+id+'"]',results))return;
+  var empty=q('.cc-member-search-empty',results);if(empty)empty.remove();
+  var button=document.createElement('button');
+  button.type='button';
+  button.className='cc-member-search-result';
+  button.dataset.polishSearch=id;
+  button.innerHTML='<strong>'+label+'</strong><span>'+parent+'</span>';
+  button.addEventListener('click',function(){
+    results.hidden=true;
+    var target=q('#ccMemberNav [data-account-shortcut="'+id+'"]');
+    if(target)target.click();
+  });
+  results.appendChild(button);
+}
+
+function augmentSearch(){
+  var search=q('#ccMemberSearch');
+  var results=q('#ccMemberSearchResults');
+  if(!search||!results)return;
+  qa('[data-polish-search]',results).forEach(function(el){el.remove()});
+  var term=String(search.value||'').trim().toLowerCase();
+  if(!term)return;
+  if(/login|security|password|two[- ]?factor|2fa/.test(term))addSearchShortcut(results,'login-security','Login & Security','Account & Privacy');
+  if(/communication|preference|notifications?|email/.test(term))addSearchShortcut(results,'communication-preferences','Communication Preferences','Account & Privacy');
+  if(q('[data-polish-search]',results))results.hidden=false;
+}
+
 function patchSearch(){
   var search=q('#ccMemberSearch');
   var results=q('#ccMemberSearchResults');
@@ -176,6 +261,7 @@ function patchSearch(){
   search.setAttribute('aria-label','Find something in My Unplug');
   search.setAttribute('aria-controls','ccMemberSearchResults');
   if(results){results.setAttribute('role','region');results.setAttribute('aria-label','Dashboard search results')}
+  search.addEventListener('input',function(){setTimeout(augmentSearch,0)});
   search.addEventListener('keydown',function(ev){
     if(ev.key!=='Escape')return;
     search.value='';
@@ -205,11 +291,13 @@ function apply(){
   scheduled=0;
   if(!q('#ccMemberNav'))return;
   syncTopNotification();
+  syncAccountShortcuts();
   patchNavigationA11y();
   patchHomeA11y();
   syncProfileChecklist();
   syncGrowthBridge();
   patchSearch();
+  augmentSearch();
   patchModal();
 }
 
@@ -223,7 +311,12 @@ function init(){
   apply();
   observer=new MutationObserver(schedule);
   observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,characterData:true,attributeFilter:['class','hidden','style']});
-  document.addEventListener('click',schedule,true);
+  document.addEventListener('click',function(ev){
+    var nav=ev.target&&ev.target.closest?ev.target.closest('#ccMemberNav .cc-member-nav-action'):null;
+    var custom=ev.target&&ev.target.closest?ev.target.closest('[data-account-shortcut]'):null;
+    if(nav&&!custom){accountShortcut='';clearAccountShortcut()}
+    schedule();
+  },true);
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
