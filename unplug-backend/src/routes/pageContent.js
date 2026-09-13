@@ -188,7 +188,7 @@ router.get('/', async (req, res, next) => {
       if (!s) return; // unknown slot: the stylesheet keeps its own default
       adSlotSizes[k] = {
         w: s.w, h: s.h, label: s.label,
-        mobileW: s.mobileW, mobileH: s.mobileH,
+        mobileW: s.mobileW, mobileH: s.mobileH, mobileSet: s.mobileSet,
         fit: s.fit,
       };
     });

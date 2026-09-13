@@ -5846,12 +5846,22 @@ async function applyPageCms() {
       // `fit` off means the admin wants this banner to span its column, and
       // accepts the artwork being upscaled to get there.
       if (slotSize.fit !== false) slot.style.setProperty('--ad-slot-max-w', slotSize.w + 'px');
-      // Only when EVERY banner here has a mobile file. In a mixed slot the
-      // <picture> falls back to the wide desktop image for the ones without,
-      // so the squarer mobile box would letterbox those instead — and the
-      // right ratio would depend on which banner happened to be showing,
-      // which is the page movement this is all avoiding.
-      if (slotSize.mobileW > 0 && slotSize.mobileH > 0 && banners.every((b) => b.mobile_image_url)) {
+      // The DEFAULT mobile size is applied only when every banner here has a
+      // mobile file. In a mixed slot the <picture> falls back to the wide
+      // desktop image for the ones without, so the squarer mobile box would
+      // letterbox those instead — and the right ratio would depend on which
+      // banner happened to be showing, which is the page movement this is all
+      // avoiding.
+      //
+      // A mobile size an admin CHOSE for this slot (mobileSet) is applied
+      // regardless. It is an explicit instruction about a specific slot, not a
+      // default guessing on everyone's behalf, and it exists for exactly the
+      // case that forced it: a 728x90 leaderboard with no mobile artwork
+      // renders about 38px tall on a phone — proportionally correct and far
+      // too short to read. Letterboxing the wide image into a taller box is
+      // the better of two bad outcomes, and it is the admin's call to make.
+      if (slotSize.mobileW > 0 && slotSize.mobileH > 0
+          && (slotSize.mobileSet || banners.every((b) => b.mobile_image_url))) {
         slot.style.setProperty('--ad-slot-ratio-mobile', slotSize.mobileW + '/' + slotSize.mobileH);
         if (slotSize.fit !== false) slot.style.setProperty('--ad-slot-max-w-mobile', slotSize.mobileW + 'px');
       }

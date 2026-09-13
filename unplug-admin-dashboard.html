@@ -6150,6 +6150,13 @@ function adSlotFormatEditorHtml(slotKey) {
       <label style="font-size:11px;">Mobile width<br><input type="number" class="afm-mw" value="${num(o.mobileW)}" placeholder="${num(cur.mobileW)}" style="width:88px;"></label>
       <label style="font-size:11px;">Mobile height<br><input type="number" class="afm-mh" value="${num(o.mobileH)}" placeholder="${num(cur.mobileH)}" style="width:88px;"></label>
     </div>
+    <div style="font-size:11px;color:var(--slate);margin-top:8px;line-height:1.5;">
+      Leave the mobile size blank and phones use the banner's own mobile image when
+      every campaign here has one; without one the slot keeps its full-size shape,
+      which makes a wide leaderboard very short on a phone. Setting a mobile size
+      forces that shape on phones either way — a banner with no mobile image is
+      then fitted inside it, with space above and below.
+    </div>
     <label style="display:block;font-size:11.5px;margin-top:10px;">
       <input type="checkbox" class="afm-fit" ${cur.fit === false ? '' : 'checked'}>
       Never draw this banner wider than its own size (centre it instead)

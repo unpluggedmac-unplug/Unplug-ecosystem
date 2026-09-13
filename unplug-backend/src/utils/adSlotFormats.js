@@ -91,6 +91,12 @@ function resolveAdSlotSizes(raw) {
       label: (o.w && (o.w !== base.w || o.h !== base.h)) ? null : base.label,
       mobileW: o.mobileW || mobile.w,
       mobileH: o.mobileH || mobile.h,
+      // Whether an admin CHOSE this mobile size, as opposed to inheriting the
+      // ad_banner_mobile default. The public page needs the difference: a
+      // chosen size is an instruction and is applied whatever artwork exists,
+      // while the default is only safe to apply when every banner in the slot
+      // actually has a mobile file to put in the squarer box.
+      mobileSet: Boolean(o.mobileW && o.mobileH),
       fit: o.fit === undefined ? true : o.fit,
       customised: Boolean(o.w || o.mobileW || o.fit !== undefined),
     };
