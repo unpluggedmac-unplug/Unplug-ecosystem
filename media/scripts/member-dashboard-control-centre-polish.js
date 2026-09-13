@@ -245,12 +245,16 @@ function augmentSearch(){
   var search=q('#ccMemberSearch');
   var results=q('#ccMemberSearchResults');
   if(!search||!results)return;
-  qa('[data-polish-search]',results).forEach(function(el){el.remove()});
   var term=String(search.value||'').trim().toLowerCase();
-  if(!term)return;
-  if(/login|security|password|two[- ]?factor|2fa/.test(term))addSearchShortcut(results,'login-security','Login & Security','Account & Privacy');
-  if(/communication|preference|notifications?|email/.test(term))addSearchShortcut(results,'communication-preferences','Communication Preferences','Account & Privacy');
-  if(q('[data-polish-search]',results))results.hidden=false;
+  var security=q('[data-polish-search="login-security"]',results);
+  var prefs=q('[data-polish-search="communication-preferences"]',results);
+  var wantSecurity=!!term&&/login|security|password|two[- ]?factor|2fa/.test(term);
+  var wantPrefs=!!term&&/communication|preference|notifications?|email/.test(term);
+  if(wantSecurity&&!security)addSearchShortcut(results,'login-security','Login & Security','Account & Privacy');
+  else if(!wantSecurity&&security)security.remove();
+  if(wantPrefs&&!prefs)addSearchShortcut(results,'communication-preferences','Communication Preferences','Account & Privacy');
+  else if(!wantPrefs&&prefs)prefs.remove();
+  if(wantSecurity||wantPrefs)results.hidden=false;
 }
 
 function patchSearch(){
