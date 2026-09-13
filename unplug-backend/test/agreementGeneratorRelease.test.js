@@ -19,6 +19,14 @@ test('Control Centre exposes the standalone Agreement Generator and exact requir
   assert.match(html, /Party A first, then Party B/);
 });
 
+test('Agreement Generator identifies templates by their admin name, not only the inherited legal title', () => {
+  const html = read('unplug-agreement-generator-admin.html');
+  assert.match(html, /esc\(t\.name\|\|t\.title\)/);
+  assert.match(html, /currentTemplate\.name\|\|currentTemplate\.title/);
+  assert.match(html, /t\.title&&t\.title!==t\.name/);
+  assert.match(html, /Agreement title:/);
+});
+
 test('Agreement Generator restores the saved admin session before loading templates after refresh', () => {
   const html = read('unplug-agreement-generator-admin.html');
   assert.match(html, /function adminToken\(\)/, 'session token must be resolved when each request is made');
