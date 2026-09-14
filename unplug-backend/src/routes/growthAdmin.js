@@ -3,6 +3,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
+const { notifyMemberAsync } = require('../utils/memberNotify');
 
 const router = express.Router();
 router.use(requireRole('admin'));
@@ -65,7 +66,8 @@ async function versionTree(versionId, includeSensitive = false) {
 async function latestAnswers(applicationId, includeSensitive = false) {
   const r = await pool.query(
     `SELECT DISTINCT ON (r.field_key) r.field_key,r.field_id,r.value_json,r.revision_number,r.created_at,
-            f.label,f.field_type,COALESCE(f.sensitive,false) AS sensitive,COALESCE(f.confidential,false) AS confidential
+            f.label,f.field_type,COALESCE(f.sensitive,false) AS sensitive,COALESCE(f.confidential,false) AS confidential,
+            COALESCE(f.allow_external_sharing,false) AS allow_external_sharing
        FROM growth_application_answer_revisions r
        LEFT JOIN growth_form_fields f ON f.id=r.field_id
       WHERE r.application_id=$1 ${includeSensitive ? '' : 'AND COALESCE(f.sensitive,false)=false'}
@@ -77,7 +79,7 @@ async function adminDetail(applicationId, includeSensitive = false) {
   const a = await pool.query(
     `SELECT a.id,a.user_id,a.applicant_email,a.applicant_type,a.status,a.form_version_id,
             a.completion_percent,a.last_saved_at,a.submitted_at,a.locked_at,a.withdrawn_at,a.withdrawn_reason,
-            a.external_sharing_allowed,a.external_sharing_consent_at,a.admin_notes,a.research_notes,a.closed_reason,
+            a.external_sharing_allowed,a.external_sharing_consent_at,a.field_sharing,a.admin_notes,a.research_notes,a.closed_reason,
             a.created_at,a.updated_at,u.email AS member_email
        FROM growth_applications a LEFT JOIN users u ON u.id=a.user_id WHERE a.id=$1`, [applicationId]);
   if (!a.rowCount) return null;
@@ -211,6 +213,18 @@ router.patch('/versions/:id', async (req, res, next) => {
   } catch (e) { return next(e); }
 });
 
+router.delete('/versions/:id', async (req, res, next) => {
+  const versionId = asId(req.params.id);
+  if (!versionId) return res.status(400).json({ error: 'Invalid version id.' });
+  try {
+    const current = await pool.query(`SELECT status FROM growth_form_versions WHERE id=$1`, [versionId]);
+    if (!current.rowCount) return res.status(404).json({ error: 'Version not found.' });
+    if (current.rows[0].status !== 'draft') return res.status(409).json({ error: 'Only a draft version can be deleted. Published or retired versions must be kept for existing applications.' });
+    await pool.query(`DELETE FROM growth_form_versions WHERE id=$1`, [versionId]);
+    return res.json({ deleted: true });
+  } catch (e) { return next(e); }
+});
+
 router.post('/versions/:id/steps', async (req, res, next) => {
   const versionId=asId(req.params.id), title=str(req.body?.title);
   const key=str(req.body?.stepKey).toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'');
@@ -236,6 +250,17 @@ router.patch('/steps/:id', async (req, res, next) => {
       Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:s.display_order,
       typeof req.body?.enabled==='boolean'?req.body.enabled:s.is_enabled]);
     return res.json({step:r.rows[0]});
+  }catch(e){return next(e);}
+});
+
+router.delete('/steps/:id', async (req, res, next) => {
+  const stepId=asId(req.params.id); if(!stepId)return res.status(400).json({error:'Invalid step id.'});
+  try{
+    const c=await pool.query(`SELECT s.id,v.status AS version_status FROM growth_form_steps s JOIN growth_form_versions v ON v.id=s.version_id WHERE s.id=$1`,[stepId]);
+    if(!c.rowCount)return res.status(404).json({error:'Step not found.'});
+    if(c.rows[0].version_status!=='draft')return res.status(409).json({error:'Only draft versions can be edited.'});
+    await pool.query(`DELETE FROM growth_form_steps WHERE id=$1`,[stepId]);
+    return res.json({deleted:true});
   }catch(e){return next(e);}
 });
 
@@ -288,6 +313,17 @@ router.patch('/fields/:id', async (req,res,next)=>{
   }catch(e){return next(e);}
 });
 
+router.delete('/fields/:id', async (req, res, next) => {
+  const fieldId=asId(req.params.id); if(!fieldId)return res.status(400).json({error:'Invalid field id.'});
+  try{
+    const c=await pool.query(`SELECT f.id,v.status AS version_status FROM growth_form_fields f JOIN growth_form_versions v ON v.id=f.version_id WHERE f.id=$1`,[fieldId]);
+    if(!c.rowCount)return res.status(404).json({error:'Field not found.'});
+    if(c.rows[0].version_status!=='draft')return res.status(409).json({error:'Published fields are immutable. Create a new draft version.'});
+    await pool.query(`DELETE FROM growth_form_fields WHERE id=$1`,[fieldId]);
+    return res.json({deleted:true});
+  }catch(e){return next(e);}
+});
+
 router.post('/fields/:id/options', async(req,res,next)=>{
   const fieldId=asId(req.params.id),value=str(req.body?.value),label=str(req.body?.label);
   if(!fieldId||!value||!label)return res.status(400).json({error:'value and label are required.'});
@@ -295,6 +331,17 @@ router.post('/fields/:id/options', async(req,res,next)=>{
     SELECT f.id,$2,$3,$4,$5 FROM growth_form_fields f JOIN growth_form_versions v ON v.id=f.version_id
     WHERE f.id=$1 AND v.status='draft' RETURNING *`,[fieldId,value,label,Number.isInteger(req.body?.displayOrder)?req.body.displayOrder:0,req.body?.enabled!==false]);
     return r.rowCount?res.status(201).json({option:r.rows[0]}):res.status(409).json({error:'Only draft fields can be edited.'});
+  }catch(e){return next(e);}
+});
+
+router.delete('/options/:id', async (req, res, next) => {
+  const optionId=asId(req.params.id);if(!optionId)return res.status(400).json({error:'Invalid option id.'});
+  try{
+    const c=await pool.query(`SELECT o.id,v.status AS version_status FROM growth_form_field_options o JOIN growth_form_fields f ON f.id=o.field_id JOIN growth_form_versions v ON v.id=f.version_id WHERE o.id=$1`,[optionId]);
+    if(!c.rowCount)return res.status(404).json({error:'Option not found.'});
+    if(c.rows[0].version_status!=='draft')return res.status(409).json({error:'Only draft options can be edited.'});
+    await pool.query(`DELETE FROM growth_form_field_options WHERE id=$1`,[optionId]);
+    return res.json({deleted:true});
   }catch(e){return next(e);}
 });
 
@@ -321,7 +368,25 @@ router.post('/versions/:id/publish', async(req,res,next)=>{
     if(!c.rows[0].steps||!c.rows[0].fields){await client.query('ROLLBACK');return res.status(400).json({error:'At least one enabled step and field are required.'});}
     await client.query(`UPDATE growth_form_versions SET status='retired',retired_at=now() WHERE form_id=$1 AND status='published'`,[v.rows[0].form_id]);
     const p=await client.query(`UPDATE growth_form_versions SET status='published',published_at=now(),published_by=$2 WHERE id=$1 RETURNING *`,[versionId,req.user.id]);
-    await client.query('COMMIT');return res.json({version:p.rows[0]});
+    // Only members with a draft already open, never every member — an open
+    // draft keeps working on the version it was started on, so this is a
+    // heads-up that something newer exists, not an action they must take.
+    const openDrafts=await client.query(`SELECT DISTINCT user_id FROM growth_applications WHERE status='draft'`);
+    await client.query('COMMIT');
+    for(const row of openDrafts.rows){
+      notifyMemberAsync({
+        userId: row.user_id,
+        type: 'growth_form_updated',
+        title: 'The Growth Application form has been updated',
+        body: 'Unplug has published a new version of the Growth Application. Your existing draft is unaffected and stays exactly as you left it, but you can start a fresh application on the new version if you would rather use that.',
+        linkUrl: '/unplug-growth-application-v2.html',
+        email: {
+          subject: 'The Growth Application form has been updated',
+          text: 'Unplug has published a new version of the Growth Application.\n\nYour existing draft is unaffected and stays exactly as you left it. If you would rather start fresh on the new version, open My Growth Journey: https://www.unplugnews.com/unplug-growth-application-v2.html',
+        },
+      });
+    }
+    return res.json({version:p.rows[0]});
   }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}
 });
 
@@ -367,10 +432,23 @@ router.post('/applications/:id/reopen-field',async(req,res,next)=>{
 
 router.post('/applications/:id/information-requests',async(req,res,next)=>{
   const applicationId=asId(req.params.id),requestText=str(req.body?.requestText);if(!applicationId||!requestText)return res.status(400).json({error:'requestText is required.'});
-  const client=await pool.connect();try{await client.query('BEGIN');const a=await client.query(`SELECT status FROM growth_applications WHERE id=$1 FOR UPDATE`,[applicationId]);if(!a.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Growth Application not found.'});}
+  const client=await pool.connect();try{await client.query('BEGIN');const a=await client.query(`SELECT status,user_id FROM growth_applications WHERE id=$1 FOR UPDATE`,[applicationId]);if(!a.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Growth Application not found.'});}
     const r=await client.query(`INSERT INTO growth_information_requests(application_id,request_text,requested_fields,requested_by) VALUES($1,$2,$3::jsonb,$4) RETURNING *`,[applicationId,requestText,JSON.stringify(arr(req.body?.requestedFields)),req.user.id]);
     if(!['withdrawn','completed','closed'].includes(a.rows[0].status)){await client.query(`UPDATE growth_applications SET status='information_requested',updated_at=now() WHERE id=$1`,[applicationId]);await client.query(`INSERT INTO growth_status_history(application_id,from_status,to_status,changed_by,note) VALUES($1,$2,'information_requested',$3,'Additional information requested')`,[applicationId,a.rows[0].status,req.user.id]);}
-    await client.query('COMMIT');return res.status(201).json({request:r.rows[0]});
+    await client.query('COMMIT');
+    notifyMemberAsync({
+      userId: a.rows[0].user_id,
+      type: 'growth_information_requested',
+      title: 'Unplug needs more information on your Growth Application',
+      body: requestText,
+      linkUrl: '/unplug-growth-application-v2.html',
+      isStatusChange: true,
+      email: {
+        subject: 'Unplug needs more information on your Growth Application',
+        text: `Unplug has asked for more information on your Growth Application:\n\n${requestText}\n\nRespond here: https://www.unplugnews.com/unplug-growth-application-v2.html`,
+      },
+    });
+    return res.status(201).json({request:r.rows[0]});
   }catch(e){await client.query('ROLLBACK');return next(e);}finally{client.release();}
 });
 
