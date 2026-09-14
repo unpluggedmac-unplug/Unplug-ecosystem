@@ -191,6 +191,16 @@ window.UnplugImg = (function () {
     }
   }
 
+  // Imported WordPress biographies still contain old /media/legacy images.
+  // When one of those files no longer exists, browsers display a broken-image
+  // icon plus the alt text (often the person's name) inside the About section.
+  // Remove only images that actually fail; healthy biography/gallery images
+  // and every image outside rich editorial content remain untouched.
+  document.addEventListener('error', function (event) {
+    var image = event.target;
+    if (image && image.tagName === 'IMG' && image.closest && image.closest('.rich-bio')) image.remove();
+  }, true);
+
   load();
 
   return {
