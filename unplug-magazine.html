@@ -1603,6 +1603,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .gallery-lightbox-visit:hover{ background:#b30507; }
 .gallery-lightbox-close{ position:fixed; top:16px; right:20px; width:44px; height:44px; border:none; background:rgba(255,255,255,0.14); color:#fff; font-size:26px; line-height:1; border-radius:50%; cursor:pointer; }
 .gallery-lightbox-close:hover{ background:rgba(255,255,255,0.26); }
+
+/* ---- member-only gate prompt (public "Submit your event" / banner ad, etc.) ---- */
+.member-gate{ position:fixed; inset:0; background:rgba(15,14,14,0.72); z-index:10001; display:flex; align-items:center; justify-content:center; padding:20px; opacity:0; transition:opacity .18s ease; }
+.member-gate.open{ opacity:1; }
+.member-gate[hidden]{ display:none; }
+.member-gate-box{ position:relative; background:var(--cream); max-width:440px; width:100%; padding:28px 26px; border-radius:6px; box-shadow:0 24px 70px rgba(0,0,0,0.4); }
+.member-gate-title{ font-family:'Playfair Display',Georgia,serif; font-size:22px; margin:0 0 10px; color:var(--ink); }
+.member-gate-body{ font-size:14.5px; line-height:1.6; color:var(--slate); margin:0 0 20px; }
+.member-gate-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+.member-gate-actions .btn{ flex:1; min-width:130px; text-align:center; }
+.member-gate-close{ position:absolute; top:10px; right:12px; width:34px; height:34px; border:none; background:transparent; font-size:24px; line-height:1; color:var(--slate); cursor:pointer; }
+.member-gate-close:hover{ color:var(--ink); }
 .follow-btn{ font-size:10px; padding:7px 12px; background:var(--red); border-color:var(--red); color:var(--cream); margin-top:4px; align-self:flex-start; }
 
 /* ---- top10 new entries ---- */
@@ -4751,6 +4763,65 @@ function goToMemberDashboard(competitionSlug) {
   window.location.href = competitionSlug
     ? MEMBER_DASHBOARD_URL + '?competition=' + encodeURIComponent(competitionSlug)
     : MEMBER_DASHBOARD_URL;
+}
+
+// Public "Submit your event" button. A signed-in member goes straight to the
+// event form (the dashboard reads ?submit=event and opens it pre-selected);
+// everyone else gets a friendly "join us, it's free" prompt instead of being
+// dropped on a bare sign-in screen with no idea why.
+function submitEventFlow() {
+  if (UnplugAPI.getToken()) {
+    window.location.href = MEMBER_DASHBOARD_URL + '?submit=event';
+  } else {
+    memberGatePrompt({
+      title: 'Submit your event',
+      body: 'Listing an event is a member feature — and joining Unplug is free. Create your account and you’ll come straight back to the event form.',
+      submitType: 'event',
+    });
+  }
+}
+
+// A small, reusable "you need a free account" gate for member-only actions on
+// the public site (events now, banner ads next). It builds its own overlay once,
+// so no page markup is needed anywhere. Sign-up carries ?submit=<type> so the
+// new member lands on the right form straight after joining.
+let memberGateEl = null;
+function memberGateKey(e) { if (e.key === 'Escape') closeMemberGate(); }
+function closeMemberGate() {
+  if (!memberGateEl) return;
+  memberGateEl.classList.remove('open');
+  document.removeEventListener('keydown', memberGateKey);
+  setTimeout(() => { if (memberGateEl) memberGateEl.hidden = true; }, 180);
+}
+function memberGatePrompt(opts) {
+  const submitType = opts.submitType || '';
+  if (!memberGateEl) {
+    memberGateEl = document.createElement('div');
+    memberGateEl.className = 'member-gate';
+    memberGateEl.hidden = true;
+    memberGateEl.innerHTML =
+      '<div class="member-gate-box">'
+      + '<button type="button" class="member-gate-close" aria-label="Close">×</button>'
+      + '<h3 class="member-gate-title"></h3>'
+      + '<p class="member-gate-body"></p>'
+      + '<div class="member-gate-actions">'
+      + '<a class="btn btn-solid member-gate-signup">Sign up — it’s free</a>'
+      + '<a class="btn btn-line member-gate-signin">Sign in</a>'
+      + '</div></div>';
+    document.body.appendChild(memberGateEl);
+    memberGateEl.addEventListener('click', (e) => {
+      if (e.target === memberGateEl || e.target.closest('.member-gate-close')) closeMemberGate();
+    });
+  }
+  const suffix = submitType ? ('&submit=' + encodeURIComponent(submitType)) : '';
+  memberGateEl.querySelector('.member-gate-title').textContent = opts.title || 'Join Unplug';
+  memberGateEl.querySelector('.member-gate-body').textContent = opts.body || '';
+  memberGateEl.querySelector('.member-gate-signup').href = MEMBER_DASHBOARD_URL + '?signup=1' + suffix;
+  memberGateEl.querySelector('.member-gate-signin').href = MEMBER_DASHBOARD_URL + (submitType ? '?submit=' + encodeURIComponent(submitType) : '');
+  memberGateEl.hidden = false;
+  void memberGateEl.offsetWidth;         // commit the hidden->shown state so the fade plays
+  memberGateEl.classList.add('open');
+  document.addEventListener('keydown', memberGateKey);
 }
 
 // Welcome gate — greets a visitor once per browser session on the homepage.
@@ -12344,7 +12415,7 @@ function openEventModal(ev) {
 
 function setupCalendarEvents() {
   const submitBtn = document.getElementById('submitEventBtn');
-  if (submitBtn) submitBtn.addEventListener('click', goToMemberDashboard);
+  if (submitBtn) submitBtn.addEventListener('click', submitEventFlow);
 
   const modal = document.getElementById('eventModal');
   if (modal) {
