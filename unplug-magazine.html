@@ -1581,13 +1581,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tier-btn{ font-size:11px; padding:10px 16px; margin-top:6px; }
 
 /* ---- gallery overlay ---- */
-.gallery-item{ overflow:hidden; }
+.gallery-item{ overflow:hidden; cursor:pointer; }
 .gallery-item img{ width:100%; height:100%; object-fit:cover; display:block; }
 .gallery-overlay{ position:absolute; inset:0; background:linear-gradient(to top, rgba(15,14,14,0.88) 0%, transparent 55%); display:flex; flex-direction:column; justify-content:flex-end; padding:14px; gap:4px; opacity:0; transition:opacity .25s ease; }
 .gallery-item:hover .gallery-overlay, .gallery-item:focus-within .gallery-overlay{ opacity:1; }
 .gallery-title{ font-size:14px; font-weight:700; color:var(--cream); }
 .gallery-cap{ font-size:12.5px; color:rgba(255,255,255,0.85); line-height:1.4; }
 .gallery-supplied{ font-size:11px; color:rgba(255,255,255,0.7); font-style:italic; }
+
+/* ---- community gallery lightbox (tap a photo to view it full-size) ---- */
+.gallery-lightbox{ position:fixed; inset:0; background:rgba(15,14,14,0.92); z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px; opacity:0; transition:opacity .2s ease; }
+.gallery-lightbox.open{ opacity:1; }
+.gallery-lightbox[hidden]{ display:none; }
+.gallery-lightbox-inner{ display:flex; flex-direction:column; align-items:center; gap:12px; max-width:min(1100px,94vw); }
+.gallery-lightbox img{ max-width:94vw; max-height:74vh; object-fit:contain; border-radius:4px; box-shadow:0 20px 60px rgba(0,0,0,0.5); background:#111; }
+.gallery-lightbox-cap{ text-align:center; max-width:70ch; }
+.gallery-lightbox-cap .t{ display:block; font-family:'Playfair Display',Georgia,serif; font-size:18px; font-weight:700; color:var(--cream); margin-bottom:4px; }
+.gallery-lightbox-cap .c{ font-size:14px; color:rgba(255,255,255,0.82); line-height:1.5; }
+.gallery-lightbox-cap .s{ display:block; font-size:12px; color:rgba(255,255,255,0.6); font-style:italic; margin-top:6px; }
+.gallery-lightbox-visit{ display:inline-block; margin-top:10px; padding:9px 18px; background:var(--red); color:#fff; font-size:13px; font-weight:600; border-radius:4px; text-decoration:none; }
+.gallery-lightbox-visit:hover{ background:#b30507; }
+.gallery-lightbox-close{ position:fixed; top:16px; right:20px; width:44px; height:44px; border:none; background:rgba(255,255,255,0.14); color:#fff; font-size:26px; line-height:1; border-radius:50%; cursor:pointer; }
+.gallery-lightbox-close:hover{ background:rgba(255,255,255,0.26); }
 .follow-btn{ font-size:10px; padding:7px 12px; background:var(--red); border-color:var(--red); color:var(--cream); margin-top:4px; align-self:flex-start; }
 
 /* ---- top10 new entries ---- */
@@ -7144,18 +7159,88 @@ function galleryItemHtml(image, index) {
   const altText = escapeHtml(image.alt_text || image.title || 'Gallery photo');
   const supplied = image.supplied_by ? `<span class="gallery-supplied">Supplied by ${escapeHtml(image.supplied_by)}</span>` : '';
   const img = `<img src="${escapeHtml(image.image_url)}" alt="${altText}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${PLACEHOLDER_COVER}';">`;
+  // A click now opens the full photo in a lightbox (openGalleryLightbox), rather
+  // than jumping straight to the linked page or — with no link — doing nothing
+  // but show the name on hover. Any link the photo carries moves into the
+  // lightbox as a "Visit" button, so the image itself is what a tap opens.
   const href = galleryLinkHref(image);
-  const tag = href ? 'a' : 'div';
-  const linkAttrs = href ? ` href="${escapeHtml(href)}"${/^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener"' : ''}` : '';
-  return `<div class="gallery-item-shell"><${tag} class="gallery-item"${linkAttrs}>
+  const external = href && /^https?:\/\//i.test(href) ? '1' : '';
+  const dataAttrs = ` data-full="${escapeHtml(image.image_url)}" data-title="${title}" data-caption="${caption}"`
+    + (image.supplied_by ? ` data-supplied="${escapeHtml(image.supplied_by)}"` : '')
+    + (href ? ` data-link="${escapeHtml(href)}" data-link-external="${external}"` : '');
+  return `<div class="gallery-item-shell"><div class="gallery-item" role="button" tabindex="0" aria-label="Open photo${title ? ': ' + title : ''}"${dataAttrs}>
     ${img}
     <div class="gallery-overlay">
       ${title ? `<span class="gallery-title">${title}</span>` : ''}
       ${caption ? `<span class="gallery-cap">${caption}</span>` : ''}
       ${supplied}
     </div>
-  </${tag}><div class="int-bar-compact" id="gallery-int-${image.id}"></div></div>`;
+  </div><div class="int-bar-compact" id="gallery-int-${image.id}"></div></div>`;
 }
+
+// ---- Community gallery lightbox: tap a photo to see it full-size ----
+let galleryLightboxEl = null;
+function galleryLightboxKey(e) { if (e.key === 'Escape') closeGalleryLightbox(); }
+function ensureGalleryLightbox() {
+  if (galleryLightboxEl) return galleryLightboxEl;
+  const el = document.createElement('div');
+  el.className = 'gallery-lightbox';
+  el.hidden = true;
+  el.innerHTML = '<button type="button" class="gallery-lightbox-close" aria-label="Close">×</button>'
+    + '<div class="gallery-lightbox-inner"><img alt=""><div class="gallery-lightbox-cap"></div></div>';
+  el.addEventListener('click', (e) => {
+    if (e.target === el || e.target.closest('.gallery-lightbox-close')) closeGalleryLightbox();
+  });
+  document.body.appendChild(el);
+  galleryLightboxEl = el;
+  return el;
+}
+function openGalleryLightbox(data) {
+  const el = ensureGalleryLightbox();
+  const img = el.querySelector('img');
+  const cap = el.querySelector('.gallery-lightbox-cap');
+  img.src = data.full || '';
+  img.alt = data.title || 'Gallery photo';
+  let html = '';
+  if (data.title) html += `<span class="t">${escapeHtml(data.title)}</span>`;
+  if (data.caption) html += `<span class="c">${escapeHtml(data.caption)}</span>`;
+  if (data.supplied) html += `<span class="s">Supplied by ${escapeHtml(data.supplied)}</span>`;
+  const safeLink = data.link && /^(https?:\/\/|\/)/i.test(data.link) ? data.link : null;
+  if (safeLink) {
+    const ext = data.linkExternal ? ' target="_blank" rel="noopener"' : '';
+    html += `<a class="gallery-lightbox-visit" href="${escapeHtml(safeLink)}"${ext}>Visit link ↗</a>`;
+  }
+  cap.innerHTML = html;
+  el.hidden = false;
+  requestAnimationFrame(() => el.classList.add('open'));
+  document.addEventListener('keydown', galleryLightboxKey);
+}
+function closeGalleryLightbox() {
+  if (!galleryLightboxEl) return;
+  galleryLightboxEl.classList.remove('open');
+  document.removeEventListener('keydown', galleryLightboxKey);
+  setTimeout(() => { if (galleryLightboxEl) galleryLightboxEl.hidden = true; }, 200);
+}
+document.addEventListener('click', (e) => {
+  const item = e.target.closest('.gallery-item');
+  if (!item || !item.dataset.full) return;
+  e.preventDefault();
+  openGalleryLightbox({
+    full: item.dataset.full,
+    title: item.dataset.title,
+    caption: item.dataset.caption,
+    supplied: item.dataset.supplied,
+    link: item.dataset.link,
+    linkExternal: item.dataset.linkExternal === '1',
+  });
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const item = e.target.closest && e.target.closest('.gallery-item');
+  if (!item || !item.dataset.full) return;
+  e.preventDefault();
+  item.click();
+});
 
 async function loadGallery(reset) {
   if (galleryLoading) return;
