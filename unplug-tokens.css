@@ -122,3 +122,9 @@
 @media (max-width: 600px) {
   body { padding-bottom: 88px; }
 }
+
+@media (max-width: 600px) {
+  .poll-name     { width: auto; flex: 1 1 auto; min-width: 0; }
+  .poll-bar-wrap { flex-basis: 100%; }
+  .poll-row      { row-gap: 8px; }
+}
