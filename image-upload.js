@@ -31,6 +31,13 @@
     if (typeof options.getToken === 'function') getToken = options.getToken;
   }
 
+  // One source of truth for the size limit and accepted formats, so the hint a
+  // member reads and the check the code enforces cannot drift apart. They had:
+  // the hint said "5MB" while the code — and the server's /uploads route
+  // (MAX_FILE_SIZE_BYTES) — actually allow 8MB.
+  const MAX_UPLOAD_MB = 8;
+  const SPECS_LINE = `JPG, PNG or WEBP, max ${MAX_UPLOAD_MB}MB`;
+
   // The markup for one upload field. `value` pre-fills an existing image so
   // editing an article doesn't silently drop the picture already on it.
   // `recommended`, when passed, is { w, h, label } (e.g. { w:1080, h:1350,
@@ -44,8 +51,8 @@
     // photo for a landscape slot. It comes from the same server entry as the
     // numbers, so a field can never state a size without its reason.
     const hint = recommended
-      ? `<p class="img-upload-hint">Recommended size: ${recommended.w} × ${recommended.h}px${recommended.label ? ' — ' + recommended.label : ''}. JPG, PNG or WEBP, max 5MB.${recommended.note ? ' ' + recommended.note : ''}</p>`
-      : '';
+      ? `<p class="img-upload-hint">Recommended size: ${recommended.w} × ${recommended.h}px${recommended.label ? ' — ' + recommended.label : ''}. ${SPECS_LINE}.${recommended.note ? ' ' + recommended.note : ''}</p>`
+      : `<p class="img-upload-hint">${SPECS_LINE}.</p>`;
     const ratioAttrs = recommended ? ` data-ratio-w="${recommended.w}" data-ratio-h="${recommended.h}"` : '';
     return `<div class="img-upload" data-name="${name}"${ratioAttrs}>
       ${label ? `<label>${label}</label>` : ''}
@@ -53,6 +60,7 @@
       <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="img-upload-input">
       <input type="hidden" class="img-upload-url" name="${name}" value="${safe}">
       <div class="img-upload-status"></div>
+      <div class="img-upload-progress" hidden><div class="img-upload-progress-bar"></div></div>
       <div class="img-upload-warning" hidden></div>
       <img class="img-upload-preview" src="${safe}" alt="" ${value ? '' : 'hidden'}>
       ${recommended ? `<button type="button" class="img-upload-recrop" hidden>Re-crop this image</button>` : ''}
@@ -93,10 +101,34 @@
     return hidden ? hidden.value.trim() : '';
   }
 
-  async function upload(fileOrBlob, widget, filename) {
+  // Progress-bar styling, injected once (like the cropper below) so every page
+  // that uses this widget gets it with no per-page CSS to add.
+  let uploadStylesReady = false;
+  function ensureUploadStyles() {
+    if (uploadStylesReady) return;
+    uploadStylesReady = true;
+    const style = document.createElement('style');
+    style.textContent = `
+      .img-upload-progress{ margin-top:6px; height:6px; background:#e8e0d2; border-radius:3px; overflow:hidden; }
+      .img-upload-progress[hidden]{ display:none; }
+      .img-upload-progress-bar{ height:100%; width:0; background:#d20709; border-radius:3px; transition:width .15s ease; }
+      .img-upload-progress-bar.indeterminate{ width:35%; animation:uc-indet 1.1s ease-in-out infinite; }
+      @keyframes uc-indet{ 0%{ transform:translateX(-120%); } 100%{ transform:translateX(320%); } }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // XMLHttpRequest, not fetch: fetch cannot report how far along an upload is,
+  // and "is this thing even doing anything?" on a slow connection was the whole
+  // complaint. The bar shows a real percentage while the file is sent, then a
+  // moving "Processing…" state while the server resizes and stores it.
+  function upload(fileOrBlob, widget, filename) {
     const status = widget.querySelector('.img-upload-status');
     const hidden = widget.querySelector('.img-upload-url');
     const preview = widget.querySelector('.img-upload-preview');
+    const progress = widget.querySelector('.img-upload-progress');
+    const bar = progress ? progress.querySelector('.img-upload-progress-bar') : null;
+    ensureUploadStyles();
 
     // Checked here as well as on the server so the person gets an immediate,
     // specific answer instead of waiting for a failed upload.
@@ -105,48 +137,87 @@
       status.className = 'img-upload-status error';
       return;
     }
-    const maxMb = 8;
-    if (fileOrBlob.size > maxMb * 1024 * 1024) {
-      status.textContent = `That image is ${(fileOrBlob.size / 1024 / 1024).toFixed(1)} MB — the limit is ${maxMb} MB. Please resize it and try again.`;
+    if (fileOrBlob.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      status.textContent = `That image is ${(fileOrBlob.size / 1024 / 1024).toFixed(1)} MB — the limit is ${MAX_UPLOAD_MB} MB. Please resize it and try again.`;
       status.className = 'img-upload-status error';
       return;
     }
 
+    function showBar(indeterminate) {
+      if (!progress || !bar) return;
+      progress.hidden = false;
+      bar.classList.toggle('indeterminate', !!indeterminate);
+      if (!indeterminate) bar.style.width = '0%';
+    }
+    function setPct(pct) {
+      if (!bar) return;
+      bar.classList.remove('indeterminate');
+      bar.style.width = pct + '%';
+    }
+    function hideBar() {
+      if (progress) progress.hidden = true;
+      if (bar) { bar.classList.remove('indeterminate'); bar.style.width = '0%'; }
+    }
+
     status.textContent = 'Uploading…';
     status.className = 'img-upload-status';
+    showBar(true); // animate immediately, before the first progress event arrives
+
     const form = new FormData();
-    // A cropped export is a Blob, not a File — Blobs have no filename of
-    // their own, and the upload route needs one with a real extension to
-    // infer content type sensibly server-side, so it's supplied explicitly
-    // here rather than left to FormData's default ("blob").
+    // A cropped export is a Blob, not a File — Blobs have no filename of their
+    // own, and the upload route needs one with a real extension to infer
+    // content type server-side, so it's supplied explicitly here.
     form.append('file', fileOrBlob, filename || (fileOrBlob.name || 'upload.jpg'));
-    try {
-      const token = getToken();
-      const base = String(getApiBase() || '').replace(/\/+$/, '');
-      const res = await fetch(base + '/uploads', {
-        method: 'POST',
-        // No Content-Type header: the browser must set the multipart
-        // boundary itself, and setting it manually breaks the upload.
-        headers: token ? { Authorization: 'Bearer ' + token } : {},
-        body: form,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
-      hidden.value = data.url;
-      preview.src = data.url;
-      preview.hidden = false;
-      status.textContent = 'Uploaded.';
-      status.className = 'img-upload-status ok';
-      const recrop = widget.querySelector('.img-upload-recrop');
-      if (recrop) recrop.hidden = false;
-      // Setting .value programmatically doesn't fire input/change, so callers
-      // that need to react once the upload finishes (e.g. refresh a live
-      // preview elsewhere on the page) can listen for this instead.
-      widget.dispatchEvent(new CustomEvent('img-upload:done', { bubbles: true, detail: { url: data.url } }));
-    } catch (err) {
-      status.textContent = err.message;
+
+    const token = getToken();
+    const base = String(getApiBase() || '').replace(/\/+$/, '');
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', base + '/uploads');
+    // No Content-Type header: the browser must set the multipart boundary
+    // itself, and setting it by hand breaks the upload.
+    if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.round((e.loaded / e.total) * 100);
+      if (pct < 100) {
+        setPct(pct);
+        status.textContent = 'Uploading… ' + pct + '%';
+      } else {
+        showBar(true);            // fully sent — the server is now processing it
+        status.textContent = 'Processing…';
+      }
+    };
+
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (_) {}
+      if (xhr.status >= 200 && xhr.status < 300) {
+        hideBar();
+        hidden.value = data.url;
+        preview.src = data.url;
+        preview.hidden = false;
+        status.textContent = 'Uploaded.';
+        status.className = 'img-upload-status ok';
+        const recrop = widget.querySelector('.img-upload-recrop');
+        if (recrop) recrop.hidden = false;
+        // Setting .value programmatically doesn't fire input/change, so callers
+        // that need to react once the upload finishes (e.g. refresh a live
+        // preview elsewhere on the page) can listen for this instead.
+        widget.dispatchEvent(new CustomEvent('img-upload:done', { bubbles: true, detail: { url: data.url } }));
+      } else {
+        hideBar();
+        status.textContent = data.error || `Upload failed (${xhr.status})`;
+        status.className = 'img-upload-status error';
+      }
+    };
+    xhr.onerror = () => {
+      hideBar();
+      status.textContent = 'Upload failed — please check your connection and try again.';
       status.className = 'img-upload-status error';
-    }
+    };
+
+    xhr.send(form);
   }
 
   // ---------------------------------------------------------------------
