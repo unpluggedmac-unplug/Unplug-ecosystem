@@ -178,7 +178,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .rl-actions .btn{ padding:8px 12px; font-size:11px; }
 @media(max-width:820px){
   .ms-shell{ flex-direction:column; gap:0; }
-  .ms-menu-btn{ display:block; }
+  .ms-menu-btn{ display:block; position:sticky; top:0; z-index:50; box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+  /* while the menu is open, don't let the sticky button overlap the list */
+  .ms-sidebar.open + .ms-main .ms-menu-btn{ position:static; box-shadow:none; }
   .ms-sidebar{ position:static; width:100%; flex-basis:auto; display:none; margin-bottom:16px; }
   .ms-sidebar.open{ display:flex; }
 }
@@ -5149,7 +5151,13 @@ function msSetupNav(){
     link.addEventListener('click', function(){ loadNotifPrefs(); loadTwoFactor(); });
   });
   const menuBtn=document.getElementById('msMenuBtn');
-  if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
+  if (menuBtn && sidebar) menuBtn.addEventListener('click', function(){
+    const opening = !sidebar.classList.contains('open');
+    sidebar.classList.toggle('open');
+    // Opening while scrolled deep in a section: the menu list renders above the
+    // content, so bring the top into view — it never opens off-screen above you.
+    if (opening) window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
   const lo=document.getElementById('msLogout');
   if (lo) lo.addEventListener('click', function(){ localStorage.removeItem('unplug_auth_token'); location.reload(); });
   const cpw=document.getElementById('cpwBtn');
