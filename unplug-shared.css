@@ -54,3 +54,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .row-actions button{ font-size:10px; font-weight:700; text-transform:uppercase; padding:5px 9px; border:1px solid var(--ink); background:none; cursor:pointer; }
 .row-actions button.approve{ background:var(--ink); color:#fff; border-color:var(--ink); }
 .row-actions button.reject{ color:var(--red); border-color:var(--red); }
+
+
+/* Mobile: keep the fixed accessibility button (bottom-left) and chat button
+   (bottom-right) from covering tappable content at the bottom of a page.
+   This was hiding the Terms links and the "Buy Bulk Votes" button on phones. */
+@media (max-width: 600px) {
+  body { padding-bottom: 88px; }
+}
