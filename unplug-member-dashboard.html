@@ -2017,6 +2017,22 @@ function enterMemberDashboard(user){
     if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // Arriving from a public-site button with ?submit=<type> (e.g. the magazine's
+  // "Submit your event") opens straight onto that submission form with the type
+  // pre-selected, instead of landing on the generic form defaulting to Article.
+  // Mirrors the ?competition= handling above; the value is validated against the
+  // real options so a stray or unknown type simply does nothing.
+  const submitParam = new URLSearchParams(location.search).get('submit');
+  if (submitParam) {
+    const submitTypeSel = document.getElementById('submitType');
+    if (submitTypeSel && Array.from(submitTypeSel.options).some((o) => o.value === submitParam)) {
+      submitTypeSel.value = submitParam;
+      submitTypeSel.dispatchEvent(new Event('change'));
+      const card = submitTypeSel.closest('.card');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   // Highlight Article / Highlight Profile purchase buttons.
   const artBtn = document.getElementById('svcArtBtn');
   if (artBtn && !artBtn.dataset.wired) {
