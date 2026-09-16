@@ -127,6 +127,8 @@ function s3Provider(config) {
 
   return {
     name: label,
+    bucket,
+    endpoint: endpoint.replace(/\/$/, ''),
     warning: null,
     async put(key, buffer) {
       await send('PUT', key, buffer);
@@ -160,14 +162,24 @@ function s3Provider(config) {
 function providers() {
   const list = [];
 
-  if (process.env.R2_ACCESS_KEY_ID && process.env.R2_BUCKET) {
+  // Cloudflare R2 backup destination — its OWN bucket and keys (R2_BACKUP_*),
+  // deliberately separate from the R2_* vars that image storage uses in
+  // routes/uploads.js. The two must never share a bucket: pointing image storage
+  // at the backups bucket would misfile every upload, and writing backups into
+  // the public images bucket would leave an encrypted copy of every member's
+  // data somewhere the world can list. Only the account id and endpoint fall
+  // back to the image-storage values, because the Cloudflare account is the
+  // same; the bucket and keys never fall back. (Superseded the earlier block
+  // that reused R2_BUCKET — it had never run in production, since backups only
+  // start once UNPLUG_BACKUP_PASSPHRASE is set, so nothing that worked changes.)
+  if (process.env.R2_BACKUP_ACCESS_KEY_ID && process.env.R2_BACKUP_BUCKET) {
     list.push(s3Provider({
       label: 'Cloudflare R2',
-      endpoint: process.env.R2_ENDPOINT
-        || `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      bucket: process.env.R2_BUCKET,
-      accessKeyId: process.env.R2_ACCESS_KEY_ID,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      endpoint: process.env.R2_BACKUP_ENDPOINT
+        || `https://${process.env.R2_BACKUP_ACCOUNT_ID || process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      bucket: process.env.R2_BACKUP_BUCKET,
+      accessKeyId: process.env.R2_BACKUP_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_BACKUP_SECRET_ACCESS_KEY,
       region: 'auto',
     }));
   }
