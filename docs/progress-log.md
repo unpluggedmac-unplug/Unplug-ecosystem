@@ -3298,3 +3298,39 @@ methodology used for every group after (real endpoint traced from source, never 
 **Still open:** nothing new from this task specifically — Unplug Live remains intentionally unbuilt behind
 its "Coming Soon" placeholders until a future task takes it on.
 
+
+
+## 2026-09-17 — Batches A–F frontend polish shipped (everything except D)
+
+**Context.** A polish pass run under a tight weekly-usage budget (Sept 23 reset), delivered through the Cowork cloud session → GitHub Desktop pipeline: files are edited in the cloud, written into the OneDrive GitHub Desktop working copy via the device bridge, and the user commits + pushes each one. Direct push from the cloud is blocked by the agent proxy; `add_repo` is unavailable in this session; the laptop's `device_bash` remains broken since the Sept-8 Windows update. Every HTML change was syntax-validated (inline-script checker) and each commit was diff-checked against the freshly-staged device copy so it layered only the intended change onto the current file — this caught one stale-base near-miss (the View Score restyle had been applied to a pre-restyle copy of the dashboard and would have wiped the share card; re-applied onto the correct base before committing).
+
+Roadmap batches: **A** quick wins, **B** Profile/Menu-1 polish, **C** display pages (View Score, Growth App, Orders, Analytics), **D** money & schema (HELD — high-risk; needs full test + sign-off + the Sept-23 reset), **E** dashboard restructure + standardized image upload, **F** public sharing & ads. This session completed the frontend-safe work in **A, B, C, E, F**; **D** and the backend items below remain.
+
+**Shipped this session (all pushed by the user):**
+
+- **View Score page** (`unplug-member-dashboard.html`) — dedicated frontend-only gamification page: new `viewscore` nav item + section + `loadViewScore()` reading the existing `GET /participation/dashboard`, lifting score/status/streak/passport/achievements out of the busy My Unplug profile. Then restyled premium: a dark hero (brand `--black`/`--maroon`/`--red`) with the big score + progress-to-next-status bar, a three-up stat trio, passport "stamp" discs, refined achievement cards (`.vs-*` classes; element IDs unchanged; verified with a headless render).
+
+- **Passport Stamp share card** (`unplug-member-dashboard.html`) — rebuilt the "Share my status" canvas card to match the founder's poster reference: portrait 1080×1500, red field, member photo in a black-ringed circle (initials monogram fallback), status word in Archivo Black, "My Unplug Passport Stamp" in Kaushan Script, cream footer band with CURRENT POINTS / POINTS TO GO banners (real numbers via `CURRENT_STATUS_FOR_SHARE`, now carrying `pointsToGo`), tagline + URL. Google fonts preloaded before canvas paint; verified with a headless render. Old landscape/square/story sizes hidden in favour of the single poster.
+
+- **Growth application mobile layout** (`unplug-growth-application-v2.html` — the live member Growth page per `growth-integration.js`, `MEMBER_V2`) — added a ≤560px breakpoint: full-width hero stat, tighter cards, full-width stacked form-nav buttons, momentum-scroll step tabs, 44px min tap targets. CSS-only; desktop/tablet untouched.
+
+- **Member sidebar restructure** (`unplug-member-dashboard.html`) — grouped the ~25 flat nav items under 7 `.ms-navgroup-label` headings (Profile & Community / My Progress / Create & Submit / Read / Orders & Billing / Representative / Account). The conditional **Representative** heading shows only when one of its items is visible, via a pure-CSS `#msSidebar:has(<rep id>:not(.section-hidden)) #msRepLabel` rule (no JS change). Every nav item + its `msSetupNav` wiring preserved; verified with a standalone render.
+
+- **Edge social link-previews** (`functions/[[path]].js`, Cloudflare Pages Function) — for social crawlers only (real visitors pass through untouched, no added latency): a shared article link (`?p=article&id=<id>`) gets its `<title>`/description/og:*/twitter:* rewritten at the edge from the public `GET /articles/:id` (title = `seo_title||title`, desc = `meta_description||stripped body`, image = `banner_image_url`), so shared stories preview with their real headline + cover rather than the generic site card. Extended the same session to **directory profiles** (`?p=profile&slug` → `GET /profiles/:slug`: display_name / bio / feature_image_url) and **projects** (`?p=project&id` → `GET /projects/:id`: title / cover_image_url), each with its own page-title branding. Falls back to site-level meta on any miss; deploys with the Cloudflare push (no Render). Verify live via Facebook's Sharing Debugger. NOTE: edge code could not be run locally here — syntax-checked + reviewed only.
+
+- **Clickable ad inventory** (`unplug-magazine.html`) — empty "Reserve this space" ad slots now link to the Advertise/Marketplace page (`goToPage('brandplacement')`, same destination as the "Advertise Here" buttons), keyboard-accessible with hover/focus cues, turning unsold slots into advertiser leads. Filled banners untouched.
+
+**Audit findings — already complete, deliberately not changed (avoided breaking working code):**
+- **Standardized image upload (E):** the shared `UnplugUpload` widget already powers every content-image upload across the member dashboard (avatar, article cover/body/section, event, gallery, marketplace poster, ad banners desktop+mobile, directory listing cover) and the admin dashboard (81 mount points). The remaining raw `type="file"` inputs are legitimately non-image and correctly separate: member proof-of-payment (accepts PDF), the client-side card-maker photo (own crop/zoom), two admin PDF uploads (editions/downloads). Growth's own uploader is backend-coupled.
+- **Public sharing UI (F):** article share buttons (`reader-share`: WhatsApp/Facebook/X/native/copy), full OG/Twitter meta, and client-side per-article meta updates were already present — the only gap (crawler previews) is the edge function above.
+- **Ad display (F):** already comprehensive (impression+click tracking to `/ad-banners/:id/event`, multi-banner carousel, mobile `<picture>` crops, per-slot ratios, `rel="sponsored"`) — the only gap was clickable empty slots, above.
+
+**Queued for the D / backend session (after the Sept-23 reset):**
+- **Batch D** — money & schema (held entirely; high-risk).
+- **My Analytics "real data"** (C) — needs backend.
+- **Growth "visible status"** (C) — needs backend.
+- **My Unplug custom interests** + public/private per-field toggle (B leftover) — needs backend/schema.
+- **My Orders** waiting-vs-approved split (C) — flagged as a data-model mismatch: `order.status` is PAYMENT vocabulary (confirmed/failed/awaiting), not approval status; needs backend clarification before building.
+- ~~Edge social previews for profiles/projects~~ — **DONE this session**, right after this entry was first written (see the edge-previews item above); `withSocialMeta` now dispatches article / profile / project.
+
+**Delivery/verification notes for the next session:** direct cloud push blocked (proxy) → use the GitHub-Desktop bridge (edit → `device_commit_files` into `~/OneDrive/Documents/GitHub/Unplug-ecosystem` → user commits + pushes → Cloudflare auto-deploys frontend; Render backend deploy is manual). Always re-stage the target file and diff before committing — the uploads copy goes stale after a re-stage, and the member dashboard file in particular has now carried several stacked changes. Backend suite (`node --test`) cannot be validly run in this cloud session (stale clone, no backend `node_modules`, pull blocked) — rely on repo CI as authoritative.
