@@ -369,26 +369,9 @@ router.post('/', requireAuth, (req, res) => {
     }
 
     if (r2Configured) {
+      let stored;
       try {
-        const { url, key, buffer } = await uploadPublicFile(req.file);
-        let derivatives = null;
-        try {
-          derivatives = await storeDerivatives({ key, buffer, putObject: putPublicObject });
-        } catch (derr) {
-          console.error('[uploads] derivatives failed for', key, '-', derr.message);
-        }
-        await indexPublicUpload({
-          url, filename: req.file.filename, storage: 'r2', mimetype: req.file.mimetype,
-          sizeBytes: req.file.size, uploadedBy: req.user && req.user.id,
-          width: derivatives && derivatives.meta && derivatives.meta.width,
-          height: derivatives && derivatives.meta && derivatives.meta.height,
-        });
-        return res.status(201).json({
-          url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'r2',
-          responsive: derivatives && derivatives.made > 0
-            ? { widths: derivatives.widths, formats: derivatives.formats }
-            : null,
-        });
+        stored = await uploadPublicFile(req.file);
       } catch (e) {
         // Do NOT silently fall back to local disk in production: Render's disk is
         // ephemeral, so a locally-stored image looks fine now but vanishes on the
@@ -399,6 +382,34 @@ router.post('/', requireAuth, (req, res) => {
           error: 'Image storage is misconfigured, so the upload was not saved. Please try again — if it keeps failing, check your R2 settings.',
         });
       }
+
+      const { url, key, buffer } = stored;
+
+      // Record it in the media library straight away, so the image is usable the
+      // instant it is stored.
+      await indexPublicUpload({
+        url, filename: req.file.filename, storage: 'r2', mimetype: req.file.mimetype,
+        sizeBytes: req.file.size, uploadedBy: req.user && req.user.id,
+      });
+
+      // Reply NOW — the original is safely on R2, and the original is what every
+      // page serves until (and unless) responsive derivatives exist. /images/
+      // manifest only ever lists images whose derivatives are CONFIRMED made
+      // (routes/images.js), so an image with none simply serves its original,
+      // exactly as the site did before the pipeline existed. Building the
+      // derivatives is therefore done AFTER the reply, best-effort: a slow AVIF
+      // encode on the small 512 MB instance can no longer hold the upload open —
+      // which was making larger images (article section pictures cropped to
+      // 1600px) appear to "upload forever" while the cover, cropped smaller,
+      // always got through. If the encode fails or the instance restarts first,
+      // the original stays served and the next backfill run can make them later.
+      res.status(201).json({
+        url, filename: req.file.filename, sizeBytes: req.file.size, storage: 'r2',
+      });
+
+      storeDerivatives({ key, buffer, putObject: putPublicObject })
+        .catch((derr) => console.error('[uploads] derivatives failed for', key, '-', derr.message));
+      return;
     }
 
     // No object storage configured (e.g. local dev): serve from local disk.
