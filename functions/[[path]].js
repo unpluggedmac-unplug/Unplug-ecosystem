@@ -79,10 +79,42 @@ async function articleMeta(api, id) {
   if (!res.ok) return null;
   const a = await res.json();
   if (!a || (!a.title && !a.seo_title)) return null;
+  const title = a.seo_title || a.title;
   return {
-    title: a.seo_title || a.title,
+    title,
+    pageTitle: /unplug\s*magazine\s*$/i.test(title) ? title : title + ' — Unplug Magazine',
     description: (a.meta_description && String(a.meta_description).trim()) || firstText(a.body, 200),
     image: absoluteImage(a.banner_image_url) || 'https://www.unplugnews.com/social-banner.jpg',
+  };
+}
+// Directory profiles (?p=profile&slug=) and projects (?p=project&id=) are shared
+// the same way as stories — same edge treatment, from their own public endpoints.
+async function profileMeta(api, slug) {
+  const res = await fetch(`${api}/profiles/${encodeURIComponent(slug)}`, {
+    headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(4000),
+  });
+  if (!res.ok) return null;
+  const p = (await res.json() || {}).profile;
+  if (!p || !p.display_name) return null;
+  return {
+    title: p.display_name,
+    pageTitle: p.display_name + ' — Unplug Directory',
+    description: (p.bio && String(p.bio).trim()) || (p.display_name + ' on the Unplug Magazine Directory.'),
+    image: absoluteImage(p.feature_image_url) || 'https://www.unplugnews.com/social-banner.jpg',
+  };
+}
+async function projectMeta(api, id) {
+  const res = await fetch(`${api}/projects/${encodeURIComponent(id)}`, {
+    headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(4000),
+  });
+  if (!res.ok) return null;
+  const p = (await res.json() || {}).project;
+  if (!p || !p.title) return null;
+  return {
+    title: p.title,
+    pageTitle: p.title + ' — Unplug Magazine',
+    description: (p.summary && String(p.summary).trim()) || firstText(p.description, 200) || (p.title + ' — a project on Unplug Magazine.'),
+    image: absoluteImage(p.cover_image_url) || 'https://www.unplugnews.com/social-banner.jpg',
   };
 }
 async function withSocialMeta(response, request, url, api) {
@@ -91,20 +123,21 @@ async function withSocialMeta(response, request, url, api) {
   const type = String(response.headers.get('content-type') || '').toLowerCase();
   if (!type.includes('text/html')) return response;
 
+  const params = url.searchParams;
+  const p = params.get('p');
   let meta = null;
   try {
-    if (url.searchParams.get('p') === 'article' && url.searchParams.get('id')) {
-      meta = await articleMeta(api, url.searchParams.get('id'));
-    }
+    if (p === 'article' && params.get('id')) meta = await articleMeta(api, params.get('id'));
+    else if (p === 'profile' && params.get('slug')) meta = await profileMeta(api, params.get('slug'));
+    else if (p === 'project' && params.get('id')) meta = await projectMeta(api, params.get('id'));
   } catch (_) { meta = null; }
   if (!meta) return response;
 
-  const fullTitle = /unplug\s*magazine\s*$/i.test(meta.title) ? meta.title : meta.title + ' — Unplug Magazine';
   const pageUrl = 'https://www.unplugnews.com' + url.pathname + (url.search || '');
   const setC = (val) => ({ element(el) { el.setAttribute('content', val); } });
 
   return new HTMLRewriter()
-    .on('title', { element(el) { el.setInnerContent(fullTitle); } })
+    .on('title', { element(el) { el.setInnerContent(meta.pageTitle); } })
     .on('link[rel="canonical"]', { element(el) { el.setAttribute('href', pageUrl); } })
     .on('meta[name="description"]', setC(meta.description))
     .on('meta[property="og:title"]', setC(meta.title))
