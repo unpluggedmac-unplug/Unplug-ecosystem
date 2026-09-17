@@ -173,6 +173,19 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 .ms-brand{ font-family:'Playfair Display',serif; font-weight:700; font-size:15px; padding:6px 10px 12px; color:var(--ink); border-bottom:1px solid var(--paper-line); margin-bottom:6px; }
 .ms-navlink{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:none; padding:11px 12px; font-size:14px; font-family:'Inter',sans-serif; color:var(--ink); cursor:pointer; text-decoration:none; border-radius:4px; }
 .ms-navlink span{ width:20px; text-align:center; }
+/* Sidebar group headings — organise the ~25 nav items into labelled sections
+   without removing any. Plain flat siblings, so the generic nav wiring and the
+   mobile menu are untouched. */
+.ms-navgroup-label{ font-size:10px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:var(--slate); padding:12px 12px 4px; }
+/* The Representative group is conditional: its items reveal themselves for
+   representatives / signers. This heading follows them — shown only while at
+   least one of its items is visible, hidden for everyone else. */
+#msRepLabel{ display:none; }
+#msSidebar:has(#msMyReferralsNav:not(.section-hidden)) #msRepLabel,
+#msSidebar:has(#msMyAgreementsNav:not(.section-hidden)) #msRepLabel,
+#msSidebar:has(#msMyClientsNav:not(.section-hidden)) #msRepLabel,
+#msSidebar:has(#msAvailableAgreementsNav:not(.section-hidden)) #msRepLabel,
+#msSidebar:has(#msSigningRequestsNav:not(.section-hidden)) #msRepLabel{ display:block; }
 .ms-navlink:hover{ background:var(--paper); }
 .ms-navlink.active{ background:var(--red); color:#fff; font-weight:600; }
 .ms-navlink.ms-logout{ color:var(--maroon); margin-top:6px; border-top:1px solid var(--paper-line); border-radius:0; }
@@ -362,12 +375,17 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
   <div class="ms-shell">
     <aside class="ms-sidebar" id="msSidebar">
       <div class="ms-brand">My Account</div>
+      <div class="ms-navgroup-label">Profile &amp; Community</div>
       <button class="ms-navlink active" data-ms="profile"><span>👤</span> My Profile</button>
       <button class="ms-navlink" data-ms="unplug"><span>🔌</span> My Unplug</button>
-      <button class="ms-navlink" data-ms="viewscore"><span>🎯</span> View Score</button>
       <button class="ms-navlink" data-ms="notifications"><span>🔔</span> Notifications <span id="notifCountBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></button>
+
+      <div class="ms-navgroup-label">My Progress</div>
+      <button class="ms-navlink" data-ms="viewscore"><span>🎯</span> View Score</button>
       <button class="ms-navlink" data-ms="leaderboard"><span>🏆</span> Leaderboard</button>
       <button class="ms-navlink" data-ms="myanalytics"><span>📊</span> My Analytics</button>
+
+      <div class="ms-navgroup-label">Create &amp; Submit</div>
       <!-- "Browse Services" is the CATALOGUE — services you can buy. Renamed from
            "Services" so it cannot be mistaken for My Services (spec §4), which is
            the ones you already have. The data-ms key stays `services`: it pairs
@@ -380,20 +398,28 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="listing"><span>&#127991;</span> My Listings</button>
       <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="advertising"><span>&#128226;</span> My Advertising</button>
       <button class="ms-navlink ms-subnav" data-ms="submissions" data-ms-type="competition"><span>&#127942;</span> My Competitions</button>
+
+      <div class="ms-navgroup-label">Read</div>
       <button class="ms-navlink" data-ms="reading"><span>📚</span> Reading List</button>
       <button class="ms-navlink" data-ms="editions"><span>📖</span> My Editions</button>
+
+      <div class="ms-navgroup-label">Orders &amp; Billing</div>
       <button class="ms-navlink" data-ms="myorders"><span>&#128722;</span> My Orders</button>
       <button class="ms-navlink" data-ms="mycredits"><span>&#127974;</span> My Credits</button>
       <button class="ms-navlink" data-ms="myinvoices"><span>&#129534;</span> My Invoices</button>
       <button class="ms-navlink" data-ms="myvotes"><span>&#128499;</span> My Votes</button>
-      <button class="ms-navlink" data-ms="account"><span>&#9881;</span> Account Settings</button>
       <button class="ms-navlink" data-ms="payments"><span>🧾</span> Payments</button>
-      <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
+
+      <div class="ms-navgroup-label" id="msRepLabel">Representative</div>
       <button class="ms-navlink section-hidden" data-ms="myreferrals" id="msMyReferralsNav"><span>🤝</span> My Referrals</button>
       <button class="ms-navlink section-hidden" data-ms="myagreements" id="msMyAgreementsNav"><span>📄</span> My Agreements</button>
+      <button class="ms-navlink section-hidden" data-ms="myclients" id="msMyClientsNav"><span>🌱</span> My Clients</button>
       <button class="ms-navlink section-hidden" data-ms="availableagreements" id="msAvailableAgreementsNav"><span>📝</span> Available Agreements</button>
       <button class="ms-navlink section-hidden" data-ms="signingrequests" id="msSigningRequestsNav"><span>✍</span> Agreements I'm Signing</button>
-      <button class="ms-navlink section-hidden" data-ms="myclients" id="msMyClientsNav"><span>🌱</span> My Clients</button>
+
+      <div class="ms-navgroup-label">Account</div>
+      <button class="ms-navlink" data-ms="account"><span>&#9881;</span> Account Settings</button>
+      <button class="ms-navlink" data-ms="privacy"><span>🔒</span> Your Data</button>
       <a class="ms-navlink" href="unplug-magazine.html"><span>🌐</span> View Official Site</a>
       <button class="ms-navlink ms-logout" id="msLogout"><span>↩</span> Logout</button>
     </aside>
