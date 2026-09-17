@@ -75,6 +75,22 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
    and screen-reader users get the native control and the whole group is
    still a proper form field. */
 .mu-chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+/* ---- My Unplug profile: read-only summary view ---- */
+.mu-profile-view{ border:1px solid var(--paper-line); border-radius:6px; padding:16px; background:var(--cream); }
+.mu-profile-view[hidden]{ display:none; }
+#muEditFields[hidden]{ display:none; }
+.mu-view-head{ display:flex; align-items:center; gap:14px; }
+.mu-view-avatar{ width:56px; height:56px; border-radius:50%; object-fit:cover; flex-shrink:0; background:var(--paper); }
+.mu-view-avatar-empty{ background:linear-gradient(135deg,var(--paper),#e3d8c2); }
+.mu-view-id{ min-width:0; }
+.mu-view-name{ font-family:'Playfair Display',serif; font-weight:700; font-size:18px; }
+.mu-view-username{ font-size:13px; color:var(--slate); }
+.mu-view-loc{ font-size:12.5px; color:var(--slate); margin-top:2px; }
+.mu-view-edit{ margin-left:auto; width:auto; padding:6px 16px; flex-shrink:0; }
+.mu-view-about{ margin:12px 0 0; font-size:14px; line-height:1.6; color:var(--ink); white-space:pre-wrap; }
+.mu-view-tags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.mu-view-tag{ font-size:11.5px; background:var(--paper); border:1px solid var(--paper-line); border-radius:12px; padding:3px 10px; color:var(--ink); }
+.share-size-btn.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
 .mu-chip{ position:relative; display:inline-flex; }
 .mu-chip input{ position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
 .mu-chip span{ display:inline-block; border:1px solid var(--paper-line); background:#fff; border-radius:20px;
@@ -345,6 +361,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="ms-brand">My Account</div>
       <button class="ms-navlink active" data-ms="profile"><span>👤</span> My Profile</button>
       <button class="ms-navlink" data-ms="unplug"><span>🔌</span> My Unplug</button>
+      <button class="ms-navlink" data-ms="viewscore"><span>🎯</span> View Score</button>
       <button class="ms-navlink" data-ms="notifications"><span>🔔</span> Notifications <span id="notifCountBadge" style="background:var(--red); color:#fff; font-size:9.5px; padding:1px 6px; border-radius:10px; display:none;"></span></button>
       <button class="ms-navlink" data-ms="leaderboard"><span>🏆</span> Leaderboard</button>
       <button class="ms-navlink" data-ms="myanalytics"><span>📊</span> My Analytics</button>
@@ -426,6 +443,9 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <p id="muCompletionTodo" style="font-size:11.5px; color:var(--slate); margin-top:6px;"></p>
         </div>
 
+        <div id="muProfileView" class="mu-profile-view" hidden></div>
+
+        <div id="muEditFields">
         <div class="field-row">
           <div class="field">
             <label for="muUsername">@username</label>
@@ -458,6 +478,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <p style="font-size:11.5px; color:var(--slate); margin-top:-6px;">Your town is all that shows publicly — never a street address, phone number or email.</p>
 
         <button class="btn btn-solid" id="muSaveBtn" type="button" style="width:auto;">Save Profile</button>
+        </div>
       </div>
 
       <div class="card">
@@ -532,6 +553,56 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
       <div class="card">
         <h2>Unplug Passport</h2>
         <div id="unplugPassport" style="display:flex; flex-wrap:wrap; gap:10px;"><div class="loading-state">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- VIEW SCORE — a focused, at-a-glance scoreboard. Draws the same
+         participation data that fills My Unplug (status, score, streak,
+         passport, achievements), lifted out of that busy profile-editing
+         section so a member can see how they're doing in one glance without
+         scrolling past the profile form. Frontend-only: GET /participation/dashboard. -->
+    <section class="ms-section section-hidden" data-ms-section="viewscore">
+      <div class="error-banner" id="vsError"></div>
+
+      <div class="card" style="text-align:center;">
+        <div id="vsStatusBadge" style="font-family:'Playfair Display',serif; font-size:26px; font-weight:700;">Loading…</div>
+        <div id="vsStatusSince" style="font-size:12.5px; color:var(--slate); margin-top:2px;"></div>
+        <div id="vsScore" style="font-family:'Playfair Display',serif; font-size:60px; font-weight:700; color:var(--red); line-height:1.05; margin-top:12px;">—</div>
+        <div style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--slate);">Unplug Score</div>
+        <div class="progress-track" style="max-width:420px; margin:18px auto 0;"><div class="progress-fill" id="vsNextFill"></div></div>
+        <div id="vsNextStatus" style="margin-top:8px; font-size:13px; color:var(--slate);"></div>
+        <button class="btn btn-solid" id="vsShareBtn" type="button" style="width:auto; margin-top:16px;">Share my status →</button>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:16px;">
+        <div class="card" style="margin:0; text-align:center;">
+          <div style="font-family:'Playfair Display',serif; font-size:40px; font-weight:700; color:var(--red);"><span id="vsStreak">0</span> <span style="font-size:26px;">🔥</span></div>
+          <div style="font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--slate);">Day Streak</div>
+          <div id="vsStreakNextTier" style="margin-top:8px; font-size:12px; color:var(--slate);"></div>
+        </div>
+        <div class="card" style="margin:0; text-align:center;">
+          <div id="vsAchCount" style="font-family:'Playfair Display',serif; font-size:40px; font-weight:700; color:var(--red);">0</div>
+          <div style="font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--slate);">Achievements</div>
+        </div>
+        <div class="card" style="margin:0; text-align:center;">
+          <div id="vsPassportCount" style="font-family:'Playfair Display',serif; font-size:40px; font-weight:700; color:var(--red);">0 / 0</div>
+          <div style="font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--slate);">Passport Stamps</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0;">Unplug Passport</h2>
+          <span id="vsPassportPct" style="font-size:12px; color:var(--slate);">0%</span>
+        </div>
+        <p class="sub">Every stamp is a different way you've taken part. Collect them all.</p>
+        <div class="progress-track"><div class="progress-fill" id="vsPassportFill"></div></div>
+        <div id="vsPassport" style="display:flex; flex-wrap:wrap; gap:12px; margin-top:14px;"><div class="loading-state">Loading…</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Achievements</h2>
+        <div id="vsAchievements"><div class="loading-state">Loading…</div></div>
       </div>
     </section>
 
@@ -1288,6 +1359,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 <div id="shareCardOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
   <div style="background:var(--cream); border-radius:10px; padding:20px; max-width:420px; width:100%; text-align:center;">
     <canvas id="shareCardCanvas" width="1200" height="630" style="width:100%; height:auto; border-radius:8px; border:1px solid var(--paper-line);"></canvas>
+    <div id="shareCardSizes" style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; justify-content:center;">
+      <button class="btn btn-line share-size-btn active" type="button" data-size="landscape" style="width:auto; padding:6px 12px; font-size:12px;">Landscape</button>
+      <button class="btn btn-line share-size-btn" type="button" data-size="square" style="width:auto; padding:6px 12px; font-size:12px;">Square</button>
+      <button class="btn btn-line share-size-btn" type="button" data-size="story" style="width:auto; padding:6px 12px; font-size:12px;">Story</button>
+    </div>
     <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; justify-content:center;">
       <button class="btn btn-solid" id="shareCardDownloadBtn" type="button" style="width:auto; padding:9px 16px;">Download PNG</button>
       <button class="btn btn-line" id="shareCardNativeBtn" type="button" style="width:auto; padding:9px 16px; display:none;">Share…</button>
@@ -4503,6 +4579,47 @@ function muRenderPublishState() {
   btn.style.width = 'auto';
 }
 
+// ---- My Unplug profile: read-only summary + edit toggle ----
+// Once a member has filled in their profile, show a clean summary instead of a
+// screen of inputs; "Edit" re-opens the form. Frontend-only, driven by the same
+// MU_PROFILE the form already uses.
+function muProfileHasContent() {
+  const p = MU_PROFILE || {};
+  return !!(p.username || p.display_name || p.about_me || (p.tags && p.tags.length));
+}
+function muRenderProfileView() {
+  const view = document.getElementById('muProfileView');
+  if (!view) return;
+  const p = MU_PROFILE || {};
+  const loc = [p.city, p.province, p.country].filter(Boolean).join(', ');
+  const tags = (p.tags || []).map((t) => `<span class="mu-view-tag">${escapeHtmlM(t)}</span>`).join('');
+  const avatar = p.avatar_url
+    ? `<img class="mu-view-avatar" src="${escapeHtmlM(p.avatar_url)}" alt="">`
+    : '<div class="mu-view-avatar mu-view-avatar-empty"></div>';
+  view.innerHTML =
+    '<div class="mu-view-head">' + avatar +
+      '<div class="mu-view-id">' +
+        `<div class="mu-view-name">${escapeHtmlM(p.display_name || p.username || 'Your profile')}</div>` +
+        (p.username ? `<div class="mu-view-username">@${escapeHtmlM(p.username)}</div>` : '') +
+        (loc ? `<div class="mu-view-loc">${escapeHtmlM(loc)}</div>` : '') +
+      '</div>' +
+      '<button class="btn btn-line mu-view-edit" type="button" id="muEditBtn">Edit</button>' +
+    '</div>' +
+    (p.about_me ? `<p class="mu-view-about">${escapeHtmlM(p.about_me)}</p>` : '') +
+    (tags ? `<div class="mu-view-tags">${tags}</div>` : '');
+}
+function muSetProfileMode(mode) {
+  const edit = document.getElementById('muEditFields');
+  const view = document.getElementById('muProfileView');
+  if (!edit || !view) return;
+  const showView = mode === 'view';
+  edit.hidden = showView;
+  view.hidden = !showView;
+}
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.id === 'muEditBtn') muSetProfileMode('edit');
+});
+
 function muFillForm() {
   const p = MU_PROFILE || {};
   document.getElementById('muUsername').value = p.username || '';
@@ -4522,6 +4639,8 @@ function muFillForm() {
     avatarHost.innerHTML = UnplugUpload.fieldHtml('muAvatar', p.avatar_url || '', '', imgSpecFull('person_portrait'));
   }
   muRenderPublishState();
+  muRenderProfileView();
+  muSetProfileMode(muProfileHasContent() ? 'view' : 'edit');
 }
 
 let _muLoaded = false;
@@ -4599,6 +4718,8 @@ document.getElementById('muSaveBtn').addEventListener('click', async () => {
     MU_PROFILE = data.profile;
     muRenderCompletion(data.completion);
     muRenderPublishState();
+    muRenderProfileView();
+    muSetProfileMode('view');
     showToast(MU_PROFILE.is_published ? 'Profile saved and updated publicly.' : 'Profile saved — still private until you publish.');
   } catch (e) {
     err.textContent = e.message; err.classList.add('show');
@@ -4794,6 +4915,98 @@ async function loadMyUnplug() {
     document.getElementById('unplugReferralLink').textContent = '—';
     document.getElementById('unplugReferralStats').textContent = '';
     document.getElementById('unplugStreakNextTier').textContent = '';
+  }
+}
+
+// VIEW SCORE — a focused scoreboard drawn from the same
+// GET /participation/dashboard payload as My Unplug. Kept as its own loader
+// (re-fetched on each visit) so the two sections stay decoupled: this page is
+// only status, score, progress-to-next, streak, passport and achievements —
+// lifted out of the busy My Unplug profile section where members lost them.
+async function loadViewScore() {
+  const err = document.getElementById('vsError');
+  if (err) err.classList.remove('show');
+  try {
+    const data = await api('/participation/dashboard');
+    const status = data.currentStatus;
+    const score = (data.score && data.score.unplug_score) || 0;
+
+    document.getElementById('vsStatusBadge').textContent = status
+      ? `${status.emoji} ${status.label}` : '🌱 Explorer';
+    document.getElementById('vsStatusSince').textContent = status && status.achieved_at
+      ? 'Since ' + msDate(status.achieved_at) : '';
+    document.getElementById('vsScore').textContent = score;
+
+    CURRENT_STATUS_FOR_SHARE = {
+      emoji: status ? status.emoji : '🌱',
+      label: status ? status.label : 'Explorer',
+      score: score,
+    };
+
+    // Progress toward the next status. The floor is the current status's own
+    // minimum when the payload carries it, otherwise 0 — either way the bar
+    // and the "points to go" line can never go negative or past 100%.
+    const next = data.nextStatus;
+    const nextFill = document.getElementById('vsNextFill');
+    const nextLine = document.getElementById('vsNextStatus');
+    if (next) {
+      const curMin = (status && typeof status.min_score === 'number') ? status.min_score : 0;
+      const span = Math.max(next.min_score - curMin, 1);
+      const pct = Math.max(0, Math.min(100, Math.round(((score - curMin) / span) * 100)));
+      nextFill.style.width = pct + '%';
+      const toGo = Math.max(next.min_score - score, 0);
+      nextLine.textContent = `${toGo} more point${toGo === 1 ? '' : 's'} to ${next.emoji} ${next.label}`;
+    } else {
+      nextFill.style.width = '100%';
+      nextLine.textContent = 'You\'ve reached the top of the status ladder. 👑';
+    }
+
+    // Streak
+    const currentStreakDays = (data.streak && data.streak.current_streak_days) || 0;
+    document.getElementById('vsStreak').textContent = currentStreakDays;
+    const nextTier = (data.streakTiers || []).find((t) => t.min_days > currentStreakDays);
+    document.getElementById('vsStreakNextTier').textContent = nextTier
+      ? `${nextTier.min_days - currentStreakDays} more day${nextTier.min_days - currentStreakDays === 1 ? '' : 's'} to ${nextTier.emoji} ${nextTier.label} (+${nextTier.bonus_points} pts)`
+      : ((data.streakTiers || []).length ? 'Top streak tier reached! 🔥' : '');
+
+    // Achievements — own class (vs-share-ach-btn) so re-renders of My Unplug's
+    // list never double-wire these, and vice versa.
+    const ach = data.achievements || [];
+    document.getElementById('vsAchCount').textContent = ach.length;
+    document.getElementById('vsAchievements').innerHTML = ach.length
+      ? `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px;">${ach.map((a) => `
+        <div style="text-align:center; padding:12px 6px; border:1px solid var(--paper-line); border-radius:6px;">
+          <div style="font-size:26px;">${a.emoji}</div>
+          <div style="font-size:11.5px; font-weight:600; margin-top:4px;">${escapeHtmlM(a.label)}</div>
+          <button class="vs-share-ach-btn" type="button" data-emoji="${escapeAttrM(a.emoji)}" data-label="${escapeAttrM(a.label)}" style="border:none; background:none; color:var(--red); font-size:11px; cursor:pointer; margin-top:4px; padding:0;">Share →</button>
+        </div>`).join('')}</div>`
+      : '<p class="sub" style="margin:0;">No achievements yet — take part and they\'ll start unlocking.</p>';
+    document.querySelectorAll('#vsAchievements .vs-share-ach-btn').forEach((btn) => {
+      btn.addEventListener('click', () => openShareCard({
+        emoji: btn.dataset.emoji, title: btn.dataset.label, subtitle: 'Achievement unlocked on Unplug', footer: 'unplugnews.com',
+      }));
+    });
+
+    // Passport, with a completion bar
+    const passport = data.passport || [];
+    const earned = passport.filter((p) => p.earned).length;
+    document.getElementById('vsPassportCount').textContent = `${earned} / ${passport.length}`;
+    const pPct = passport.length ? Math.round((earned / passport.length) * 100) : 0;
+    document.getElementById('vsPassportFill').style.width = pPct + '%';
+    document.getElementById('vsPassportPct').textContent = pPct + '%';
+    document.getElementById('vsPassport').innerHTML = passport.length
+      ? passport.map((p) => `
+        <div style="text-align:center; width:66px; opacity:${p.earned ? '1' : '0.3'};" title="${escapeHtmlM(p.label)}">
+          <div style="font-size:24px;">${p.emoji}</div>
+          <div style="font-size:10px; margin-top:2px;">${escapeHtmlM(p.label)}</div>
+        </div>`).join('')
+      : '<p class="sub" style="margin:0;">No passport stamps yet.</p>';
+  } catch (e) {
+    if (err) { err.textContent = 'Could not load your score — ' + (e.message || 'please try again shortly.'); err.classList.add('show'); }
+    const badge = document.getElementById('vsStatusBadge'); if (badge) badge.textContent = 'Could not load';
+    const sc = document.getElementById('vsScore'); if (sc) sc.textContent = '—';
+    const ap = document.getElementById('vsAchievements'); if (ap) ap.innerHTML = '';
+    const pp = document.getElementById('vsPassport'); if (pp) pp.innerHTML = '';
   }
 }
 
@@ -5146,6 +5359,12 @@ function msSetupNav(){
   });
   document.querySelectorAll('.ms-navlink[data-ms="myvotes"]').forEach(function(link){
     link.addEventListener('click', function(){ loadMyVotes(); });
+  });
+  // View Score re-reads the participation dashboard on each visit so the
+  // scoreboard is always current — a member checks it precisely to see what
+  // moved. Same generic show/hide as every other link switched the section.
+  document.querySelectorAll('.ms-navlink[data-ms="viewscore"]').forEach(function(link){
+    link.addEventListener('click', function(){ loadViewScore(); });
   });
   document.querySelectorAll('.ms-navlink[data-ms="account"]').forEach(function(link){
     link.addEventListener('click', function(){ loadNotifPrefs(); loadTwoFactor(); });
@@ -6458,69 +6677,153 @@ async function loadReadingList(){
 // ---------------------------------------------------------------------------
 let CURRENT_STATUS_FOR_SHARE = null;
 
-function openShareCard({ emoji, title, subtitle, footer }) {
+const SHARE_SIZES = {
+  landscape: { w: 1200, h: 630 },   // link previews, X, Facebook
+  square:    { w: 1080, h: 1080 },  // Instagram / general post
+  story:     { w: 1080, h: 1920 },  // WhatsApp / IG story
+};
+let CURRENT_SHARE_OPTS = null;
+let _shareSize = 'landscape';
+let _shareAvatar = null;   // cached loaded Image, or null → monogram fallback
+
+function _shareInitials(name) {
+  const parts = String(name || '').replace(/^@/, '').split(/[\s_]+/).filter(Boolean);
+  const s = ((parts[0] || '')[0] || '') + ((parts[1] || '')[0] || '');
+  return (s || 'U').toUpperCase();
+}
+
+// Draws the branded card at the currently selected platform size. Everything is
+// proportional to the canvas, so one routine covers landscape / square / story.
+// The member's photo is drawn when it loaded cross-origin (see openShareCard),
+// otherwise a monogram stands in — either way the canvas stays untainted so
+// download and native share keep working.
+function drawShareCard() {
   const canvas = document.getElementById('shareCardCanvas');
+  const S = SHARE_SIZES[_shareSize] || SHARE_SIZES.landscape;
+  const W = S.w, H = S.h;
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
+  const o = CURRENT_SHARE_OPTS || {};
+  const cx = W / 2;
+  const m = Math.min(W, H);
 
   const grad = ctx.createLinearGradient(0, 0, W, H);
   grad.addColorStop(0, '#721415');
   grad.addColorStop(1, '#d20709');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
-
   ctx.textAlign = 'center';
+
+  const r = m * 0.12;
+  const photoY = H * 0.20;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, photoY, r + m * 0.012, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, photoY, r, 0, Math.PI * 2); ctx.clip();
+  if (_shareAvatar) {
+    ctx.drawImage(_shareAvatar, cx - r, photoY - r, r * 2, r * 2);
+  } else {
+    ctx.fillStyle = '#8a1113'; ctx.fillRect(cx - r, photoY - r, r * 2, r * 2);
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+    ctx.font = `700 ${r}px Georgia, serif`;
+    ctx.fillText(_shareInitials(o.who), cx, photoY);
+    ctx.textBaseline = 'alphabetic';
+  }
+  ctx.restore();
+
   ctx.fillStyle = '#fff';
-  ctx.font = '140px sans-serif';
-  ctx.fillText(emoji || '🏆', W / 2, 280);
+  let y = photoY + r + m * 0.10;
+  ctx.font = `${W * 0.075}px sans-serif`;
+  ctx.fillText(o.emoji || '🏆', cx, y);
 
-  ctx.font = '700 56px Georgia, serif';
-  wrapCanvasText(ctx, title || '', W / 2, 380, W - 160, 64);
+  y += m * 0.10;
+  ctx.font = `700 ${W * 0.052}px Georgia, serif`;
+  y = wrapCanvasText(ctx, o.title || '', cx, y, W * 0.82, W * 0.062);
 
-  ctx.font = '32px sans-serif';
-  ctx.globalAlpha = 0.9;
-  ctx.fillText(subtitle || '', W / 2, 470);
+  y += m * 0.035;
+  ctx.font = `${W * 0.032}px sans-serif`;
+  ctx.globalAlpha = 0.92;
+  wrapCanvasText(ctx, o.subtitle || '', cx, y, W * 0.8, W * 0.044);
   ctx.globalAlpha = 1;
 
-  ctx.font = '600 26px sans-serif';
-  ctx.fillText((footer || 'unplugnews.com').toUpperCase(), W / 2, H - 50);
+  ctx.font = `700 ${W * 0.038}px Georgia, serif`;
+  ctx.fillText('UNPLUG', cx, H - m * 0.085);
+  ctx.font = `600 ${W * 0.024}px sans-serif`;
+  ctx.globalAlpha = 0.85;
+  ctx.fillText((o.footer || 'unplugnews.com').toUpperCase(), cx, H - m * 0.04);
+  ctx.globalAlpha = 1;
+}
 
-  const waText = encodeURIComponent(`${emoji || ''} ${title || ''} — ${subtitle || ''} on Unplug! unplugnews.com`);
+// Rebuilds the WhatsApp link and the native-share file for the current canvas.
+function _shareRefreshActions() {
+  const o = CURRENT_SHARE_OPTS || {};
+  const waText = encodeURIComponent(`${o.emoji || ''} ${o.title || ''} — ${o.subtitle || ''} on Unplug! unplugnews.com`);
   document.getElementById('shareCardWaBtn').href = `https://wa.me/?text=${waText}`;
-
-  const overlay = document.getElementById('shareCardOverlay');
-  overlay.style.display = 'flex';
-
-  const downloadBtn = document.getElementById('shareCardDownloadBtn');
-  downloadBtn.onclick = () => {
-    canvas.toBlob((blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'unplug-share.png';
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-  };
-
   const nativeBtn = document.getElementById('shareCardNativeBtn');
   if (navigator.share && navigator.canShare) {
-    canvas.toBlob((blob) => {
-      const file = new File([blob], 'unplug-share.png', { type: 'image/png' });
+    document.getElementById('shareCardCanvas').toBlob((blob) => {
+      if (!blob) { nativeBtn.style.display = 'none'; return; }
+      const file = new File([blob], `unplug-${_shareSize}.png`, { type: 'image/png' });
       if (navigator.canShare({ files: [file] })) {
         nativeBtn.style.display = 'inline-block';
-        nativeBtn.onclick = () => navigator.share({ files: [file], title, text: subtitle }).catch(() => {});
+        nativeBtn.onclick = () => navigator.share({ files: [file], title: o.title, text: o.subtitle }).catch(() => {});
+      } else {
+        nativeBtn.style.display = 'none';
       }
     });
   } else {
     nativeBtn.style.display = 'none';
   }
-
-  document.getElementById('shareCardCloseBtn').onclick = () => { overlay.style.display = 'none'; };
 }
 
+function openShareCard(opts) {
+  CURRENT_SHARE_OPTS = opts || {};
+  const mu = (typeof MU_PROFILE !== 'undefined' && MU_PROFILE) ? MU_PROFILE : null;
+  if (!CURRENT_SHARE_OPTS.who && mu) CURRENT_SHARE_OPTS.who = mu.display_name || mu.username || '';
+  _shareSize = 'landscape';
+  document.querySelectorAll('.share-size-btn').forEach((b) => b.classList.toggle('active', b.dataset.size === 'landscape'));
+
+  // Load the member's photo cross-origin so drawing it never taints the canvas
+  // (download/share must keep working). No photo, or a host that sends no CORS
+  // header → it simply fails to load and the monogram is used instead.
+  const avatarUrl = mu && mu.avatar_url;
+  if (!avatarUrl) {
+    _shareAvatar = null;
+  } else if (!_shareAvatar || _shareAvatar._src !== avatarUrl) {
+    _shareAvatar = null;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { img._src = avatarUrl; _shareAvatar = img; drawShareCard(); _shareRefreshActions(); };
+    img.onerror = () => { _shareAvatar = null; drawShareCard(); _shareRefreshActions(); };
+    img.src = avatarUrl;
+  }
+
+  drawShareCard();
+  _shareRefreshActions();
+  document.getElementById('shareCardOverlay').style.display = 'flex';
+
+  document.getElementById('shareCardDownloadBtn').onclick = () => {
+    document.getElementById('shareCardCanvas').toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `unplug-${_shareSize}.png`; a.click();
+      URL.revokeObjectURL(url);
+    });
+  };
+  document.getElementById('shareCardCloseBtn').onclick = () => { document.getElementById('shareCardOverlay').style.display = 'none'; };
+}
+
+document.querySelectorAll('.share-size-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    _shareSize = btn.dataset.size || 'landscape';
+    document.querySelectorAll('.share-size-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    drawShareCard();
+    _shareRefreshActions();
+  });
+});
+
 function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
-  const words = text.split(' ');
+  const words = String(text || '').split(' ');
   let line = '';
   let lineY = y;
   for (const word of words) {
@@ -6534,6 +6837,7 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
     }
   }
   ctx.fillText(line, x, lineY);
+  return lineY;
 }
 
 // ---------------------------------------------------------------------------
@@ -6656,6 +6960,20 @@ async function loadMyAnalytics() {
 }
 
 document.getElementById('shareStatusBtn').addEventListener('click', () => {
+  if (!CURRENT_STATUS_FOR_SHARE) return;
+  openShareCard({
+    emoji: CURRENT_STATUS_FOR_SHARE.emoji,
+    title: CURRENT_STATUS_FOR_SHARE.label,
+    subtitle: `${CURRENT_STATUS_FOR_SHARE.score} points on Unplug`,
+    footer: 'unplugnews.com',
+  });
+});
+
+// The View Score page carries its own "Share my status" button. Same status
+// share as above; CURRENT_STATUS_FOR_SHARE is set on load and refreshed by
+// loadViewScore, so it is populated whichever section drew last.
+const vsShareBtnEl = document.getElementById('vsShareBtn');
+if (vsShareBtnEl) vsShareBtnEl.addEventListener('click', () => {
   if (!CURRENT_STATUS_FOR_SHARE) return;
   openShareCard({
     emoji: CURRENT_STATUS_FOR_SHARE.emoji,
