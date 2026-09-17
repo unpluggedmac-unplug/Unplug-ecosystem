@@ -51,6 +51,72 @@ function withGrowthIntegration(response, pathname) {
   return rewriter.transform(response);
 }
 
+// --- Per-article social previews (edge meta injection) ---------------------
+// Social crawlers (WhatsApp, Facebook, X, LinkedIn, Slack, …) read a link
+// card's meta from the served HTML and never run the page's JavaScript, so the
+// client-side per-article meta updates in unplug-magazine.html never reach
+// them — a shared story would otherwise preview with the generic site card.
+// For a crawler requesting a deep-linked article, rewrite the card's
+// title / description / image at the edge from the same public /articles/:id
+// the reader uses, falling back to the untouched site-level meta on any miss.
+// Real visitors are not matched (their own JS sets the meta), so a normal page
+// view gains no latency.
+const SOCIAL_CRAWLER = /facebookexternalhit|Facebot|Twitterbot|WhatsApp|LinkedInBot|Slackbot|TelegramBot|Discordbot|Pinterest|redditbot|Googlebot|Google-InspectionTool|bingbot|Applebot|SkypeUriPreview|vkShare|Embedly|Iframely/i;
+const META_PAGES = /^\/(?:index|unplug-magazine)?(?:\.html)?$/i;
+
+function absoluteImage(u) {
+  const s = String(u || '');
+  if (!s) return '';
+  return /^https?:\/\//i.test(s) ? s : 'https://www.unplugnews.com' + (s.startsWith('/') ? '' : '/') + s;
+}
+function firstText(html, max) {
+  return String(html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+async function articleMeta(api, id) {
+  const res = await fetch(`${api}/articles/${encodeURIComponent(id)}`, {
+    headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(4000),
+  });
+  if (!res.ok) return null;
+  const a = await res.json();
+  if (!a || (!a.title && !a.seo_title)) return null;
+  return {
+    title: a.seo_title || a.title,
+    description: (a.meta_description && String(a.meta_description).trim()) || firstText(a.body, 200),
+    image: absoluteImage(a.banner_image_url) || 'https://www.unplugnews.com/social-banner.jpg',
+  };
+}
+async function withSocialMeta(response, request, url, api) {
+  if (!SOCIAL_CRAWLER.test(request.headers.get('user-agent') || '')) return response;
+  if (!META_PAGES.test(url.pathname)) return response;
+  const type = String(response.headers.get('content-type') || '').toLowerCase();
+  if (!type.includes('text/html')) return response;
+
+  let meta = null;
+  try {
+    if (url.searchParams.get('p') === 'article' && url.searchParams.get('id')) {
+      meta = await articleMeta(api, url.searchParams.get('id'));
+    }
+  } catch (_) { meta = null; }
+  if (!meta) return response;
+
+  const fullTitle = /unplug\s*magazine\s*$/i.test(meta.title) ? meta.title : meta.title + ' — Unplug Magazine';
+  const pageUrl = 'https://www.unplugnews.com' + url.pathname + (url.search || '');
+  const setC = (val) => ({ element(el) { el.setAttribute('content', val); } });
+
+  return new HTMLRewriter()
+    .on('title', { element(el) { el.setInnerContent(fullTitle); } })
+    .on('link[rel="canonical"]', { element(el) { el.setAttribute('href', pageUrl); } })
+    .on('meta[name="description"]', setC(meta.description))
+    .on('meta[property="og:title"]', setC(meta.title))
+    .on('meta[property="og:description"]', setC(meta.description))
+    .on('meta[property="og:image"]', setC(meta.image))
+    .on('meta[property="og:url"]', setC(pageUrl))
+    .on('meta[name="twitter:title"]', setC(meta.title))
+    .on('meta[name="twitter:description"]', setC(meta.description))
+    .on('meta[name="twitter:image"]', setC(meta.image))
+    .transform(response);
+}
+
 export async function onRequest(context) {
   const { request, next, env, waitUntil } = context;
   const url = new URL(request.url);
@@ -118,7 +184,9 @@ export async function onRequest(context) {
 
   const response = await next();
   if (response.status !== 404) {
-    return request.method === 'GET' ? withGrowthIntegration(response, url.pathname) : response;
+    if (request.method !== 'GET') return response;
+    const withMeta = await withSocialMeta(response, request, url, api);
+    return withGrowthIntegration(withMeta, url.pathname);
   }
   if (request.method !== 'GET' || IGNORED.test(url.pathname)) return response;
 
