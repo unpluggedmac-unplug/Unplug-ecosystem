@@ -176,6 +176,11 @@
     // No Content-Type header: the browser must set the multipart boundary
     // itself, and setting it by hand breaks the upload.
     if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    // A stalled upload must say so rather than spin forever. The server now
+    // stores the original and replies before building the responsive versions,
+    // so a normal upload returns quickly and this only ever fires on a genuine
+    // network or server stall (see xhr.ontimeout below).
+    xhr.timeout = 120000; // 2 minutes
 
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable) return;
@@ -214,6 +219,11 @@
     xhr.onerror = () => {
       hideBar();
       status.textContent = 'Upload failed — please check your connection and try again.';
+      status.className = 'img-upload-status error';
+    };
+    xhr.ontimeout = () => {
+      hideBar();
+      status.textContent = 'That took too long and was stopped. Please try again — if it keeps happening, try a slightly smaller image.';
       status.className = 'img-upload-status error';
     };
 
