@@ -23,57 +23,6 @@ function loadCss(){
   (document.head||document.documentElement).appendChild(link);
 }
 
-function syncTopNotification(){
-  var tree=q('#ccMemberTree');
-  if(!tree)return;
-  var community=q('[data-node="g-community"]',tree);
-  var source=community&&q('[data-id="notifications"]',community);
-  if(!source)return;
-
-  var existing=q('[data-node="notifications-quick"]',tree);
-  if(!existing){
-    var wrap=document.createElement('div');
-    wrap.className='cc-member-node cc-member-leaf';
-    wrap.dataset.node='notifications-quick';
-    wrap.style.setProperty('--cc-depth',0);
-    wrap.innerHTML='<div class="cc-member-leaf-row"><button type="button" class="cc-member-nav-action" data-id="notifications-quick" aria-label="Open notifications"><span class="cc-member-icon">●</span><span class="cc-member-label">Notifications</span><span class="cc-member-count" data-polish-notification-count hidden></span></button><button type="button" class="cc-member-star" data-polish-notification-star aria-label="Favourite Notifications">☆</button></div>';
-    var home=q('[data-node="g-home"]',tree);
-    if(home&&home.nextSibling)tree.insertBefore(wrap,home.nextSibling);else if(home)tree.appendChild(wrap);else tree.insertBefore(wrap,tree.firstChild);
-    existing=wrap;
-
-    q('[data-id="notifications-quick"]',wrap).addEventListener('click',function(){
-      var current=q('[data-node="g-community"] [data-id="notifications"]',tree);
-      if(current)current.click();
-    });
-    q('[data-polish-notification-star]',wrap).addEventListener('click',function(ev){
-      ev.stopPropagation();
-      var star=q('[data-node="g-community"] [data-star="notifications"]',tree);
-      if(star)star.click();
-      schedule();
-    });
-  }
-
-  var nativeCount=q('#notifCountBadge');
-  var count=q('[data-polish-notification-count]',existing);
-  var text=nativeCount?String(nativeCount.textContent||'').trim():'';
-  var visible=!!text && !(nativeCount&&nativeCount.style&&nativeCount.style.display==='none') && !(nativeCount&&nativeCount.hidden);
-  if(count){txt(count,text);if(count.hidden===visible)count.hidden=!visible}
-
-  var sourceStar=q('[data-node="g-community"] [data-star="notifications"]',tree);
-  var quickStar=q('[data-polish-notification-star]',existing);
-  if(sourceStar&&quickStar){
-    txt(quickStar,sourceStar.textContent||'☆');
-    quickStar.setAttribute('aria-label',(sourceStar.textContent==='★'?'Remove Notifications from favourites':'Favourite Notifications'));
-  }
-
-  var quick=q('[data-id="notifications-quick"]',existing);
-  if(quick){
-    var isActive=source.classList.contains('active');
-    quick.classList.toggle('active',isActive);
-    if(isActive)quick.setAttribute('aria-current','page');else quick.removeAttribute('aria-current');
-  }
-}
-
 function accountLeaf(id,label,icon){
   var wrap=document.createElement('div');
   wrap.className='cc-member-node cc-member-leaf';
@@ -118,10 +67,10 @@ function syncAccountShortcuts(){
     q('[data-account-shortcut="login-security"]',security).addEventListener('click',function(){openAccountShortcut('login-security','Login & Security','#twoFactorContent')});
   }
   if(!q('[data-node="communication-preferences"]',children)){
-    var prefs=accountLeaf('communication-preferences','Communication Preferences','●');
+    var prefs=accountLeaf('communication-preferences','Notification Preferences','●');
     var securityNode=q('[data-node="login-security"]',children);
     if(securityNode&&securityNode.nextSibling)children.insertBefore(prefs,securityNode.nextSibling);else children.appendChild(prefs);
-    q('[data-account-shortcut="communication-preferences"]',prefs).addEventListener('click',function(){openAccountShortcut('communication-preferences','Communication Preferences','#notifPrefsContent')});
+    q('[data-account-shortcut="communication-preferences"]',prefs).addEventListener('click',function(){openAccountShortcut('communication-preferences','Notification Preferences','#notifPrefsContent')});
   }
   if(accountShortcut){
     var active=q('[data-account-shortcut="'+accountShortcut+'"]',children);
@@ -129,17 +78,121 @@ function syncAccountShortcuts(){
   }
 }
 
+var PAGE_META={
+  'directory-profile':['My Directory Profile','Manage the public professional or business profile people see in the Unplug Directory.'],
+  'directory-performance':['Directory Performance','Review the existing analytics connected to your public Directory presence and published work.'],
+  'community-profile':['My Profile','Manage your personal Unplug profile, identity details and community visibility.'],
+  'profile-completion':['Profile Completion','See what is complete and exactly what still needs attention on your personal profile.'],
+  'public-profile':['Preview My Unplug Profile','Open the existing public-profile preview for your personal Unplug identity.'],
+  'growth-overview':['My Growth Journey','Continue your existing Growth Application, assigned tasks and development progress.'],
+  'my-submissions':['My Submissions','View content and entries you have submitted and check their current status.'],
+  'my-articles':['My Articles','View your article submissions and their current approval or publishing status.'],
+  'my-events':['My Events','View your event submissions and their current approval or publishing status.'],
+  'my-listings':['My Listings','View your listing submissions and their current approval or publishing status.'],
+  'my-gallery':['My Gallery','View Gallery content you have submitted and its current approval status.'],
+  'reading-list':['Reading List','Return to articles you saved so you can read them again later.'],
+  'my-editions':['My Editions','View magazine editions connected to your member account.'],
+  'journey-referral':['Referral Progress','Track the existing referral activity connected to your Unplug participation.'],
+  'my-referrals':['My Referrals','View members connected to your existing referral or representative activity.'],
+  'my-clients':['My Clients','View members connected to your existing representative or consultant role.'],
+  'journey-status':['My Score & Level','See your current Unplug Score, status level, streak and recognition progress.'],
+  'journey-today':['Missions','View the current missions already available through your My Unplug participation.'],
+  'journey-week':["This Week's Mission",'View the current weekly mission and your existing progress.'],
+  'journey-month':["This Month's Challenge",'View the current monthly challenge and your existing progress.'],
+  'journey-achievements':['My Achievements','Review achievements already awarded through your Unplug participation.'],
+  'journey-passport':['Unplug Passport','Review the passport stamps and milestones already earned on your journey.'],
+  'leaderboard':['Leaderboard','View the existing Unplug rankings and participation leaderboard.'],
+  'my-competitions':['My Competitions','View competition entries connected to your account and their status.'],
+  'my-votes':['My Votes','Review votes and vote packages already connected to your account.'],
+  'browse-competitions':['Browse Competitions','Explore competition opportunities currently available on UnplugNews.'],
+  'browse-services':['Browse Services','Explore the existing UnplugNews services available to members.'],
+  'my-services':['My Services','View services already connected to your account and their current state.'],
+  'my-advertising':['My Advertising','View advertising submissions connected to your account and their current status.'],
+  'my-orders':['My Orders','Review your existing orders, references and current payment or approval state.'],
+  'payments':['Payments','Review payment records already connected to your member account.'],
+  'my-credits':['Unplug Credits','Review your available Unplug Credit and existing credit history.'],
+  'my-invoices':['My Invoices','Open invoices already issued for your member purchases.'],
+  'notifications':['All Notifications','Review important member, account and activity notifications in one place.'],
+  'my-agreements':['My Agreements','Review agreements currently connected to your member account.'],
+  'available-agreements':['Available Agreements','View agreement templates currently available for you to complete.'],
+  'contact-support':['Contact Support','Use the existing UnplugNews contact channel when you need help.'],
+  'account-settings':['Account Details','Manage the account controls already available in your member workspace.'],
+  'login-security':['Login & Security','Manage your password and existing two-step sign-in controls.'],
+  'communication-preferences':['Notification Preferences','Choose which non-essential account notifications UnplugNews sends you.'],
+  'your-data':['Privacy & Your Data','Review privacy controls and the data tools available to your account.'],
+  'download-data':['Download My Data','Use the existing privacy export tool to download your account data.']
+};
+function pageActive(){return q('#ccMemberNav .cc-member-nav-action.active')||q('#ccMemberNav [aria-current="page"]')}
+function pageLabel(button){var x=button&&q('.cc-member-label',button);return String((x&&x.textContent)||(button&&button.textContent)||'Member Dashboard').replace(/\s+/g,' ').trim()}
+function pageStatus(id,section){
+  var label='',note='';
+  if(id==='community-profile'||id==='profile-completion'||id==='public-profile'){
+    var p=q('#muCompletionPct'),pub=q('#muPublishLabel');
+    label=String((pub&&pub.textContent)||(p&&p.textContent)||'In progress').trim();
+    note=p&&p.textContent?'Profile completion '+String(p.textContent).trim():'Personal profile status';
+  }else if(id==='directory-profile'||id==='directory-performance'){
+    var pill=section&&q('.status-pill',section);
+    label=String((pill&&pill.textContent)||'Current profile').trim();
+    note='Directory status';
+  }else if(id==='notifications'){
+    var badge=q('#notifCountBadge'),n=String(badge&&badge.textContent||'').trim();
+    label=n?(n+' unread'):'Up to date';note='Notification status';
+  }else if(id==='my-submissions'||/^my-(articles|events|listings|advertising|competitions)$/.test(id)){
+    var rows=section?qa('.subs-row',section).length:0;
+    label=rows+' item'+(rows===1?'':'s');note='Current submission view';
+  }else{
+    label='Ready';note='This area is available to use.';
+  }
+  return {label:label,note:note};
+}
+function syncPageHeader(){
+  var home=q('#ccMemberHome');
+  if(home&&!home.classList.contains('section-hidden'))return;
+  var section=qa('.ms-section[data-ms-section]').find(function(x){return !x.classList.contains('section-hidden')&&!x.hidden});
+  if(!section)return;
+  var active=pageActive(),id=active&&active.dataset&&(active.dataset.id||active.dataset.accountShortcut)||'',label=pageLabel(active);
+  var meta=PAGE_META[id]||[label,'View and manage this part of your UnplugNews member account.'];
+  var status=pageStatus(id,section),sig=[id,meta[0],meta[1],status.label,status.note].join('|');
+  var head=q('[data-cc-page-head]',section);
+  if(!head){head=document.createElement('div');head.className='cc-member-page-head';head.dataset.ccPageHead='true';section.insertBefore(head,section.firstChild)}
+  if(head.dataset.signature===sig)return;
+  head.dataset.signature=sig;
+  head.innerHTML='<div class="cc-member-page-head-copy"><span>MEMBER DASHBOARD</span><h1>'+meta[0]+'</h1><p>'+meta[1]+'</p></div><div class="cc-member-page-status '+(/^Ready$/.test(status.label)?'is-neutral':'')+'"><small>'+status.note+'</small><strong>'+status.label+'</strong></div>';
+}
+
+function patchMobileMenuA11y(){
+  var button=q('#msMenuBtn'),side=q('#msSidebar');
+  if(!button||!side)return;
+  button.setAttribute('aria-controls','msSidebar');
+  button.setAttribute('aria-expanded',side.classList.contains('open')?'true':'false');
+  if(button.dataset.ccMobileBound)return;
+  button.dataset.ccMobileBound='true';
+  button.addEventListener('click',function(){setTimeout(function(){button.setAttribute('aria-expanded',side.classList.contains('open')?'true':'false')},0)});
+  document.addEventListener('keydown',function(ev){
+    if(ev.key!=='Escape'||!matchMedia('(max-width:820px)').matches||!side.classList.contains('open'))return;
+    side.classList.remove('open');
+    button.setAttribute('aria-expanded','false');
+    button.focus();
+  });
+}
+
 function patchNavigationA11y(){
+  var nav=q('#ccMemberNav');
+  if(nav){nav.setAttribute('role','navigation');nav.setAttribute('aria-label','Member Dashboard navigation')}
+  qa('#ccMemberNav .cc-member-icon').forEach(function(icon){icon.setAttribute('aria-hidden','true')});
   qa('#ccMemberNav .cc-member-branch').forEach(function(branch){
     var toggle=q(':scope > .cc-member-branch-head > .cc-member-toggle',branch);
     var children=q(':scope > .cc-member-children',branch);
+    var action=q(':scope > .cc-member-branch-head > .cc-member-nav-action',branch);
     if(!toggle||!children)return;
     if(!children.id)children.id='cc-member-children-'+Math.random().toString(36).slice(2,9);
+    var open=branch.classList.contains('open'),label=String((action&&q('.cc-member-label',action)&&q('.cc-member-label',action).textContent)||'section').replace(/\s+/g,' ').trim();
     toggle.setAttribute('aria-controls',children.id);
-    toggle.setAttribute('aria-expanded',branch.classList.contains('open')?'true':'false');
+    toggle.setAttribute('aria-expanded',open?'true':'false');
+    toggle.setAttribute('aria-label',(open?'Collapse ':'Expand ')+label);
     if(!toggle.dataset.ccA11yBound){
       toggle.dataset.ccA11yBound='true';
-      toggle.addEventListener('click',function(){setTimeout(function(){toggle.setAttribute('aria-expanded',branch.classList.contains('open')?'true':'false')},0)});
+      toggle.addEventListener('click',function(){setTimeout(patchNavigationA11y,0)});
     }
   });
 
@@ -147,8 +200,11 @@ function patchNavigationA11y(){
     if(button.classList.contains('active'))button.setAttribute('aria-current','page');
     else button.removeAttribute('aria-current');
   });
+  qa('#ccMemberNav .cc-member-star').forEach(function(star){
+    var row=star.closest('.cc-member-leaf-row'),button=row&&q('.cc-member-nav-action',row),label=String((button&&q('.cc-member-label',button)&&q('.cc-member-label',button).textContent)||'item').replace(/\s+/g,' ').trim();
+    star.setAttribute('aria-label',(star.textContent==='★'?'Remove ':'Add ')+label+(star.textContent==='★'?' from favourites':' to favourites'));
+  });
 }
-
 function patchHomeA11y(){
   qa('#ccMemberHome [data-panel]').forEach(function(panel){
     var button=q('.cc-home-panel-toggle',panel);
@@ -172,14 +228,14 @@ function profilePercent(){
 }
 
 function syncProfileChecklist(){
-  var cards=q('#ccHomeCards');
+  var cards=q('#ccHomeUnplug');
   if(!cards)return;
   var host=q('#ccHomeProfileChecklist');
   if(!host){
     host=document.createElement('div');
     host.id='ccHomeProfileChecklist';
     host.className='cc-home-profile-checklist';
-    cards.insertAdjacentElement('afterend',host);
+    cards.appendChild(host);
   }
   var pct=profilePercent();
   var todo=q('#muCompletionTodo');
@@ -199,7 +255,7 @@ function syncProfileChecklist(){
 }
 
 function syncGrowthBridge(){
-  var cards=q('#ccHomeCards');
+  var cards=q('#ccHomeUnplug');
   if(!cards)return;
   var host=q('#ccHomeGrowthBridge');
   if(!host){
@@ -207,7 +263,7 @@ function syncGrowthBridge(){
     host.id='ccHomeGrowthBridge';
     host.className='cc-home-growth-bridge';
     var checklist=q('#ccHomeProfileChecklist');
-    (checklist||cards).insertAdjacentElement('afterend',host);
+    if(checklist)checklist.insertAdjacentElement('afterend',host);else cards.appendChild(host);
   }
   var pct=profilePercent();
   var score=String((q('#unplugScore')&&q('#unplugScore').textContent)||'—').trim();
@@ -250,9 +306,9 @@ function augmentSearch(){
   var prefs=q('[data-polish-search="communication-preferences"]',results);
   var wantSecurity=!!term&&/login|security|password|two[- ]?factor|2fa/.test(term);
   var wantPrefs=!!term&&/communication|preference|notifications?|email/.test(term);
-  if(wantSecurity&&!security)addSearchShortcut(results,'login-security','Login & Security','Account & Privacy');
+  if(wantSecurity&&!security)addSearchShortcut(results,'login-security','Login & Security','Account & Settings');
   else if(!wantSecurity&&security)security.remove();
-  if(wantPrefs&&!prefs)addSearchShortcut(results,'communication-preferences','Communication Preferences','Account & Privacy');
+  if(wantPrefs&&!prefs)addSearchShortcut(results,'communication-preferences','Notification Preferences','Account & Settings');
   else if(!wantPrefs&&prefs)prefs.remove();
   if(wantSecurity||wantPrefs)results.hidden=false;
 }
@@ -260,12 +316,15 @@ function augmentSearch(){
 function patchSearch(){
   var search=q('#ccMemberSearch');
   var results=q('#ccMemberSearchResults');
-  if(!search||search.dataset.ccA11yBound)return;
+  if(!search)return;
+  search.setAttribute('aria-expanded',results&&!results.hidden?'true':'false');
+  if(search.dataset.ccA11yBound)return;
   search.dataset.ccA11yBound='true';
-  search.setAttribute('aria-label','Find something in My Unplug');
+  search.setAttribute('aria-label','Find something in Member Dashboard');
   search.setAttribute('aria-controls','ccMemberSearchResults');
+  search.setAttribute('aria-autocomplete','list');
   if(results){results.setAttribute('role','region');results.setAttribute('aria-label','Dashboard search results')}
-  search.addEventListener('input',function(){setTimeout(augmentSearch,0)});
+  search.addEventListener('input',function(){setTimeout(function(){augmentSearch();patchSearch()},0)});
   search.addEventListener('keydown',function(ev){
     if(ev.key!=='Escape')return;
     search.value='';
@@ -273,7 +332,6 @@ function patchSearch(){
     search.focus();
   });
 }
-
 function patchModal(){
   var modal=q('#ccMemberQuickCreate');
   if(!modal||modal.dataset.ccA11yBound)return;
@@ -281,21 +339,42 @@ function patchModal(){
   var card=q('.cc-member-modal-card',modal);
   var title=q('.cc-member-modal-head h2',modal);
   var close=q('[data-close]',modal);
+  var returnFocus=document.activeElement;
   if(card){
     card.setAttribute('role','dialog');
     card.setAttribute('aria-modal','true');
     if(title){if(!title.id)title.id='ccMemberQuickCreateTitle';card.setAttribute('aria-labelledby',title.id)}
   }
   if(close){close.setAttribute('aria-label','Close quick create');setTimeout(function(){try{close.focus()}catch(_){}},0)}
-  function esc(ev){if(ev.key==='Escape'){document.removeEventListener('keydown',esc,true);if(modal.isConnected)modal.remove()}}
-  document.addEventListener('keydown',esc,true);
+  function restore(){if(returnFocus&&returnFocus.focus&&document.contains(returnFocus))try{returnFocus.focus()}catch(_){}}
+  function keys(ev){
+    if(!modal.isConnected){document.removeEventListener('keydown',keys,true);return}
+    if(ev.key==='Escape'){
+      ev.preventDefault();
+      document.removeEventListener('keydown',keys,true);
+      modal.remove();
+      restore();
+      return;
+    }
+    if(ev.key!=='Tab'||!card)return;
+    var focusable=qa('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',card).filter(function(x){return !x.hidden&&x.offsetParent!==null});
+    if(!focusable.length)return;
+    var first=focusable[0],last=focusable[focusable.length-1];
+    if(ev.shiftKey&&document.activeElement===first){ev.preventDefault();last.focus()}
+    else if(!ev.shiftKey&&document.activeElement===last){ev.preventDefault();first.focus()}
+  }
+  document.addEventListener('keydown',keys,true);
+  modal.addEventListener('click',function(ev){
+    if(!(ev.target===modal||(ev.target&&ev.target.closest&&ev.target.closest('[data-close]'))))return;
+    setTimeout(function(){document.removeEventListener('keydown',keys,true);restore()},0);
+  },true);
 }
-
 function apply(){
   scheduled=0;
   if(!q('#ccMemberNav'))return;
-  syncTopNotification();
   syncAccountShortcuts();
+  syncPageHeader();
+  patchMobileMenuA11y();
   patchNavigationA11y();
   patchHomeA11y();
   syncProfileChecklist();

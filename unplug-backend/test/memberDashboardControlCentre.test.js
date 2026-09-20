@@ -17,15 +17,18 @@ const runtime = fs.readFileSync(path.join(ROOT, 'functions', 'runtime-config.js'
 
 const TOP_LEVEL = [
   ['g-home', 'Home'],
-  ['g-id', 'My Identity'],
-  ['g-journey', 'My Unplug Journey'],
-  ['g-growth', 'My Growth'],
+  ['g-unplug', 'My Unplug'],
+  ['g-directory', 'My Directory'],
   ['g-content', 'My Content'],
-  ['g-services', 'Services'],
-  ['g-money', 'Money & Purchases'],
-  ['g-agreements', 'Agreements'],
   ['g-community', 'Community'],
-  ['g-account', 'Account & Privacy'],
+  ['g-recognition', 'Recognition & Gamification'],
+  ['g-opportunities', 'Opportunities'],
+  ['g-services', 'Services & Marketplace'],
+  ['g-money', 'Finance'],
+  ['g-notifications', 'Notifications'],
+  ['g-agreements', 'Agreements'],
+  ['g-help', 'Help & Support'],
+  ['g-account', 'Account & Settings'],
 ];
 
 const SOURCE_KEYS = [
@@ -81,22 +84,52 @@ test('all approved top-level member groups are represented', () => {
   }
 });
 
-test('identity, journey, content, money and account children are grouped as approved', () => {
+test('Phase 2 groups keep each existing function in one clear conceptual home', () => {
   const labels = [
-    'Directory Profile', 'My Unplug Community Profile', 'Preview as Public', 'Profile Completion', 'My Analytics',
-    'Status & Score', "Today\'s Missions", "This Week\'s Mission", "This Month\'s Challenge", 'Achievements', 'Unplug Passport', 'Leaderboard', 'Referral Progress',
-    'My Submissions', 'My Articles', 'My Events', 'My Listings', 'My Advertising', 'My Competitions', 'Reading List', 'My Editions',
-    'My Orders', 'Payments', 'My Credits', 'My Invoices', 'My Votes',
-    'Account Settings', 'Your Data', 'Download My Data', 'View Official Site', 'Logout',
+    'My Profile', 'Profile Completion', 'Preview My Unplug Profile', 'My Growth Journey',
+    'My Directory Profile', 'Directory Performance',
+    'My Submissions', 'My Articles', 'My Events', 'My Listings', 'My Gallery', 'Reading List', 'My Editions',
+    'Referral Progress', 'My Referrals', 'My Clients',
+    'My Score & Level', 'Missions', "This Week\'s Mission", "This Month\'s Challenge", 'My Achievements', 'Unplug Passport', 'Leaderboard',
+    'My Competitions', 'My Votes', 'Browse Competitions',
+    'Browse Services', 'My Services', 'My Advertising',
+    'My Orders', 'Payments', 'Unplug Credits', 'My Invoices',
+    'All Notifications', 'Contact Support',
+    'Account Details', 'Privacy & Your Data', 'Download My Data', 'Logout',
   ];
   for (const label of labels) assert.ok(script.includes(label), `missing hierarchy label: ${label}`);
+  for (const oldLabel of ['My Identity', 'My Unplug Journey', 'Money & Purchases', 'Account & Privacy']) {
+    assert.ok(!script.includes(`label:'${oldLabel}'`), `retired top-level label still present: ${oldLabel}`);
+  }
 });
 
-test('notifications have root-level quick access and remain inside Community', () => {
-  assert.match(script, /id:'notifications',label:'Notifications'/);
-  assert.match(polish, /data-node=\"notifications-quick\"/);
-  assert.match(polish, /data-node=\"g-community\"\] \[data-id=\"notifications\"\]/);
-  assert.match(polish, /notifCountBadge/);
+test('notifications have one clear primary home and are not duplicated under Community', () => {
+  assert.match(script, /id:'g-notifications',label:'Notifications'/);
+  assert.match(script, /id:'notifications',label:'All Notifications'/);
+  assert.doesNotMatch(polish, /notifications-quick/);
+  const communityStart = script.indexOf("id:'g-community'");
+  const recognitionStart = script.indexOf("id:'g-recognition'", communityStart);
+  assert.ok(communityStart > -1 && recognitionStart > communityStart);
+  assert.doesNotMatch(script.slice(communityStart, recognitionStart), /id:'notifications'/);
+});
+
+test('personal My Unplug and public My Directory are visibly separated', () => {
+  assert.match(script, /id:'g-unplug',label:'My Unplug'/);
+  assert.match(script, /id:'community-profile',label:'My Profile'/);
+  assert.match(script, /id:'g-directory',label:'My Directory'/);
+  assert.match(script, /id:'directory-profile',label:'My Directory Profile'/);
+  assert.match(script, /id:'directory-performance',label:'Directory Performance'/);
+  assert.doesNotMatch(script, /label:'My Identity'/);
+});
+
+test('commercial and opportunity functions are moved out of the generic submissions branch', () => {
+  const contentStart = script.indexOf("id:'g-content'");
+  const communityStart = script.indexOf("id:'g-community'", contentStart);
+  const content = script.slice(contentStart, communityStart);
+  assert.doesNotMatch(content, /My Advertising/);
+  assert.doesNotMatch(content, /My Competitions/);
+  assert.match(script, /id:'g-services'[\s\S]*id:'my-advertising',label:'My Advertising'/);
+  assert.match(script, /id:'g-opportunities'[\s\S]*id:'my-competitions',label:'My Competitions'/);
 });
 
 test('services stay compact and quick create is provided instead of listing every service in the tree', () => {
@@ -109,7 +142,7 @@ test('services stay compact and quick create is provided instead of listing ever
 });
 
 test('search, favourites, recent items, breadcrumbs and remembered UI state are present', () => {
-  assert.match(script, /Find something in My Unplug/);
+  assert.match(script, /Find something in Member Dashboard/);
   assert.match(script, /unplug_member_cc_favourites_v1/);
   assert.match(script, /unplug_member_cc_recent_v1/);
   assert.match(script, /unplug_member_cc_open_v1/);
@@ -125,9 +158,43 @@ test('member home is personalised from live DOM state without inventing a second
   assert.match(script, /function actions\(/);
   assert.match(script, /function submissions\(/);
   assert.match(script, /function agreements\(/);
-  assert.match(script, /Your personal Unplug home/);
-  assert.match(script, /Profile completion/);
+  assert.match(script, /Your UnplugNews member dashboard/);
+  assert.match(script, /function homeStatus\(/);
+  assert.match(script, /Account status/);
   assert.match(script, /My Growth/);
+});
+
+test('Home status severity distinguishes incomplete, unread and action-required states', () => {
+  assert.match(script, /match\(\/\(\\d\+\)%\\s\*complete\//);
+  assert.match(script, /needs your attention/);
+  assert.match(script, /unread/);
+  assert.match(script, /statusClass\(value\+' '\+note\)/);
+});
+
+test('Phase 4 Home follows the approved control-centre hierarchy without a new data source', () => {
+  const ordered = [
+    "panel('status','Account status'",
+    "panel('priority','Action required'",
+    "panel('quick','Quick actions'",
+    "panel('unplug','My Unplug snapshot'",
+    "panel('content','My content'",
+    "panel('opportunities','Opportunities'",
+    "panel('recent','Recently used'",
+  ];
+  let last = -1;
+  for (const token of ordered) {
+    const pos = script.indexOf(token);
+    assert.ok(pos > last, `Home section missing or out of order: ${token}`);
+    last = pos;
+  }
+  for (const fn of ['memberName', 'directoryStatus', 'myUnplugState', 'submissionStates', 'homeStatus', 'homeUnplug', 'homeContent', 'homeOpportunities']) {
+    assert.match(script, new RegExp(`function ${fn}\\(`));
+  }
+  assert.match(script, /Good morning|Good afternoon|Good evening/);
+  assert.match(script, /Top 10/);
+  assert.match(script, /Browse Competitions/);
+  assert.doesNotMatch(script, /Recent activity/);
+  assert.doesNotMatch(script, /fetch\(/, 'Home must continue deriving state from the existing rendered dashboard');
 });
 
 test('profile checklist mirrors existing completion state instead of inventing completion rules', () => {
@@ -147,6 +214,29 @@ test('member home visibly connects identity, participation, growth and opportuni
   assert.match(polish, /unplugScore/);
   assert.match(polish, /unplugStatusBadge/);
   assert.match(polishCss, /cc-home-path/);
+});
+
+test('Phase 8 first-time-user journeys are discoverable from the dashboard', () => {
+  const journeys = [
+    ['personal profile', "id:'community-profile',label:'My Profile'"],
+    ['directory profile', "id:'directory-profile',label:'My Directory Profile'"],
+    ['gallery', "id:'my-gallery',label:'My Gallery'"],
+    ['achievements', "id:'journey-achievements',label:'My Achievements'"],
+    ['incomplete items', "id:'home-action',label:'Action Required'"],
+    ['submission status', "id:'my-submissions',label:'My Submissions'"],
+    ['competition', "id:'my-competitions',label:'My Competitions'"],
+    ['purchase', "id:'browse-services',label:'Browse Services'"],
+    ['support', "id:'contact-support',label:'Contact Support'"],
+  ];
+  for (const [name, token] of journeys) {
+    assert.ok(script.includes(token), `first-time journey not discoverable: ${name}`);
+  }
+  assert.match(polish, /accountLeaf\('login-security','Login & Security'/, 'first-time journey not discoverable: password/security');
+  assert.match(page, /data-ms-type="gallery"/);
+  assert.match(page, /gallery: \['My Gallery', 'Gallery content you have submitted\.'\]/);
+  assert.match(page, /<option value="gallery">/);
+  assert.match(script, /Add Gallery Content/);
+  assert.match(script, /opt\('Gallery','Add gallery content','gallery'\)/);
 });
 
 test('role-aware and conditional areas stay conditional', () => {
@@ -176,14 +266,25 @@ test('accessibility polish covers expandable navigation, home panels, search and
 });
 
 test('responsive member styling preserves the existing mobile drawer model', () => {
-  assert.match(css, /@media\(max-width:760px\)/);
+  assert.match(css, /@media\(max-width:820px\)/);
   assert.match(css, /#msSidebar/);
   assert.match(css, /cc-home-cards/);
   assert.match(css, /cc-member-create-grid/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(helpCss, /cc-member-nav-help/);
-  assert.match(polishCss, /@media\(max-width:760px\)/);
+  assert.match(polishCss, /@media\(max-width:820px\)/);
   assert.match(polishCss, /@media\(max-width:500px\)/);
+});
+
+test('Phase 6 mobile navigation uses one 820px breakpoint and accessible drawer behaviour', () => {
+  assert.match(script, /matchMedia\('\(max-width:820px\)'\)/);
+  assert.match(polish, /function patchMobileMenuA11y\(/);
+  assert.match(polish, /aria-controls','msSidebar'/);
+  assert.match(polish, /aria-expanded/);
+  assert.match(polish, /Escape/);
+  assert.match(css, /#msMenuBtn\{ position:sticky/);
+  assert.match(css, /min-height:44px/);
+  assert.match(css, /overflow-wrap:anywhere/);
 });
 
 test('member visual identity stays anchored to the existing Unplug token system', () => {

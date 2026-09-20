@@ -3298,3 +3298,22 @@ methodology used for every group after (real endpoint traced from source, never 
 **Still open:** nothing new from this task specifically — Unplug Live remains intentionally unbuilt behind
 its "Coming Soon" placeholders until a future task takes it on.
 
+
+
+## 2026-09-20 — Member Dashboard redesign Phases 2–10: staging candidate prepared
+
+**Scope.** Completed the Member Dashboard restructuring from the September 20 redesign specification without changing backend business logic. The final hierarchy separates **My Unplug** (personal/community identity) from **My Directory** (public professional/business listing) and gives content, community, recognition/gamification, opportunities, services, finance, notifications, support and account controls clear homes. Agreements and Growth remain conditional and continue using their existing backends.
+
+**Home/control centre.** Rebuilt the Home experience around Welcome → Account Status → Action Required → Quick Actions → My Unplug snapshot → My Content → Opportunities → Recently Used. All status/summary data is derived from the dashboard's existing rendered state; no second Home API or duplicate data model was introduced.
+
+**Consistency/mobile/accessibility.** Added additive workspace headers with page descriptions/status context. Corrected the Control Centre's 760px breakpoint mismatch to the dashboard's existing 820px mobile breakpoint; added accessible drawer state, Escape close, touch targets and overflow handling. Added accessible navigation naming, current-state/expand-collapse semantics, meaningful favourite labels, visible focus treatment, reduced-motion handling, and a focus-trapped Quick Create dialog that returns focus on close.
+
+**First-time discoverability.** Auditing the required first-time journeys found one genuine gap: Gallery submission already existed end-to-end but had no clear member navigation home. Added the existing Gallery filter to native submissions, **My Content → My Gallery**, Home **Add Gallery Content**, and Quick Create, while keeping the original `/gallery` submission path. The first-time regression matrix now covers profile, Directory, Gallery, achievements, action-required items, submission status, competitions, purchase/services, support, and login/security.
+
+**Bugs fixed during regression.** Removed duplicate Notifications navigation; moved Advertising to Services & Marketplace; moved Competitions/Votes to Opportunities; removed Votes from Finance; renamed misleading Recent Activity to Recently Used; aligned stale regression tests with the 820px contract; corrected Home status severity so an incomplete percentage such as 72% is not styled as complete.
+
+**Verification.** Independent final structural audit passed **67/67** destination/uniqueness/grouping/conditional checks. Phase-specific dashboard CI is green through Phase 7. The corrected Phase 8 source commit passed Member Dashboard CI run **#133**. Full handover: `docs/member-dashboard-redesign-handover-2026-09-20.md`.
+
+**Release candidate.** Consolidation PR **#63** targets `staging-control-centre` directly and supersedes stacked draft PRs #56–#61 for release purposes. It contains only the Member Dashboard scripts/styles, dashboard HTML Gallery discoverability change, dashboard regression tests, and handover documentation.
+
+**Staging gate.** Canonical staging frontend (`https://unplug-staging.pages.dev`) and staging backend health endpoint are reachable, but they currently serve the existing staging branch rather than this candidate. Feature-branch preview aliases returned 404. The next gate is PR #63 green CI → merge to `staging-control-centre` → verify the exact commit deployed to canonical staging → authenticated desktop/mobile walkthrough and screenshots. Production remains unchanged until that exact staging validation passes.

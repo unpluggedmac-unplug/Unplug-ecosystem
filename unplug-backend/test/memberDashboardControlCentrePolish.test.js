@@ -18,7 +18,7 @@ test('account convenience shortcuts reuse real Account Settings controls', () =>
   assert.match(page, /id="twoFactorContent"/);
   assert.match(page, /id="notifPrefsContent"/);
   assert.match(polish, /Login & Security/);
-  assert.match(polish, /Communication Preferences/);
+  assert.match(polish, /Notification Preferences/);
   assert.match(polish, /#twoFactorContent/);
   assert.match(polish, /#notifPrefsContent/);
   assert.match(polish, /data-account-shortcut/);
@@ -47,6 +47,21 @@ test('polish observer ignores attributes it writes for accessibility', () => {
   assert.match(polish, /function txt\(el,value\).*textContent!==value/s);
 });
 
+test('secondary workspaces receive one consistent page header without duplicating backend data', () => {
+  assert.match(polish, /var PAGE_META=/);
+  assert.match(polish, /function syncPageHeader\(/);
+  assert.match(polish, /data-cc-page-head/);
+  assert.match(polish, /MEMBER DASHBOARD/);
+  assert.match(polish, /function pageStatus\(/);
+  assert.match(polish, /My Directory Profile/);
+  assert.match(polish, /My Profile/);
+  assert.match(polish, /My Score & Level/);
+  assert.match(polish, /Notification Preferences/);
+  assert.match(polishCss, /cc-member-page-head/);
+  assert.match(polishCss, /cc-member-page-status/);
+  assert.doesNotMatch(polish, /fetch\(/, 'page headers must describe already-rendered state rather than create another data source');
+});
+
 test('profile checklist is derived from existing completion output', () => {
   assert.match(page, /id="muCompletionPct"/);
   assert.match(page, /id="muCompletionTodo"/);
@@ -66,8 +81,23 @@ test('the member progress bridge remains a navigational layer, not a second grow
   assert.doesNotMatch(polish, /\/growth-application\/v2\/applications/);
 });
 
+test('Phase 7 accessibility names controls and traps quick-create focus', () => {
+  assert.match(polish, /role','navigation'/);
+  assert.match(polish, /Member Dashboard navigation/);
+  assert.match(polish, /aria-hidden','true'/);
+  assert.match(polish, /from favourites|to favourites/);
+  assert.match(polish, /Collapse |Expand /);
+  assert.match(polish, /aria-autocomplete','list'/);
+  assert.match(polish, /aria-expanded/);
+  assert.match(polish, /ev\.key!=='Tab'/);
+  assert.match(polish, /returnFocus/);
+  assert.match(polish, /restore\(\)/);
+  assert.match(polishCss, /#ccMemberNav button:focus-visible/);
+  assert.match(polishCss, /prefers-reduced-motion:reduce/);
+});
+
 test('polish remains responsive and keyboard visible', () => {
-  assert.match(polishCss, /@media\(max-width:760px\)/);
+  assert.match(polishCss, /@media\(max-width:820px\)/);
   assert.match(polishCss, /@media\(max-width:500px\)/);
   assert.match(polishCss, /:focus-visible/);
   assert.match(polish, /Escape/);
