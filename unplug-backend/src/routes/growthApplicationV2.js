@@ -3,6 +3,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { growthMemberStatus } = require('../utils/growthMemberStatus');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -62,11 +63,22 @@ async function owned(applicationId, userId, client = pool) {
   const result = await client.query(
     `SELECT id,user_id,applicant_email,applicant_type,status,form_version_id,completion_percent,last_saved_at,
             popia_consent,popia_consent_at,popia_consent_version,submitted_at,locked_at,withdrawn_at,
-            external_sharing_allowed,external_sharing_consent_at,field_sharing,created_at,updated_at
+            external_sharing_allowed,external_sharing_consent_at,field_sharing,created_at,updated_at,
+            COALESCE((SELECT MAX(h.created_at) FROM growth_status_history h
+                       WHERE h.application_id=growth_applications.id
+                         AND h.to_status=growth_applications.status),updated_at) AS status_changed_at
        FROM growth_applications WHERE id=$1 AND user_id=$2`,
     [applicationId, userId],
   );
   return result.rows[0] || null;
+}
+
+function memberApplication(row) {
+  const { status_changed_at: statusChangedAt, ...application } = row;
+  return {
+    ...application,
+    memberVisibleStatus: growthMemberStatus(application.status, statusChangedAt),
+  };
 }
 
 async function form(versionId, applicantType, client = pool) {
@@ -256,13 +268,16 @@ router.get('/applications', async (req, res, next) => {
   try {
     const result = await pool.query(
       `SELECT id,applicant_type,status,completion_percent,last_saved_at,submitted_at,
-              withdrawn_at,created_at,updated_at
+              withdrawn_at,created_at,updated_at,
+              COALESCE((SELECT MAX(h.created_at) FROM growth_status_history h
+                         WHERE h.application_id=growth_applications.id
+                           AND h.to_status=growth_applications.status),updated_at) AS status_changed_at
          FROM growth_applications
         WHERE user_id=$1
         ORDER BY created_at DESC`,
       [req.user.id],
     );
-    return res.json({ applications: result.rows });
+    return res.json({ applications: result.rows.map(memberApplication) });
   } catch (err) { return next(err); }
 });
 
@@ -325,8 +340,9 @@ router.get('/applications/:id', async (req, res, next) => {
   const applicationId = asId(req.params.id);
   if (!applicationId) return res.status(400).json({ error: 'Invalid application id.' });
   try {
-    const application = await owned(applicationId, req.user.id);
-    if (!application) return res.status(404).json({ error: 'Growth Application not found.' });
+    const ownedApplication = await owned(applicationId, req.user.id);
+    if (!ownedApplication) return res.status(404).json({ error: 'Growth Application not found.' });
+    const application = memberApplication(ownedApplication);
     const requests = await infoRequests(applicationId);
 
     if (application.status !== 'draft') {
