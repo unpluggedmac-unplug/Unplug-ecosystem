@@ -10,6 +10,7 @@ const { sendEmail } = require('../utils/email');
 const { loginLimiter, registerLimiter, emailActionLimiter } = require('../middleware/rateLimit');
 const loginAttempts = require('../utils/loginAttempts');
 const twoFactor = require('../utils/twoFactor');
+const { recordSignupReferral } = require('../utils/referralAttribution');
 
 const router = express.Router();
 
@@ -117,6 +118,20 @@ router.post('/register', registerLimiter, async (req, res, next) => {
     // A new account is the first step past anonymous reading. Fire-and-forget:
     // a reporting write must never delay or fail a registration.
     recordConversionAsync({ userId: user.id, eventName: 'signup', entityType: 'user', entityId: user.id });
+
+    // Complete a referral funnel when this signup came from ?ref=CODE. This is
+    // deliberately best-effort: referral points/analytics are secondary to the
+    // account the person just created. The utility also attaches the exact
+    // anonymous click row when the browser carried its click id forward.
+    try {
+      await recordSignupReferral({
+        userId: user.id,
+        referralCode: req.body.referralCode,
+        referralClickId: req.body.referralClickId,
+      });
+    } catch (referralErr) {
+      console.error('[auth] signup referral attribution failed:', referralErr.message);
+    }
 
     res.status(201).json({
       user,
