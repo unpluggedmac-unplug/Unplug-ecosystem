@@ -3652,3 +3652,17 @@ The Control Centre navigation remains its own scrollable flex child, while the
 accessibility footer slot, View Site link and account footer remain visible inside
 the viewport. Mobile behaviour is unchanged. Control Centre asset version bumped to
 20260920-5 and regression coverage added.
+
+
+## 2026-09-20 — Mobile POPIA consent overflow guard
+
+The older finalisation handover still listed a mobile consent-bar horizontal-scroll issue.
+Current main already used a full-screen consent dialog and a global border-box reset, but
+the consent component itself had no dedicated horizontal containment regression.
+
+The dialog now explicitly contains horizontal overflow, lets the card/actions shrink,
+wraps long translated button text instead of forcing width, and uses reduced mobile
+padding with full-width stacked actions at <=640px. Consent behaviour, storage,
+privacy recording and analytics gating are unchanged.
+
+Added `mobileConsentOverflow.test.js` to lock the viewport/card/action containment.
