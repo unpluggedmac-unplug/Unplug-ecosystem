@@ -3602,3 +3602,13 @@ were bumped so deployed browsers receive the new navigation instead of the Septe
 require purpose descriptions for all 13, confirm high-value existing destinations remain discoverable,
 and verify the description renderer/CSS. Existing Growth builder wording was retained as “Master Form
 Builder” so the prior Growth navigation regression remains valid.
+
+
+## 2026-09-20 — Admin Dashboard post-merge visual-gate polish
+
+Production screenshot after PR #78 confirmed the new 13-group Control Centre is live and structurally correct.
+Three small UX issues were fixed without changing backend behaviour: the redundant Back button is hidden on
+the Dashboard root and its breadcrumb now says Platform Overview; stale Recently Used labels now prefer the
+current navigation label and the quick sidebar area is capped at three recents/favourites (empty favourites
+collapse) to reduce sidebar density; and the seven live Platform Status totals stay balanced in one row on
+wide desktop viewports. Runtime/CSS cache version bumped to 20260920-2. Regression coverage added.
