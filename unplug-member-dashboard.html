@@ -1736,6 +1736,32 @@ function showCard(cardId){
   });
 }
 
+// A referral can land directly on this dashboard as well as on the magazine.
+// Capture it here too, using the same session keys as unplug-participation-sdk.
+// If the magazine already recorded this code, the click-code marker prevents a
+// second count while the visitor moves into registration.
+(function captureDashboardReferral() {
+  try {
+    const ref = String(new URLSearchParams(location.search).get('ref') || '').trim().slice(0, 20);
+    if (!ref) return;
+    const prior = sessionStorage.getItem('unplug_referral_code') || '';
+    if (prior !== ref) {
+      sessionStorage.removeItem('unplug_referral_click_id');
+      sessionStorage.removeItem('unplug_referral_click_code');
+    }
+    sessionStorage.setItem('unplug_referral_code', ref);
+    if (sessionStorage.getItem('unplug_referral_click_code') === ref) return;
+
+    api('/acquisition/referral-clicks', {
+      method: 'POST',
+      body: JSON.stringify({ code: ref, from: document.referrer || '' }),
+    }).then((result) => {
+      sessionStorage.setItem('unplug_referral_click_code', ref);
+      if (result && result.clickId) sessionStorage.setItem('unplug_referral_click_id', String(result.clickId));
+    }).catch(() => { /* referral tracking must never block registration */ });
+  } catch (_) { /* storage/private-mode failures are non-blocking */ }
+})();
+
 // Registration is now two steps: pick a membership type, then fill the form.
 let SELECTED_MEMBER_TYPE = 'individual';
 document.getElementById('showRegisterBtn').addEventListener('click', () => showCard('typeCard'));
