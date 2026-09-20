@@ -991,19 +991,37 @@
       var overview = document.getElementById('section-overview');
       if (!overview || overview.querySelector('.cc-overview-grid')) return;
       var heading = overview.querySelector('.main-head');
+      var totals = document.getElementById('ovTotals');
+      var pending = document.getElementById('ovPending');
+      var recentPanel = document.getElementById('ovRecent')?.closest('.panel');
+
+      if (totals && !totals.previousElementSibling?.classList.contains('cc-overview-section-label')) {
+        var statusLabel = document.createElement('div');
+        statusLabel.className = 'cc-overview-section-label';
+        statusLabel.innerHTML = '<strong>Platform status</strong><span>Reliable live totals from the existing Admin Overview data.</span>';
+        totals.insertAdjacentElement('beforebegin', statusLabel);
+      }
+
+      if (pending) {
+        var pendingHead = pending.closest('.panel')?.querySelector('.panel-head h3');
+        if (pendingHead) pendingHead.textContent = 'Requires attention';
+      }
+
+      var quickLabel = document.createElement('div');
+      quickLabel.className = 'cc-overview-section-label cc-overview-quick-label';
+      quickLabel.innerHTML = '<strong>Quick actions</strong><span>Frequent administrative destinations — limited to the actions used most often.</span>';
+
       var grid = document.createElement('div');
       grid.className = 'cc-overview-grid';
       var cards = [
-        ['Today', 'Open your operational inbox and act on what needs attention.', 'queue', '!'],
-        ['Pending Approvals', 'Review submissions, requests and pending website changes.', 'queue', '✓'],
-        ['Payments', 'Payments, EFT proof, orders, credits and cancellations.', 'payqueue', 'R'],
-        ['Growth Applications', 'Research workspace, stages and Growth Journey applications.', null, '↗', growthHref()],
-        ['Agreements', 'Templates, individual agreements, signing and records.', null, '✍', agreementHref()],
-        ['Content', 'Articles, gallery, events, editions and participation content.', 'manage', '✎'],
-        ['Members', 'Members, profiles, staff access and community administration.', 'users', '♟'],
-        ['Site Health', 'Checkout and system-facing operational health controls.', 'checkouthealth', '♥'],
-        ['Recent Activity', 'Audit trail and recent administrator activity.', 'activitylog', '↺'],
-        ['Admin Tools', 'Backups, settings, redirects, spam and system controls.', 'sitesettings', '⚙']
+        ['Review Approvals', 'Open the operational inbox for submissions and requests that need action.', 'queue', '!'],
+        ['Publish Article', 'Create or review editorial content and publishing work.', 'publish', '✎'],
+        ['Manage Members', 'Open members, profiles, representatives and access controls.', 'users', '♟'],
+        ['Review Directory', 'Open public Directory listings, claims and reviews.', 'dirprofiles', '⌖'],
+        ['Manage Competitions', 'Open competition setup, entries, winners and prizes.', 'competitions', '🏆'],
+        ['Payments & Orders', 'Review payments, orders, credits, vouchers and cancellations.', 'payqueue', 'R'],
+        ['Growth Applications', 'Review applications and manage the Growth master form.', null, '↗', growthHref()],
+        ['Agreement Generator', 'Manage templates, individual agreements, signing and records.', null, '✍', agreementHref()]
       ];
       cards.forEach(function (c) {
         var card = document.createElement('button');
@@ -1015,7 +1033,26 @@
         card.addEventListener('click', function () { if (c[2]) activateSection(c[2], [c[0]]); else location.href = c[4]; });
         grid.appendChild(card);
       });
-      if (heading) heading.insertAdjacentElement('afterend', grid); else overview.prepend(grid);
+
+      var pendingPanel = pending ? pending.closest('.panel') : null;
+      if (pendingPanel) {
+        pendingPanel.insertAdjacentElement('afterend', quickLabel);
+        quickLabel.insertAdjacentElement('afterend', grid);
+      } else if (totals) {
+        totals.insertAdjacentElement('afterend', quickLabel);
+        quickLabel.insertAdjacentElement('afterend', grid);
+      } else if (heading) {
+        heading.insertAdjacentElement('afterend', quickLabel);
+        quickLabel.insertAdjacentElement('afterend', grid);
+      } else {
+        overview.prepend(grid);
+        overview.prepend(quickLabel);
+      }
+
+      if (recentPanel) {
+        var recentHead = recentPanel.querySelector('.panel-head h3');
+        if (recentHead) recentHead.textContent = 'Recent submissions';
+      }
 
       // User selected collapsible cards/panels, but not rearrangeable.
       var collapsed = readJson(STORAGE.collapsed, {});
