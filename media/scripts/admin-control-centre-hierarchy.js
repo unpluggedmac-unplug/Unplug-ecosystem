@@ -57,7 +57,7 @@
     if (document.querySelector('link[data-cc-hierarchy-style]')) return;
     var l = document.createElement('link');
     l.rel = 'stylesheet';
-    l.href = '/media/styles/admin-control-centre-hierarchy.css?v=20260920-1';
+    l.href = '/media/styles/admin-control-centre-hierarchy.css?v=20260920-2';
     l.setAttribute('data-cc-hierarchy-style', 'true');
     document.head.appendChild(l);
   }
@@ -717,7 +717,7 @@
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'cc-quick-link';
-      b.textContent = item.label || node?.label || 'Item';
+      b.textContent = node?.label || item.label || 'Item';
       b.addEventListener('click', function () {
         if (node) {
           if (node.type === 'section') activateSection(node.section, item.path || [node.label], node);
@@ -734,15 +734,15 @@
       var recentHost = document.getElementById('ccRecent');
       if (!favHost || !recentHost) return;
       favHost.textContent = '';
-      var favNodes = Array.from(favourites).map(findNodeByKey).filter(Boolean).slice(0, 5);
-      if (!favNodes.length) {
-        var empty = document.createElement('div'); empty.className = 'cc-quick-empty'; empty.textContent = 'Use ☆ beside any tool to pin it.'; favHost.appendChild(empty);
-      } else favNodes.forEach(function (n) { favHost.appendChild(quickButton({ label: n.label, path: [n.label] }, n)); });
+      var favNodes = Array.from(favourites).map(findNodeByKey).filter(Boolean).slice(0, 3);
+      var favBlock = favHost.closest('.cc-quick-block');
+      if (favBlock) favBlock.hidden = !favNodes.length;
+      favNodes.forEach(function (n) { favHost.appendChild(quickButton({ label: n.label, path: [n.label] }, n)); });
 
       recentHost.textContent = '';
-      if (!recent.length) {
-        var re = document.createElement('div'); re.className = 'cc-quick-empty'; re.textContent = 'Your recent tools will appear here.'; recentHost.appendChild(re);
-      } else recent.slice(0, 5).forEach(function (r) { recentHost.appendChild(quickButton(r, findNodeByKey(r.key))); });
+      var recentBlock = recentHost.closest('.cc-quick-block');
+      if (recentBlock) recentBlock.hidden = !recent.length;
+      recent.slice(0, 3).forEach(function (r) { recentHost.appendChild(quickButton(r, findNodeByKey(r.key))); });
     }
     renderQuickLists();
 
@@ -771,22 +771,24 @@
     if (globalSearch) globalSearch.insertAdjacentElement('afterend', contextBar); else main.prepend(contextBar);
 
     function setContext(parts) {
-      state.currentPath = parts && parts.length ? parts : ['Dashboard', 'Overview'];
+      state.currentPath = parts && parts.length ? parts : ['Dashboard', 'Platform Overview'];
       var b = document.getElementById('ccBreadcrumb');
       if (b) b.textContent = ['Control Centre'].concat(state.currentPath).join('  ›  ');
       var back = document.getElementById('ccBack');
-      if (back) back.hidden = state.currentPath.length < 2;
+      var atDashboardRoot = state.currentPath[0] === 'Dashboard' &&
+        (state.currentPath[1] === 'Overview' || state.currentPath[1] === 'Platform Overview');
+      if (back) back.hidden = state.currentPath.length < 2 || atDashboardRoot;
     }
-    setContext(['Dashboard', 'Overview']);
+    setContext(['Dashboard', 'Platform Overview']);
     document.getElementById('ccBack').addEventListener('click', function () {
-      if (state.currentPath.length <= 1) return activateSection('overview', ['Dashboard', 'Overview']);
+      if (state.currentPath.length <= 1) return activateSection('overview', ['Dashboard', 'Platform Overview']);
       var parent = state.currentPath.slice(0, -1);
-      if (parent[0] === 'Dashboard') activateSection('overview', ['Dashboard', 'Overview']);
+      if (parent[0] === 'Dashboard') activateSection('overview', ['Dashboard', 'Platform Overview']);
       else {
         var top = model.find(function (n) { return n.label === parent[0]; });
         if (top && top.overview?.section) activateSection(top.overview.section, parent);
         else if (top && top.overview?.href) location.href = top.overview.href;
-        else activateSection('overview', ['Dashboard', 'Overview']);
+        else activateSection('overview', ['Dashboard', 'Platform Overview']);
       }
     });
 
