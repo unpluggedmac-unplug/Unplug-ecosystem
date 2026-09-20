@@ -422,14 +422,16 @@ The old production integration PR #66 was closed because its stale merge-base ma
 
 PR #68 was later superseded after production `main` advanced again. Current production includes PR #74's gallery cancellation fixes, so the dashboard candidate was rebuilt from the new current `main` rather than merging a branch that was 15 commits behind.
 
-Current production integration is **PR #76**:
-- branch: `integrate/member-dashboard-redesign-main-current-20260920`
-- base: current `main` at/after PR #74
+PR #76 was built from current `main` after PR #74 and passed its complete exact-head gates, including both full backend regression jobs at **2,487/2,487 tests, 0 failures, 0 skipped**. Before staging promotion, production `main` advanced again when PR #75 merged profile-image fallback and Growth mobile fixes. Those PR #75 changes do not touch any of the 13 dashboard candidate files.
+
+Current production integration is **PR #77**:
+- branch: `integrate/member-dashboard-redesign-main-latest-20260920`
+- base: latest `main` after PR #75
 - scope: 13 dashboard/runtime/docs/test files only
-- the 15 newer production commits did not touch these candidate files
+- PR #74 and PR #75 production changes are inherited unchanged
 - no auth/referral/acquisition/payment/pricing/cancellation/business-rule changes
-- PR #68 is closed unmerged
-- keep #76 draft until its exact current-main CI is green, staging is resynced to the same head, and authenticated staging visual validation is completed.
+- PR #68 is closed unmerged; PR #76 is superseded
+- keep #77 draft until its exact-head CI is green, staging is resynced to that exact head, and authenticated staging visual validation is completed.
 
 ## 15. Production stop conditions
 
@@ -486,7 +488,8 @@ The existing service-shortcut layer remains in use and was intentionally not rep
 - Read-only deployed DOM/Home validation: passed
 - Authenticated desktop/mobile visual staging validation: BLOCKED only by missing staging member credentials in the browser vault
 - Prior clean integration PR #68: closed unmerged after `main` advanced
-- Refreshed current-main integration: PR #76 draft, built from current `main` after PR #74
+- PR #76 exact-head validation: green, including both full backend suites at 2,487/2,487 with zero failures/skips; superseded before staging promotion when PR #75 advanced production `main`
+- Final latest-main integration: PR #77 draft, built from current `main` after PR #75
 - Staging backend: redeployed on the dashboard candidate; staging CORS corrected to the canonical staging Pages origin
 - Authenticated desktop/mobile visual staging validation: still pending manual staging sign-in because browser automation will not handle passwords
 - Production: unchanged
