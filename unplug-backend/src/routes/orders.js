@@ -151,6 +151,9 @@ router.post('/quote', requireAuth, async (req, res, next) => {
   } catch (err) {
     if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
     if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
     if (err.code === 'PRICING_UNAVAILABLE') {
       return res.status(503).json({ error: 'Pricing is temporarily unavailable. No order was created.' });
     }
@@ -350,6 +353,9 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
   } catch (err) {
     if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
     if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
     if (err.code === 'PRICING_UNAVAILABLE') {
       return res.status(503).json({ error: 'Pricing is temporarily unavailable. No order was created.' });
     }
