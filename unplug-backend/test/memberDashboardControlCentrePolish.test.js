@@ -97,7 +97,7 @@ test('Phase 7 accessibility names controls and traps quick-create focus', () => 
 });
 
 test('polish remains responsive and keyboard visible', () => {
-  assert.match(polishCss, /@media\(max-width:760px\)/);
+  assert.match(polishCss, /@media\(max-width:820px\)/);
   assert.match(polishCss, /@media\(max-width:500px\)/);
   assert.match(polishCss, /:focus-visible/);
   assert.match(polish, /Escape/);
