@@ -47,6 +47,21 @@ test('polish observer ignores attributes it writes for accessibility', () => {
   assert.match(polish, /function txt\(el,value\).*textContent!==value/s);
 });
 
+test('secondary workspaces receive one consistent page header without duplicating backend data', () => {
+  assert.match(polish, /var PAGE_META=/);
+  assert.match(polish, /function syncPageHeader\(/);
+  assert.match(polish, /data-cc-page-head/);
+  assert.match(polish, /MEMBER DASHBOARD/);
+  assert.match(polish, /function pageStatus\(/);
+  assert.match(polish, /My Directory Profile/);
+  assert.match(polish, /My Profile/);
+  assert.match(polish, /My Score & Level/);
+  assert.match(polish, /Notification Preferences/);
+  assert.match(polishCss, /cc-member-page-head/);
+  assert.match(polishCss, /cc-member-page-status/);
+  assert.doesNotMatch(polish, /fetch\(/, 'page headers must describe already-rendered state rather than create another data source');
+});
+
 test('profile checklist is derived from existing completion output', () => {
   assert.match(page, /id="muCompletionPct"/);
   assert.match(page, /id="muCompletionTodo"/);
