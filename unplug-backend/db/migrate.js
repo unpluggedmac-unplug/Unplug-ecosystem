@@ -14,8 +14,22 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
+const { runWithMigrationRetry } = require('./migrationRetry');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+async function applyMigration(file, sql) {
+  return runWithMigrationRetry({
+    file,
+    operation: () => pool.query(sql),
+    onRetry: ({ code, nextAttempt, maxAttempts, waitMs }) => {
+      console.warn(
+        `Migration ${file} hit retryable PostgreSQL error ${code}; `
+        + `retrying in ${waitMs}ms (attempt ${nextAttempt}/${maxAttempts}).`
+      );
+    },
+  });
+}
 
 async function run() {
   const migrationsDir = path.join(__dirname, 'migrations');
@@ -26,7 +40,7 @@ async function run() {
   for (const file of files) {
     console.log(`Applying ${file}...`);
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-    await pool.query(sql);
+    await applyMigration(file, sql);
   }
   console.log('All migrations applied.');
 
