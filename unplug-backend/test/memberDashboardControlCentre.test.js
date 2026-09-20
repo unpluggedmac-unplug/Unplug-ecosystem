@@ -17,15 +17,18 @@ const runtime = fs.readFileSync(path.join(ROOT, 'functions', 'runtime-config.js'
 
 const TOP_LEVEL = [
   ['g-home', 'Home'],
-  ['g-id', 'My Identity'],
-  ['g-journey', 'My Unplug Journey'],
-  ['g-growth', 'My Growth'],
+  ['g-unplug', 'My Unplug'],
+  ['g-directory', 'My Directory'],
   ['g-content', 'My Content'],
-  ['g-services', 'Services'],
-  ['g-money', 'Money & Purchases'],
-  ['g-agreements', 'Agreements'],
   ['g-community', 'Community'],
-  ['g-account', 'Account & Privacy'],
+  ['g-recognition', 'Recognition & Gamification'],
+  ['g-opportunities', 'Opportunities'],
+  ['g-services', 'Services & Marketplace'],
+  ['g-money', 'Finance'],
+  ['g-notifications', 'Notifications'],
+  ['g-agreements', 'Agreements'],
+  ['g-help', 'Help & Support'],
+  ['g-account', 'Account & Settings'],
 ];
 
 const SOURCE_KEYS = [
@@ -81,22 +84,52 @@ test('all approved top-level member groups are represented', () => {
   }
 });
 
-test('identity, journey, content, money and account children are grouped as approved', () => {
+test('Phase 2 groups keep each existing function in one clear conceptual home', () => {
   const labels = [
-    'Directory Profile', 'My Unplug Community Profile', 'Preview as Public', 'Profile Completion', 'My Analytics',
-    'Status & Score', "Today\'s Missions", "This Week\'s Mission", "This Month\'s Challenge", 'Achievements', 'Unplug Passport', 'Leaderboard', 'Referral Progress',
-    'My Submissions', 'My Articles', 'My Events', 'My Listings', 'My Advertising', 'My Competitions', 'Reading List', 'My Editions',
-    'My Orders', 'Payments', 'My Credits', 'My Invoices', 'My Votes',
-    'Account Settings', 'Your Data', 'Download My Data', 'View Official Site', 'Logout',
+    'My Profile', 'Profile Completion', 'Preview My Unplug Profile', 'My Growth Journey',
+    'My Directory Profile', 'Directory Performance',
+    'My Submissions', 'My Articles', 'My Events', 'My Listings', 'Reading List', 'My Editions',
+    'Referral Progress', 'My Referrals', 'My Clients',
+    'My Score & Level', 'Missions', "This Week\'s Mission", "This Month\'s Challenge", 'My Achievements', 'Unplug Passport', 'Leaderboard',
+    'My Competitions', 'My Votes', 'Browse Competitions',
+    'Browse Services', 'My Services', 'My Advertising',
+    'My Orders', 'Payments', 'Unplug Credits', 'My Invoices',
+    'All Notifications', 'Contact Support',
+    'Account Details', 'Privacy & Your Data', 'Download My Data', 'Logout',
   ];
   for (const label of labels) assert.ok(script.includes(label), `missing hierarchy label: ${label}`);
+  for (const oldLabel of ['My Identity', 'My Unplug Journey', 'Money & Purchases', 'Account & Privacy']) {
+    assert.ok(!script.includes(label:'${oldLabel}'), `retired top-level label still present: ${oldLabel}`);
+  }
 });
 
-test('notifications have root-level quick access and remain inside Community', () => {
-  assert.match(script, /id:'notifications',label:'Notifications'/);
-  assert.match(polish, /data-node=\"notifications-quick\"/);
-  assert.match(polish, /data-node=\"g-community\"\] \[data-id=\"notifications\"\]/);
-  assert.match(polish, /notifCountBadge/);
+test('notifications have one clear primary home and are not duplicated under Community', () => {
+  assert.match(script, /id:'g-notifications',label:'Notifications'/);
+  assert.match(script, /id:'notifications',label:'All Notifications'/);
+  assert.doesNotMatch(polish, /notifications-quick/);
+  const communityStart = script.indexOf("id:'g-community'");
+  const recognitionStart = script.indexOf("id:'g-recognition'", communityStart);
+  assert.ok(communityStart > -1 && recognitionStart > communityStart);
+  assert.doesNotMatch(script.slice(communityStart, recognitionStart), /id:'notifications'/);
+});
+
+test('personal My Unplug and public My Directory are visibly separated', () => {
+  assert.match(script, /id:'g-unplug',label:'My Unplug'/);
+  assert.match(script, /id:'community-profile',label:'My Profile'/);
+  assert.match(script, /id:'g-directory',label:'My Directory'/);
+  assert.match(script, /id:'directory-profile',label:'My Directory Profile'/);
+  assert.match(script, /id:'directory-performance',label:'Directory Performance'/);
+  assert.doesNotMatch(script, /label:'My Identity'/);
+});
+
+test('commercial and opportunity functions are moved out of the generic submissions branch', () => {
+  const contentStart = script.indexOf("id:'g-content'");
+  const communityStart = script.indexOf("id:'g-community'", contentStart);
+  const content = script.slice(contentStart, communityStart);
+  assert.doesNotMatch(content, /My Advertising/);
+  assert.doesNotMatch(content, /My Competitions/);
+  assert.match(script, /id:'g-services'[\s\S]*id:'my-advertising',label:'My Advertising'/);
+  assert.match(script, /id:'g-opportunities'[\s\S]*id:'my-competitions',label:'My Competitions'/);
 });
 
 test('services stay compact and quick create is provided instead of listing every service in the tree', () => {
@@ -109,7 +142,7 @@ test('services stay compact and quick create is provided instead of listing ever
 });
 
 test('search, favourites, recent items, breadcrumbs and remembered UI state are present', () => {
-  assert.match(script, /Find something in My Unplug/);
+  assert.match(script, /Find something in Member Dashboard/);
   assert.match(script, /unplug_member_cc_favourites_v1/);
   assert.match(script, /unplug_member_cc_recent_v1/);
   assert.match(script, /unplug_member_cc_open_v1/);
