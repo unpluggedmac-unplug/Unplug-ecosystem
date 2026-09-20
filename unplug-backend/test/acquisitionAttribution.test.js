@@ -366,10 +366,10 @@ test('a referral signup links the exact anonymous click and creates one member r
   assert.equal(stats.body.conversionRate, 100);
 });
 
-test('referral signup falls back to the latest unconverted click when an old session has no click id', async () => {
+test('code-only referral signup never guesses another visitor\'s click', async () => {
   const referrer = await makeUser();
   const referred = await makeUser();
-  const code = 'LEGACYFUNNEL';
+  const code = 'NOGUESSFUNNEL';
 
   await pool.query(
     `INSERT INTO member_participation_profiles (user_id, referral_code) VALUES ($1, $2)
@@ -382,14 +382,14 @@ test('referral signup falls back to the latest unconverted click when an old ses
     userId: referred,
     referralCode: code,
   }, pool);
-  assert.equal(result.ok, true);
-  assert.equal(result.clickMarked, true);
+  assert.equal(result.ok, true, 'the referral relationship is still valid');
+  assert.equal(result.clickMarked, false, 'without an exact id, no anonymous click is claimed');
 
   const converted = await pool.query(
     'SELECT converted_user_id FROM referral_clicks WHERE id = $1',
     [click.body.clickId]
   );
-  assert.equal(converted.rows[0].converted_user_id, referred);
+  assert.equal(converted.rows[0].converted_user_id, null);
 });
 
 test('shares are recorded and summarised, and a bad type is refused', async () => {
