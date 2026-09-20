@@ -163,6 +163,32 @@ test('member home is personalised from live DOM state without inventing a second
   assert.match(script, /My Growth/);
 });
 
+test('Phase 4 Home follows the approved control-centre hierarchy without a new data source', () => {
+  const ordered = [
+    "panel('status','Account status'",
+    "panel('priority','Action required'",
+    "panel('quick','Quick actions'",
+    "panel('unplug','My Unplug snapshot'",
+    "panel('content','My content'",
+    "panel('opportunities','Opportunities'",
+    "panel('recent','Recently used'",
+  ];
+  let last = -1;
+  for (const token of ordered) {
+    const pos = script.indexOf(token);
+    assert.ok(pos > last, `Home section missing or out of order: ${token}`);
+    last = pos;
+  }
+  for (const fn of ['memberName', 'directoryStatus', 'myUnplugState', 'submissionStates', 'homeStatus', 'homeUnplug', 'homeContent', 'homeOpportunities']) {
+    assert.match(script, new RegExp(`function ${fn}\\(`));
+  }
+  assert.match(script, /Good morning|Good afternoon|Good evening/);
+  assert.match(script, /Top 10/);
+  assert.match(script, /Browse Competitions/);
+  assert.doesNotMatch(script, /Recent activity/);
+  assert.doesNotMatch(script, /fetch\(/, 'Home must continue deriving state from the existing rendered dashboard');
+});
+
 test('profile checklist mirrors existing completion state instead of inventing completion rules', () => {
   assert.match(page, /id=\"muCompletionPct\"/);
   assert.match(page, /id=\"muCompletionTodo\"/);
