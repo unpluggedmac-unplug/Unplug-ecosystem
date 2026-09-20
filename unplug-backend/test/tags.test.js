@@ -285,10 +285,26 @@ test('A MEMBER PROFILE IS SEARCHABLE ONLY ONCE PUBLISHED', async () => {
   let res = await req('GET', '/search?q=birdwatching');
   assert.equal((res.body.results.members || []).length, 0, 'an unpublished profile must not appear');
 
-  await pool.query('UPDATE my_unplug_profiles SET is_published = true WHERE user_id = $1', [userId]);
+  await req('PATCH', '/my-unplug/me/visibility', {
+    token, body: { visibility: { tags: true } },
+  });
+  await req('POST', '/my-unplug/me/publish', { token });
   res = await req('GET', '/search?q=birdwatching');
   assert.ok((res.body.results.members || []).some((m) => m.user_id === userId),
-    'once published it is findable by its tag');
+    'once published AND tags are public it is findable by its tag');
+});
+
+test('a private member tag never makes a published profile searchable', async () => {
+  const userId = await makeUser();
+  const token = tokenFor(userId);
+  await req('PUT', '/my-unplug/me', {
+    token, body: { username: 'privtag' + userId, displayName: 'Private Tag Person', tags: ['SecretBirding'] },
+  });
+  await req('POST', '/my-unplug/me/publish', { token });
+
+  const res = await req('GET', '/search?q=secretbirding');
+  assert.ok(!(res.body.results.members || []).some((m) => m.user_id === userId),
+    'private tags must not influence public search');
 });
 
 test('search results always carry a members list, even when empty', async () => {

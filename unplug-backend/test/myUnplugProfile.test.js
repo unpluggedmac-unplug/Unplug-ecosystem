@@ -135,6 +135,121 @@ test('a published public profile exposes NO private field', async () => {
   }
 });
 
+test('new profiles keep every optional field private when first published', async () => {
+  const user = await makeUser();
+  const { username, body: saved } = await makeProfile(user, {
+    aboutMe: 'A private biography.',
+    avatarUrl: 'https://example.com/private-avatar.jpg',
+    country: 'South Africa',
+    province: 'Gauteng',
+    city: 'Johannesburg',
+    tags: ['PrivateTag'],
+  });
+  assert.deepEqual(saved.profile.field_visibility, {
+    avatar: false, about: false, country: false, province: false, city: false,
+    interests: false, skills: false, purposes: false, tags: false,
+  });
+
+  await req('PUT', '/my-unplug/me/taxonomy', {
+    token: tokenFor(user),
+    body: {
+      interests: ['music'],
+      customInterests: ['Youth mentorship'],
+      skills: ['writing'],
+      purposes: ['creativity'],
+    },
+  });
+  await req('POST', '/my-unplug/me/publish', { token: tokenFor(user) });
+
+  const pub = await req('GET', `/my-unplug/u/${username}`);
+  assert.equal(pub.status, 200);
+  assert.equal(pub.body.profile.username, username);
+  assert.equal(pub.body.profile.display_name, 'Test Member');
+  for (const key of ['about_me', 'avatar_url', 'country', 'province', 'city', 'tags']) {
+    assert.equal(pub.body.profile[key], null, `${key} should default private`);
+  }
+  assert.deepEqual(pub.body.taxonomies.interests, []);
+  assert.deepEqual(pub.body.taxonomies.customInterests, []);
+  assert.deepEqual(pub.body.taxonomies.skills, []);
+  assert.deepEqual(pub.body.taxonomies.purposes, []);
+});
+
+test('optional public fields can be exposed independently without leaking the rest', async () => {
+  const user = await makeUser();
+  const { username } = await makeProfile(user, {
+    aboutMe: 'Public bio, private town.',
+    avatarUrl: 'https://example.com/hidden-avatar.jpg',
+    country: 'South Africa',
+    province: 'Gauteng',
+    city: 'Johannesburg',
+    tags: ['VisibleTag'],
+  });
+  await req('PUT', '/my-unplug/me/taxonomy', {
+    token: tokenFor(user),
+    body: {
+      interests: ['music'],
+      customInterests: ['Community radio'],
+      skills: ['writing'],
+      purposes: ['creativity'],
+    },
+  });
+
+  const vis = await req('PATCH', '/my-unplug/me/visibility', {
+    token: tokenFor(user),
+    body: { visibility: {
+      about: true,
+      country: true,
+      tags: true,
+      interests: true,
+      avatar: false,
+      province: false,
+      city: false,
+      skills: false,
+      purposes: false,
+    } },
+  });
+  assert.equal(vis.status, 200);
+  await req('POST', '/my-unplug/me/publish', { token: tokenFor(user) });
+
+  const pub = await req('GET', `/my-unplug/u/${username}`);
+  assert.equal(pub.body.profile.about_me, 'Public bio, private town.');
+  assert.equal(pub.body.profile.country, 'South Africa');
+  assert.equal(pub.body.profile.province, null);
+  assert.equal(pub.body.profile.city, null);
+  assert.equal(pub.body.profile.avatar_url, null);
+  assert.deepEqual(pub.body.profile.tags, ['VisibleTag']);
+  assert.deepEqual(pub.body.taxonomies.interests.map((x) => x.key), ['music']);
+  assert.deepEqual(pub.body.taxonomies.customInterests.map((x) => x.label), ['Community radio']);
+  assert.deepEqual(pub.body.taxonomies.skills, []);
+  assert.deepEqual(pub.body.taxonomies.purposes, []);
+});
+
+test('custom interests belong only to the member and never become global taxonomy options', async () => {
+  const first = await makeUser();
+  const second = await makeUser();
+  await makeProfile(first);
+  await makeProfile(second);
+
+  const custom = Array.from({ length: 12 }, (_, i) => `Custom Interest ${i}`);
+  custom.splice(1, 0, 'custom interest 0');
+  const saved = await req('PUT', '/my-unplug/me/taxonomy', {
+    token: tokenFor(first),
+    body: { customInterests: custom },
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.taxonomies.customInterests.length, 10, 'custom interests are capped at ten');
+  assert.equal(saved.body.taxonomies.customInterests[0].label, 'Custom Interest 0');
+  assert.equal(saved.body.completion.steps.find((s) => s.key === 'interests').done, true,
+    'a custom interest counts as completing the interests step');
+
+  const other = await req('GET', '/my-unplug/me', { token: tokenFor(second) });
+  assert.deepEqual(other.body.taxonomies.customInterests, [], 'another member must not inherit them');
+
+  const taxonomy = await req('GET', '/my-unplug/taxonomy');
+  assert.ok(!taxonomy.body.interests.some((x) => /Custom Interest/i.test(x.label)),
+    'member-entered interests must never be promoted into the shared catalogue');
+});
+
 test('an UNPUBLISHED profile is not reachable publicly, and 404s rather than admitting it exists', async () => {
   const user = await makeUser();
   const { username } = await makeProfile(user);
@@ -338,7 +453,13 @@ test('the published list contains only published profiles', async () => {
 test('re-running every migration is idempotent — profiles and selections survive', async () => {
   const user = await makeUser();
   const { username } = await makeProfile(user);
-  await req('PUT', '/my-unplug/me/taxonomy', { token: tokenFor(user), body: { interests: ['music'] } });
+  await req('PUT', '/my-unplug/me/taxonomy', {
+    token: tokenFor(user),
+    body: { interests: ['music'], customInterests: ['Local theatre'] },
+  });
+  await req('PATCH', '/my-unplug/me/visibility', {
+    token: tokenFor(user), body: { visibility: { about: true, interests: false } },
+  });
 
   for (const f of fs.readdirSync(path.join(__dirname, '..', 'db', 'migrations')).filter((x) => x.endsWith('.sql')).sort()) {
     await pool.query(fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', f), 'utf8'));
@@ -347,6 +468,9 @@ test('re-running every migration is idempotent — profiles and selections survi
   const mine = await req('GET', '/my-unplug/me', { token: tokenFor(user) });
   assert.equal(mine.body.profile.username, username);
   assert.deepEqual(mine.body.taxonomies.interests.map((i) => i.key), ['music']);
+  assert.deepEqual(mine.body.taxonomies.customInterests.map((i) => i.label), ['Local theatre']);
+  assert.equal(mine.body.profile.field_visibility.about, true, 'migration re-run keeps a member privacy choice');
+  assert.equal(mine.body.profile.field_visibility.interests, false, 'migration re-run never resets privacy to public');
   // Seeds must not have duplicated.
   const seeds = await pool.query(`SELECT COUNT(*)::int AS n FROM mu_interests WHERE key = 'music'`);
   assert.equal(seeds.rows[0].n, 1);

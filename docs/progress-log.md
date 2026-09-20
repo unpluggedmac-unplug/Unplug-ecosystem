@@ -3413,3 +3413,50 @@ Admin still sees the detailed raw workflow status.
 approval-state modelling; and Batch D money/schema work. Each remains a separate task requiring its own
 review/approval before implementation.
 
+## 2026-09-20 — My Unplug custom interests + per-field privacy completed on draft PR #51 (not merged)
+
+**Approved product decisions.** Owner approved 1A / 2A / 3A / 4B. Custom interests are member-owned and
+never become global taxonomy options. A published My Unplug profile always exposes only the public identity
+pair (@username + display name); profile picture, About Me, country, province, town/city, interests, skills,
+"What I’m plugging into" and tags each have their own Public/Private control. Country/province/town are
+separate switches. New profiles default every optional field to Private.
+
+**Schema and backwards compatibility.** Migration 213 adds a whitelisted JSONB `field_visibility` map plus
+`mu_profile_custom_interests`, a per-member table capped by the API at ten normalized labels. The migration
+adds the visibility column nullable first and backfills only NULL legacy rows, so re-running migrations cannot
+overwrite a later member choice. Existing published profiles are backfilled to the legacy all-public optional
+field behaviour; existing unpublished profiles are backfilled private; new rows default optional fields private.
+The migration also adds the privacy-aware public-member FTS index and updates `get_featured_members` so
+unpublished profiles cannot be featured and private avatar/country values cannot leak through homepage cards.
+
+**API, search and member UI.** `myUnplug.js` now returns/stores custom interests separately from the shared
+interest catalogue, counts custom-only interests toward profile completion, exposes
+`PATCH /my-unplug/me/visibility`, and masks every optional field server-side on the public profile response.
+Interests/skills/purposes are filtered as groups before leaving the API; custom interests follow the Interests
+switch. Public search always matches username/display name but includes About Me and Tags only when the member
+made those fields public, and search results mask private avatar/tags. The member dashboard has a custom-interest
+input plus nine explicit privacy switches and explains that username/display name stay public on a published
+profile. The public magazine profile renders custom interests and tags only from the already-filtered response.
+
+**Scope safety.** No Directory, Growth, payment, pricing, order, credit or vote logic changed. Admin/internal
+profile access remains internal; the privacy controls govern public My Unplug surfaces. The task also closes a
+pre-existing public-surface gap in which a My Unplug row did not need `is_published=true` to qualify for the
+featured-members function.
+
+**Verification.** Candidate `46375b89979d081e99bec8879b51a362e82c3a6b` passed the Build configuration
+contract gate, production frontend/package build, Member Dashboard regressions and Member Analytics checks.
+The focused My Unplug privacy/custom-interest job passed **101/101 tests, 0 failures**. The complete real-
+PostgreSQL backend suite passed **2,450/2,450 tests, 0 failures, 0 skipped**. Syntax checks for the changed
+routes/tests and migration re-run/idempotency coverage are included in CI. GitHub Actions currently warns that
+Node 20 actions are being forced to Node 24; it is non-failing and is a separate CI-maintenance concern.
+
+**Release state.** Draft PR **#51** (`feat/my-unplug-privacy-custom-interests-20260920` → `main`) remains
+deliberately unmerged. Production is untouched. After owner review/sign-off: merge PR #51, verify the Cloudflare
+frontend deployment, verify Render production auto-deploys the exact merge commit from `main`, confirm
+`/health/ready` is healthy, then smoke-test a new member (defaults private), an existing published member
+(backwards-compatible visibility), custom interests, individual field toggles, search privacy and featured-card
+privacy before calling the release live.
+
+**Still queued:** My Orders approval-state modelling (separate payment status from service/approval state), then
+Batch D money/schema work. Both remain separate backend tasks and require their own review/approval before build.
+

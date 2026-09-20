@@ -198,6 +198,50 @@ test('the expression in search.js is the one migration 150 indexed', async () =>
   }
 });
 
+test('the privacy-aware My Unplug FTS expression is indexed by migration 213', () => {
+  const { PUBLIC_MEMBER_FTS } = require('../src/routes/search');
+  const sql = fs.readFileSync(path.join(migrationsDir, '213_my_unplug_privacy_custom_interests.sql'), 'utf8');
+  const flat = (s) => s.replace(/\s+/g, ' ').trim();
+  assert.ok(flat(sql).includes(flat(PUBLIC_MEMBER_FTS)),
+    'PUBLIC_MEMBER_FTS is not indexed by migration 213 — privacy-aware member search would scan');
+});
+
+test('a private About Me cannot make a published member discoverable', async () => {
+  const userId = 560002;
+  await pool.query(
+    `INSERT INTO users (id, email, full_name, password_hash, role)
+     VALUES ($1, 'private-about@test.com', 'Private About', 'x', 'member')`,
+    [userId]
+  );
+  await pool.query(
+    `INSERT INTO my_unplug_profiles
+       (user_id, username, display_name, about_me, avatar_url, tags, is_published, published_at)
+     VALUES ($1, 'privacysearch', 'Privacy Search', 'ultrasecretbioword',
+             'https://example.com/private.jpg', ARRAY['SecretTag'], true, now())`,
+    [userId]
+  );
+
+  let result = await search('q=ultrasecretbioword');
+  assert.ok(!result.body.results.members.some((m) => m.user_id === userId),
+    'private bio text must not influence public search');
+
+  result = await search('q=privacysearch');
+  const byName = result.body.results.members.find((m) => m.user_id === userId);
+  assert.ok(byName, 'username/display name remain searchable on a published profile');
+  assert.equal(byName.avatar_url, null, 'private avatar is masked in search results');
+  assert.equal(byName.tags, null, 'private tags are masked in search results');
+
+  await pool.query(
+    `UPDATE my_unplug_profiles
+        SET field_visibility = field_visibility || '{"about":true,"avatar":true,"tags":true}'::jsonb
+      WHERE user_id = $1`,
+    [userId]
+  );
+  result = await search('q=ultrasecretbioword');
+  assert.ok(result.body.results.members.some((m) => m.user_id === userId),
+    'bio becomes searchable only after the member makes it public');
+});
+
 test('STEMMING: "running" finds "Runs"', async () => {
   const { body } = await search('q=running');
   assert.ok(titles(body).includes('She Runs at Dawn'),
@@ -361,8 +405,8 @@ test('re-running every migration is idempotent and the indexes survive', async (
   // The full-text indexes do not depend on any extension, so these must exist
   // wherever the migration ran at all.
   assert.deepEqual(
-    (await names(['idx_articles_fts', 'idx_profiles_fts', 'idx_my_unplug_fts'])).sort(),
-    ['idx_articles_fts', 'idx_my_unplug_fts', 'idx_profiles_fts'],
+    (await names(['idx_articles_fts', 'idx_profiles_fts', 'idx_my_unplug_fts', 'idx_my_unplug_public_fts'])).sort(),
+    ['idx_articles_fts', 'idx_my_unplug_fts', 'idx_my_unplug_public_fts', 'idx_profiles_fts'],
     'the FTS indexes survive a migration re-run');
 
   if (!(await hasTrgm())) {

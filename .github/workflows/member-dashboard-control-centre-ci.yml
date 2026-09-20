@@ -4,6 +4,15 @@ on:
   push:
     paths:
       - 'unplug-member-dashboard.html'
+      - 'unplug-magazine.html'
+      - 'unplug-backend/src/routes/myUnplug.js'
+      - 'unplug-backend/src/routes/search.js'
+      - 'unplug-backend/db/migrations/213_my_unplug_privacy_custom_interests.sql'
+      - 'unplug-backend/test/myUnplugProfile.test.js'
+      - 'unplug-backend/test/myUnplugPrivacyUi.test.js'
+      - 'unplug-backend/test/tags.test.js'
+      - 'unplug-backend/test/siteSearch.test.js'
+      - 'unplug-backend/test/featuredMembers.test.js'
       - 'functions/runtime-config.js'
       - 'media/scripts/member-dashboard-control-centre*.js'
       - 'media/scripts/member-dashboard-service-shortcuts.js'
@@ -19,6 +28,15 @@ on:
   pull_request:
     paths:
       - 'unplug-member-dashboard.html'
+      - 'unplug-magazine.html'
+      - 'unplug-backend/src/routes/myUnplug.js'
+      - 'unplug-backend/src/routes/search.js'
+      - 'unplug-backend/db/migrations/213_my_unplug_privacy_custom_interests.sql'
+      - 'unplug-backend/test/myUnplugProfile.test.js'
+      - 'unplug-backend/test/myUnplugPrivacyUi.test.js'
+      - 'unplug-backend/test/tags.test.js'
+      - 'unplug-backend/test/siteSearch.test.js'
+      - 'unplug-backend/test/featuredMembers.test.js'
       - 'functions/runtime-config.js'
       - 'media/scripts/member-dashboard-control-centre*.js'
       - 'media/scripts/member-dashboard-service-shortcuts.js'
@@ -72,6 +90,85 @@ jobs:
           node --test --test-concurrency=1
           test/profileAnalytics.test.js
           test/myAnalyticsRealData.test.js
+
+  my-unplug-privacy:
+    name: My Unplug privacy & custom interests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Syntax-check privacy routes and tests
+        run: |
+          node --check src/routes/myUnplug.js
+          node --check src/routes/search.js
+          node --check test/myUnplugProfile.test.js
+          node --check test/myUnplugPrivacyUi.test.js
+          node --check test/tags.test.js
+          node --check test/siteSearch.test.js
+          node --check test/featuredMembers.test.js
+
+      - name: Clear stale embedded PostgreSQL processes
+        run: node scripts/sweep-test-postgres.js
+
+      - name: Prepare text-search fixture
+        run: node scripts/ensure-text-search.js
+
+      - name: Run My Unplug privacy regression tests
+        run: >-
+          node --test --test-concurrency=1
+          test/myUnplugProfile.test.js
+          test/myUnplugPrivacyUi.test.js
+          test/tags.test.js
+          test/siteSearch.test.js
+          test/featuredMembers.test.js
+
+  full-backend-regression:
+    name: Full backend regression suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Clear stale embedded PostgreSQL processes
+        run: node scripts/sweep-test-postgres.js
+
+      - name: Prepare text-search fixture
+        run: node scripts/ensure-text-search.js
+
+      - name: Run complete backend suite
+        shell: bash
+        run: |
+          set -o pipefail
+          find test -name '*.test.js' -print0 | sort -z | xargs -0 node --test --test-concurrency=1
 
   member-dashboard-control-centre:
     name: Member Dashboard regression checks

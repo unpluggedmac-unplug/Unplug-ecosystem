@@ -4000,8 +4000,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 <!-- ============ MEMBERS ============ -->
 <!-- MY UNPLUG PUBLIC PROFILE — /?p=myunplug&u=<username>.
      Community identity only. The API for this page (GET /my-unplug/u/:username)
-     returns no email, phone or address at all, and unpublished profiles 404,
-     so there is nothing private for this template to accidentally render. -->
+     returns no email, phone or street address, unpublished profiles 404, and
+     optional My Unplug fields are already removed server-side when private. -->
 <main class="page" id="page-myunplug">
   <div class="wrap" style="padding-top:56px;">
     <div id="muProfileBody"><div class="dir-empty-state">Loading…</div></div>
@@ -5758,12 +5758,14 @@ async function loadMyUnplugPublicProfile(username) {
     return;
   }
   const p = data.profile;
-  const t = data.taxonomies || { interests: [], skills: [], purposes: [] };
+  const t = data.taxonomies || { interests: [], customInterests: [], skills: [], purposes: [] };
   const chips = (list) => list.length
     ? `<div class="mu-pub-chips">${list.map((x) => `<span class="mu-pub-chip">${escapeHtml(x.label)}</span>`).join('')}</div>`
     : '';
   const place = [p.city, p.province, p.country].filter(Boolean).map(escapeHtml).join(', ');
   const block = (title, list) => list.length ? `<section class="mu-pub-block"><h2>${title}</h2>${chips(list)}</section>` : '';
+  const publicInterests = [...(t.interests || []), ...(t.customInterests || [])];
+  const publicTags = (p.tags || []).map((label) => ({ label }));
 
   host.innerHTML = `
     <article class="mu-pub">
@@ -5780,7 +5782,8 @@ async function loadMyUnplugPublicProfile(username) {
       ${p.about_me ? `<p class="mu-pub-about">${escapeHtml(p.about_me)}</p>` : ''}
       ${block('What I’m plugging into', t.purposes)}
       ${block('My skills &amp; talents', t.skills)}
-      ${block('My interests', t.interests)}
+      ${block('My interests', publicInterests)}
+      ${block('Tags', publicTags)}
     </article>`;
 
   document.title = `${p.display_name} (@${p.username}) — Unplug Magazine`;

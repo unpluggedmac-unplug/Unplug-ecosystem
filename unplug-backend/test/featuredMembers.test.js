@@ -62,11 +62,20 @@ async function giveBusiness(userId, name) {
     [userId, `fm-biz-${_slug++}`, name]);
 }
 
-async function giveMyUnplug(userId, name) {
+const ALL_PUBLIC = {
+  avatar: true, about: true, country: true, province: true, city: true,
+  interests: true, skills: true, purposes: true, tags: true,
+};
+
+async function giveMyUnplug(userId, name, opts = {}) {
+  const published = opts.published !== false;
+  const visibility = opts.visibility || ALL_PUBLIC;
   await pool.query(
-    `INSERT INTO my_unplug_profiles (user_id, username, display_name, avatar_url)
-     VALUES ($1, $2, $3, 'https://example.com/a.jpg')`,
-    [userId, `fmuser${userId}`, name]);
+    `INSERT INTO my_unplug_profiles
+       (user_id, username, display_name, avatar_url, country, is_published, published_at, field_visibility)
+     VALUES ($1, $2, $3, 'https://example.com/a.jpg', 'South Africa', $4,
+             CASE WHEN $4 THEN now() ELSE NULL END, $5::jsonb)`,
+    [userId, `fmuser${userId}`, name, published, JSON.stringify(visibility)]);
 }
 
 async function givePoints(userId, points, daysAgo = 1) {
@@ -171,6 +180,30 @@ test('an individual is featured through their My Unplug profile', async () => {
   assert.ok(row, 'the member is eligible');
   assert.equal(row.kind, 'member');
   assert.ok(row.ref, 'and it has a username to link to');
+});
+
+test('an unpublished My Unplug profile is never featured publicly', async () => {
+  const uid = await makeUser();
+  await giveMyUnplug(uid, 'Private Member', { published: false });
+  await givePoints(uid, 999999);
+
+  const rows = await featured();
+  assert.ok(!rows.some((r) => r.display_name === 'Private Member'),
+    'whole-profile privacy must win even over very high activity');
+});
+
+test('featured-member cards obey avatar and country privacy', async () => {
+  const uid = await makeUser();
+  await giveMyUnplug(uid, 'Privacy Member', {
+    visibility: { avatar: false, country: false },
+  });
+  await givePoints(uid, 999998);
+
+  const rows = await featured();
+  const row = rows.find((r) => r.display_name === 'Privacy Member');
+  assert.ok(row, 'published member remains eligible');
+  assert.equal(row.image_url, null, 'private avatar must not leave the database function');
+  assert.equal(row.tagline, 'Member', 'private country must fall back to a generic label');
 });
 
 test('somebody who is BOTH a member and a business gets exactly one card', async () => {
