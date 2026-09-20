@@ -4,6 +4,10 @@ on:
   push:
     paths:
       - 'unplug-member-dashboard.html'
+      - 'unplug-backend/src/routes/orders.js'
+      - 'unplug-backend/src/utils/orderServiceStatus.js'
+      - 'unplug-backend/test/myOrders.test.js'
+      - 'unplug-backend/test/myOrdersStatusUi.test.js'
       - 'unplug-magazine.html'
       - 'unplug-backend/src/routes/myUnplug.js'
       - 'unplug-backend/src/routes/search.js'
@@ -28,6 +32,10 @@ on:
   pull_request:
     paths:
       - 'unplug-member-dashboard.html'
+      - 'unplug-backend/src/routes/orders.js'
+      - 'unplug-backend/src/utils/orderServiceStatus.js'
+      - 'unplug-backend/test/myOrders.test.js'
+      - 'unplug-backend/test/myOrdersStatusUi.test.js'
       - 'unplug-magazine.html'
       - 'unplug-backend/src/routes/myUnplug.js'
       - 'unplug-backend/src/routes/search.js'
@@ -136,6 +144,46 @@ jobs:
           test/tags.test.js
           test/siteSearch.test.js
           test/featuredMembers.test.js
+
+  my-orders-status:
+    name: My Orders payment & service status
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Syntax-check My Orders status files
+        run: |
+          node --check src/routes/orders.js
+          node --check src/utils/orderServiceStatus.js
+          node --check test/myOrders.test.js
+          node --check test/myOrdersStatusUi.test.js
+
+      - name: Clear stale embedded PostgreSQL processes
+        run: node scripts/sweep-test-postgres.js
+
+      - name: Prepare text-search fixture
+        run: node scripts/ensure-text-search.js
+
+      - name: Run My Orders status tests
+        run: >-
+          node --test --test-concurrency=1
+          test/myOrders.test.js
+          test/myOrdersStatusUi.test.js
 
   full-backend-regression:
     name: Full backend regression suite

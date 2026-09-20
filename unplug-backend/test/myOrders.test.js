@@ -31,6 +31,9 @@ let tokenMine;
 let tokenOther;
 let myOrderId;
 let theirOrderId;
+let myArticleId;
+let myAdId;
+let theirArticleId;
 // Loaded in before(), after DATABASE_URL is set — see mySubmissions.test.js.
 let ref;
 
@@ -86,6 +89,25 @@ before(async () => {
   tokenMine = jwt.sign({ id: ME, email: 'me@ord.test', role: 'member' }, process.env.JWT_SECRET);
   tokenOther = jwt.sign({ id: OTHER, email: 'other@ord.test', role: 'member' }, process.env.JWT_SECRET);
 
+  // Real source rows for the order lines. Payment state and service/review
+  // state deliberately disagree: both are paid, but one service is approved
+  // while the other is still waiting for an admin decision.
+  const myArticle = await pool.query(
+    `INSERT INTO articles (title, body, status, author_user_id)
+     VALUES ('My approved article', 'Body', 'approved', $1) RETURNING id`, [ME]);
+  myArticleId = myArticle.rows[0].id;
+
+  const myAd = await pool.query(
+    `INSERT INTO ad_slots (slot_key, image_url, name, owner_user_id, moderation_status, is_active)
+     VALUES ('my-orders-ad', 'https://example.com/ad.jpg', 'My advert', $1, 'pending_approval', false)
+     RETURNING id`, [ME]);
+  myAdId = myAd.rows[0].id;
+
+  const theirArticle = await pool.query(
+    `INSERT INTO articles (title, body, status, author_user_id)
+     VALUES ('Their article', 'Body', 'approved', $1) RETURNING id`, [OTHER]);
+  theirArticleId = theirArticle.rows[0].id;
+
   // My order: two services, a voucher and credit applied — §10.4's shape.
   const mine = await pool.query(
     `INSERT INTO orders (user_id, reference, method, status, subtotal,
@@ -98,9 +120,10 @@ before(async () => {
   myOrderId = mine.rows[0].id;
   await pool.query(
     `INSERT INTO payments (user_id, linked_type, linked_id, amount, status, method,
-                           gateway_reference, order_id)
-     VALUES ($1,'article_publish',1, 95.00,'confirmed','eft','GW-MINE-A',$2),
-            ($1,'ad_banner',2, 450.00,'confirmed','eft','GW-MINE-B',$2)`, [ME, myOrderId]);
+                           gateway_reference, order_id, fulfillment_status, fulfilled_at)
+     VALUES ($1,'article_publish',$2, 95.00,'confirmed','eft','GW-MINE-A',$4,'applied',now()),
+            ($1,'ad_banner',$3, 450.00,'confirmed','eft','GW-MINE-B',$4,'applied',now())`,
+    [ME, myArticleId, myAdId, myOrderId]);
 
   const theirs = await pool.query(
     `INSERT INTO orders (user_id, reference, method, status, subtotal, total,
@@ -110,8 +133,9 @@ before(async () => {
   theirOrderId = theirs.rows[0].id;
   await pool.query(
     `INSERT INTO payments (user_id, linked_type, linked_id, amount, status, method,
-                           gateway_reference, order_id)
-     VALUES ($1,'article_publish',3, 95.00,'confirmed','eft','GW-THEIRS',$2)`, [OTHER, theirOrderId]);
+                           gateway_reference, order_id, fulfillment_status, fulfilled_at)
+     VALUES ($1,'article_publish',$2, 95.00,'confirmed','eft','GW-THEIRS',$3,'applied',now())`,
+    [OTHER, theirArticleId, theirOrderId]);
 });
 
 after(async () => {
@@ -169,6 +193,98 @@ test('the list says what each order was for, without a second request', async ()
   assert.equal(order.item_count, 2);
 });
 
+test('PAYMENT STATUS AND SERVICE STATUS ARE SEPARATE FACTS', async () => {
+  const res = await api('/orders/mine', tokenMine);
+  assert.equal(res.status, 200);
+  const order = res.body.orders.find((o) => o.reference === 'UNP-MINE-1');
+
+  assert.equal(order.status, 'confirmed', 'stored order payment vocabulary stays unchanged');
+  assert.equal(order.paymentStatusLabel, 'Paid');
+  assert.equal(order.serviceStatusSummary.key, 'mixed');
+  assert.equal(
+    order.serviceStatusSummary.label,
+    'Mixed status · 1 Approved · 1 Awaiting approval'
+  );
+  assert.deepEqual(order.serviceStatusSummary.counts, [
+    { key: 'approved', label: 'Approved', count: 1 },
+    { key: 'pending', label: 'Awaiting approval', count: 1 },
+  ]);
+});
+
+test('each order line reports its own service status', async () => {
+  const res = await api(`/orders/${myOrderId}`, tokenMine);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.order.paymentStatusLabel, 'Paid');
+  assert.equal(
+    res.body.order.serviceStatusSummary.label,
+    'Mixed status · 1 Approved · 1 Awaiting approval'
+  );
+
+  const article = res.body.items.find((i) => i.linked_type === 'article_publish');
+  const advert = res.body.items.find((i) => i.linked_type === 'ad_banner');
+  assert.equal(article.paymentStatusLabel, 'Paid');
+  assert.equal(article.serviceStatus, 'approved');
+  assert.equal(article.serviceStatusLabel, 'Approved');
+  assert.equal(advert.paymentStatusLabel, 'Paid');
+  assert.equal(advert.serviceStatus, 'pending');
+  assert.equal(advert.serviceStatusLabel, 'Awaiting approval');
+});
+
+test('a fulfilment failure overrides a misleading downstream approval state', async () => {
+  const source = await pool.query(
+    `INSERT INTO articles (title, body, status, author_user_id)
+     VALUES ('Needs attention', 'Body', 'approved', $1) RETURNING id`, [ME]);
+  const ord = await pool.query(
+    `INSERT INTO orders (user_id, reference, method, status, subtotal, total,
+                         terms_version, terms_accepted_at, info_confirmed_at, confirmed_at)
+     VALUES ($1,'UNP-PROCESS-1','eft','confirmed',95,95,'v1',now(),now(),now())
+     RETURNING id`, [ME]);
+  await pool.query(
+    `INSERT INTO payments (user_id, linked_type, linked_id, amount, status, method,
+                           gateway_reference, order_id, fulfillment_status, fulfillment_error)
+     VALUES ($1,'article_publish',$2,95,'confirmed','eft','GW-PROCESS',$3,'failed','test failure')`,
+    [ME, source.rows[0].id, ord.rows[0].id]);
+
+  const res = await api(`/orders/${ord.rows[0].id}`, tokenMine);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.items[0].serviceStatus, 'processing_issue');
+  assert.equal(res.body.items[0].serviceStatusLabel, 'Processing issue — we’re attending to it');
+  assert.equal(res.body.order.serviceStatusSummary.label, 'Processing issue — we’re attending to it');
+  assert.ok(!JSON.stringify(res.body).includes('test failure'),
+    'internal fulfilment errors must never be exposed to a member');
+});
+
+test('a paid Directory upgrade reports Completed rather than inventing an approval queue', async () => {
+  const profile = await pool.query(
+    `INSERT INTO profiles (user_id, package_tier, slug, display_name, status)
+     VALUES ($1,'basic',$2,'Upgrade profile','approved') RETURNING id`,
+    [ME, 'order-upgrade-' + Date.now()]
+  );
+  const upgrade = await pool.query(
+    `INSERT INTO profile_upgrades (profile_id, from_tier, to_tier, fee_paid, paid_at)
+     VALUES ($1,'basic','pro',250,now()) RETURNING id`,
+    [profile.rows[0].id]
+  );
+  const ord = await pool.query(
+    `INSERT INTO orders (user_id, reference, method, status, subtotal, total,
+                         terms_version, terms_accepted_at, info_confirmed_at, confirmed_at)
+     VALUES ($1,'UNP-UPGRADE-1','eft','confirmed',250,250,'v1',now(),now(),now())
+     RETURNING id`, [ME]
+  );
+  await pool.query(
+    `INSERT INTO payments (user_id, linked_type, linked_id, amount, status, method,
+                           gateway_reference, order_id, fulfillment_status, fulfilled_at)
+     VALUES ($1,'profile_upgrade',$2,250,'confirmed','eft','GW-UPGRADE',$3,'applied',now())`,
+    [ME, upgrade.rows[0].id, ord.rows[0].id]
+  );
+
+  const res = await api(`/orders/${ord.rows[0].id}`, tokenMine);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.items[0].serviceStatus, 'completed');
+  assert.equal(res.body.items[0].serviceStatusLabel, 'Completed');
+  assert.equal(res.body.order.serviceStatusSummary.label, 'Completed');
+});
+
 test('an unknown linked_type is shown as itself, never hidden', () => {
   // A line the member paid for must always appear, even if it is named badly.
   assert.equal(ref.serviceLabel('something_new'), 'something_new');
@@ -213,6 +329,9 @@ test('an order with no payments yet still lists, with no service names', async (
   assert.ok(empty, 'the order should still be listed');
   assert.deepEqual(empty.serviceNames, []);
   assert.equal(empty.item_count, 0);
+  assert.equal(empty.paymentStatusLabel, 'Awaiting payment');
+  assert.equal(empty.serviceStatusSummary.key, 'empty');
+  assert.equal(empty.serviceStatusSummary.label, 'No services');
 });
 
 test('orders are newest first', async () => {

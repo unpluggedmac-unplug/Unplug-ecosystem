@@ -1421,7 +1421,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <section class="ms-section section-hidden" data-ms-section="myorders">
       <div class="card">
         <h2>My Orders</h2>
-        <p class="sub">Every checkout you have made. The reference is what to quote on an EFT.</p>
+        <p class="sub">Every checkout you have made. Payment and service approval are shown separately, because paying for something and having it approved are two different steps. The reference is what to quote on an EFT.</p>
         <div id="ordContent"><div class="loading-state">Loading&#8230;</div></div>
       </div>
     </section>
@@ -6269,7 +6269,9 @@ function ordRender(orders){
             var li = document.createElement('div');
             li.className = 'subs-meta';
             li.textContent = (it.serviceName || it.linked_type) + ' \u00b7 R'
-              + Number(it.amount || 0).toFixed(2);
+              + Number(it.amount || 0).toFixed(2)
+              + ' \u00b7 Payment: ' + (it.paymentStatusLabel || 'Unknown')
+              + ' \u00b7 Service: ' + (it.serviceStatusLabel || 'Status unavailable');
             lines.appendChild(li);
           });
         } catch (err) {
@@ -6280,15 +6282,39 @@ function ordRender(orders){
       main.appendChild(lines);
     }
 
-    var pill = document.createElement('span');
-    pill.className = 'status-pill ' + String(o.status || '').replace(/[^a-z_]/g, '');
-    // Order statuses are their own vocabulary (pending/confirmed/failed), not
-    // the submission one, so they are worded here rather than shared.
-    pill.textContent = o.status === 'confirmed' ? 'Paid'
-      : (o.status === 'failed' ? 'Failed' : 'Awaiting payment');
+    var statusBox = document.createElement('div');
+    statusBox.style.cssText = 'display:flex; flex-direction:column; align-items:flex-end; gap:6px; min-width:170px; max-width:300px;';
+
+    var paymentWrap = document.createElement('div');
+    paymentWrap.style.cssText = 'text-align:right;';
+    var paymentLabel = document.createElement('div');
+    paymentLabel.className = 'subs-meta';
+    paymentLabel.textContent = 'Payment';
+    var paymentPill = document.createElement('span');
+    paymentPill.className = 'status-pill ' + String(o.status || '').replace(/[^a-z_]/g, '');
+    paymentPill.textContent = o.paymentStatusLabel
+      || (o.status === 'confirmed' ? 'Paid' : (o.status === 'failed' ? 'Payment failed' : 'Awaiting payment'));
+    paymentWrap.appendChild(paymentLabel);
+    paymentWrap.appendChild(paymentPill);
+
+    var serviceWrap = document.createElement('div');
+    serviceWrap.style.cssText = 'text-align:right;';
+    var serviceLabel = document.createElement('div');
+    serviceLabel.className = 'subs-meta';
+    serviceLabel.textContent = 'Services';
+    var servicePill = document.createElement('span');
+    var serviceSummary = o.serviceStatusSummary || { key: 'unavailable', label: 'Status unavailable' };
+    servicePill.className = 'status-pill ' + String(serviceSummary.key || '').replace(/[^a-z_]/g, '');
+    servicePill.style.cssText = 'white-space:normal; text-align:right; line-height:1.35;';
+    servicePill.textContent = serviceSummary.label || 'Status unavailable';
+    serviceWrap.appendChild(serviceLabel);
+    serviceWrap.appendChild(servicePill);
+
+    statusBox.appendChild(paymentWrap);
+    statusBox.appendChild(serviceWrap);
 
     row.appendChild(main);
-    row.appendChild(pill);
+    row.appendChild(statusBox);
     host.appendChild(row);
   });
 }

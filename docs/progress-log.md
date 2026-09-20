@@ -3460,3 +3460,42 @@ privacy before calling the release live.
 **Still queued:** My Orders approval-state modelling (separate payment status from service/approval state), then
 Batch D money/schema work. Both remain separate backend tasks and require their own review/approval before build.
 
+## 2026-09-20 — My Orders payment/service status split completed on draft PR #52 (not merged)
+
+**Approved product decision.** Owner chose the detailed mixed summary for multi-service orders. My Orders now
+treats payment state and service/review state as separate facts. A paid cart can therefore truthfully say
+`Payment: Paid` while its services say `Mixed status · 1 Approved · 1 Awaiting approval`.
+
+**No new schema.** `orders.status` remains the existing payment vocabulary (`pending / confirmed / failed`).
+No `orders.approval_status` column was added because one order can contain several services whose approval
+states diverge. Instead, `orderServiceStatus.js` resolves the current service state from each purchased
+submission. Standard review services reuse the shared member-facing submission vocabulary; self-serve adverts
+use `ad_slots.moderation_status`; paid Directory upgrades report `Completed` once their payment effect is
+applied. A payment fulfilment failure overrides a misleading downstream state with the member-safe
+`Processing issue — we’re attending to it` and never exposes the internal fulfilment error text.
+
+**API and member UI.** `GET /orders/mine` now adds `paymentStatusLabel` plus a derived
+`serviceStatusSummary` for each order. `GET /orders/:id` adds payment/service labels to every individual
+line and the same aggregate service summary to the order. The Member Dashboard now renders two explicit
+status areas — Payment and Services — and expanded lines show both statuses instead of the old single Paid /
+Awaiting payment pill.
+
+**Scope safety.** No checkout pricing, vouchers, credits, invoice creation, payment confirmation, EFT
+confirmation, admin approval actions, service-status writes or database migrations changed. This task is
+read/derive/display only.
+
+**Verification.** Candidate `8508e22f0604cf10b24c77703cab29cad94c98e7` passed frontend packaging,
+Member Dashboard regressions, Member Analytics and My Unplug regression jobs. Focused My Orders tests passed
+**18/18, 0 failures**. The complete real-PostgreSQL backend suite passed **2,457/2,457, 0 failures, 0 skipped**.
+The focused tests cover a paid mixed order, per-line approval status, Directory-upgrade completion,
+fulfilment-failure masking, ownership, stored totals and an empty unpaid order. GitHub's Node 20 -> Node 24
+warning remains non-failing and unrelated.
+
+**Release state.** Draft PR **#52** (`feat/my-orders-service-status-20260920` → `main`) remains deliberately
+unmerged. Production is unchanged by this task. After owner sign-off: merge PR #52, verify the frontend
+deployment and Render's exact merge-commit auto-deploy, then smoke-test one paid mixed-status order in a signed-in
+member account before calling it live.
+
+**Still queued:** Batch D money/schema work remains the next high-risk backend task and requires its own review
+and explicit approval before implementation.
+
