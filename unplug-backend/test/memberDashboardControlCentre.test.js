@@ -236,7 +236,7 @@ test('accessibility polish covers expandable navigation, home panels, search and
 });
 
 test('responsive member styling preserves the existing mobile drawer model', () => {
-  assert.match(css, /@media\(max-width:760px\)/);
+  assert.match(css, /@media\(max-width:820px\)/);
   assert.match(css, /#msSidebar/);
   assert.match(css, /cc-home-cards/);
   assert.match(css, /cc-member-create-grid/);
@@ -244,6 +244,17 @@ test('responsive member styling preserves the existing mobile drawer model', () 
   assert.match(helpCss, /cc-member-nav-help/);
   assert.match(polishCss, /@media\(max-width:760px\)/);
   assert.match(polishCss, /@media\(max-width:500px\)/);
+});
+
+test('Phase 6 mobile navigation uses one 820px breakpoint and accessible drawer behaviour', () => {
+  assert.match(script, /matchMedia\('\(max-width:820px\)'\)/);
+  assert.match(polish, /function patchMobileMenuA11y\(/);
+  assert.match(polish, /aria-controls','msSidebar'/);
+  assert.match(polish, /aria-expanded/);
+  assert.match(polish, /Escape/);
+  assert.match(css, /#msMenuBtn\{ position:sticky/);
+  assert.match(css, /min-height:44px/);
+  assert.match(css, /overflow-wrap:anywhere/);
 });
 
 test('member visual identity stays anchored to the existing Unplug token system', () => {
