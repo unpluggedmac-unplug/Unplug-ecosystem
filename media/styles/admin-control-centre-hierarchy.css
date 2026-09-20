@@ -92,3 +92,22 @@
   .cc-overview-grid{grid-template-columns:1fr}
   .cc-overview-card{min-height:112px}
 }
+
+
+/* Primary-group purpose copy: keeps the 13-section information architecture self-explanatory. */
+.cc-group-description{
+  margin:-2px 34px 7px 38px;
+  font-size:11px;
+  line-height:1.35;
+  color:var(--muted,#6b7280);
+}
+.cc-nav-group:not(.open)>.cc-group-description{
+  display:none;
+}
+@media (max-width:800px){
+  .cc-group-description{
+    margin-left:38px;
+    margin-right:28px;
+    font-size:12px;
+  }
+}
