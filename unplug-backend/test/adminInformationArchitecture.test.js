@@ -114,7 +114,7 @@ test('Admin dashboard root hides the redundant Back control and uses current wor
 test('sidebar recents stay compact and prefer current node labels over stale stored labels', () => {
   const hierarchy = read('media/scripts/admin-control-centre-hierarchy.js');
   assert.match(hierarchy, /b\.textContent = node\?\.label \|\| item\.label \|\| 'Item'/);
-  assert.match(hierarchy, /recent\.slice\(0, 3\)/);
+  assert.match(hierarchy, /\.filter\(Boolean\)\.slice\(0, 3\)/);
   assert.match(hierarchy, /favBlock\.hidden = !favNodes\.length/);
 });
 
