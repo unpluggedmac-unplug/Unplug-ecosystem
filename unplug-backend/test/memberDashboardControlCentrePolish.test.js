@@ -81,6 +81,21 @@ test('the member progress bridge remains a navigational layer, not a second grow
   assert.doesNotMatch(polish, /\/growth-application\/v2\/applications/);
 });
 
+test('Phase 7 accessibility names controls and traps quick-create focus', () => {
+  assert.match(polish, /role','navigation'/);
+  assert.match(polish, /Member Dashboard navigation/);
+  assert.match(polish, /aria-hidden','true'/);
+  assert.match(polish, /from favourites|to favourites/);
+  assert.match(polish, /Collapse |Expand /);
+  assert.match(polish, /aria-autocomplete','list'/);
+  assert.match(polish, /aria-expanded/);
+  assert.match(polish, /ev\.key!=='Tab'/);
+  assert.match(polish, /returnFocus/);
+  assert.match(polish, /restore\(\)/);
+  assert.match(polishCss, /#ccMemberNav button:focus-visible/);
+  assert.match(polishCss, /prefers-reduced-motion:reduce/);
+});
+
 test('polish remains responsive and keyboard visible', () => {
   assert.match(polishCss, /@media\(max-width:760px\)/);
   assert.match(polishCss, /@media\(max-width:500px\)/);
