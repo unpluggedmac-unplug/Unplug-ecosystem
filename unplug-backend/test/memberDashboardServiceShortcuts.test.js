@@ -61,6 +61,10 @@ test('service shortcut dialogs are accessible, dismissible and clean up global h
   assert.match(css, /:focus-visible/);
 });
 
+test('service shortcut stylesheet uses the current dashboard cache version', () => {
+  assert.match(script, /member-dashboard-service-shortcuts\.css\?v=20260920-2/);
+});
+
 test('service shortcut UI is responsive and reuses Unplug tokens', () => {
   assert.match(css, /@media\(max-width:560px\)/);
   for (const token of ['var(--paper-line)', 'var(--ink)', 'var(--red)', 'var(--paper)']) {
