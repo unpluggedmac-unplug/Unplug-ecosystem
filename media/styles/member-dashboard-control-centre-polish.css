@@ -1,3 +1,15 @@
+#ccMemberNav button:focus-visible,
+#ccMemberHome button:focus-visible,
+#ccMemberContext button:focus-visible,
+#ccMemberSearch:focus-visible,
+.cc-member-page-head button:focus-visible,
+.cc-member-modal button:focus-visible,
+.cc-member-modal a:focus-visible{ outline:3px solid var(--red); outline-offset:2px; }
+.cc-member-page-status strong{ color:var(--ink); }
+@media(prefers-reduced-motion:reduce){
+  #ccMemberNav *,#ccMemberHome *,#ccMemberContext *{ scroll-behavior:auto !important; transition:none !important; animation:none !important; }
+}
+
 .cc-member-page-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin:0 0 16px; padding:18px 20px; border:1px solid var(--paper-line); background:var(--cream); }
 .cc-member-page-head-copy{ min-width:0; }
 .cc-member-page-head-copy > span{ display:block; color:var(--red); font-size:9.5px; font-weight:900; letter-spacing:.13em; text-transform:uppercase; margin-bottom:5px; }
