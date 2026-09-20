@@ -216,6 +216,25 @@ test('a member cannot request cancellation of someone else\'s service', async ()
   assert.equal(res.status, 403);
 });
 
+test('an invalid requested effective date is a 400, not a database 500', async () => {
+  const userId = await makeUser();
+  const { profileId } = await makeLiveListing(userId, 'Bad Date Ltd');
+
+  for (const requestedEffectiveDate of ['not-a-date', '2026-02-31', '20/09/2026']) {
+    const res = await req('POST', '/cancellations', {
+      token: tokenFor(userId),
+      body: { serviceType: 'profile_package', serviceId: profileId, requestedEffectiveDate },
+    });
+    assert.equal(res.status, 400, requestedEffectiveDate);
+  }
+
+  const count = await pool.query(
+    'SELECT COUNT(*)::int AS n FROM service_cancellations WHERE user_id = $1 AND service_id = $2',
+    [userId, profileId]
+  );
+  assert.equal(count.rows[0].n, 0, 'invalid input must not leave a request row behind');
+});
+
 test('the same service cannot have two open requests', async () => {
   const userId = await makeUser();
   const { profileId } = await makeLiveListing(userId, 'Double Request Ltd');
