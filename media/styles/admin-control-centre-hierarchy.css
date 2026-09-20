@@ -138,3 +138,10 @@
   .cc-overview-section-label{align-items:flex-start;flex-direction:column;gap:3px}
   .cc-overview-section-label span{text-align:left}
 }
+
+
+/* Keep the seven live overview totals balanced on wide admin desktops. */
+@media(min-width:1450px){
+  #section-overview #ovTotals{grid-template-columns:repeat(7,minmax(0,1fr))}
+  #section-overview #ovTotals .stat-card{min-width:0}
+}
