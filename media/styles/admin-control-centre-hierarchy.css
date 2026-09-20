@@ -147,9 +147,12 @@
 }
 
 
-/* Admin-only accessibility placement: keep the fixed accessibility control
-   clear of the persistent desktop Control Centre sidebar. */
+/* Admin-only accessibility placement: reserve a dedicated bottom-left
+   pocket inside the persistent desktop sidebar so the control never covers
+   either navigation or dashboard content. The panel also opens inside that
+   sidebar footprint. */
 @media(min-width:801px){
-  body .a11y-fab{left:350px!important}
-  body .a11y-panel{left:350px!important}
+  .sidebar{padding-bottom:92px!important}
+  body .a11y-fab{left:20px!important;right:auto!important}
+  body .a11y-panel{left:20px!important;right:auto!important}
 }

@@ -131,8 +131,9 @@ test('stale Admin recently-used entries are dropped after the information archit
   assert.match(hierarchy, /validRecent\.forEach/);
 });
 
-test('desktop accessibility control stays clear of the persistent Admin sidebar', () => {
+test('desktop accessibility control gets reserved space inside the Admin sidebar', () => {
   const css = read('media/styles/admin-control-centre-hierarchy.css');
-  assert.match(css, /body \.a11y-fab\{left:350px!important\}/);
-  assert.match(css, /body \.a11y-panel\{left:350px!important\}/);
+  assert.match(css, /\.sidebar\{padding-bottom:92px!important\}/);
+  assert.match(css, /body \.a11y-fab\{left:20px!important;right:auto!important\}/);
+  assert.match(css, /body \.a11y-panel\{left:20px!important;right:auto!important\}/);
 });

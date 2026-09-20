@@ -3612,3 +3612,13 @@ the Dashboard root and its breadcrumb now says Platform Overview; stale Recently
 current navigation label and the quick sidebar area is capped at three recents/favourites (empty favourites
 collapse) to reduce sidebar density; and the seven live Platform Status totals stay balanced in one row on
 wide desktop viewports. Runtime/CSS cache version bumped to 20260920-2. Regression coverage added.
+
+
+## 2026-09-20 — Admin accessibility final visual placement
+
+A second live screenshot after PR #79 showed the accessibility FAB no longer covered
+the sidebar, but it still overlaid the Dashboard's Recent submissions content. The
+desktop Admin-specific placement is now moved back into the sidebar footprint with a
+dedicated 92px reserved bottom pocket. The accessibility panel opens within that same
+sidebar footprint. Mobile behaviour remains unchanged. Control Centre JS/CSS cache
+version bumped to 20260920-3 and regression coverage updated.
