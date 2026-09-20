@@ -308,7 +308,7 @@
           nodeHref(growthHref({ status: 'in_progress' }), 'In Progress', '◐', { adminOnly: true, countKey: 'growth:in_progress' }),
           nodeHref(growthHref({ status: 'under_review' }), 'Under Review', '◒', { adminOnly: true, countKey: 'growth:under_review' }),
           nodeHref(growthHref({ status: 'completed' }), 'Completed', '✓', { adminOnly: true, countKey: 'growth:closed', note: 'Mapped to the current Closed workflow status' }),
-          nodeHref(growthHref({ tab: 'builder' }), 'Master Application Form', '◆', { adminOnly: true })
+          nodeHref(growthHref({ tab: 'builder' }), 'Master Form Builder', '◆', { adminOnly: true })
         ]),
         branch('opportunities-competitions', 'Competitions', '🏆', { section: 'competitions' }, [
           nodeSection('competitions', 'Competitions', '🏆'),
