@@ -188,6 +188,14 @@ test('private analytics require auth and only ever return the caller\'s own data
   assert.ok(Array.isArray(body.followerGrowth));
   assert.ok(Array.isArray(body.rankHistory));
   assert.ok(Array.isArray(body.recognitionBreakdown));
+  assert.deepEqual(body.audience, {
+    profileViews: 0,
+    profileVisitors: 0,
+    articleReads: 0,
+    articleReaders: 0,
+  });
+  assert.ok(Array.isArray(body.dailyAudience));
+  assert.ok(Array.isArray(body.topArticles));
 });
 
 test('private analytics dailyPoints and followerGrowth reflect this member\'s real recent activity', async () => {
@@ -217,4 +225,73 @@ test('recognitionBreakdown groups by recognition type, scoped to this member', a
   const { body } = await req('GET', '/profile-analytics/me/private', { token: tokenFor(userId) });
   const types = body.recognitionBreakdown.map((r) => r.recognition_type).sort();
   assert.deepEqual(types, ['helpful', 'inspiring']);
+});
+
+test('private analytics report real profile and article audiences without leaking another creator or counting the owner', async () => {
+  const owner = await makeUser();
+  const profileId = await makeProfile(owner);
+  const profile = await pool.query('SELECT slug FROM profiles WHERE id=$1', [profileId]);
+  const article = await pool.query(
+    `INSERT INTO articles (author_user_id,title,body,status)
+     VALUES($1,'Owner story','Body','approved') RETURNING id`,
+    [owner]
+  );
+
+  const otherOwner = await makeUser();
+  const otherArticle = await pool.query(
+    `INSERT INTO articles (author_user_id,title,body,status)
+     VALUES($1,'Someone else''s story','Body','approved') RETURNING id`,
+    [otherOwner]
+  );
+
+  const insertView = (values) => pool.query(
+    `INSERT INTO analytics_events
+       (session_id,visitor_id,event_name,page_path,entity_type,entity_id,user_id,occurred_at)
+     VALUES($1,$2,'page_view',$3,$4,$5,$6,$7)`,
+    values
+  );
+  const now = new Date();
+  const old = new Date(Date.now() - 45 * 864e5);
+  const profilePath = `profile-${profile.rows[0].slug}`;
+
+  // Two real profile opens by one anonymous visitor: one legacy path-only
+  // event and one newer entity-linked event. Both are real history and must
+  // count as views, while the visitor remains one person.
+  await insertView(['pa-session-profile-1', 'pa-visitor-profile', profilePath, null, null, null, now]);
+  await insertView(['pa-session-profile-2', 'pa-visitor-profile', profilePath, 'profile', profileId, null, now]);
+
+  // Two article reads by two visitors, plus an older read that only belongs in
+  // the 90-day window.
+  await insertView(['pa-session-article-1', 'pa-visitor-article-1', 'article-owner', 'article', article.rows[0].id, null, now]);
+  await insertView(['pa-session-article-2', 'pa-visitor-article-2', 'article-owner', 'article', article.rows[0].id, null, now]);
+  await insertView(['pa-session-article-old', 'pa-visitor-article-old', 'article-owner', 'article', article.rows[0].id, null, old]);
+
+  // Neither the owner's own signed-in preview nor another creator's article
+  // is this member's audience.
+  await insertView(['pa-session-self', 'pa-visitor-self', profilePath, 'profile', profileId, owner, now]);
+  await insertView(['pa-session-other', 'pa-visitor-other', 'article-other', 'article', otherArticle.rows[0].id, null, now]);
+
+  const recent = await req('GET', '/profile-analytics/me/private?range=30', { token: tokenFor(owner) });
+  assert.equal(recent.status, 200);
+  assert.deepEqual(recent.body.audience, {
+    profileViews: 2,
+    profileVisitors: 1,
+    articleReads: 2,
+    articleReaders: 2,
+  });
+  assert.equal(recent.body.dailyAudience.length, 1);
+  assert.equal(recent.body.dailyAudience[0].profile_views, 2);
+  assert.equal(recent.body.dailyAudience[0].article_reads, 2);
+  assert.deepEqual(recent.body.topArticles, [{
+    articleId: article.rows[0].id,
+    title: 'Owner story',
+    reads: 2,
+    readers: 2,
+  }]);
+  assert.match(recent.body.audienceNote, /analytics consent/i);
+  assert.match(recent.body.audienceNote, /own signed-in views are excluded/i);
+
+  const ninetyDays = await req('GET', '/profile-analytics/me/private?range=90', { token: tokenFor(owner) });
+  assert.equal(ninetyDays.body.audience.articleReads, 3);
+  assert.equal(ninetyDays.body.topArticles[0].reads, 3);
 });

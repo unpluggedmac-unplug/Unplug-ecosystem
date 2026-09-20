@@ -3334,3 +3334,42 @@ Roadmap batches: **A** quick wins, **B** Profile/Menu-1 polish, **C** display pa
 - ~~Edge social previews for profiles/projects~~ — **DONE this session**, right after this entry was first written (see the edge-previews item above); `withSocialMeta` now dispatches article / profile / project.
 
 **Delivery/verification notes for the next session:** direct cloud push blocked (proxy) → use the GitHub-Desktop bridge (edit → `device_commit_files` into `~/OneDrive/Documents/GitHub/Unplug-ecosystem` → user commits + pushes → Cloudflare auto-deploys frontend; Render backend deploy is manual). Always re-stage the target file and diff before committing — the uploads copy goes stale after a re-stage, and the member dashboard file in particular has now carried several stacked changes. Backend suite (`node --test`) cannot be validly run in this cloud session (stale clone, no backend `node_modules`, pull blocked) — rely on repo CI as authoritative.
+
+## 2026-09-20 — My Analytics real data completed on draft PR #48 (not merged)
+
+**What the audit found.** The 2026-09-17 handover said My Analytics still "needs backend", but
+`GET /profile-analytics/me/private` already existed, was authenticated, and read real participation,
+following, recognition and publishing tables. The real gap was narrower: the page mostly repeated the
+separate View Score screen (score/rank/streak), while the site's first-party analytics already recorded
+profile-detail opens and article reads without exposing those performance figures to the member.
+
+**Backend, with no migration.** The existing private endpoint now adds 7/30/90-day audience figures from
+`analytics_events`: profile views + distinct visitors, article reads + distinct readers, daily profile/article
+activity, and the member's five most-read articles. Historical profile visits remain countable through the
+existing `profile-<slug>` page path, so no fake backfill or schema change was needed. A member's own signed-in
+views are excluded, another creator's articles cannot leak into their totals, and the response states plainly
+that only analytics-consented visits are recorded (so actual reach may be higher). Recognition breakdowns now
+follow the selected range instead of silently staying all-time.
+
+**Member dashboard.** My Analytics is now distinct from View Score. The range cards show profile views,
+profile visitors, article reads, article readers, new followers and points earned; the page also shows daily
+visibility, top articles, points/follower charts, range-specific recognition, and an all-time profile/publishing
+summary backed by the existing real fields. The layout collapses to one column and gives range controls 44px
+tap targets on mobile. No public page, payment, price, vote or database-schema behavior changed.
+
+**Verification.** Added a real-Postgres ownership/range test to `profileAnalytics.test.js` and a new static
+contract file, `myAnalyticsRealData.test.js`. Local source checks: 34 focused dashboard/static tests pass,
+inline dashboard scripts parse, `git diff --check` passes, and the complete production frontend build passes
+asset closure/CSP verification. GitHub Actions on candidate `c05c9b5fc0f6a3541afcb8a76668dcd58f6c9557`:
+Member Analytics backend checks **14/14 pass**, Member Dashboard regression checks pass, Member Dashboard
+packaged asset check passes, and Build configuration contract gate passes.
+
+**Release state.** Draft PR **#48** (`fix/my-analytics-real-data-20260920` → `main`) is deliberately unmerged.
+Production is untouched. After owner review/sign-off: mark ready/merge, let Cloudflare deploy the frontend,
+manually deploy the exact merged backend commit in Render, confirm `/health` reports that exact commit, then
+sign in as a member and smoke-test My Analytics at 7/30/90 days (including a zero-data member). Do not call the
+task live until both the frontend and backend are on the same merged candidate.
+
+**Still queued, unchanged:** Growth "visible status"; My Unplug custom interests plus per-field public/private
+controls; My Orders approval-state modelling; and Batch D money/schema work. Each remains a separate task and
+still needs its own review/approval before implementation.
