@@ -227,12 +227,11 @@ test('Phase 8 first-time-user journeys are discoverable from the dashboard', () 
     ['competition', "id:'my-competitions',label:'My Competitions'"],
     ['purchase', "id:'browse-services',label:'Browse Services'"],
     ['support', "id:'contact-support',label:'Contact Support'"],
-    ['password/security', "id:'login-security'"],
   ];
   for (const [name, token] of journeys) {
-    const source = name === 'password/security' ? polish : script;
-    assert.ok(source.includes(token), `first-time journey not discoverable: ${name}`);
+    assert.ok(script.includes(token), `first-time journey not discoverable: ${name}`);
   }
+  assert.match(polish, /accountLeaf\('login-security','Login & Security'/, 'first-time journey not discoverable: password/security');
   assert.match(page, /data-ms-type="gallery"/);
   assert.match(page, /gallery: \['My Gallery', 'Gallery content you have submitted\.'\]/);
   assert.match(page, /<option value="gallery">/);
