@@ -7,10 +7,10 @@
 // systems that already exist in the schema) rather than invented
 // market-size or revenue-projection numbers nobody supplied.
 //
-// This test's job is narrow: confirm the five required sections exist,
-// and that the one quantitative claim it makes (the Directory price range)
-// matches the real PACKAGE_PRICES it was drawn from — not to judge the
-// prose itself, which is inherently a matter of judgement.
+// This test's job is narrow: confirm the five required sections exist and
+// that the proposition names real product lines. Directory prices are no
+// longer repeated here: admin-managed prices belong on the live Directory
+// pricing surface, not in investor narrative copy that can drift.
 //
 // Website remediation punch-list (2026-09-03), INV-002.
 //
@@ -50,23 +50,14 @@ test('THE INVESTORS PAGE HAS ALL FIVE PROPOSITION SECTIONS, IN ORDER, BEFORE THE
   });
 });
 
-test('THE REVENUE MODEL\'S QUOTED PRICE RANGE MATCHES THE REAL PACKAGE_PRICES, NOT A ROUNDED GUESS', () => {
-  const backend = readBackend('src/routes/payments.js');
-  const match = backend.match(/individual: \{ basic: ([\d.]+), pro: ([\d.]+), premium: ([\d.]+) \}/);
-  const businessMatch = backend.match(/business:\s*\{ basic: ([\d.]+), pro: ([\d.]+), premium: ([\d.]+) \}/);
-  assert.ok(match && businessMatch, 'PACKAGE_PRICES shape changed — update this test\'s pattern first');
-  const allPrices = [...match.slice(1), ...businessMatch.slice(1)].map(Number);
-  const realMin = Math.min(...allPrices);
-  const realMax = Math.max(...allPrices);
-
+test('THE REVENUE MODEL DOES NOT DUPLICATE ADMIN-MANAGED DIRECTORY PRICES', () => {
   const src = readFrontend();
-  const idx = src.indexOf('Directory packages —');
-  assert.ok(idx > -1);
-  const line = src.slice(idx, idx + 120);
-  // Locale-agnostic on the thousands separator (comma vs space) — only the
-  // actual digits need to match the real prices.
-  assert.match(line, new RegExp(`R${realMin.toFixed(0)}\\D{1,3}R${String(realMax).replace(/\B(?=(\d{3})+(?!\d))/g, '[,.\\s]?')}`),
-    `the stated range should be R${realMin.toFixed(0)}–R${realMax} to match real prices exactly`);
+  const start = src.indexOf('Revenue model');
+  const end = src.indexOf('Growth strategy', start);
+  const block = src.slice(start, end);
+  assert.match(block, /Directory packages — once-off packages/i);
+  assert.doesNotMatch(block, /Directory packages[^\n<]*R\s*\d/i,
+    'Directory prices can change in Admin, so investor copy must not freeze a second price list');
 });
 
 test('THE REVENUE MODEL NAMES ONLY REAL, ALREADY-BUILT PRODUCT LINES', () => {
