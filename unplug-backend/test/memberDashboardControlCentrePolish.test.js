@@ -82,7 +82,7 @@ test('the member progress bridge remains a navigational layer, not a second grow
 });
 
 test('polish remains responsive and keyboard visible', () => {
-  assert.match(polishCss, /@media\(max-width:760px\)/);
+  assert.match(polishCss, /@media\(max-width:820px\)/);
   assert.match(polishCss, /@media\(max-width:500px\)/);
   assert.match(polishCss, /:focus-visible/);
   assert.match(polish, /Escape/);
