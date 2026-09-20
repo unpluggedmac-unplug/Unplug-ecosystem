@@ -35,7 +35,25 @@ async function recordSignupReferral({ userId, referralCode, referralClickId } = 
     [code, memberId]
   );
   const row = processed.rows[0];
-  if (!row || !row.success) {
+
+  // process_member_referral also awards points. A point cap can make its
+  // success flag false after the member_referrals row was validly inserted,
+  // and an idempotent retry reports referral_already_recorded. Neither should
+  // erase a genuine signup from the acquisition funnel, so the relationship
+  // row is the authority for whether attribution exists.
+  let relationshipExists = Boolean(row && row.success);
+  if (!relationshipExists) {
+    const existing = await client.query(
+      `SELECT 1
+         FROM member_referrals
+        WHERE referred_user_id = $1
+          AND referral_code = $2
+        LIMIT 1`,
+      [memberId, code]
+    );
+    relationshipExists = existing.rowCount > 0;
+  }
+  if (!relationshipExists) {
     return {
       ok: false,
       reason: row && row.blocked_reason ? row.blocked_reason : 'referral not recorded',
