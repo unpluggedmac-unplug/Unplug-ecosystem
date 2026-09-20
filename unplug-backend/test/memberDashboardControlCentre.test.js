@@ -59,6 +59,22 @@ test('member enhancement is guarded and runtime has one isolated member integrat
   assert.match(loader, /member-dashboard-service-shortcuts\.js\?v=/);
 });
 
+test('member asset cache version is bumped consistently through the loader chain', () => {
+  const version = '20260920-2';
+  assert.ok(runtime.includes(`member-dashboard-control-centre-loader.js?v=${version}`));
+  for (const asset of [
+    'member-dashboard-control-centre.css',
+    'member-dashboard-control-centre-help.css',
+    'member-dashboard-control-centre.js',
+    'member-dashboard-control-centre-polish.js',
+    'member-dashboard-service-shortcuts.js',
+  ]) {
+    assert.ok(loader.includes(`${asset}?v=${version}`), `stale loader version for ${asset}`);
+  }
+  assert.ok(script.includes(`member-dashboard-control-centre.css?v=${version}`));
+  assert.ok(polish.includes(`member-dashboard-control-centre-polish.css?v=${version}`));
+});
+
 test('member asset loader keeps execution order explicit', () => {
   const core = loader.indexOf('member-dashboard-control-centre.js?v=');
   const polishPos = loader.indexOf('member-dashboard-control-centre-polish.js?v=');
