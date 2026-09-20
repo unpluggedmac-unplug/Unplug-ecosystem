@@ -9,8 +9,9 @@
 //   account creation;
 // - idempotent referral processing is delegated to process_member_referral();
 // - an exact click id is preferred so one browser visit is the conversion;
-// - a most-recent-code fallback supports older referral sessions that predate
-//   click ids;
+// - a click is converted only when the browser supplies its exact id; guessing
+//   the latest click for a popular code could credit one visitor with another
+//   visitor's signup;
 // - a click can be converted only once.
 const pool = require('../db');
 
@@ -74,26 +75,6 @@ async function recordSignupReferral({ userId, referralCode, referralClickId } = 
       [memberId, clickId, code]
     );
     marked = exact.rowCount;
-  }
-
-  // Older referral sessions had the code but no click id. Link the latest
-  // still-unconverted click for that same code rather than losing the funnel.
-  if (!marked) {
-    const fallback = await client.query(
-      `UPDATE referral_clicks
-          SET converted_user_id = $1
-        WHERE id = (
-          SELECT id
-            FROM referral_clicks
-           WHERE referral_code = $2
-             AND converted_user_id IS NULL
-           ORDER BY created_at DESC, id DESC
-           LIMIT 1
-        )
-        RETURNING id`,
-      [memberId, code]
-    );
-    marked = fallback.rowCount;
   }
 
   return {
