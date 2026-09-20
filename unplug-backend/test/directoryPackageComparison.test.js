@@ -48,18 +48,21 @@ test('THE TABLE\'S LISTING-PHOTO LIMITS MATCH gallery.js\'S REAL PHOTO_LIMITS', 
     'the comparison table\'s photo limits must match PHOTO_LIMITS exactly');
 });
 
-test('THE TABLE\'S PRICES MATCH payments.js\'S REAL PACKAGE_PRICES', () => {
-  const backend = readBackend('src/routes/payments.js');
-  const backendMatch = backend.match(/individual: \{ basic: ([\d.]+), pro: ([\d.]+), premium: ([\d.]+) \}/);
-  assert.ok(backendMatch, 'PACKAGE_PRICES shape changed — update this test\'s pattern first');
-  const [, iBasic, iPro, iPremium] = backendMatch.map((n, i) => (i === 0 ? n : Number(n)));
+test('DIRECTORY PACKAGE PRICES ARE LOADED FROM THE AUTHORITATIVE ENDPOINT', () => {
+  const magazine = readFile('unplug-magazine.html');
+  const checkout = readFile('unplug-checkout.html');
+  const payments = readBackend('src/routes/payments.js');
 
-  const frontend = readFile('unplug-magazine.html');
-  const frontendMatch = frontend.match(/individual: \{ basic: (\d+), pro: (\d+), premium: (\d+) \}/);
-  assert.ok(frontendMatch, 'PKG_PRICES shape changed — update this test\'s pattern first');
-  assert.equal(Number(frontendMatch[1]), iBasic);
-  assert.equal(Number(frontendMatch[2]), iPro);
-  assert.equal(Number(frontendMatch[3]), iPremium);
+  assert.match(magazine, /payments\/directory-packages/);
+  assert.match(checkout, /payments\/directory-packages/);
+  assert.match(payments, /directory_package_prices|priceForDirectoryPackage/);
+
+  assert.doesNotMatch(payments, /const\s+PACKAGE_PRICES\s*=/,
+    'payments.js must not reintroduce a second Directory price table');
+  assert.doesNotMatch(magazine, /const\s+PKG_PRICES\s*=\s*\{[\s\S]{0,250}basic:\s*\d/,
+    'magazine must not freeze Directory prices in JavaScript');
+  assert.doesNotMatch(checkout, /const\s+TIER_PRICES\s*=\s*\{[\s\S]{0,250}basic:\s*\d/,
+    'checkout must not freeze Directory prices in JavaScript');
 });
 
 test('ONLY PRO AND PREMIUM CLAIM QUOTE/ACHIEVEMENTS/CAREER — MATCHING profileDetailHtml\'s showExtras GATE', () => {
