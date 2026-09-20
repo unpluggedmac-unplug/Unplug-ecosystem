@@ -592,6 +592,9 @@ router.get('/packages', async (req, res, next) => {
     }
     res.json({ service, packages: await packagesFor(service) });
   } catch (err) {
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
     if (err.code === 'PRICING_UNAVAILABLE') {
       return res.status(503).json({ error: 'Pricing is temporarily unavailable. Please try again shortly.' });
     }
@@ -606,6 +609,9 @@ router.get('/directory-packages', async (req, res, next) => {
     const rows = await directoryPackages();
     res.json({ packages: rows, priceMap: asPriceMap(rows) });
   } catch (err) {
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
     if (err.code === 'PRICING_UNAVAILABLE') {
       return res.status(503).json({ error: 'Directory pricing is temporarily unavailable. Please try again shortly.' });
     }
@@ -619,6 +625,9 @@ router.get('/admin/directory-packages', requireRole('admin'), async (req, res, n
   try {
     res.json({ packages: await directoryPackages({ includeInactive: true }) });
   } catch (err) {
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
     if (err.code === 'PRICING_UNAVAILABLE') {
       return res.status(503).json({ error: 'Directory pricing is temporarily unavailable.' });
     }
@@ -973,6 +982,9 @@ router.post('/quote', requireAuth, async (req, res, next) => {
   } catch (err) {
     if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
     if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
     if (err.code === 'PRICING_UNAVAILABLE') {
       return res.status(503).json({ error: 'Pricing is temporarily unavailable. No order was created.' });
     }
@@ -1158,6 +1170,9 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
   } catch (err) {
     if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
     if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
     if (err.code === 'PRICING_UNAVAILABLE') {
       return res.status(503).json({ error: 'Pricing is temporarily unavailable. No payment was created.' });
     }
