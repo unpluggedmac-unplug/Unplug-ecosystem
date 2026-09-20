@@ -4,6 +4,21 @@ on:
   push:
     paths:
       - 'unplug-member-dashboard.html'
+      - 'unplug-checkout.html'
+      - 'unplug-admin-dashboard.html'
+      - 'chatbot.js'
+      - 'unplug-backend/src/routes/payments.js'
+      - 'unplug-backend/src/routes/highlights.js'
+      - 'unplug-backend/src/routes/adBanners.js'
+      - 'unplug-backend/src/utils/servicePackages.js'
+      - 'unplug-backend/src/utils/directoryPackages.js'
+      - 'unplug-backend/db/migrations/214_directory_package_pricing.sql'
+      - 'unplug-backend/test/batchDPricing.test.js'
+      - 'unplug-backend/test/batchDPricingUi.test.js'
+      - 'unplug-backend/test/pricingSingleSource.test.js'
+      - 'unplug-backend/test/servicePackages.test.js'
+      - 'unplug-backend/test/directoryPackageComparison.test.js'
+      - 'unplug-backend/test/investorProposition.test.js'
       - 'unplug-backend/src/routes/orders.js'
       - 'unplug-backend/src/utils/orderServiceStatus.js'
       - 'unplug-backend/test/myOrders.test.js'
@@ -32,6 +47,21 @@ on:
   pull_request:
     paths:
       - 'unplug-member-dashboard.html'
+      - 'unplug-checkout.html'
+      - 'unplug-admin-dashboard.html'
+      - 'chatbot.js'
+      - 'unplug-backend/src/routes/payments.js'
+      - 'unplug-backend/src/routes/highlights.js'
+      - 'unplug-backend/src/routes/adBanners.js'
+      - 'unplug-backend/src/utils/servicePackages.js'
+      - 'unplug-backend/src/utils/directoryPackages.js'
+      - 'unplug-backend/db/migrations/214_directory_package_pricing.sql'
+      - 'unplug-backend/test/batchDPricing.test.js'
+      - 'unplug-backend/test/batchDPricingUi.test.js'
+      - 'unplug-backend/test/pricingSingleSource.test.js'
+      - 'unplug-backend/test/servicePackages.test.js'
+      - 'unplug-backend/test/directoryPackageComparison.test.js'
+      - 'unplug-backend/test/investorProposition.test.js'
       - 'unplug-backend/src/routes/orders.js'
       - 'unplug-backend/src/utils/orderServiceStatus.js'
       - 'unplug-backend/test/myOrders.test.js'
@@ -184,6 +214,59 @@ jobs:
           node --test --test-concurrency=1
           test/myOrders.test.js
           test/myOrdersStatusUi.test.js
+
+  batch-d-pricing:
+    name: Batch D pricing safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Syntax-check Batch D backend and JS files
+        run: |
+          node --check src/routes/payments.js
+          node --check src/routes/orders.js
+          node --check src/routes/highlights.js
+          node --check src/routes/adBanners.js
+          node --check src/utils/servicePackages.js
+          node --check src/utils/directoryPackages.js
+          node --check test/batchDPricing.test.js
+          node --check test/batchDPricingUi.test.js
+          node --check test/pricingSingleSource.test.js
+          node --check test/servicePackages.test.js
+          node --check ../chatbot.js
+
+      - name: Clear stale embedded PostgreSQL processes
+        run: node scripts/sweep-test-postgres.js
+
+      - name: Prepare text-search fixture
+        run: node scripts/ensure-text-search.js
+
+      - name: Run Batch D pricing tests
+        run: >-
+          node --test --test-concurrency=1
+          test/batchDPricing.test.js
+          test/batchDPricingUi.test.js
+          test/pricingSingleSource.test.js
+          test/servicePackages.test.js
+          test/directoryPackageComparison.test.js
+          test/investorProposition.test.js
+          test/highlights.test.js
+          test/adBanners.test.js
 
   full-backend-regression:
     name: Full backend regression suite
