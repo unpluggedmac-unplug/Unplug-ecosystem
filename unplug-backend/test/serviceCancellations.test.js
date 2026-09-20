@@ -84,6 +84,27 @@ async function listingStatus(profileId) {
   return r.rows[0];
 }
 
+async function makeLiveGalleryBundle(userId) {
+  const bundle = await pool.query(
+    `INSERT INTO gallery_bundles (user_id, image_count, price, status)
+     VALUES ($1, 2, 100, 'approved') RETURNING id`,
+    [userId]
+  );
+  const bundleId = bundle.rows[0].id;
+  await pool.query(
+    `INSERT INTO gallery_images (owner_type, image_url, caption, status, bundle_id)
+     VALUES ('general', 'https://example.com/gallery-a.jpg', 'Gallery A', 'approved', $1),
+            ('general', 'https://example.com/gallery-b.jpg', 'Gallery B', 'approved', $1)`,
+    [bundleId]
+  );
+  const pay = await pool.query(
+    `INSERT INTO payments (user_id, amount, method, gateway_reference, status, linked_type, linked_id)
+     VALUES ($1, 100, 'eft', $2, 'confirmed', 'gallery_bundle', $3) RETURNING id`,
+    [userId, `SCGAL${bundleId}${Math.random().toString(36).slice(2, 6).toUpperCase()}`, bundleId]
+  );
+  return { bundleId, paymentId: pay.rows[0].id };
+}
+
 async function creditBalance(userId) {
   const r = await pool.query('SELECT COALESCE(SUM(amount), 0) AS n FROM account_credits WHERE user_id = $1', [userId]);
   return Number(r.rows[0].n);
@@ -195,6 +216,25 @@ test('a member cannot request cancellation of someone else\'s service', async ()
   assert.equal(res.status, 403);
 });
 
+test('an invalid requested effective date is a 400, not a database 500', async () => {
+  const userId = await makeUser();
+  const { profileId } = await makeLiveListing(userId, 'Bad Date Ltd');
+
+  for (const requestedEffectiveDate of ['not-a-date', '2026-02-31', '20/09/2026']) {
+    const res = await req('POST', '/cancellations', {
+      token: tokenFor(userId),
+      body: { serviceType: 'profile_package', serviceId: profileId, requestedEffectiveDate },
+    });
+    assert.equal(res.status, 400, requestedEffectiveDate);
+  }
+
+  const count = await pool.query(
+    'SELECT COUNT(*)::int AS n FROM service_cancellations WHERE user_id = $1 AND service_id = $2',
+    [userId, profileId]
+  );
+  assert.equal(count.rows[0].n, 0, 'invalid input must not leave a request row behind');
+});
+
 test('the same service cannot have two open requests', async () => {
   const userId = await makeUser();
   const { profileId } = await makeLiveListing(userId, 'Double Request Ltd');
@@ -221,6 +261,44 @@ test('approving stops the service immediately', async () => {
   const after = await listingStatus(profileId);
   assert.equal(after.status, 'rejected', 'the listing must no longer be live');
   assert.ok(after.cancelled_at, 'cancelled_at distinguishes this from a listing we turned down');
+});
+
+test('gallery cancellation targets the paid bundle and stops every image in it', async () => {
+  const userId = await makeUser();
+  const { bundleId } = await makeLiveGalleryBundle(userId);
+
+  const offered = await req('GET', '/cancellations/services', { token: tokenFor(userId) });
+  const gallery = offered.body.services.find((s) => s.serviceType === 'gallery_bundle' && s.serviceId === bundleId);
+  assert.ok(gallery, 'the cancellable service must use gallery_bundles.id, the same id the payment uses');
+
+  const created = await req('POST', '/cancellations', {
+    token: tokenFor(userId),
+    body: { serviceType: 'gallery_bundle', serviceId: bundleId, reason: 'Please remove my gallery submission' },
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.request.service_id, bundleId);
+
+  const approved = await req('PATCH', `/cancellations/admin/${created.body.request.id}`, {
+    token: adminToken,
+    body: { action: 'approve' },
+  });
+  assert.equal(approved.status, 200);
+  assert.equal(approved.body.status, 'cancelled');
+
+  const bundle = await pool.query(
+    'SELECT status, cancelled_at FROM gallery_bundles WHERE id = $1',
+    [bundleId]
+  );
+  assert.equal(bundle.rows[0].status, 'rejected');
+  assert.ok(bundle.rows[0].cancelled_at);
+
+  const images = await pool.query(
+    'SELECT status, cancelled_at FROM gallery_images WHERE bundle_id = $1 ORDER BY id',
+    [bundleId]
+  );
+  assert.equal(images.rowCount, 2);
+  assert.ok(images.rows.every((row) => row.status === 'rejected' && row.cancelled_at),
+    'every image in the paid bundle must stop with the bundle');
 });
 
 test('no refund is issued unless the admin sets an amount', async () => {
