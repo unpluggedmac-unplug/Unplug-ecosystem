@@ -54,7 +54,7 @@ async function preferencesFor(userId) {
 // Send one. `isStatusChange` marks the events governed by notify_status_change —
 // a submission moving through the review lifecycle is exactly that.
 async function notifyMember({
-  userId, type, title, body, linkUrl, email, isStatusChange = false,
+  userId, type, title, body, linkUrl, email, isStatusChange = false, deferEmail = false,
 }) {
   try {
     if (!userId || !type || !title || !body) return { sent: false, reason: 'incomplete' };
@@ -73,15 +73,18 @@ async function notifyMember({
     }
 
     let mailed = false;
+    let emailQueued = false;
     if (prefs.email && email && email.subject && email.text) {
-      const to = await addressFor(userId);
-      if (to) {
-        await sendEmail({ to, subject: email.subject, text: email.text });
-        mailed = true;
+      if (deferEmail) {
+        emailQueued = true;
+        sendMemberEmail(userId, email).catch((err) =>
+          console.error('[notify] deferred email failed:', err.message));
+      } else {
+        mailed = await sendMemberEmail(userId, email);
       }
     }
 
-    return { sent: web || mailed, web, mailed };
+    return { sent: web || mailed || emailQueued, web, mailed, emailQueued };
   } catch (err) {
     console.error('[notify] could not notify member:', err.message);
     return { sent: false, reason: err.message };
@@ -93,6 +96,37 @@ async function addressFor(userId) {
   return r.rows.length ? r.rows[0].email : null;
 }
 
+async function sendMemberEmail(userId, email) {
+  const to = await addressFor(userId);
+  if (!to) return false;
+  await sendEmail({ to, subject: email.subject, text: email.text });
+  return true;
+}
+
+// Email-only companion for events whose in-app notification is created by
+// PostgreSQL (for example follow/unfollow). It respects the same member
+// preference without inserting a duplicate notifications row.
+async function notifyMemberEmail({ userId, email, isStatusChange = false }) {
+  try {
+    if (!userId || !email || !email.subject || !email.text) {
+      return { sent: false, reason: 'incomplete' };
+    }
+    const prefs = await preferencesFor(userId);
+    if (isStatusChange && !prefs.statusChange) return { sent: false, reason: 'opted out' };
+    if (!prefs.email) return { sent: false, reason: 'email disabled' };
+    const mailed = await sendMemberEmail(userId, email);
+    return { sent: mailed, mailed };
+  } catch (err) {
+    console.error('[notify] could not email member:', err.message);
+    return { sent: false, reason: err.message };
+  }
+}
+
+function notifyMemberEmailAsync(payload) {
+  notifyMemberEmail(payload).catch((err) =>
+    console.error('[notify] async email failed:', err.message));
+}
+
 // Fire-and-forget, for a call site that has already committed and must not wait
 // for an email round trip to answer the request.
 function notifyMemberAsync(payload) {
@@ -100,4 +134,10 @@ function notifyMemberAsync(payload) {
     console.error('[notify] async notify failed:', err.message));
 }
 
-module.exports = { notifyMember, notifyMemberAsync, preferencesFor };
+module.exports = {
+  notifyMember,
+  notifyMemberAsync,
+  notifyMemberEmail,
+  notifyMemberEmailAsync,
+  preferencesFor,
+};
