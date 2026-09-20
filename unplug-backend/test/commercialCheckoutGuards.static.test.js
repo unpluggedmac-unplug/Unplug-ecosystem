@@ -23,8 +23,13 @@ test('cart and single checkout share the server gateway-live gate', () => {
   assert.match(read('src/routes/payments.js'), /if \(method === 'eft'\) return true;[\s\S]*return false;/);
 });
 
-test('21-day banner fallback matches the database package introduced by migration 168', () => {
-  assert.match(read('src/utils/servicePackages.js'), /ad_banner:\s*\{[^}]*21:\s*785\.00/);
+test('21-day banner price lives in the database and has no hardcoded fallback', () => {
+  const pricing = read('src/utils/servicePackages.js');
+  const migration = read('db/migrations/168_ad_banner_21_day_tier.sql');
+  assert.doesNotMatch(pricing, /FALLBACK_PRICES|ad_banner:\s*\{[^}]*21:\s*785\.00/,
+    'Batch D fail-closed pricing must not restore a hardcoded banner fallback');
+  assert.match(migration, /'ad_banner',\s*21,[\s\S]*785\.00/,
+    'the 21-day R785 package remains seeded in service_packages');
 });
 
 test('confirmed payments use tracked fulfilment and manual EFT passes confirmed state to analytics', () => {
