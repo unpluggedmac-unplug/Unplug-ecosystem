@@ -153,6 +153,55 @@ test('STEP ONE creates an unverified account and a code', async () => {
   assert.ok(await codeFor(email), 'a code was issued');
 });
 
+test('registration completes referral attribution and converts the exact click', async () => {
+  const referrer = await pool.query(
+    `INSERT INTO users (email, password_hash, role, full_name)
+     VALUES ($1, 'x', 'member', 'Referral Owner')
+     RETURNING id`,
+    [freshEmail()]
+  );
+  const referrerId = referrer.rows[0].id;
+  const referralCode = 'SIGNUPFLOW1';
+
+  await pool.query(
+    `INSERT INTO member_participation_profiles (user_id, referral_code)
+     VALUES ($1, $2)`,
+    [referrerId, referralCode]
+  );
+  const click = await pool.query(
+    `INSERT INTO referral_clicks (referral_code, referrer_user_id, user_agent, referrer_url)
+     VALUES ($1, $2, 'signup-test', 'https://social.example/post')
+     RETURNING id`,
+    [referralCode, referrerId]
+  );
+
+  const email = freshEmail();
+  const registered = await api('POST', '/auth/register', {
+    email,
+    ...GOOD,
+    referralCode,
+    referralClickId: click.rows[0].id,
+  });
+  assert.equal(registered.status, 201);
+
+  const userId = registered.body.user.id;
+  const referral = await pool.query(
+    `SELECT referrer_user_id, referred_user_id, referral_code
+       FROM member_referrals
+      WHERE referred_user_id = $1`,
+    [userId]
+  );
+  assert.equal(referral.rowCount, 1);
+  assert.equal(referral.rows[0].referrer_user_id, referrerId);
+  assert.equal(referral.rows[0].referral_code, referralCode);
+
+  const converted = await pool.query(
+    'SELECT converted_user_id FROM referral_clicks WHERE id = $1',
+    [click.rows[0].id]
+  );
+  assert.equal(converted.rows[0].converted_user_id, userId);
+});
+
 test('STEP TWO IS NOT OPTIONAL — sign-in is refused until the code is entered', async () => {
   const email = freshEmail();
   await api('POST', '/auth/register', { email, ...GOOD });
