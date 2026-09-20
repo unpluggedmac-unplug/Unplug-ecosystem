@@ -32,7 +32,7 @@ before(async () => {
   await pg.start();
   await pg.createDatabase('unplug_test');
 
-  process.env.DATABASE_URL = \`postgres://postgres:postgres@localhost:\${port}/unplug_test\`;
+  process.env.DATABASE_URL = `postgres://postgres:postgres@localhost:${port}/unplug_test`;
 
   const { Pool } = require('pg');
   pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -69,15 +69,15 @@ test('the dead payment-route price copies stay gone', () => {
 
 test('priceFor reads the admin-managed table value', async () => {
   await pool.query(
-    \`UPDATE service_packages SET price = 12345.00
-      WHERE service_key = 'ad_banner' AND duration_days = 7\`);
+    `UPDATE service_packages SET price = 12345.00
+      WHERE service_key = 'ad_banner' AND duration_days = 7`);
   assert.equal(await servicePackages.priceFor('ad_banner', 7), 12345);
 });
 
 test('an inactive or unknown package has no hidden price', async () => {
   await pool.query(
-    \`UPDATE service_packages SET active = false
-      WHERE service_key = 'highlight_article' AND duration_days = 21\`);
+    `UPDATE service_packages SET active = false
+      WHERE service_key = 'highlight_article' AND duration_days = 21`);
   assert.equal(await servicePackages.priceFor('highlight_article', 21), null);
   assert.equal(await servicePackages.priceFor('ad_banner', 999), null);
   assert.equal(await servicePackages.priceFor('not_a_service', 7), null);
@@ -104,7 +104,7 @@ test('THE BANNER PRICE SENTENCE HAS ONE LIVE LOADER, NOT TEN PRICE TABLES', () =
     path.join(__dirname, '..', '..', 'unplug-magazine.html'), 'utf8');
 
   const tagged = (page.match(/<p class="js-banner-pricing">/g) || []).length;
-  assert.ok(tagged >= 10, \`expected every banner sentence tagged, found \${tagged}\`);
+  assert.ok(tagged >= 10, `expected every banner sentence tagged, found ${tagged}`);
 
   const loaders = (page.match(/payments\/packages\?service=ad_banner/g) || []).length;
   assert.equal(loaders, 1, 'there should be exactly one live banner-pricing loader');
