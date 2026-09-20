@@ -23,57 +23,6 @@ function loadCss(){
   (document.head||document.documentElement).appendChild(link);
 }
 
-function syncTopNotification(){
-  var tree=q('#ccMemberTree');
-  if(!tree)return;
-  var community=q('[data-node="g-community"]',tree);
-  var source=community&&q('[data-id="notifications"]',community);
-  if(!source)return;
-
-  var existing=q('[data-node="notifications-quick"]',tree);
-  if(!existing){
-    var wrap=document.createElement('div');
-    wrap.className='cc-member-node cc-member-leaf';
-    wrap.dataset.node='notifications-quick';
-    wrap.style.setProperty('--cc-depth',0);
-    wrap.innerHTML='<div class="cc-member-leaf-row"><button type="button" class="cc-member-nav-action" data-id="notifications-quick" aria-label="Open notifications"><span class="cc-member-icon">●</span><span class="cc-member-label">Notifications</span><span class="cc-member-count" data-polish-notification-count hidden></span></button><button type="button" class="cc-member-star" data-polish-notification-star aria-label="Favourite Notifications">☆</button></div>';
-    var home=q('[data-node="g-home"]',tree);
-    if(home&&home.nextSibling)tree.insertBefore(wrap,home.nextSibling);else if(home)tree.appendChild(wrap);else tree.insertBefore(wrap,tree.firstChild);
-    existing=wrap;
-
-    q('[data-id="notifications-quick"]',wrap).addEventListener('click',function(){
-      var current=q('[data-node="g-community"] [data-id="notifications"]',tree);
-      if(current)current.click();
-    });
-    q('[data-polish-notification-star]',wrap).addEventListener('click',function(ev){
-      ev.stopPropagation();
-      var star=q('[data-node="g-community"] [data-star="notifications"]',tree);
-      if(star)star.click();
-      schedule();
-    });
-  }
-
-  var nativeCount=q('#notifCountBadge');
-  var count=q('[data-polish-notification-count]',existing);
-  var text=nativeCount?String(nativeCount.textContent||'').trim():'';
-  var visible=!!text && !(nativeCount&&nativeCount.style&&nativeCount.style.display==='none') && !(nativeCount&&nativeCount.hidden);
-  if(count){txt(count,text);if(count.hidden===visible)count.hidden=!visible}
-
-  var sourceStar=q('[data-node="g-community"] [data-star="notifications"]',tree);
-  var quickStar=q('[data-polish-notification-star]',existing);
-  if(sourceStar&&quickStar){
-    txt(quickStar,sourceStar.textContent||'☆');
-    quickStar.setAttribute('aria-label',(sourceStar.textContent==='★'?'Remove Notifications from favourites':'Favourite Notifications'));
-  }
-
-  var quick=q('[data-id="notifications-quick"]',existing);
-  if(quick){
-    var isActive=source.classList.contains('active');
-    quick.classList.toggle('active',isActive);
-    if(isActive)quick.setAttribute('aria-current','page');else quick.removeAttribute('aria-current');
-  }
-}
-
 function accountLeaf(id,label,icon){
   var wrap=document.createElement('div');
   wrap.className='cc-member-node cc-member-leaf';
@@ -118,10 +67,10 @@ function syncAccountShortcuts(){
     q('[data-account-shortcut="login-security"]',security).addEventListener('click',function(){openAccountShortcut('login-security','Login & Security','#twoFactorContent')});
   }
   if(!q('[data-node="communication-preferences"]',children)){
-    var prefs=accountLeaf('communication-preferences','Communication Preferences','●');
+    var prefs=accountLeaf('communication-preferences','Notification Preferences','●');
     var securityNode=q('[data-node="login-security"]',children);
     if(securityNode&&securityNode.nextSibling)children.insertBefore(prefs,securityNode.nextSibling);else children.appendChild(prefs);
-    q('[data-account-shortcut="communication-preferences"]',prefs).addEventListener('click',function(){openAccountShortcut('communication-preferences','Communication Preferences','#notifPrefsContent')});
+    q('[data-account-shortcut="communication-preferences"]',prefs).addEventListener('click',function(){openAccountShortcut('communication-preferences','Notification Preferences','#notifPrefsContent')});
   }
   if(accountShortcut){
     var active=q('[data-account-shortcut="'+accountShortcut+'"]',children);
@@ -250,9 +199,9 @@ function augmentSearch(){
   var prefs=q('[data-polish-search="communication-preferences"]',results);
   var wantSecurity=!!term&&/login|security|password|two[- ]?factor|2fa/.test(term);
   var wantPrefs=!!term&&/communication|preference|notifications?|email/.test(term);
-  if(wantSecurity&&!security)addSearchShortcut(results,'login-security','Login & Security','Account & Privacy');
+  if(wantSecurity&&!security)addSearchShortcut(results,'login-security','Login & Security','Account & Settings');
   else if(!wantSecurity&&security)security.remove();
-  if(wantPrefs&&!prefs)addSearchShortcut(results,'communication-preferences','Communication Preferences','Account & Privacy');
+  if(wantPrefs&&!prefs)addSearchShortcut(results,'communication-preferences','Notification Preferences','Account & Settings');
   else if(!wantPrefs&&prefs)prefs.remove();
   if(wantSecurity||wantPrefs)results.hidden=false;
 }
@@ -262,7 +211,7 @@ function patchSearch(){
   var results=q('#ccMemberSearchResults');
   if(!search||search.dataset.ccA11yBound)return;
   search.dataset.ccA11yBound='true';
-  search.setAttribute('aria-label','Find something in My Unplug');
+  search.setAttribute('aria-label','Find something in Member Dashboard');
   search.setAttribute('aria-controls','ccMemberSearchResults');
   if(results){results.setAttribute('role','region');results.setAttribute('aria-label','Dashboard search results')}
   search.addEventListener('input',function(){setTimeout(augmentSearch,0)});
@@ -294,7 +243,6 @@ function patchModal(){
 function apply(){
   scheduled=0;
   if(!q('#ccMemberNav'))return;
-  syncTopNotification();
   syncAccountShortcuts();
   patchNavigationA11y();
   patchHomeA11y();
