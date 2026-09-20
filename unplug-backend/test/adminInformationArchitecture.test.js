@@ -88,3 +88,17 @@ test('primary navigation descriptions are rendered as text and hidden with colla
   assert.match(css, /\.cc-group-description\{/);
   assert.match(css, /\.cc-nav-group:not\(\.open\)>\.cc-group-description/);
 });
+
+
+test('Admin Dashboard landing page keeps quick actions focused and ordered after attention', () => {
+  const hierarchy = read('media/scripts/admin-control-centre-hierarchy.js');
+  const start = hierarchy.indexOf('function addOverviewCards()');
+  const end = hierarchy.indexOf('addOverviewCards();', start);
+  const overview = hierarchy.slice(start, end);
+  assert.match(overview, /Platform status/);
+  assert.match(overview, /Requires attention/);
+  assert.match(overview, /Quick actions/);
+  const quickCards = [...overview.matchAll(/^        \['[^']+',/gm)];
+  assert.equal(quickCards.length, 8, 'Quick Actions must stay within the 4–8 item clarity target');
+  assert.match(overview, /pendingPanel\.insertAdjacentElement\('afterend', quickLabel\)/);
+});
