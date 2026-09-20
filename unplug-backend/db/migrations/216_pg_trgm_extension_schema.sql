@@ -40,4 +40,4 @@ BEGIN
       RAISE NOTICE 'Skipping pg_trgm schema move: current role does not own all extension objects';
   END;
 END
-$;
+$$;
