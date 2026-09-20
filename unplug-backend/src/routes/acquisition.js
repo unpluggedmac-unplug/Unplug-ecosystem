@@ -320,9 +320,10 @@ router.post('/referral-clicks', publicSubmitLimiter, attachUser, async (req, res
       'SELECT user_id FROM member_participation_profiles WHERE referral_code = $1', [code]
     );
 
-    await pool.query(
+    const recorded = await pool.query(
       `INSERT INTO referral_clicks (referral_code, referrer_user_id, user_agent, referrer_url)
-       VALUES ($1, $2, $3, $4)`,
+       VALUES ($1, $2, $3, $4)
+       RETURNING id`,
       [
         code,
         owner.rows[0] ? owner.rows[0].user_id : null,
@@ -332,8 +333,10 @@ router.post('/referral-clicks', publicSubmitLimiter, attachUser, async (req, res
     );
     // Always 200, even for a code that matches nothing: this is a public
     // endpoint, and a different answer for real and fake codes would turn it
-    // into a way to enumerate members' referral codes.
-    res.json({ recorded: true });
+    // into a way to enumerate members' referral codes. The click id is an
+    // opaque row id, returned for both shapes so the browser can attach the
+    // exact visit to a later signup without learning whether the code is real.
+    res.json({ recorded: true, clickId: recorded.rows[0].id });
   } catch (err) {
     next(err);
   }
