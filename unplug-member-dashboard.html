@@ -1736,6 +1736,32 @@ function showCard(cardId){
   });
 }
 
+// A referral can land directly on this dashboard as well as on the magazine.
+// Capture it here too, using the same session keys as unplug-participation-sdk.
+// If the magazine already recorded this code, the click-code marker prevents a
+// second count while the visitor moves into registration.
+(function captureDashboardReferral() {
+  try {
+    const ref = String(new URLSearchParams(location.search).get('ref') || '').trim().slice(0, 20);
+    if (!ref) return;
+    const prior = sessionStorage.getItem('unplug_referral_code') || '';
+    if (prior !== ref) {
+      sessionStorage.removeItem('unplug_referral_click_id');
+      sessionStorage.removeItem('unplug_referral_click_code');
+    }
+    sessionStorage.setItem('unplug_referral_code', ref);
+    if (sessionStorage.getItem('unplug_referral_click_code') === ref) return;
+
+    api('/acquisition/referral-clicks', {
+      method: 'POST',
+      body: JSON.stringify({ code: ref, from: document.referrer || '' }),
+    }).then((result) => {
+      sessionStorage.setItem('unplug_referral_click_code', ref);
+      if (result && result.clickId) sessionStorage.setItem('unplug_referral_click_id', String(result.clickId));
+    }).catch(() => { /* referral tracking must never block registration */ });
+  } catch (_) { /* storage/private-mode failures are non-blocking */ }
+})();
+
 // Registration is now two steps: pick a membership type, then fill the form.
 let SELECTED_MEMBER_TYPE = 'individual';
 document.getElementById('showRegisterBtn').addEventListener('click', () => showCard('typeCard'));
@@ -1877,7 +1903,50 @@ document.getElementById('registerBtn').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Creating account...';
 
   try {
-    await api('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, phone, fullName, memberType: SELECTED_MEMBER_TYPE }) });
+    // Carry a referral journey from the public site into account creation.
+    // The click id identifies the exact anonymous visit; both values are
+    // optional so direct signups keep the exact same path.
+    let referralCode = '';
+    let referralClickId = '';
+    try {
+      referralCode = sessionStorage.getItem('unplug_referral_code') || '';
+      referralClickId = sessionStorage.getItem('unplug_referral_click_id') || '';
+    } catch (_) { /* private mode: referral attribution is best-effort */ }
+    // A code-only session can happen when the visitor arrived before the
+    // click-id implementation, or pressed Register before the background click
+    // request finished. Resolve that exact click now rather than letting the
+    // backend guess among several people using the same referral code.
+    if (referralCode && !referralClickId) {
+      try {
+        const click = await api('/acquisition/referral-clicks', {
+          method: 'POST',
+          body: JSON.stringify({ code: referralCode, from: document.referrer || '' }),
+        });
+        if (click && click.clickId) {
+          referralClickId = String(click.clickId);
+          try {
+            sessionStorage.setItem('unplug_referral_click_id', referralClickId);
+            sessionStorage.setItem('unplug_referral_click_code', referralCode);
+          } catch (_) {}
+        }
+      } catch (_) { /* attribution remains best-effort; signup still proceeds */ }
+    }
+
+    const registerPayload = { email, password, phone, fullName, memberType: SELECTED_MEMBER_TYPE };
+    if (referralCode) registerPayload.referralCode = referralCode;
+    if (referralClickId) registerPayload.referralClickId = referralClickId;
+
+    await api('/auth/register', { method: 'POST', body: JSON.stringify(registerPayload) });
+
+    // Only clear after a successful account creation. A validation or network
+    // error must not silently lose the referral before the member retries.
+    if (referralCode) {
+      try {
+        sessionStorage.removeItem('unplug_referral_code');
+        sessionStorage.removeItem('unplug_referral_click_id');
+        sessionStorage.removeItem('unplug_referral_click_code');
+      } catch (_) {}
+    }
     localStorage.setItem('unplug_api_base', API_BASE);
     PENDING_VERIFY_EMAIL = email;
     document.getElementById('verifySub').textContent = `We sent a 6-digit code to ${email}. Enter it below to activate your free account.`;
