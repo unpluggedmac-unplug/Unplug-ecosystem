@@ -59,6 +59,11 @@ test('member enhancement is guarded and runtime has one isolated member integrat
   assert.match(loader, /member-dashboard-service-shortcuts\.js\?v=/);
 });
 
+test('staging runtime binds login, forgot-password, and registration forms to the isolated staging API', () => {
+  assert.match(runtime, /\["apiBaseInput","forgotApiBaseInput","registerApiBaseInput"\]/);
+  assert.match(page, /id="registerApiBaseInput"/);
+});
+
 test('member asset cache version is bumped consistently through the loader chain', () => {
   const version = '20260920-2';
   assert.ok(runtime.includes(`member-dashboard-control-centre-loader.js?v=${version}`));
