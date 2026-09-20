@@ -51,6 +51,9 @@ router.get('/options', async (req, res, next) => {
       packages: list,
     });
   } catch (err) {
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Advertising pricing is temporarily unavailable. Please try again shortly.' });
+    }
     next(err);
   }
 });
@@ -109,7 +112,12 @@ router.post('/', requireAuth, async (req, res, next) => {
       price: chosen.price,
       message: 'Banner created — complete payment, then it goes to admin for approval.',
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Advertising pricing is temporarily unavailable. No banner was created.' });
+    }
+    next(err);
+  }
 });
 
 // GET /ad-banners/mine — the member's own banners + status.
