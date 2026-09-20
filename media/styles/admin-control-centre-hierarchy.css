@@ -3,6 +3,15 @@
 
 @media(min-width:801px){
   .app-shell.active{grid-template-columns:330px minmax(0,1fr)!important}
+  .sidebar{
+    position:sticky!important;
+    top:0;
+    height:100vh;
+    max-height:100vh;
+    align-self:start;
+    overflow:hidden;
+  }
+  .cc-nav-root{overscroll-behavior:contain}
 }
 .sidebar{padding:18px 12px!important;gap:0!important;min-width:0}
 .sidebar .brand{font-family:'Inter',sans-serif!important;text-transform:uppercase;letter-spacing:.055em;font-size:14px!important;font-weight:900!important;color:#fff!important;margin:0 4px 14px!important}
