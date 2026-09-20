@@ -3499,3 +3499,73 @@ member account before calling it live.
 **Still queued:** Batch D money/schema work remains the next high-risk backend task and requires its own review
 and explicit approval before implementation.
 
+## 2026-09-20 — Batch D pricing source-of-truth completed on draft PR #53 (not merged)
+
+**Approved product decisions.** Owner approved **1A / 2A / 3A**. Directory package pricing must have
+one Admin-managed source; pricing failures must **fail closed** rather than charge a stale fallback; paid
+forms stay outside this batch. The implementation changes no existing price.
+
+**Directory pricing schema.** Migration `214_directory_package_pricing.sql` adds
+`directory_package_prices`, keyed by `profile_type + tier`, with active/display-order and Admin audit
+fields. It seeds exactly the pre-Batch-D amounts: Individual Basic R150 / Pro R280 / Premium R400 and
+Business Basic R500 / Pro R700 / Premium R1,000. Seeds use `ON CONFLICT DO NOTHING`, so migration
+re-runs cannot overwrite an Admin change. Existing payments, orders, invoices, vouchers, credits and
+historical financial records are not rewritten.
+
+**One Directory price source.** `priceForDirectoryPackage()` is now the server-side amount resolver for
+`profile_package`; the old `PACKAGE_PRICES` charge map is gone. `GET /payments/directory-packages`
+returns only active public type/tier/price data. Checkout, the public Directory package cards and chatbot
+all read that endpoint rather than carrying their own numeric ladders. Admin sees all rows, including
+inactive ones, through `GET /payments/admin/directory-packages` and can update price/availability through
+`PATCH /payments/admin/directory-packages/:id` in the existing **Commerce & Payments → Service Pricing**
+screen. Disabling one tier makes only that tier unavailable.
+
+**Fail-closed duration pricing.** `service_packages` remains the source for Highlight and Advertising
+Banner duration pricing, but `FALLBACK_PRICES` has been removed. A healthy database with no active exact
+package returns "not offered"; a database read failure raises `PRICING_UNAVAILABLE`. Single-service quote,
+single-service initiate and cart initiate return a controlled 503 before payment/order creation when pricing
+cannot be read. Highlight/Banner creation/options use the same fail-closed rule. No guessed fallback amount
+can be charged after an Admin edit.
+
+**Scope safety.** Paid forms were not added to `payments.js`; no form-payment business model was invented.
+Competition, edition, vote, fixed-fee services, vouchers, account credit, invoice behavior, payment
+confirmation, fulfilment effects, Admin approval and My Orders status semantics remain outside this change
+except where existing checkout paths now stop on pricing unavailability. The public pricing endpoint does
+not expose Admin email/timestamps.
+
+**Regression work caught and fixed before handover.** CI caught a malformed generated SQL placeholder in
+the new Admin PATCH route and an accidental duplicated tail in `payments.js`; both were removed before
+the candidate went green. The complete suite then surfaced one old static test that explicitly required the
+removed 21-day banner fallback. That test was corrected to enforce the approved fail-closed architecture
+while still verifying migration 168 seeds the R785 21-day package.
+
+**Verification before this handover commit.** Code candidate
+`8dab79bba072b499ca6b53a4f75b854f3b8cc8fb` passed:
+- focused **Batch D pricing safety: 85/85**, 0 failures;
+- **Full backend regression: 2,467/2,467**, 0 failures, 0 skipped;
+- My Orders payment/service-status checks;
+- My Unplug privacy/custom-interest checks;
+- Member Analytics backend checks;
+- Member Dashboard regressions;
+- frontend production/package build; and
+- Build configuration contract gate.
+
+The workflow path filters now include the Batch D commercial-checkout guard plus
+`docs/progress-log.md` and `docs/pricing-comparison.md`, so this documentation-only handover commit
+must itself receive the same final-head CI verification.
+
+**Release state / next checkpoint.** PR **#53**
+(`feat/batch-d-pricing-source-20260920` → `main`) remains deliberately **draft and unmerged**.
+Batch D has not been released to production. Do not mark it live from the pre-handover results above.
+Required next sequence: verify every CI job on the final documentation head is green; record that exact
+head/result on PR #53; only after explicit owner release approval mark ready and merge using the expected
+head SHA; let production Render auto-deploy from `main` (do not manually trigger while auto-deploy is on);
+confirm migration 214 is applied, `/health/ready` is healthy, and the deployed commit is the merge commit;
+then verify the live public Directory pricing endpoint, Directory package cards, checkout and Admin Service
+Pricing. A signed-in smoke should confirm an Admin price change would affect only **new** orders and an
+inactive tier cannot be purchased. Keep the existing price values unchanged unless the owner separately
+authorizes a pricing change.
+
+**Known separate maintenance note.** GitHub Actions still warns that Node 20-targeted actions are being
+forced to Node 24. The warning is non-failing and is not part of Batch D.
+
