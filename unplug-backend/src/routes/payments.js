@@ -7,6 +7,11 @@ const { recordPaymentOnce } = require('../utils/analyticsRecorder');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor, historyFor } = require('../utils/accountCredit');
 const { priceFor, packagesFor, highlightServiceKey } = require('../utils/servicePackages');
+const {
+  priceForDirectoryPackage,
+  directoryPackages,
+  asPriceMap,
+} = require('../utils/directoryPackages');
 const { logActivity } = require('./activityLog');
 const { assertPurchasableByUser } = require('../utils/purchaseOwnership');
 const { eftInstructions } = require('../utils/eftDetails');
@@ -99,25 +104,10 @@ function gatewayIsLive(method) {
   return false;
 }
 
-const PACKAGE_PRICES = {
-  individual: { basic: 150.00, pro: 280.00, premium: 400.00 },
-  business:   { basic: 500.00, pro: 700.00, premium: 1000.00 },
-};
-
-// Highlights & Promotions pricing — optional homepage boost, unchanged
-// from the original locked pricing.
-// HIGHLIGHT_PRICES and AD_BANNER_PRICES used to be declared here. They were
-// DEAD — every quote and charge in this file already goes through priceFor(),
-// which reads service_packages — but they still read as authoritative, and a
-// price that appears in a second place is a price that will one day disagree
-// with the first. docs/pricing-comparison.md lists this as one of the three
-// copies of the highlight and banner ladders.
-//
-// Two of those three are now gone. What remains is service_packages (the source
-// of truth) and FALLBACK_PRICES in utils/servicePackages.js, which is a
-// deliberate last-known-good for when the table cannot be read. A test now
-// asserts the fallback still matches the seeded table, so it cannot go stale
-// unnoticed.
+// Directory package prices live in directory_package_prices and duration-based
+// Highlight/Banner prices live in service_packages. Neither money path has a
+// hardcoded fallback: if its table cannot be read, checkout stops rather than
+// guessing what the admin intended to charge.
 
 // Marketplace: flat R500 for a fixed 30-day duration (replaces the old
 // tiered 7/14/21/28-day Business Banner pricing).
@@ -201,7 +191,7 @@ async function resolveAmount(linkedType, linkedId) {
     const result = await pool.query('SELECT package_tier, type FROM profiles WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Profile not found.');
     const { package_tier, type } = result.rows[0];
-    return PACKAGE_PRICES[type][package_tier];
+    return priceForDirectoryPackage(type, package_tier);
   }
   if (linkedType === 'profile_upgrade') {
     const result = await pool.query('SELECT fee_paid FROM profile_upgrades WHERE id = $1', [linkedId]);
@@ -220,10 +210,14 @@ async function resolveAmount(linkedType, linkedId) {
     const result = await pool.query('SELECT target_type, duration_days FROM highlights WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Highlight not found.');
     const { target_type, duration_days } = result.rows[0];
-    // Admin-managed price (service_packages), falling back to the built-in
-    // table if that row is missing — never the client's word for it.
+    // Admin-managed price from service_packages — never the client's word for
+    // it, and never a hardcoded fallback if the pricing table cannot be read.
     const price = await priceFor(highlightServiceKey(target_type), duration_days);
-    if (price === null) throw new Error('That highlight package is no longer available.');
+    if (price === null) {
+      const err = new Error('That highlight package is no longer available.');
+      err.code = 'PACKAGE_UNAVAILABLE';
+      throw err;
+    }
     return price;
   }
   if (linkedType === 'marketplace_listing') {
@@ -261,7 +255,11 @@ async function resolveAmount(linkedType, linkedId) {
     const result = await pool.query('SELECT duration_days FROM ad_slots WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Banner not found.');
     const price = await priceFor('ad_banner', result.rows[0].duration_days);
-    if (price === null) throw new Error('Invalid banner duration.');
+    if (price === null) {
+      const err = new Error('That advertising package is no longer available.');
+      err.code = 'PACKAGE_UNAVAILABLE';
+      throw err;
+    }
     return price;
   }
   if (linkedType === 'edition_download') {
@@ -583,9 +581,9 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
 // Both exist so a price is never typed into a page by hand: a figure shown to a
 // member and the figure they are charged come from the same place.
 //
-// Services whose price is stored per row (competition entries, edition
-// downloads, directory packages) are deliberately absent — they have no single
-// figure to quote, and inventing one here is exactly the drift this prevents.
+// Services whose price is stored per purchase row (competition entries and
+// edition downloads) are deliberately absent. Directory packages have their
+// own public endpoint below because they are a type × tier matrix.
 router.get('/fees', (req, res) => {
   res.json({ fees: FIXED_FEES });
 });
@@ -601,10 +599,104 @@ router.get('/packages', async (req, res, next) => {
       return res.status(400).json({ error: `service must be one of: ${ALLOWED.join(', ')}` });
     }
     res.json({ service, packages: await packagesFor(service) });
+  } catch (err) {
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Pricing is temporarily unavailable. Please try again shortly.' });
+    }
+    next(err);
+  }
+});
+
+// GET /payments/directory-packages — public source for every place that shows
+// Directory pricing. Only active packages are exposed.
+router.get('/directory-packages', async (req, res, next) => {
+  try {
+    const rows = await directoryPackages();
+    const publicRows = rows.map((row) => ({
+      profile_type: row.profile_type,
+      tier: row.tier,
+      price: Number(row.price),
+    }));
+    res.json({ packages: publicRows, priceMap: asPriceMap(publicRows) });
+  } catch (err) {
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Directory pricing is temporarily unavailable. Please try again shortly.' });
+    }
+    next(err);
+  }
+});
+
+// GET /payments/admin/directory-packages — admin, all six Directory package
+// rows including ones temporarily switched off.
+router.get('/admin/directory-packages', requireRole('admin'), async (req, res, next) => {
+  try {
+    res.json({ packages: await directoryPackages({ includeInactive: true }) });
+  } catch (err) {
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Directory pricing is temporarily unavailable.' });
+    }
+    next(err);
+  }
+});
+
+// PATCH /payments/admin/directory-packages/:id — only price/availability/order
+// are editable. profile_type + tier are the identity and never change.
+router.patch('/admin/directory-packages/:id', requireRole('admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'A valid package id is required.' });
+
+    const sets = [];
+    const values = [];
+    const param = String.fromCharCode(36); // PostgreSQL positional-parameter marker
+    const push = (col, val) => {
+      values.push(val);
+      sets.push(col + ' = ' + param + values.length);
+    };
+
+    if (req.body.price !== undefined) {
+      const price = Number(req.body.price);
+      if (!Number.isFinite(price) || price < 0) {
+        return res.status(400).json({ error: 'Price must be a number of 0 or more.' });
+      }
+      push('price', price);
+    }
+    if (req.body.active !== undefined) push('active', !!req.body.active);
+    if (req.body.displayOrder !== undefined) push('display_order', Number(req.body.displayOrder) || 0);
+    if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+
+    push('updated_at', new Date());
+    push('updated_by', req.user.id);
+    values.push(id);
+
+    const sql = 'UPDATE directory_package_prices SET ' + sets.join(', ')
+      + ' WHERE id = ' + param + values.length + ' RETURNING *';
+    const r = await pool.query(sql, values);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'That Directory package no longer exists.' });
+
+    const row = r.rows[0];
+    logActivity(
+      req.user.id,
+      'directory_package_price_updated',
+      `${row.profile_type} ${row.tier} → R${Number(row.price).toFixed(2)}`
+    );
+    res.json({
+      package: { ...row, price: Number(row.price) },
+      message: 'Saved — the new Directory price applies to new orders immediately.',
+    });
   } catch (err) { next(err); }
 });
 
-// GET /payments/admin/packages — admin, every package including inactive ones.
+// GET /payments/admin/packages — admin, every duration package including inactive ones.
 router.get('/admin/packages', requireRole('admin'), async (req, res, next) => {
   try {
     const r = await pool.query(
@@ -903,6 +995,12 @@ router.post('/quote', requireAuth, async (req, res, next) => {
   } catch (err) {
     if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
     if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Pricing is temporarily unavailable. No order was created.' });
+    }
     next(err);
   }
 });
@@ -1085,6 +1183,12 @@ router.post('/initiate', requireAuth, async (req, res, next) => {
   } catch (err) {
     if (err.code === 'PURCHASE_NOT_OWNED') return res.status(403).json({ error: err.message });
     if (err.code === 'PURCHASE_NOT_FOUND') return res.status(404).json({ error: err.message });
+    if (err.code === 'PACKAGE_UNAVAILABLE') {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Pricing is temporarily unavailable. No payment was created.' });
+    }
     if (err.message.includes('not found') || err.message.includes('not implemented')) {
       return res.status(400).json({ error: err.message });
     }

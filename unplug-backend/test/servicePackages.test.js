@@ -150,15 +150,13 @@ test('THE RENAME DOES NOT RE-APPLY ITSELF ON THE NEXT DEPLOY', async () => {
   );
 });
 
-test('a deactivated package is not sellable', async () => {
+test('a deactivated package is not sellable and is never priced from a fallback', async () => {
   await pool.query(
     `UPDATE service_packages SET active = false
       WHERE service_key = 'highlight_article' AND duration_days = 21`
   );
-  // priceFor falls back to the built-in table when there's no ACTIVE row, so
-  // the caller still gets a price rather than a crash...
-  assert.equal(await packages.priceFor('highlight_article', 21), 300);
-  // ...but it must not be offered for sale.
+  assert.equal(await packages.priceFor('highlight_article', 21), null,
+    'an inactive package must not receive a hidden hardcoded price');
   const list = await packages.packagesFor('highlight_article');
   assert.ok(!list.some((p) => p.durationDays === 21), 'inactive package was still listed');
 });

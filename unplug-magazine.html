@@ -2764,7 +2764,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="tier-card">
         <div class="tier-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="36" height="36"><path d="M12 2L8 8H4l4 4-2 6 6-3 6 3-2-6 4-4h-4L12 2z"/><circle cx="12" cy="12" r="2" fill="var(--red)" stroke="none"/></svg></div>
         <h4>Basic</h4>
-        <div class="tier-price"><span class="pkg-price" data-tier="basic">R150</span> <span>once-off</span></div>
+        <div class="tier-price"><span class="pkg-price" data-tier="basic">Loading…</span> <span>once-off</span></div>
         <p class="pkg-desc" data-tier="basic">Entry-level listing — name, category, short bio, and one contact method.</p>
         <button class="btn btn-line tier-btn" onclick="choosePackage('basic')">Choose Basic</button>
         <p class="tier-example section-hidden" data-tier="basic" style="font-size:12px; margin-top:8px;"></p>
@@ -2772,7 +2772,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="tier-card tier-featured">
         <div class="tier-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="36" height="36"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
         <h4>Pro</h4>
-        <div class="tier-price"><span class="pkg-price" data-tier="pro">R280</span> <span>once-off</span></div>
+        <div class="tier-price"><span class="pkg-price" data-tier="pro">Loading…</span> <span>once-off</span></div>
         <p class="pkg-desc" data-tier="pro">Full biography, achievements, career highlights, quote, and social handles.</p>
         <button class="btn btn-solid tier-btn" onclick="choosePackage('pro')">Choose Pro</button>
         <p class="tier-example section-hidden" data-tier="pro" style="font-size:12px; margin-top:8px;"></p>
@@ -2780,7 +2780,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
       <div class="tier-card">
         <div class="tier-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.8" width="36" height="36"><path d="M2 20h20M4 20V8l5 5 3-6 3 6 5-5v12"/><circle cx="12" cy="4" r="2" fill="var(--red)" stroke="none"/></svg></div>
         <h4>Premium</h4>
-        <div class="tier-price"><span class="pkg-price" data-tier="premium">R400</span> <span>once-off</span></div>
+        <div class="tier-price"><span class="pkg-price" data-tier="premium">Loading…</span> <span>once-off</span></div>
         <p class="pkg-desc" data-tier="premium">Everything in Pro, plus a full project gallery and linked videos.</p>
         <button class="btn btn-line tier-btn" onclick="choosePackage('premium')">Choose Premium</button>
         <p class="tier-example section-hidden" data-tier="premium" style="font-size:12px; margin-top:8px;"></p>
@@ -3340,7 +3340,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
     <h3 class="profile-section-title">Revenue model</h3>
     <p style="color:var(--slate); line-height:1.7; margin-bottom:10px;">Several real, already-built and priced revenue lines, not a single bet:</p>
     <ul style="color:var(--slate); line-height:1.8; margin:0 0 20px; padding-left:20px;">
-      <li>Directory packages — once-off, R150–R1,000 depending on tier and individual/business</li>
+      <li>Directory packages — once-off packages for individuals and businesses, with current pricing shown live on the Directory page</li>
       <li>Competition entries — Top 10 and The Arena</li>
       <li>Advertising banners and homepage/article highlight placements</li>
       <li>Marketplace listings for businesses</li>
@@ -4571,15 +4571,10 @@ function renderRichText(html) {
 // login — per Darius's decision 2026-07-07. Same-folder relative link,
 // matching how the four Unplug frontends already sit side by side.
 const MEMBER_DASHBOARD_URL = 'unplug-member-dashboard.html';
-// Directory package selection — prices mirror the checkout page's
-// TIER_PRICES map (display only; the backend resolves the real charge).
-// Kept in sync with PACKAGE_PRICES in unplug-backend/src/routes/payments.js —
-// that server-side constant is what actually gets charged, so a mismatch here
-// would show visitors a price different from what checkout bills them.
-const PKG_PRICES = {
-  individual: { basic: 150, pro: 280, premium: 400 },
-  business:   { basic: 500, pro: 700, premium: 1000 },
-};
+// Directory prices are loaded from the same database rows checkout charges.
+// There is deliberately no client-side price fallback.
+let PKG_PRICES = { individual: {}, business: {} };
+let PKG_PRICING_READY = false;
 const PKG_DESCS = {
   individual: {
     basic: 'Entry-level listing — name, category, short bio, and one contact method.',
@@ -4593,6 +4588,38 @@ const PKG_DESCS = {
   },
 };
 let PKG_TYPE = 'individual';
+
+function directoryPackagePrice(type, tier) {
+  const value = PKG_PRICES[type] && PKG_PRICES[type][tier];
+  return Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
+function renderDirectoryPackagePrices() {
+  document.querySelectorAll('.tier-card').forEach((card) => {
+    const priceEl = card.querySelector('.pkg-price');
+    const btn = card.querySelector('.tier-btn');
+    if (!priceEl || !btn) return;
+    const tier = priceEl.dataset.tier;
+    const price = directoryPackagePrice(PKG_TYPE, tier);
+    priceEl.textContent = price === null ? 'Unavailable' : 'R' + price.toFixed(0);
+    btn.disabled = price === null;
+    btn.style.opacity = price === null ? '0.5' : '';
+    btn.title = price === null ? 'This package is not currently available.' : '';
+  });
+}
+
+async function loadDirectoryPackagePrices() {
+  try {
+    const data = await api('/payments/directory-packages');
+    PKG_PRICES = data.priceMap || { individual: {}, business: {} };
+    PKG_PRICING_READY = true;
+  } catch (err) {
+    PKG_PRICES = { individual: {}, business: {} };
+    PKG_PRICING_READY = false;
+  }
+  renderDirectoryPackagePrices();
+}
+loadDirectoryPackagePrices();
 
 // DIR-002: one row per real, enforced difference. '' renders as an em dash
 // (does not apply / not included); '✓' as a plain check — no partial-credit
@@ -4631,9 +4658,7 @@ document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
   if (!btn) return;
   PKG_TYPE = btn.dataset.ptype;
   document.querySelectorAll('#pkgTypeToggle button').forEach((b) => b.classList.toggle('active', b === btn));
-  document.querySelectorAll('.pkg-price').forEach((el) => {
-    el.textContent = 'R' + PKG_PRICES[PKG_TYPE][el.dataset.tier];
-  });
+  renderDirectoryPackagePrices();
   document.querySelectorAll('.pkg-desc').forEach((el) => {
     el.textContent = PKG_DESCS[PKG_TYPE][el.dataset.tier];
   });
@@ -4643,6 +4668,7 @@ document.getElementById('pkgTypeToggle').addEventListener('click', (e) => {
 renderPkgCompareTable();
 
 function choosePackage(tier) {
+  if (!PKG_PRICING_READY || directoryPackagePrice(PKG_TYPE, tier) === null) return;
   window.location.href = 'unplug-checkout.html?ptype=' + PKG_TYPE + '&tier=' + tier;
 }
 

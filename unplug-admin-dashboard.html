@@ -14215,8 +14215,8 @@ async function saveGalleryImage() {
 
 // ---------------------------------------------------------------------------
 // Service Pricing — edit what each paid package costs, without a deploy.
-// Prices live in service_packages; the server still decides what to charge, so
-// nothing here can change a price on its own.
+// Duration packages live in service_packages; Directory tiers live in
+// directory_package_prices. The server reads these same rows when charging.
 // ---------------------------------------------------------------------------
 const PRICING_GROUPS = {
   highlight_article: 'Article Highlight',
@@ -14228,13 +14228,35 @@ async function loadServicePricing() {
   const body = document.getElementById('pricingBody');
   body.innerHTML = '<div style="padding:16px; color:#666;">Loading…</div>';
   try {
-    const d = await api('/payments/admin/packages');
-    const rows = d.packages || [];
-    if (!rows.length) { body.innerHTML = '<div style="padding:16px; color:#666;">No packages configured.</div>'; return; }
+    const [durationData, directoryData] = await Promise.all([
+      api('/payments/admin/packages'),
+      api('/payments/admin/directory-packages'),
+    ]);
+    const rows = durationData.packages || [];
+    const directoryRows = directoryData.packages || [];
+    if (!rows.length && !directoryRows.length) {
+      body.innerHTML = '<div style="padding:16px; color:#666;">No packages configured.</div>';
+      return;
+    }
+
     const byService = {};
     rows.forEach((p) => { (byService[p.service_key] = byService[p.service_key] || []).push(p); });
 
-    body.innerHTML = Object.keys(byService).map((key) => `
+    const directoryHtml = directoryRows.length ? `
+      <div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);">
+        <div style="font-weight:700; margin-bottom:4px;">Directory Packages</div>
+        <div style="font-size:12px; color:var(--slate); margin-bottom:10px;">One source for checkout, the Directory page, chatbot and the amount actually charged.</div>
+        <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead><tr style="text-align:left; border-bottom:1px solid var(--paper-line);">
+            <th style="padding:6px;">Type</th><th style="padding:6px;">Tier</th>
+            <th style="padding:6px;">Price (R)</th><th style="padding:6px;">Offered</th>
+            <th style="padding:6px;">Last changed</th><th style="padding:6px;"></th>
+          </tr></thead>
+          <tbody>${directoryRows.map(directoryPricingRowHtml).join('')}</tbody>
+        </table></div>
+      </div>` : '';
+
+    const durationHtml = Object.keys(byService).map((key) => `
       <div style="padding:14px 16px; border-bottom:1px solid var(--paper-line);">
         <div style="font-weight:700; margin-bottom:10px;">${escapeHtmlAdmin(PRICING_GROUPS[key] || key)}</div>
         <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:13px;">
@@ -14246,8 +14268,48 @@ async function loadServicePricing() {
           <tbody>${byService[key].map(pricingRowHtml).join('')}</tbody>
         </table></div>
       </div>`).join('');
+
+    body.innerHTML = directoryHtml + durationHtml;
   } catch (e) {
     body.innerHTML = `<div style="padding:16px; color:var(--red);">${escapeHtmlAdmin(e.message || 'Could not load pricing.')}</div>`;
+  }
+}
+
+function directoryPricingRowHtml(p) {
+  const changed = p.updated_at ? new Date(p.updated_at).toLocaleDateString() : '—';
+  const who = p.updated_by_email ? ` by ${escapeHtmlAdmin(p.updated_by_email)}` : '';
+  const type = p.profile_type === 'business' ? 'Business' : 'Individual';
+  const tier = String(p.tier || '').charAt(0).toUpperCase() + String(p.tier || '').slice(1);
+  return `<tr style="border-bottom:1px solid var(--paper-line);" data-dir-pkg="${p.id}">
+    <td style="padding:6px;">${type}</td>
+    <td style="padding:6px; font-weight:600;">${escapeHtmlAdmin(tier)}</td>
+    <td style="padding:6px;"><input class="dir-pkg-price" type="number" min="0" step="0.01" value="${Number(p.price).toFixed(2)}" style="padding:6px; width:110px;"></td>
+    <td style="padding:6px;"><input class="dir-pkg-active" type="checkbox" ${p.active ? 'checked' : ''}></td>
+    <td style="padding:6px; color:#666; font-size:12px;">${changed}${who}</td>
+    <td style="padding:6px;"><button class="approve" style="padding:5px 12px;" onclick="saveDirectoryPackage(${p.id})">Save</button></td>
+  </tr>`;
+}
+
+async function saveDirectoryPackage(id) {
+  const row = document.querySelector(`tr[data-dir-pkg="${id}"]`);
+  if (!row) return;
+  const price = Number(row.querySelector('.dir-pkg-price').value);
+  if (!Number.isFinite(price) || price < 0) {
+    showToast('Enter a price of 0 or more.', true);
+    return;
+  }
+  try {
+    const res = await api(`/payments/admin/directory-packages/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        price,
+        active: row.querySelector('.dir-pkg-active').checked,
+      }),
+    });
+    showToast(res.message || 'Saved.');
+    loadServicePricing();
+  } catch (e) {
+    showToast(e.message || 'Could not save.', true);
   }
 }
 

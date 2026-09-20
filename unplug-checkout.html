@@ -122,12 +122,12 @@ body{ min-height:100vh; }
     </div>
 
     <div class="tier-options" id="tierOptions">
-      <div class="tier-option" data-tier="basic"><div class="name">Basic</div><div class="price">R150</div></div>
-      <div class="tier-option" data-tier="pro"><div class="name">Pro</div><div class="price">R280</div></div>
-      <div class="tier-option" data-tier="premium"><div class="name">Premium</div><div class="price">R400</div></div>
+      <div class="tier-option" data-tier="basic"><div class="name">Basic</div><div class="price">Loading…</div></div>
+      <div class="tier-option" data-tier="pro"><div class="name">Pro</div><div class="price">Loading…</div></div>
+      <div class="tier-option" data-tier="premium"><div class="name">Premium</div><div class="price">Loading…</div></div>
     </div>
     <br>
-    <button class="btn btn-solid" id="createProfileBtn">Continue to Payment</button>
+    <button class="btn btn-solid" id="createProfileBtn" disabled>Continue to Payment</button>
   </div>
 
   <!-- BULK VOTE checkout — reached via unplug-checkout.html?type=vote_bundle&id=<entryId>
@@ -321,12 +321,10 @@ if (DIRECTORY_MODE) document.getElementById('paymentNextSteps').style.display = 
   if (ptype || tier) updateSecondCategoryVisibility();
 })();
 
-// Kept in sync with PACKAGE_PRICES in unplug-backend/src/routes/payments.js
-// (the amount actually charged) and PKG_PRICES/PKG_DESCS on unplug-magazine.html.
-const TIER_PRICES = {
-  individual: { basic: 150, pro: 280, premium: 400 },
-  business: { basic: 500, pro: 700, premium: 1000 },
-};
+// Loaded from GET /payments/directory-packages — the same database rows the
+// server uses to charge the order. There is deliberately no hardcoded fallback.
+let TIER_PRICES = { individual: {}, business: {} };
+let DIRECTORY_PRICING_READY = false;
 const TIER_DESCS = {
   individual: {
     basic: 'Entry-level listing — name, category, short bio, and one contact method.',
@@ -347,9 +345,21 @@ function showOrderDetails(type, description, price) {
   document.getElementById('orderDetailsPrice').textContent = 'R' + Number(price).toFixed(0);
 }
 
+function directoryTierPrice(type, tier) {
+  const value = TIER_PRICES[type] && TIER_PRICES[type][tier];
+  return Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
 function renderTierPrices() {
   document.querySelectorAll('#tierOptions .tier-option').forEach((el) => {
-    el.querySelector('.price').textContent = 'R' + TIER_PRICES[SELECTED_TYPE][el.dataset.tier];
+    const price = directoryTierPrice(SELECTED_TYPE, el.dataset.tier);
+    el.querySelector('.price').textContent = price === null ? 'Unavailable' : 'R' + price.toFixed(0);
+    el.style.opacity = price === null ? '0.45' : '';
+    el.setAttribute('aria-disabled', price === null ? 'true' : 'false');
+    if (price === null && el.classList.contains('selected')) {
+      el.classList.remove('selected');
+      SELECTED_TIER = '';
+    }
   });
 }
 
@@ -406,6 +416,26 @@ document.getElementById('profileTypeOptions').addEventListener('click', (e) => {
   updateSecondCategoryVisibility();
 });
 const api = UnplugAPI.api;
+
+async function loadDirectoryPricing() {
+  if (!DIRECTORY_MODE) return;
+  const btn = document.getElementById('createProfileBtn');
+  try {
+    const data = await api('/payments/directory-packages');
+    TIER_PRICES = data.priceMap || { individual: {}, business: {} };
+    DIRECTORY_PRICING_READY = true;
+    renderTierPrices();
+    btn.disabled = false;
+    hideError('packageError');
+  } catch (err) {
+    DIRECTORY_PRICING_READY = false;
+    TIER_PRICES = { individual: {}, business: {} };
+    renderTierPrices();
+    btn.disabled = true;
+    showError('packageError', 'Directory pricing is temporarily unavailable. Please try again shortly.');
+  }
+}
+loadDirectoryPricing();
 
 // Agreements an admin has placed on the checkout page. Public and anonymous —
 // no sign-in required to see it, since a visitor may not have signed in yet.
@@ -671,6 +701,7 @@ UnplugAPI.restoreSession((user) => enterCheckout(user));
 // ---------------------------------------------------------------------------
 document.querySelectorAll('#tierOptions .tier-option').forEach((el) => {
   el.addEventListener('click', () => {
+    if (directoryTierPrice(SELECTED_TYPE, el.dataset.tier) === null) return;
     document.querySelectorAll('#tierOptions .tier-option').forEach((o) => o.classList.remove('selected'));
     el.classList.add('selected');
     SELECTED_TIER = el.dataset.tier;
@@ -691,8 +722,17 @@ document.getElementById('createProfileBtn').addEventListener('click', async () =
     showError('packageError', 'Display name is required.');
     return;
   }
+  if (!DIRECTORY_PRICING_READY) {
+    showError('packageError', 'Directory pricing is temporarily unavailable. Please try again shortly.');
+    return;
+  }
   if (!SELECTED_TIER) {
     showError('packageError', 'Choose a package.');
+    return;
+  }
+  const selectedPrice = directoryTierPrice(SELECTED_TYPE, SELECTED_TIER);
+  if (selectedPrice === null) {
+    showError('packageError', 'That Directory package is not currently available.');
     return;
   }
 
@@ -720,11 +760,11 @@ body: JSON.stringify({
     showOrderDetails(
       `${displayName} — ${SELECTED_TYPE.charAt(0).toUpperCase() + SELECTED_TYPE.slice(1)} ${SELECTED_TIER.charAt(0).toUpperCase() + SELECTED_TIER.slice(1)} Package`,
       TIER_DESCS[SELECTED_TYPE][SELECTED_TIER],
-      TIER_PRICES[SELECTED_TYPE][SELECTED_TIER]
+      selectedPrice
     );
     document.getElementById('packageCard').classList.add('section-hidden');
     document.getElementById('paymentCard').classList.remove('section-hidden');
-    initCheckoutGate(Number(TIER_PRICES[SELECTED_TYPE][SELECTED_TIER]));
+    initCheckoutGate(selectedPrice);
     loadConsultants();
   } catch (err) {
     showError('packageError', err.message);

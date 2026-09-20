@@ -169,8 +169,8 @@ router.delete('/admin/:id', requireRole('admin'), async (req, res, next) => {
 // changed what checkout charged while this form went on quoting the old
 // number, which is a member being shown one price and billed another.
 //
-// packagesFor() falls back to the known-good constants if the table cannot be
-// read, so a database problem quotes the original price rather than nothing.
+// If the pricing table cannot be read, this route fails closed with 503.
+// It never substitutes a hardcoded number that may differ from an admin edit.
 router.get('/packages', async (req, res, next) => {
   try {
     const [article, directory] = await Promise.all([
@@ -179,6 +179,9 @@ router.get('/packages', async (req, res, next) => {
     ]);
     res.json({ packages: { article, directory } });
   } catch (err) {
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Highlight pricing is temporarily unavailable. Please try again shortly.' });
+    }
     next(err);
   }
 });
@@ -259,6 +262,11 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (![7, 14, 21, 28].includes(durationDays)) {
       return res.status(400).json({ error: 'durationDays must be one of: 7, 14, 21, 28.' });
     }
+    const serviceKey = targetType === 'article' ? 'highlight_article' : 'highlight_directory';
+    const onSale = await packagesFor(serviceKey);
+    if (!onSale.some((p) => p.durationDays === durationDays)) {
+      return res.status(400).json({ error: 'That highlight package is not currently available.' });
+    }
     // Optional future start date. The END date is always derived from the paid
     // duration (see applyPaymentEffect), so a member can pick when the run
     // begins but can never buy 7 days and get 30.
@@ -300,6 +308,9 @@ router.post('/', requireAuth, async (req, res, next) => {
       message: 'Highlight request created — call POST /payments/initiate with linkedType "highlight" and this highlight\'s id to proceed.',
     });
   } catch (err) {
+    if (err.code === 'PRICING_UNAVAILABLE') {
+      return res.status(503).json({ error: 'Highlight pricing is temporarily unavailable. No request was created.' });
+    }
     next(err);
   }
 });

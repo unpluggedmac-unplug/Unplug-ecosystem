@@ -7,6 +7,38 @@ bottom for each answer and what it changed. `spec-extracted.md` is a faithful ex
 edited to match these — this document is the reconciliation, and stays the record of record for what
 was decided and why.
 
+
+## 2026-09-20 — Batch D pricing source-of-truth update (draft PR #53)
+
+**Approved owner decisions: 1A / 2A / 3A.** This is the current code candidate on
+`feat/batch-d-pricing-source-20260920`; PR #53 is still draft/unmerged, so these changes do **not**
+describe production until that PR is explicitly released.
+
+Directory package pricing now has one authoritative database source:
+`directory_package_prices`, keyed by `profile_type + tier`. Migration
+`214_directory_package_pricing.sql` seeds the exact six prices already charged before Batch D —
+Individual Basic R150 / Pro R280 / Premium R400; Business Basic R500 / Pro R700 / Premium R1,000 —
+and uses `ON CONFLICT DO NOTHING`, so a later deploy cannot reset an Admin price edit.
+
+The same rows drive all new Directory-price reads: the server charge resolver,
+`GET /payments/directory-packages`, checkout, the public Directory package cards and the chatbot.
+Admin edits the same records through **Commerce & Payments → Service Pricing** via
+`GET/PATCH /payments/admin/directory-packages`. The public endpoint exposes only type/tier/price;
+Admin audit metadata stays behind the authenticated Admin endpoint.
+
+Decision **2A** also removes the hardcoded Highlight/Banner fallback from
+`src/utils/servicePackages.js`. A healthy database with an inactive/missing package means that
+package is not offered; a pricing-table read failure raises `PRICING_UNAVAILABLE` and the purchase
+path returns HTTP 503 **before creating a payment or order**. It no longer guesses a possibly stale
+price. Existing payment/order/invoice rows are not rewritten.
+
+Decision **3A** keeps paid forms outside Batch D. No form-payment charging model was added.
+
+**Pre-handover verification:** code candidate `8dab79bba072b499ca6b53a4f75b854f3b8cc8fb`
+passed the focused Batch D pricing gate **85/85** and the complete real-PostgreSQL backend suite
+**2,467/2,467**, with 0 failures and 0 skipped. The documentation commit that contains this record
+must receive its own final-head CI pass before PR #53 is considered release-ready.
+
 ## How this was checked, and what was wrong the first time
 
 The first version of this document compared the spec against **migration seed files** and
@@ -191,28 +223,20 @@ note at the top of this document).
 
 Beyond the policy-page contradiction above:
 
-1. ~~**Highlight and banner prices exist in three places**~~ — **RESOLVED 2026-09-03, without
-   changing any price.** `HIGHLIGHT_PRICES` and `AD_BANNER_PRICES` in `payments.js` turned out
-   to be **dead code**: every quote and charge already went through `priceFor()`, which reads
-   `service_packages`. They were deleted. Production was checked first and matched the fallback
-   exactly on all 11 rows, so nothing moved.
-
-   Two copies remain and the second is deliberate: `FALLBACK_PRICES` is a last-known-good for
-   when the table cannot be read. A constant cannot follow an admin's edit at runtime, but it
-   CAN be held to the seeded table — `test/pricingSingleSource.test.js` fails if a migration
-   changes a price and the fallback is not changed with it, which is the drift that would
-   otherwise reach production silently.
-
-   **Still worth deciding:** the fallback charges a possibly-stale price at exactly the moment
-   the table is unreadable — but if the database cannot be read, the payment row cannot be
-   written either, so its practical value is questionable. Refusing the charge instead may be
-   safer than guessing at it. That is a money-behaviour call, not a refactor.
+1. ~~**Highlight and banner prices exist in three places**~~ — **RESOLVED fully in Batch D,
+   2026-09-20, with no price change.** The dead `HIGHLIGHT_PRICES` / `AD_BANNER_PRICES` copies
+   were already removed on 2026-09-03. Batch D removes the remaining `FALLBACK_PRICES` copy too.
+   `service_packages` is now the only source for duration pricing. If it cannot be read, checkout
+   fails closed with a pricing-unavailable response instead of guessing a stale number. If an
+   exact package is merely inactive, that package is not offered. `test/pricingSingleSource.test.js`
+   and `commercialCheckoutGuards.static.test.js` now enforce that no fallback is reintroduced.
 2. ~~**The banner sentence, ten times**~~ — **RESOLVED 2026-09-03.** All ten are rendered by one loader from `/payments/packages?service=ad_banner`; the HTML wording remains as a no-JS fallback. No price changed.
-3. **Package tier prices** are hardcoded in `unplug-checkout.html` and `unplug-magazine.html`
-   as well as in `PACKAGE_PRICES`. Was waiting on decision 6 (the tier-naming question below),
-   which is now answered — **unblocked, but not done.** Consolidating three hardcoded copies
-   into one source, matching how the ad-banner sentence was resolved, is a real task of its own
-   and was not part of what was asked for on 2026-09-03.
+3. ~~**Package tier prices existed in checkout, magazine and `PACKAGE_PRICES`**~~ —
+   **RESOLVED in Batch D, 2026-09-20.** Directory prices now live in
+   `directory_package_prices`. The backend charge resolver reads that table; checkout and the
+   magazine package cards read `GET /payments/directory-packages`; the chatbot reads the same
+   public endpoint; Admin edits the same rows through the Service Pricing screen. There is no
+   hardcoded Directory price ladder in runtime charging code.
 4. ~~**`unplug-components-demo.html`**~~ — **RESOLVED 2026-09-03.** It IS deployed (200, no inbound links). The price claim is removed rather than corrected, since picking the right figure is a pricing decision. Open question — should the page be public at all? — **also resolved 2026-09-03: no.** Blocked in `functions/[[path]].js`'s `NOT_THE_SITE` list; confirmed 404 live.
 
 This is the recurring bug class from `CLAUDE.md`, carrying money.
@@ -237,12 +261,9 @@ section, and the resolution notes inline above, are the record of what was decid
 5. ~~**Event promotion**~~ — **dropped, not built.** No code change — there was none to make.
 6. ~~**Directory middle tier**~~ — **kept `pro` as built.** No live change.
 7. ~~**The five live-only services**~~ — **confirmed correct, as-is.** No price changed.
-8. **The duplicated prices** — referring to the numbered list under "Where a price lives more than
-   once" above: item 1 (the dead `payments.js` copies) is **done**, deleted 2026-09-03 with no
-   price change. Item 2 (the banner sentence, ten times) is **done** (`f2c3501`, resolved alongside
-   adding the 21-day banner tier). Item 4 (`unplug-components-demo.html`) is **done** — the page is
-   blocked entirely, so its stale price claim is no longer reachable either way. **Item 3 remains:
-   package tier prices are still hardcoded in `unplug-checkout.html`, `unplug-magazine.html` and
-   `PACKAGE_PRICES`.** It was waiting on decision 6, which is now settled — unblocked, but
-   consolidating three hardcoded copies into one source is a task of its own and was not part of
-   what was asked for today.
+8. ~~**The duplicated prices**~~ — **fully resolved through Batch D on 2026-09-20.**
+   The dead payment-route Highlight/Banner copies, repeated banner sentence and public demo claim
+   were already resolved on 2026-09-03. Batch D closes the remaining two money-drift paths:
+   `FALLBACK_PRICES` is removed in favour of fail-closed database pricing, and Directory tier
+   prices are centralized in `directory_package_prices` with one public read endpoint and one
+   Admin-managed source. No price was changed by this consolidation.
