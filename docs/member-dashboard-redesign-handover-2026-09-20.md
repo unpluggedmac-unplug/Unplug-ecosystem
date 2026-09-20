@@ -405,25 +405,31 @@ Verified 2026-09-20:
 
 ### Authenticated staging limitation
 
-The browser profile/vault contains **no member credentials**, so the gate card prevents a real signed-in walkthrough of:
+A staging-only browser registration attempt exposed a real configuration defect before authentication: JSON registration was blocked by the cross-origin preflight. The Render staging service was still running an older September 13 deploy, so it was first redeployed on the dashboard candidate, then the staging-only `CORS_ORIGINS` value was corrected to the runbook value `https://unplug-staging.pages.dev`. The subsequent Render staging readiness check passed and the corrected deployment went live.
+
+The remaining browser limitation is now the automation safety layer: it will not type, generate or handle account passwords. No password bypass or test backdoor was added. A real signed-in walkthrough therefore still requires a manual staging member login/session for:
 - complete left navigation and conditional submenus;
 - secondary workspace headers/breadcrumbs after real navigation;
 - tablet/mobile drawer interaction while authenticated;
 - conditional Growth/Agreements/representative states;
 - keyboard interaction across signed-in destinations.
 
-This is a genuine credential blocker, not a staging/deployment blocker. Source contracts, CI and the deployed unauthenticated DOM are verified, but do not describe the authenticated visual gate as completed until a valid staging member session is available.
+Source contracts, CI and the deployed unauthenticated DOM are verified, but do not describe the authenticated visual gate as completed until that manual staging session is available.
 
 ### Production integration
 
 The old production integration PR #66 was closed because its stale merge-base made already-released referral-attribution files from PR #62 appear in the dashboard diff.
 
-Clean production integration is **PR #68**:
-- branch: `integrate/member-dashboard-redesign-main-clean-20260920`
-- base: current `main` after PR #62
-- scope: 12 dashboard/runtime/docs/test files only
-- no auth/referral/acquisition/payment/pricing/business-rule changes
-- keep draft until all current-main CI is green; authenticated staging visual validation remains the one external blocker.
+PR #68 was later superseded after production `main` advanced again. Current production includes PR #74's gallery cancellation fixes, so the dashboard candidate was rebuilt from the new current `main` rather than merging a branch that was 15 commits behind.
+
+Current production integration is **PR #76**:
+- branch: `integrate/member-dashboard-redesign-main-current-20260920`
+- base: current `main` at/after PR #74
+- scope: 13 dashboard/runtime/docs/test files only
+- the 15 newer production commits did not touch these candidate files
+- no auth/referral/acquisition/payment/pricing/cancellation/business-rule changes
+- PR #68 is closed unmerged
+- keep #76 draft until its exact current-main CI is green, staging is resynced to the same head, and authenticated staging visual validation is completed.
 
 ## 15. Production stop conditions
 
@@ -479,5 +485,8 @@ The existing service-shortcut layer remains in use and was intentionally not rep
 - Exact feature stack on canonical staging: deployed and cache-bust verified
 - Read-only deployed DOM/Home validation: passed
 - Authenticated desktop/mobile visual staging validation: BLOCKED only by missing staging member credentials in the browser vault
-- Clean current-main integration: PR #68 draft; CI in progress at this handover update
+- Prior clean integration PR #68: closed unmerged after `main` advanced
+- Refreshed current-main integration: PR #76 draft, built from current `main` after PR #74
+- Staging backend: redeployed on the dashboard candidate; staging CORS corrected to the canonical staging Pages origin
+- Authenticated desktop/mobile visual staging validation: still pending manual staging sign-in because browser automation will not handle passwords
 - Production: unchanged
