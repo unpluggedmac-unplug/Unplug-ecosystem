@@ -57,7 +57,7 @@
     if (document.querySelector('link[data-cc-hierarchy-style]')) return;
     var l = document.createElement('link');
     l.rel = 'stylesheet';
-    l.href = '/media/styles/admin-control-centre-hierarchy.css?v=20260920-4';
+    l.href = '/media/styles/admin-control-centre-hierarchy.css?v=20260920-5';
     l.setAttribute('data-cc-hierarchy-style', 'true');
     document.head.appendChild(l);
   }
