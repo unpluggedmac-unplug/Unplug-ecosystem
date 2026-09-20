@@ -29,12 +29,29 @@ const RESERVED_USERNAMES = new Set([
 
 const USERNAME_RE = /^[A-Za-z0-9_]{3,30}$/;
 const ABOUT_MAX_WORDS = 50;
+const MAX_CUSTOM_INTERESTS = 10;
+const VISIBILITY_KEYS = Object.freeze([
+  'avatar', 'about', 'country', 'province', 'city',
+  'interests', 'skills', 'purposes', 'tags',
+]);
 
-// Exactly what a stranger may see. Kept as one constant so a future column
-// added to the table is NOT published by accident — it has to be added here
-// deliberately.
-const PUBLIC_COLUMNS = `user_id, username, display_name, about_me, avatar_url,
-                        country, province, city, published_at`;
+// Exactly what a stranger may see. Username + display name are the public
+// identity of a published profile; every optional field is projected through
+// the member's field_visibility choice so application code cannot accidentally
+// leak the stored value later.
+const PUBLIC_COLUMNS = `user_id, username, display_name,
+  CASE WHEN COALESCE(field_visibility->>'about', 'false') = 'true' THEN about_me END AS about_me,
+  CASE WHEN COALESCE(field_visibility->>'avatar', 'false') = 'true' THEN avatar_url END AS avatar_url,
+  CASE WHEN COALESCE(field_visibility->>'country', 'false') = 'true' THEN country END AS country,
+  CASE WHEN COALESCE(field_visibility->>'province', 'false') = 'true' THEN province END AS province,
+  CASE WHEN COALESCE(field_visibility->>'city', 'false') = 'true' THEN city END AS city,
+  CASE WHEN COALESCE(field_visibility->>'tags', 'false') = 'true' THEN tags END AS tags,
+  published_at`;
+
+const PUBLIC_TAXONOMY_FLAGS = `
+  (COALESCE(field_visibility->>'interests', 'false') = 'true') AS _interests_public,
+  (COALESCE(field_visibility->>'skills', 'false') = 'true') AS _skills_public,
+  (COALESCE(field_visibility->>'purposes', 'false') = 'true') AS _purposes_public`;
 
 function countWords(text) {
   return String(text || '').trim().split(/\s+/).filter(Boolean).length;
@@ -51,14 +68,48 @@ function validateUsername(raw) {
   return { username };
 }
 
-// Loads the three taxonomy selections for a profile in one round trip.
+function normaliseCustomInterests(values) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(values) ? values : []) {
+    const label = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (label.length < 2 || label.length > 60 || /[\u0000-\u001F\u007F]/.test(label)) continue;
+    const normalized = label.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push({ label, normalized });
+    if (out.length >= MAX_CUSTOM_INTERESTS) break;
+  }
+  return out;
+}
+
+function visibilityPatch(raw) {
+  const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const patch = {};
+  for (const key of VISIBILITY_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) patch[key] = source[key] === true;
+  }
+  return patch;
+}
+
+// Loads all member-owned taxonomy selections. Custom interests are deliberately
+// separate from mu_interests: one member typing a phrase must never turn it
+// into a global option for everybody else.
 async function loadTaxonomies(userId) {
-  const [interests, skills, purposes] = await Promise.all([
+  const [interests, skills, purposes, customInterests] = await Promise.all([
     pool.query(`SELECT i.key, i.label FROM mu_profile_interests p JOIN mu_interests i ON i.key = p.key WHERE p.user_id = $1 ORDER BY i.sort_order`, [userId]),
     pool.query(`SELECT s.key, s.label FROM mu_profile_skills p JOIN mu_skills s ON s.key = p.key WHERE p.user_id = $1 ORDER BY s.sort_order`, [userId]),
     pool.query(`SELECT u.key, u.label FROM mu_profile_purposes p JOIN mu_purposes u ON u.key = p.key WHERE p.user_id = $1 ORDER BY u.sort_order`, [userId]),
+    pool.query(`SELECT ('custom:' || id)::text AS key, label, true AS custom
+                  FROM mu_profile_custom_interests
+                 WHERE user_id = $1 ORDER BY sort_order, id`, [userId]),
   ]);
-  return { interests: interests.rows, skills: skills.rows, purposes: purposes.rows };
+  return {
+    interests: interests.rows,
+    skills: skills.rows,
+    purposes: purposes.rows,
+    customInterests: customInterests.rows,
+  };
 }
 
 // Weighted so the fields that actually make a profile discoverable are worth
@@ -70,7 +121,7 @@ function computeCompletion(profile, tax) {
     { key: 'display_name', label: 'Add your display name', weight: 15, done: !!profile.display_name },
     { key: 'avatar', label: 'Upload a profile picture', weight: 15, done: !!profile.avatar_url },
     { key: 'about', label: 'Write your About Me', weight: 15, done: !!(profile.about_me || '').trim() },
-    { key: 'interests', label: 'Pick your interests', weight: 15, done: tax.interests.length > 0 },
+    { key: 'interests', label: 'Pick your interests', weight: 15, done: tax.interests.length > 0 || (tax.customInterests || []).length > 0 },
     { key: 'skills', label: 'Add your skills', weight: 15, done: tax.skills.length > 0 },
     { key: 'purpose', label: 'Set what you are plugging into', weight: 10, done: tax.purposes.length > 0 },
   ];
@@ -116,7 +167,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query('SELECT * FROM my_unplug_profiles WHERE user_id = $1', [req.user.id]);
     if (!result.rowCount) {
-      return res.json({ profile: null, taxonomies: { interests: [], skills: [], purposes: [] }, completion: null });
+      return res.json({ profile: null, taxonomies: { interests: [], skills: [], purposes: [], customInterests: [] }, completion: null });
     }
     const profile = result.rows[0];
     const taxonomies = await loadTaxonomies(req.user.id);
@@ -223,6 +274,24 @@ router.put('/me/taxonomy', requireAuth, async (req, res, next) => {
         await client.query(`INSERT INTO ${table} (user_id, key) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [req.user.id, key]);
       }
     }
+
+    if (Array.isArray(req.body.customInterests)) {
+      const custom = normaliseCustomInterests(req.body.customInterests);
+      const globalLabels = await client.query('SELECT lower(trim(label)) AS normalized FROM mu_interests');
+      const global = new Set(globalLabels.rows.map((r) => r.normalized));
+      const own = custom.filter((item) => !global.has(item.normalized));
+
+      await client.query('DELETE FROM mu_profile_custom_interests WHERE user_id = $1', [req.user.id]);
+      for (let i = 0; i < own.length; i++) {
+        await client.query(
+          `INSERT INTO mu_profile_custom_interests (user_id, label, normalized_label, sort_order)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (user_id, normalized_label) DO UPDATE
+             SET label = EXCLUDED.label, sort_order = EXCLUDED.sort_order`,
+          [req.user.id, own[i].label, own[i].normalized, i]
+        );
+      }
+    }
     await client.query('COMMIT');
 
     // After COMMIT only — a member whose save rolled back has not set
@@ -240,6 +309,31 @@ router.put('/me/taxonomy', requireAuth, async (req, res, next) => {
   } finally {
     client.release();
   }
+});
+
+// PATCH /my-unplug/me/visibility — save only the optional-field privacy map.
+// Partial patches are allowed. Username + display name are intentionally absent:
+// when a profile is published they are the identity of that public page.
+router.patch('/me/visibility', requireAuth, async (req, res, next) => {
+  try {
+    const exists = await pool.query('SELECT 1 FROM my_unplug_profiles WHERE user_id = $1', [req.user.id]);
+    if (!exists.rowCount) return res.status(400).json({ error: 'Create your My Unplug profile before changing public-field privacy.' });
+
+    const patch = visibilityPatch(req.body && (req.body.visibility || req.body));
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ error: 'Choose at least one profile field to update.' });
+    }
+
+    const updated = await pool.query(
+      `UPDATE my_unplug_profiles
+          SET field_visibility = field_visibility || $2::jsonb,
+              updated_at = now()
+        WHERE user_id = $1
+        RETURNING *`,
+      [req.user.id, JSON.stringify(patch)]
+    );
+    res.json({ profile: updated.rows[0] });
+  } catch (err) { next(err); }
 });
 
 // ---------------------------------------------------------------------------
@@ -293,13 +387,26 @@ router.post('/me/unpublish', requireAuth, async (req, res, next) => {
 router.get('/u/:username', async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT ${PUBLIC_COLUMNS} FROM my_unplug_profiles
+      `SELECT ${PUBLIC_COLUMNS}, ${PUBLIC_TAXONOMY_FLAGS}
+         FROM my_unplug_profiles
         WHERE LOWER(username) = LOWER($1) AND is_published = true`,
       [String(req.params.username || '').trim()]
     );
     if (!result.rowCount) return res.status(404).json({ error: 'No published profile found for that @username.' });
-    const profile = result.rows[0];
-    const taxonomies = await loadTaxonomies(profile.user_id);
+
+    const {
+      _interests_public: interestsPublic,
+      _skills_public: skillsPublic,
+      _purposes_public: purposesPublic,
+      ...profile
+    } = result.rows[0];
+    const all = await loadTaxonomies(profile.user_id);
+    const taxonomies = {
+      interests: interestsPublic ? all.interests : [],
+      customInterests: interestsPublic ? all.customInterests : [],
+      skills: skillsPublic ? all.skills : [],
+      purposes: purposesPublic ? all.purposes : [],
+    };
     res.json({ profile, taxonomies });
   } catch (err) { next(err); }
 });
