@@ -306,20 +306,36 @@
           nodeHref(growthHref(), 'Growth Overview', '⌂', { adminOnly: true }),
           nodeHref(growthHref({ status: 'new' }), 'New Applications', '●', { adminOnly: true, countKey: 'growth:new' }),
           nodeHref(growthHref({ status: 'in_progress' }), 'In Progress', '◐', { adminOnly: true, countKey: 'growth:in_progress' }),
+          nodeHref(growthHref(), 'Submitted', '↧', { adminOnly: true, countKey: 'growth:submitted' }),
           nodeHref(growthHref({ status: 'under_review' }), 'Under Review', '◒', { adminOnly: true, countKey: 'growth:under_review' }),
           nodeHref(growthHref({ status: 'completed' }), 'Completed', '✓', { adminOnly: true, countKey: 'growth:closed', note: 'Mapped to the current Closed workflow status' }),
-          nodeHref(growthHref({ tab: 'builder' }), 'Master Form Builder', '◆', { adminOnly: true })
+          nodeHref(growthHref({ status: 'archived' }), 'Archived', '□', { adminOnly: true, countKey: 'growth:closed', note: 'Mapped to the current Closed workflow status' }),
+          branch('growth-form', 'Application Form', '☷', { href: growthHref({ tab: 'builder' }) }, [
+            nodeHref(growthHref({ tab: 'builder' }), 'Master Form Builder', '◆', { adminOnly: true }),
+            nodeHref(growthHref({ tab: 'builder' }), 'Steps & Fields', '☷', { adminOnly: true }),
+            nodeHref(growthHref({ tab: 'builder' }), 'Draft Versions', '○', { adminOnly: true }),
+            nodeHref(growthHref({ tab: 'builder' }), 'Published Version', '●', { adminOnly: true })
+          ])
         ]),
         branch('opportunities-competitions', 'Competitions', '🏆', { section: 'competitions' }, [
-          nodeSection('competitions', 'Competitions', '🏆'),
+          nodeSection('competitions', 'Current', '●'),
+          nodeSection('competitions', 'Upcoming', '◷'),
           nodeSection('competitions', 'Competition Entries', '↧'),
-          nodeSection('competitions', 'Winners / Prizes / Sponsors', '★')
+          nodeSection('competitions', 'Winners', '★'),
+          nodeSection('competitions', 'Prizes', '◆'),
+          nodeSection('competitions', 'Sponsors', '▣'),
+          nodeSection('competitions', 'Competition Settings', '⚙')
         ]),
         branch('opportunities-top10', 'Top 10', '10', { section: 'votebundles' }, [
-          nodeSection('votebundles', 'Charts & Contestants', '▥'),
+          nodeSection('votebundles', 'Charts', '▥'),
+          nodeSection('votebundles', 'Contestants', '☺'),
           nodeSection('votebundles', 'Entries', '↧'),
-          nodeSection('votebundles', 'Votes & Vote Codes', '+'),
-          nodeSection('top10monthly', 'Rankings / Results', '↟')
+          nodeSection('votebundles', 'Free Votes', '○'),
+          nodeSection('votebundles', 'Bulk Votes', '+'),
+          nodeSection('votebundles', 'Vote Codes', '#'),
+          nodeSection('top10monthly', 'Rankings / Results', '↟'),
+          nodeSection('votebundles', 'Sponsors', '◆'),
+          nodeSection('unplugtrust', 'Top 10 Trust & Anti-Cheat', '⚙')
         ]),
         nodeSection('projects', 'Investor Projects', '◆')
       ], { description: 'Manage Growth, competitions, Top 10 and other opportunity-based participation.' }),
@@ -334,7 +350,10 @@
       branch('directory-marketplace', 'Directory & Marketplace', '⌖', { section: 'dirprofiles' }, [
         branch('directory-listings', 'Directory', '⌖', { section: 'dirprofiles' }, [
           nodeSection('dirprofiles', 'All Directory Listings', '≡'),
+          nodeSection('dirprofiles', 'Individuals', '☺'),
+          nodeSection('dirprofiles', 'Businesses & Organisations', '▣'),
           nodeSection('claims', 'Listing Claims', '!'),
+          nodeSection('dirprofiles', 'Published Listings', '✓'),
           nodeSection('reviews', 'Reviews', '★'),
           nodeSection('tags', 'Directory Categories', '#'),
           nodeSection('dirprofiles', 'Map / Location View', '⌖'),
@@ -342,7 +361,15 @@
         ]),
         nodeSection('queue', 'Marketplace Listings', '▤'),
         nodeSection('placements', 'Marketplace Placements', '⌖'),
-        nodeSection('adbanners', 'Advertising', '▰'),
+        branch('directory-advertising', 'Advertising', '▰', { section: 'adbanners' }, [
+          nodeSection('adbanners', 'Banner Bookings', '▰'),
+          nodeSection('adbanners', 'Homepage Banners', '⌂'),
+          nodeSection('adbanners', 'Section Banners', '▤'),
+          nodeSection('adbanners', 'Advertisers', '☺'),
+          nodeSection('adbanners', 'Scheduled Banners', '◷'),
+          nodeSection('adbanners', 'Expired Banners', '□'),
+          nodeSection('adbanners', 'Advertising Reports', '▥')
+        ]),
         nodeSection('unplugsponsors', 'Media Partners / Sponsors', '◆')
       ], { description: 'Manage public listings, Marketplace content, promotions, advertising and commercial participation.' }),
 
@@ -364,7 +391,7 @@
         nodeSection('crm', 'Sales & CRM', '◎'),
         nodeSection('inquiries', 'Enquiries', '?'),
         nodeSection('social', 'Social Content / Feed', '@'),
-        branch('communications-advertising', 'Advertising Campaigns', '▰', { section: 'adbanners' }, [
+        branch('communications-advertising', 'Campaigns', '▰', { section: 'adbanners' }, [
           nodeSection('adbanners', 'Banner Campaigns', '▰'),
           nodeSection('unplugsponsors', 'Sponsor Campaigns', '◆')
         ])
@@ -405,18 +432,39 @@
         ], { adminOnly: true }),
         branch('administration-forms', 'Forms', '☑', { section: 'forms' }, [
           nodeSection('forms', 'All Forms', '☑'),
+          nodeSection('forms', 'Form Templates', '▤'),
+          nodeSection('forms', 'Published Forms', '●'),
+          nodeSection('forms', 'Draft Forms', '○'),
+          nodeSection('forms', 'Responses / Submissions', '↧'),
+          nodeSection('forms', 'Archived Forms', '□'),
           nodeAction('forms:new', 'Create New Form', '+', function () {
             activateSection('forms', ['Administration', 'Forms', 'Create New Form']);
             setTimeout(function () { document.getElementById('fbNew')?.click(); }, 180);
           }),
-          nodeSection('forms', 'Responses / Submissions', '↧')
+          nodeSection('forms', 'Form Settings', '⚙')
         ]),
         branch('administration-settings', 'Settings', '⚙', { section: 'sitesettings' }, [
           nodeSection('sitesettings', 'General / System Settings', '⚙'),
           nodeSection('staff', 'Permissions', '♜'),
           nodeSection('backups', 'Backups', '⬡'),
+          nodeSection('checkouthealth', 'System / Checkout Health', '♥'),
+          nodeSection('activitylog', 'Audit Logs', '↺'),
+          nodeSection('notifications', 'Notifications / Email Signals', '✉'),
           nodeSection('redirects', 'Redirects & 404s', '↪'),
           nodeSection('spam', 'Spam Filter', '⊘')
+        ]),
+        branch('administration-impact', 'Impact Makers', '✦', { section: 'impactmakers' }, [
+          nodeSection('impactmakers', 'Impact Makers', '✦'),
+          nodeSection('impactmakers', 'Banner Faces', '▧'),
+          nodeSection('impactmakers', 'Categories', '#')
+        ]),
+        branch('administration-live', 'Unplug Live', '▶', null, [
+          nodeDisabled('live:events', 'Events (Coming Soon)', '◫', 'Coming Soon — this admin module has not been built yet.'),
+          nodeDisabled('live:streams', 'Streams (Coming Soon)', '▶', 'Coming Soon — this admin module has not been built yet.'),
+          nodeDisabled('live:tickets', 'Tickets / Orders (Coming Soon)', '▥', 'Coming Soon — this admin module has not been built yet.'),
+          nodeDisabled('live:viewers', 'Viewers / Replays (Coming Soon)', '☺', 'Coming Soon — this admin module has not been built yet.'),
+          nodeDisabled('live:organisers', 'Organisers / Payouts / Sponsors (Coming Soon)', '◆', 'Coming Soon — this admin module has not been built yet.'),
+          nodeDisabled('live:settings', 'Settings (Coming Soon)', '⚙', 'Coming Soon — this admin module has not been built yet.')
         ]),
         branch('administration-danger', 'Danger Zone', '⚠', null, [
           nodeSection('backups', 'Backup / Restore Controls', '⚠', { danger: true }),
