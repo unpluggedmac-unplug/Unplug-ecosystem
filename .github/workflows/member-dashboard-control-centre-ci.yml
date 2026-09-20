@@ -17,6 +17,7 @@ on:
       - 'unplug-backend/test/batchDPricingUi.test.js'
       - 'unplug-backend/test/pricingSingleSource.test.js'
       - 'unplug-backend/test/servicePackages.test.js'
+      - 'unplug-backend/test/commercialCheckoutGuards.static.test.js'
       - 'unplug-backend/test/directoryPackageComparison.test.js'
       - 'unplug-backend/test/investorProposition.test.js'
       - 'unplug-backend/src/routes/orders.js'
@@ -43,6 +44,8 @@ on:
       - 'unplug-backend/test/profileAnalytics.test.js'
       - 'unplug-backend/test/myAnalyticsRealData.test.js'
       - 'docs/proposals/member-dashboard-control-centre-HANDOVER.md'
+      - 'docs/progress-log.md'
+      - 'docs/pricing-comparison.md'
       - '.github/workflows/member-dashboard-control-centre-ci.yml'
   pull_request:
     paths:
@@ -60,6 +63,7 @@ on:
       - 'unplug-backend/test/batchDPricingUi.test.js'
       - 'unplug-backend/test/pricingSingleSource.test.js'
       - 'unplug-backend/test/servicePackages.test.js'
+      - 'unplug-backend/test/commercialCheckoutGuards.static.test.js'
       - 'unplug-backend/test/directoryPackageComparison.test.js'
       - 'unplug-backend/test/investorProposition.test.js'
       - 'unplug-backend/src/routes/orders.js'
@@ -86,6 +90,8 @@ on:
       - 'unplug-backend/test/profileAnalytics.test.js'
       - 'unplug-backend/test/myAnalyticsRealData.test.js'
       - 'docs/proposals/member-dashboard-control-centre-HANDOVER.md'
+      - 'docs/progress-log.md'
+      - 'docs/pricing-comparison.md'
       - '.github/workflows/member-dashboard-control-centre-ci.yml'
 
 permissions:
