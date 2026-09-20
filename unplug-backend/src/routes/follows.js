@@ -6,8 +6,32 @@ const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
 const { recordParticipationAsync } = require('../utils/participation');
+const { notifyMemberEmailAsync } = require('../utils/memberNotify');
 
 const router = express.Router();
+
+function emailFollowUpdateAsync(actorUserId, recipientUserId, action) {
+  (async () => {
+    const actor = await pool.query(
+      `SELECT COALESCE(pr.display_name, SPLIT_PART(u.email, '@', 1)) AS name
+         FROM users u LEFT JOIN profiles pr ON pr.user_id = u.id
+        WHERE u.id = $1`,
+      [actorUserId]
+    );
+    const name = actor.rows[0] ? actor.rows[0].name : 'Someone';
+    const followed = action === 'followed';
+    const body = followed
+      ? `${name} started following you on Unplug.`
+      : `${name} unfollowed you on Unplug.`;
+    notifyMemberEmailAsync({
+      userId: recipientUserId,
+      email: {
+        subject: followed ? 'You have a new follower on Unplug' : 'Follower update on Unplug',
+        text: `${body}\n\nSign in to Unplug: https://www.unplugnews.com/unplug-member-dashboard.html`,
+      },
+    });
+  })().catch((err) => console.error('[follow] email notification failed:', err.message));
+}
 
 // POST /follows/:userId — follow. Following twice is a no-op (the SQL
 // function itself is idempotent), so the button stays safe on a double
@@ -35,6 +59,7 @@ router.post('/:userId', requireAuth, async (req, res, next) => {
       recordParticipationAsync(req.user.id, 'member_follow', {
         contentType: 'profile', contentId: followedId, contentOwner: followedId,
       });
+      emailFollowUpdateAsync(req.user.id, followedId, 'followed');
     }
     res.status(201).json({ following: true, wasAlreadyFollowing: !result.rows[0].followed });
   } catch (err) {
@@ -52,7 +77,13 @@ router.delete('/:userId', requireAuth, async (req, res, next) => {
     if (!(await isCommunityFeatureEnabled('community_unfollow_enabled'))) {
       return res.status(403).json({ error: 'Unfollowing is currently disabled.' });
     }
-    await pool.query('SELECT unfollow_member($1, $2)', [req.user.id, followedId]);
+    const result = await pool.query(
+      'SELECT unfollow_member($1, $2) AS unfollowed',
+      [req.user.id, followedId]
+    );
+    if (result.rows[0].unfollowed) {
+      emailFollowUpdateAsync(req.user.id, followedId, 'unfollowed');
+    }
     res.json({ following: false });
   } catch (err) {
     next(err);
