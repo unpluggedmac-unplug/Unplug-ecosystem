@@ -11,6 +11,9 @@ on:
       - 'media/styles/member-dashboard-service-shortcuts.css'
       - 'unplug-backend/test/memberDashboardControlCentre*.test.js'
       - 'unplug-backend/test/memberDashboardServiceShortcuts.test.js'
+      - 'unplug-backend/src/routes/profileAnalytics.js'
+      - 'unplug-backend/test/profileAnalytics.test.js'
+      - 'unplug-backend/test/myAnalyticsRealData.test.js'
       - 'docs/proposals/member-dashboard-control-centre-HANDOVER.md'
       - '.github/workflows/member-dashboard-control-centre-ci.yml'
   pull_request:
@@ -23,6 +26,9 @@ on:
       - 'media/styles/member-dashboard-service-shortcuts.css'
       - 'unplug-backend/test/memberDashboardControlCentre*.test.js'
       - 'unplug-backend/test/memberDashboardServiceShortcuts.test.js'
+      - 'unplug-backend/src/routes/profileAnalytics.js'
+      - 'unplug-backend/test/profileAnalytics.test.js'
+      - 'unplug-backend/test/myAnalyticsRealData.test.js'
       - 'docs/proposals/member-dashboard-control-centre-HANDOVER.md'
       - '.github/workflows/member-dashboard-control-centre-ci.yml'
 
@@ -34,6 +40,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  member-analytics-backend:
+    name: Member Analytics backend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: unplug-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: unplug-backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Clear stale embedded PostgreSQL processes
+        run: node scripts/sweep-test-postgres.js
+
+      - name: Prepare text-search fixture
+        run: node scripts/ensure-text-search.js
+
+      - name: Run Member Analytics tests
+        run: >-
+          node --test --test-concurrency=1
+          test/profileAnalytics.test.js
+          test/myAnalyticsRealData.test.js
+
   member-dashboard-control-centre:
     name: Member Dashboard regression checks
     runs-on: ubuntu-latest
