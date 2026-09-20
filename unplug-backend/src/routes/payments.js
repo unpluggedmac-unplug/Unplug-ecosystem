@@ -657,7 +657,11 @@ router.patch('/admin/directory-packages/:id', requireRole('admin'), async (req, 
 
     const sets = [];
     const values = [];
-    const push = (col, val) => { values.push(val); sets.push(col + ' = 
+    const param = String.fromCharCode(36); // PostgreSQL positional-parameter marker
+    const push = (col, val) => {
+      values.push(val);
+      sets.push(col + ' = ' + param + values.length);
+    };
 
     if (req.body.price !== undefined) {
       const price = Number(req.body.price);
@@ -674,11 +678,9 @@ router.patch('/admin/directory-packages/:id', requireRole('admin'), async (req, 
     push('updated_by', req.user.id);
     values.push(id);
 
-    const r = await pool.query(
-      'UPDATE directory_package_prices SET ' + sets.join(', ')
-        + ' WHERE id = $' + values.length + ' RETURNING *',
-      values
-    );
+    const sql = 'UPDATE directory_package_prices SET ' + sets.join(', ')
+      + ' WHERE id = ' + param + values.length + ' RETURNING *';
+    const r = await pool.query(sql, values);
     if (r.rowCount === 0) return res.status(404).json({ error: 'That Directory package no longer exists.' });
 
     const row = r.rows[0];
