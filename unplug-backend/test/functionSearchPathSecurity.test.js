@@ -107,6 +107,16 @@ test('migration 215 is safe to run repeatedly', async () => {
 });
 
 
+test('migration 216 tolerates managed-provider extension ownership without swallowing unrelated errors', () => {
+  const sql = fs.readFileSync(
+    path.join(__dirname, '..', 'db', 'migrations', '216_pg_trgm_extension_schema.sql'),
+    'utf8'
+  );
+  assert.match(sql, /ALTER EXTENSION pg_trgm SET SCHEMA extensions/i);
+  assert.match(sql, /EXCEPTION\s+WHEN\s+insufficient_privilege/i);
+  assert.doesNotMatch(sql, /WHEN\s+OTHERS/i, 'migration must not hide arbitrary database failures');
+});
+
 test('pg_trgm is not installed in the public schema when available', async () => {
   const r = await pool.query(`
     SELECT n.nspname AS schema
