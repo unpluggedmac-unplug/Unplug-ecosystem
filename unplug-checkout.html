@@ -423,11 +423,6 @@ async function loadDirectoryPricing() {
   try {
     const data = await api('/payments/directory-packages');
     TIER_PRICES = data.priceMap || { individual: {}, business: {} };
-    const required = ['basic', 'pro', 'premium'];
-    const complete = ['individual', 'business'].every((type) =>
-      required.every((tier) => directoryTierPrice(type, tier) !== null));
-    if (!complete) throw new Error('One or more Directory packages are not currently available.');
-
     DIRECTORY_PRICING_READY = true;
     renderTierPrices();
     btn.disabled = false;
