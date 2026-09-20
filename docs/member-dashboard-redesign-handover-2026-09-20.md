@@ -385,34 +385,45 @@ Known green stacked CI:
 - Phase 5 Page consistency — PR #58, CI run #99 — green
 - Phase 6 Mobile — PR #59, CI run #119 — green
 - Phase 7 Accessibility — PR #60, CI run #122 — green
-- Phase 8 — final CI must be green on the final head before staging merge.
+- Phase 8 / consolidated feature head `a2c441ca9690e8fd355f11de6b47b9e41df35e4c` — Member Dashboard CI runs #136/#137 green and build-configuration gate #369 green.
+- Staging cache-bust PR #64 — Member Dashboard CI #146 green and build-configuration gate #371 green.
 
 ## 14. Staging state
 
 Verified 2026-09-20:
 
+- Staging candidate PR **#63** merged to `staging-control-centre`.
+- Cache-bust hotfix PR **#64** merged to staging as `1132ef5842ab10643c6843f1430221e8ee2dfd30`.
 - `https://unplug-staging.pages.dev/unplug-member-dashboard` is reachable.
 - `https://unplug-ecosystem-staging.onrender.com/health` returns `{"status":"ok"}`.
-- Canonical staging currently serves the existing `staging-control-centre` branch, not this final dashboard feature stack.
-- guessed feature-branch Pages aliases returned 404.
-- therefore the exact final feature UI has **not yet** completed authenticated visual validation.
+- Canonical staging directly serves the cache-busted `20260920-2` Member Dashboard loader/core/polish/service-shortcut chain.
+- Browser DOM validation confirmed the redesigned Control Centre assets are rendered on canonical staging.
+- Home order rendered as greeting → Account Status → Action Required/recommended next step → Quick Actions → My Unplug snapshot → My Content → Opportunities → Growth bridge → Recently Used/profile checklist.
+- Add Gallery Content, View My Directory, Explore Opportunities, View My Achievements and Create / Submit are visible in the redesigned Quick Actions.
+- My Unplug and Directory status are visibly separate.
+- No visible UI/page errors were observed in the read-only staging pass.
 
-### Required staging gate
+### Authenticated staging limitation
 
-Before production:
+The browser profile/vault contains **no member credentials**, so the gate card prevents a real signed-in walkthrough of:
+- complete left navigation and conditional submenus;
+- secondary workspace headers/breadcrumbs after real navigation;
+- tablet/mobile drawer interaction while authenticated;
+- conditional Growth/Agreements/representative states;
+- keyboard interaction across signed-in destinations.
 
-1. consolidate final feature branch into one PR targeting `staging-control-centre`
-2. CI green
-3. merge to staging branch
-4. confirm Cloudflare staging publishes exact commit
-5. authenticated member walkthrough:
-   - desktop
-   - mobile
-   - first-time journey matrix
-   - conditional Growth/Agreements/representative states where available
-6. capture final desktop/mobile screenshots or equivalent real staging visuals
-7. fix/retest any defects
-8. only then consider production merge/deploy
+This is a genuine credential blocker, not a staging/deployment blocker. Source contracts, CI and the deployed unauthenticated DOM are verified, but do not describe the authenticated visual gate as completed until a valid staging member session is available.
+
+### Production integration
+
+The old production integration PR #66 was closed because its stale merge-base made already-released referral-attribution files from PR #62 appear in the dashboard diff.
+
+Clean production integration is **PR #68**:
+- branch: `integrate/member-dashboard-redesign-main-clean-20260920`
+- base: current `main` after PR #62
+- scope: 12 dashboard/runtime/docs/test files only
+- no auth/referral/acquisition/payment/pricing/business-rule changes
+- keep draft until all current-main CI is green; authenticated staging visual validation remains the one external blocker.
 
 ## 15. Production stop conditions
 
@@ -462,8 +473,11 @@ The existing service-shortcut layer remains in use and was intentionally not rep
 - Accessibility: implemented
 - First-time discoverability: implemented
 - Source/static audit: passed
-- Stacked CI: green through Phase 7; final Phase 8 head pending final green check
+- Consolidated feature CI: green
+- Staging cache-bust CI: green
 - Canonical staging infrastructure: healthy
-- Exact feature stack on canonical staging: not yet deployed
-- Authenticated visual staging validation: blocked until exact feature candidate is on staging and usable credentials/session are available
+- Exact feature stack on canonical staging: deployed and cache-bust verified
+- Read-only deployed DOM/Home validation: passed
+- Authenticated desktop/mobile visual staging validation: BLOCKED only by missing staging member credentials in the browser vault
+- Clean current-main integration: PR #68 draft; CI in progress at this handover update
 - Production: unchanged
