@@ -3564,3 +3564,14 @@ No price was changed by the release, and paid-form charging remains outside Batc
 **Known separate maintenance note.** GitHub Actions still warns that Node 20-targeted actions are being
 forced to Node 24. The warning is non-failing and is not part of Batch D.
 
+
+
+## 2026-09-20 — Member Dashboard redesign production integration candidate
+
+**Staging verified.** Consolidated dashboard PR #63 and cache-bust PR #64 were merged to `staging-control-centre`; Cloudflare staging served the `20260920-2` dashboard chain and the read-only browser DOM check passed. The Render staging backend was then found to still be running a September 13 commit because auto-deploy is disabled. It was explicitly redeployed on the dashboard candidate. The first synthetic browser registration attempt then exposed a cross-origin preflight failure before `POST /auth/register`; staging-only `CORS_ORIGINS` was corrected to the runbook value `https://unplug-staging.pages.dev`, staging readiness passed, and the corrected Render deployment went live.
+
+**Authenticated validation blocker.** The browser automation safety layer will not type/generate account passwords. No bypass or test-only login backdoor was added. Signed-in sidebar, conditional menu, workspace, mobile drawer and keyboard validation therefore still needs a manual staging member session.
+
+**Production integration safety.** PR #66 was closed without merge after stale-history audit. PR #68 was then built cleanly from production main and passed its complete 2,480-test backend/dashboard/package/build gate, but production `main` subsequently advanced by 15 commits, including PR #74's gallery cancellation fixes. Those newer commits do not touch the 13 dashboard candidate files. PR #68 was closed unmerged and the dashboard candidate was rebuilt from the new current main as **PR #76** (`integrate/member-dashboard-redesign-main-current-20260920`), preserving all newer production fixes unchanged.
+
+**Current gate.** PR #76 is draft and triggers Member Analytics, My Unplug privacy/custom interests, My Orders status, Batch D pricing, full backend regression, Member Dashboard regression, packaged frontend and build-configuration checks. After its exact head is green, staging must be resynced to that same head before the final authenticated visual gate.
