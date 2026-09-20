@@ -16,6 +16,7 @@ const { attributeConsultant } = require('../utils/consultantAttribution');
 const pool = require('../db');
 const { generateUnique } = require('../utils/reference');
 const { serviceLabel } = require('../utils/submissionReference');
+const { paymentStatusLabel, loadOrderServiceStatuses, summariseServiceStatuses } = require('../utils/orderServiceStatus');
 const { issueForOrder } = require('../utils/invoices');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { spendCredit, balanceFor } = require('../utils/accountCredit');
@@ -478,11 +479,34 @@ router.get('/mine', requireAuth, async (req, res, next) => {
         LIMIT 100`,
       [req.user.id]
     );
+    const orderIds = orders.rows.map((o) => Number(o.id));
+    const paymentRows = orderIds.length
+      ? (await pool.query(
+        `SELECT id, order_id, linked_type, linked_id, status, fulfillment_status
+           FROM payments
+          WHERE order_id = ANY($1::int[])
+          ORDER BY id ASC`,
+        [orderIds]
+      )).rows
+      : [];
+    const withServiceStatus = await loadOrderServiceStatuses(paymentRows);
+    const byOrder = new Map();
+    for (const item of withServiceStatus) {
+      const key = Number(item.order_id);
+      if (!byOrder.has(key)) byOrder.set(key, []);
+      byOrder.get(key).push(item);
+    }
+
     res.json({
-      orders: orders.rows.map((o) => ({
-        ...o,
-        serviceNames: (o.linked_types || []).map(serviceLabel),
-      })),
+      orders: orders.rows.map((o) => {
+        const items = byOrder.get(Number(o.id)) || [];
+        return {
+          ...o,
+          paymentStatusLabel: paymentStatusLabel(o.status),
+          serviceStatusSummary: summariseServiceStatuses(items),
+          serviceNames: (o.linked_types || []).map(serviceLabel),
+        };
+      }),
     });
   } catch (err) {
     next(err);
@@ -498,16 +522,37 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       return res.status(403).json({ error: 'That order is not yours.' });
     }
     const items = await pool.query(
-      `SELECT id, linked_type, linked_id, amount, order_total, status, gateway_reference FROM payments WHERE order_id = $1 ORDER BY id ASC`,
+      `SELECT id, order_id, linked_type, linked_id, amount, order_total, status,
+              fulfillment_status, gateway_reference
+         FROM payments
+        WHERE order_id = $1
+        ORDER BY id ASC`,
       [req.params.id]
     );
+    const withServiceStatus = await loadOrderServiceStatuses(items.rows);
     // serviceName is what the member is shown. linked_type stays on the row for
     // anything that needs the key; the NAME is worked out here rather than in
     // the browser so an order, an invoice and a receipt cannot end up calling
     // the same purchase three different things.
     res.json({
-      order: order.rows[0],
-      items: items.rows.map((i) => ({ ...i, serviceName: serviceLabel(i.linked_type) })),
+      order: {
+        ...order.rows[0],
+        paymentStatusLabel: paymentStatusLabel(order.rows[0].status),
+        serviceStatusSummary: summariseServiceStatuses(withServiceStatus),
+      },
+      items: withServiceStatus.map((i) => ({
+        id: i.id,
+        linked_type: i.linked_type,
+        linked_id: i.linked_id,
+        amount: i.amount,
+        order_total: i.order_total,
+        status: i.status,
+        gateway_reference: i.gateway_reference,
+        paymentStatusLabel: i.paymentStatusLabel,
+        serviceStatus: i.serviceStatus,
+        serviceStatusLabel: i.serviceStatusLabel,
+        serviceName: serviceLabel(i.linked_type),
+      })),
     });
   } catch (err) {
     next(err);
