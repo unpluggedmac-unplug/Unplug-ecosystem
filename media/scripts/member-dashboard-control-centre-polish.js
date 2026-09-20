@@ -121,14 +121,14 @@ function profilePercent(){
 }
 
 function syncProfileChecklist(){
-  var cards=q('#ccHomeCards');
+  var cards=q('#ccHomeUnplug');
   if(!cards)return;
   var host=q('#ccHomeProfileChecklist');
   if(!host){
     host=document.createElement('div');
     host.id='ccHomeProfileChecklist';
     host.className='cc-home-profile-checklist';
-    cards.insertAdjacentElement('afterend',host);
+    cards.appendChild(host);
   }
   var pct=profilePercent();
   var todo=q('#muCompletionTodo');
@@ -148,7 +148,7 @@ function syncProfileChecklist(){
 }
 
 function syncGrowthBridge(){
-  var cards=q('#ccHomeCards');
+  var cards=q('#ccHomeUnplug');
   if(!cards)return;
   var host=q('#ccHomeGrowthBridge');
   if(!host){
@@ -156,7 +156,7 @@ function syncGrowthBridge(){
     host.id='ccHomeGrowthBridge';
     host.className='cc-home-growth-bridge';
     var checklist=q('#ccHomeProfileChecklist');
-    (checklist||cards).insertAdjacentElement('afterend',host);
+    if(checklist)checklist.insertAdjacentElement('afterend',host);else cards.appendChild(host);
   }
   var pct=profilePercent();
   var score=String((q('#unplugScore')&&q('#unplugScore').textContent)||'—').trim();
