@@ -1,0 +1,79 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.join(__dirname, '..', '..');
+const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
+
+function modelSource() {
+  const hierarchy = read('media/scripts/admin-control-centre-hierarchy.js');
+  const start = hierarchy.indexOf('    var model = [');
+  const end = hierarchy.indexOf('\n\n    function keyFor', start);
+  assert.ok(start >= 0 && end > start, 'Control Centre navigation model must be present');
+  return hierarchy.slice(start, end);
+}
+
+test('Admin Control Centre uses the approved 13 purpose-based primary groups', () => {
+  const model = modelSource();
+  const topLevel = [...model.matchAll(/^      branch\('([^']+)', '([^']+)'/gm)].map((m) => m[2]);
+  assert.deepEqual(topLevel, [
+    'Dashboard',
+    'People',
+    'Content',
+    'Community',
+    'Gamification',
+    'Opportunities',
+    'Deaf Community',
+    'Directory & Marketplace',
+    'Payments & Commerce',
+    'Communications',
+    'Media & Pages',
+    'Analytics & Reports',
+    'Administration'
+  ]);
+});
+
+test('Every primary Admin Control Centre group explains its purpose', () => {
+  const model = modelSource();
+  const topLevelCount = [...model.matchAll(/^      branch\(/gm)].length;
+  const descriptions = [...model.matchAll(/\], \{ description: '[^']+' \}\),?$/gm)].length;
+  assert.equal(topLevelCount, 13);
+  assert.equal(descriptions, 13);
+});
+
+test('Admin Control Centre keeps existing high-value destinations discoverable', () => {
+  const model = modelSource();
+  [
+    'Members & Users',
+    'Directory Profiles',
+    'Stories & Articles',
+    'Gallery Submissions',
+    'Competitions',
+    'Top 10',
+    'Growth Applications',
+    'Deaf Jobs',
+    'Opportunity Passports',
+    'Marketplace Listings',
+    'Payments',
+    'Credits',
+    'Notifications',
+    'Page Content & Sections',
+    'Platform Overview',
+    'Agreement Generator',
+    'Master Form Builder',
+    'Backups',
+    'Permissions'
+  ].forEach((label) => assert.match(model, new RegExp(label.replace(/[.*+?^$()|[\]\\]/g, '\\$&'))));
+});
+
+test('primary navigation descriptions are rendered as text and hidden with collapsed groups', () => {
+  const hierarchy = read('media/scripts/admin-control-centre-hierarchy.js');
+  const css = read('media/styles/admin-control-centre-hierarchy.css');
+  assert.match(hierarchy, /description\.className = 'cc-group-description'/);
+  assert.match(hierarchy, /description\.textContent = node\.description/);
+  assert.match(css, /\.cc-group-description\{/);
+  assert.match(css, /\.cc-nav-group:not\(\.open\)>\.cc-group-description/);
+});
