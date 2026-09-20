@@ -64,8 +64,19 @@ test('Admin Control Centre keeps existing high-value destinations discoverable',
     'Platform Overview',
     'Agreement Generator',
     'Master Form Builder',
+    'Form Templates',
+    'Published Forms',
+    'Archived Forms',
+    'Free Votes',
+    'Bulk Votes',
+    'Vote Codes',
+    'Competition Settings',
+    'Homepage Banners',
+    'Scheduled Banners',
+    'Banner Faces',
     'Backups',
-    'Permissions'
+    'Permissions',
+    'Unplug Live'
   ].forEach((label) => assert.match(model, new RegExp(label.replace(/[.*+?^$()|[\]\\]/g, '\\$&'))));
 });
 
