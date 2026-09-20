@@ -266,7 +266,7 @@ test('responsive member styling preserves the existing mobile drawer model', () 
   assert.match(css, /cc-member-create-grid/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(helpCss, /cc-member-nav-help/);
-  assert.match(polishCss, /@media\(max-width:760px\)/);
+  assert.match(polishCss, /@media\(max-width:820px\)/);
   assert.match(polishCss, /@media\(max-width:500px\)/);
 });
 
