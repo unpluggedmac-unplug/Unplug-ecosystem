@@ -88,7 +88,7 @@ test('Phase 2 groups keep each existing function in one clear conceptual home', 
   const labels = [
     'My Profile', 'Profile Completion', 'Preview My Unplug Profile', 'My Growth Journey',
     'My Directory Profile', 'Directory Performance',
-    'My Submissions', 'My Articles', 'My Events', 'My Listings', 'Reading List', 'My Editions',
+    'My Submissions', 'My Articles', 'My Events', 'My Listings', 'My Gallery', 'Reading List', 'My Editions',
     'Referral Progress', 'My Referrals', 'My Clients',
     'My Score & Level', 'Missions', "This Week\'s Mission", "This Month\'s Challenge", 'My Achievements', 'Unplug Passport', 'Leaderboard',
     'My Competitions', 'My Votes', 'Browse Competitions',
@@ -207,6 +207,30 @@ test('member home visibly connects identity, participation, growth and opportuni
   assert.match(polish, /unplugScore/);
   assert.match(polish, /unplugStatusBadge/);
   assert.match(polishCss, /cc-home-path/);
+});
+
+test('Phase 8 first-time-user journeys are discoverable from the dashboard', () => {
+  const journeys = [
+    ['personal profile', "id:'community-profile',label:'My Profile'"],
+    ['directory profile', "id:'directory-profile',label:'My Directory Profile'"],
+    ['gallery', "id:'my-gallery',label:'My Gallery'"],
+    ['achievements', "id:'journey-achievements',label:'My Achievements'"],
+    ['incomplete items', "id:'home-action',label:'Action Required'"],
+    ['submission status', "id:'my-submissions',label:'My Submissions'"],
+    ['competition', "id:'my-competitions',label:'My Competitions'"],
+    ['purchase', "id:'browse-services',label:'Browse Services'"],
+    ['support', "id:'contact-support',label:'Contact Support'"],
+    ['password/security', "id:'login-security'"],
+  ];
+  for (const [name, token] of journeys) {
+    const source = name === 'password/security' ? polish : script;
+    assert.ok(source.includes(token), `first-time journey not discoverable: ${name}`);
+  }
+  assert.match(page, /data-ms-type="gallery"/);
+  assert.match(page, /gallery: \['My Gallery', 'Gallery content you have submitted\.'\]/);
+  assert.match(page, /<option value="gallery">/);
+  assert.match(script, /Add Gallery Content/);
+  assert.match(script, /opt\('Gallery','Add gallery content','gallery'\)/);
 });
 
 test('role-aware and conditional areas stay conditional', () => {
