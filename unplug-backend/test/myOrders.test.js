@@ -250,10 +250,39 @@ test('a fulfilment failure overrides a misleading downstream approval state', as
   assert.equal(res.body.items[0].serviceStatus, 'processing_issue');
   assert.equal(res.body.items[0].serviceStatusLabel, 'Processing issue — we’re attending to it');
   assert.equal(res.body.order.serviceStatusSummary.label, 'Processing issue — we’re attending to it');
-  assert.equal(JSON.stringify(res.body), JSON.stringify(res.body).replace('test failure', 'test failure'),
-    'response should serialize normally');
   assert.ok(!JSON.stringify(res.body).includes('test failure'),
     'internal fulfilment errors must never be exposed to a member');
+});
+
+test('a paid Directory upgrade reports Completed rather than inventing an approval queue', async () => {
+  const profile = await pool.query(
+    `INSERT INTO profiles (user_id, package_tier, slug, display_name, status)
+     VALUES ($1,'basic',$2,'Upgrade profile','approved') RETURNING id`,
+    [ME, 'order-upgrade-' + Date.now()]
+  );
+  const upgrade = await pool.query(
+    `INSERT INTO profile_upgrades (profile_id, from_tier, to_tier, fee_paid, paid_at)
+     VALUES ($1,'basic','pro',250,now()) RETURNING id`,
+    [profile.rows[0].id]
+  );
+  const ord = await pool.query(
+    `INSERT INTO orders (user_id, reference, method, status, subtotal, total,
+                         terms_version, terms_accepted_at, info_confirmed_at, confirmed_at)
+     VALUES ($1,'UNP-UPGRADE-1','eft','confirmed',250,250,'v1',now(),now(),now())
+     RETURNING id`, [ME]
+  );
+  await pool.query(
+    `INSERT INTO payments (user_id, linked_type, linked_id, amount, status, method,
+                           gateway_reference, order_id, fulfillment_status, fulfilled_at)
+     VALUES ($1,'profile_upgrade',$2,250,'confirmed','eft','GW-UPGRADE',$3,'applied',now())`,
+    [ME, upgrade.rows[0].id, ord.rows[0].id]
+  );
+
+  const res = await api(`/orders/${ord.rows[0].id}`, tokenMine);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.items[0].serviceStatus, 'completed');
+  assert.equal(res.body.items[0].serviceStatusLabel, 'Completed');
+  assert.equal(res.body.order.serviceStatusSummary.label, 'Completed');
 });
 
 test('an unknown linked_type is shown as itself, never hidden', () => {
