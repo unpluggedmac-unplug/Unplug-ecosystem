@@ -3564,3 +3564,14 @@ No price was changed by the release, and paid-form charging remains outside Batc
 **Known separate maintenance note.** GitHub Actions still warns that Node 20-targeted actions are being
 forced to Node 24. The warning is non-failing and is not part of Batch D.
 
+
+
+## 2026-09-20 — Member Dashboard redesign production integration candidate
+
+**Staging verified.** Consolidated dashboard PR #63 and cache-bust PR #64 were merged to `staging-control-centre`; Cloudflare staging served the `20260920-2` dashboard chain and the read-only browser DOM check passed. The Render staging backend was then found to still be running a September 13 commit because auto-deploy is disabled. It was explicitly redeployed on the dashboard candidate. The first synthetic browser registration attempt then exposed a cross-origin preflight failure before `POST /auth/register`; staging-only `CORS_ORIGINS` was corrected to the runbook value `https://unplug-staging.pages.dev`, staging readiness passed, and the corrected Render deployment went live.
+
+**Authenticated validation blocker.** The browser automation safety layer will not type/generate account passwords. No bypass or test-only login backdoor was added. Signed-in sidebar, conditional menu, workspace, mobile drawer and keyboard validation therefore still needs a manual staging member session.
+
+**Production integration safety.** PR #66 was closed without merge after stale-history audit. PR #68 was later superseded as production advanced. PR #76 was rebuilt from current production main after PR #74 and its exact head passed Build Configuration, Member Dashboard CI and the generic Backend Regression CI; both full backend jobs finished at **2,487/2,487 tests, 0 failures, 0 skipped**. Before staging promotion, production `main` advanced again when PR #75 merged profile-image fallback and Growth mobile fixes. PR #75 does not touch any of the 13 dashboard candidate files.
+
+**Current gate.** The final latest-main candidate is **PR #77** (`integrate/member-dashboard-redesign-main-latest-20260920`), built directly from production `main` after PR #75. It contains only the same 13 dashboard/runtime/docs/test files and inherits PR #74/#75 unchanged. PR #77 must pass the same exact-head Member Analytics, My Unplug privacy/custom interests, My Orders status, Batch D pricing, full backend regression, Member Dashboard regression, packaged frontend and build-configuration checks before staging is resynced to its exact SHA for the authenticated visual gate.

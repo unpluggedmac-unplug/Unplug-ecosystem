@@ -32,12 +32,12 @@ function script(src,attr,next){
   (document.head||document.documentElement).appendChild(el);
 }
 
-css('/media/styles/member-dashboard-control-centre.css?v=20260913-1','data-member-control-centre-css');
-css('/media/styles/member-dashboard-control-centre-help.css?v=20260913-1','data-member-control-centre-help-css');
+css('/media/styles/member-dashboard-control-centre.css?v=20260920-2','data-member-control-centre-css');
+css('/media/styles/member-dashboard-control-centre-help.css?v=20260920-2','data-member-control-centre-help-css');
 
-script('/media/scripts/member-dashboard-control-centre.js?v=20260913-1','data-unplug-member-control-centre',function(){
-  script('/media/scripts/member-dashboard-control-centre-polish.js?v=20260913-1','data-unplug-member-control-centre-polish',function(){
-    script('/media/scripts/member-dashboard-service-shortcuts.js?v=20260913-1','data-unplug-member-service-shortcuts');
+script('/media/scripts/member-dashboard-control-centre.js?v=20260920-2','data-unplug-member-control-centre',function(){
+  script('/media/scripts/member-dashboard-control-centre-polish.js?v=20260920-2','data-unplug-member-control-centre-polish',function(){
+    script('/media/scripts/member-dashboard-service-shortcuts.js?v=20260920-2','data-unplug-member-service-shortcuts');
   });
 });
 })();

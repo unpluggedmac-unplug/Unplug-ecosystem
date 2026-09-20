@@ -27,6 +27,17 @@ BEGIN
     EXECUTE 'CREATE SCHEMA extensions';
   END IF;
 
-  ALTER EXTENSION pg_trgm SET SCHEMA extensions;
+  BEGIN
+    ALTER EXTENSION pg_trgm SET SCHEMA extensions;
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      -- Managed PostgreSQL providers can own extension member objects (for
+      -- example pg_trgm.set_limit) with a provider role even when the
+      -- application role can otherwise use the extension. In that supported
+      -- state, moving the extension is impossible without provider-level
+      -- ownership. Do not block application startup; leave the provider-owned
+      -- extension where it is and keep the rest of the migration chain usable.
+      RAISE NOTICE 'Skipping pg_trgm schema move: current role does not own all extension objects';
+  END;
 END
 $$;

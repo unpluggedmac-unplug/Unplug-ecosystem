@@ -20,7 +20,7 @@ function loadCss(){
   if(q('link[data-member-service-shortcuts-css]'))return;
   var link=document.createElement('link');
   link.rel='stylesheet';
-  link.href='/media/styles/member-dashboard-service-shortcuts.css?v=20260913-1';
+  link.href='/media/styles/member-dashboard-service-shortcuts.css?v=20260920-2';
   link.setAttribute('data-member-service-shortcuts-css','true');
   (document.head||document.documentElement).appendChild(link);
 }
