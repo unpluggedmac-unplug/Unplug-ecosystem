@@ -18,7 +18,7 @@ test('account convenience shortcuts reuse real Account Settings controls', () =>
   assert.match(page, /id="twoFactorContent"/);
   assert.match(page, /id="notifPrefsContent"/);
   assert.match(polish, /Login & Security/);
-  assert.match(polish, /Communication Preferences/);
+  assert.match(polish, /Notification Preferences/);
   assert.match(polish, /#twoFactorContent/);
   assert.match(polish, /#notifPrefsContent/);
   assert.match(polish, /data-account-shortcut/);
