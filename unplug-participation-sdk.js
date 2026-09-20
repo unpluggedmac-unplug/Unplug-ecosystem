@@ -162,11 +162,6 @@ const UnplugParticipation = (() => {
     }
   }
 
-  function initialiseReferralLifecycle() {
-    const code = captureReferralFromUrl();
-    if (code) recordReferralClick(code);
-    registerPendingReferral();
-  }
 
   return {
     action,
@@ -189,12 +184,17 @@ const UnplugParticipation = (() => {
 
 window.UnplugParticipation = UnplugParticipation;
 
-// Run after the module exists. Every referral action is best-effort and is
+// Run after the public module exists. Every referral action is best-effort and
 // intentionally decoupled from page rendering.
+function initialiseUnplugReferralLifecycle() {
+  try {
+    const code = UnplugParticipation.captureReferralFromUrl();
+    if (code) UnplugParticipation.recordReferralClick(code);
+    UnplugParticipation.registerPendingReferral();
+  } catch (_) { /* referral tracking must never disturb the page */ }
+}
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    try { initialiseReferralLifecycle(); } catch (_) {}
-  }, { once: true });
+  document.addEventListener('DOMContentLoaded', initialiseUnplugReferralLifecycle, { once: true });
 } else {
-  try { initialiseReferralLifecycle(); } catch (_) {}
+  initialiseUnplugReferralLifecycle();
 }
