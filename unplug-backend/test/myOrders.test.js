@@ -254,6 +254,33 @@ test('a fulfilment failure overrides a misleading downstream approval state', as
     'internal fulfilment errors must never be exposed to a member');
 });
 
+test('a cancelled paid service is labelled Cancelled rather than Not approved', async () => {
+  const source = await pool.query(
+    `INSERT INTO articles (title, body, status, author_user_id, cancelled_at)
+     VALUES ('Cancelled order service', 'Body', 'rejected', $1, now()) RETURNING id`,
+    [ME]
+  );
+  const ord = await pool.query(
+    `INSERT INTO orders (user_id, reference, method, status, subtotal, total,
+                         terms_version, terms_accepted_at, info_confirmed_at, confirmed_at)
+     VALUES ($1,'UNP-CANCELLED-1','eft','confirmed',95,95,'v1',now(),now(),now())
+     RETURNING id`,
+    [ME]
+  );
+  await pool.query(
+    `INSERT INTO payments (user_id, linked_type, linked_id, amount, status, method,
+                           gateway_reference, order_id, fulfillment_status, fulfilled_at)
+     VALUES ($1,'article_publish',$2,95,'confirmed','eft','GW-CANCELLED',$3,'applied',now())`,
+    [ME, source.rows[0].id, ord.rows[0].id]
+  );
+
+  const res = await api(`/orders/${ord.rows[0].id}`, tokenMine);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.items[0].serviceStatus, 'cancelled');
+  assert.equal(res.body.items[0].serviceStatusLabel, 'Cancelled');
+  assert.equal(res.body.order.serviceStatusSummary.label, 'Cancelled');
+});
+
 test('a paid Directory upgrade reports Completed rather than inventing an approval queue', async () => {
   const profile = await pool.query(
     `INSERT INTO profiles (user_id, package_tier, slug, display_name, status)

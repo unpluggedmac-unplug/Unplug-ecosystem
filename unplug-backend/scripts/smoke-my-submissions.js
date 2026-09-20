@@ -128,7 +128,7 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
   check('it returns ONLY this member\'s work', leaked.length === 0,
     `leaked: ${leaked.map((s) => s.title).join(', ')}`);
 
-  const shape = ['type', 'typeLabel', 'id', 'title', 'status', 'statusLabel',
+  const shape = ['type', 'typeLabel', 'id', 'title', 'status', 'statusLabel', 'cancelledAt',
     'submittedAt', 'expiresAt', 'amount', 'paymentStatus', 'reference'].sort();
   const wrong = (all.body.submissions || []).filter(
     (s) => JSON.stringify(Object.keys(s).sort()) !== JSON.stringify(shape));

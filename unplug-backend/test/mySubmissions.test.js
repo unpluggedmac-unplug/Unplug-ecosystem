@@ -192,7 +192,7 @@ test('signing out is not optional', async () => {
 test('EVERY TYPE RETURNS THE SAME SHAPE', async () => {
   // One renderer draws all of them, so a type that omits a key breaks the
   // section rather than this file. Caught here instead.
-  const expected = ['type', 'typeLabel', 'id', 'title', 'status', 'statusLabel',
+  const expected = ['type', 'typeLabel', 'id', 'title', 'status', 'statusLabel', 'cancelledAt',
     'submittedAt', 'expiresAt', 'amount', 'paymentStatus', 'reference'].sort();
 
   const res = await api('/my/submissions', tokenA);
@@ -263,6 +263,20 @@ test('no status is left to a fall-through default', async () => {
 
 test('an unknown status is shown as itself rather than guessed at', async () => {
   assert.equal(statusLabel('something_new'), 'something_new');
+});
+
+test('a member-requested cancellation is shown as Cancelled, not Not approved', async () => {
+  const row = await pool.query(
+    `INSERT INTO articles (author_user_id, title, body, status, cancelled_at)
+     VALUES ($1, 'Cancelled by member', 'body', 'rejected', now()) RETURNING id`,
+    [A]
+  );
+  const res = await api('/my/submissions?type=article', tokenA);
+  const cancelled = res.body.submissions.find((s) => s.id === row.rows[0].id);
+  assert.ok(cancelled);
+  assert.equal(cancelled.status, 'rejected', 'the existing publication status remains unchanged');
+  assert.equal(cancelled.statusLabel, 'Cancelled');
+  assert.ok(cancelled.cancelledAt);
 });
 
 // ------------------------------------------------------------------ the menu
