@@ -132,6 +132,19 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (!Number.isInteger(serviceId) || serviceId <= 0) {
       return res.status(400).json({ error: 'Which service do you want to cancel?' });
     }
+    // PostgreSQL DATE will reject malformed input, but letting that bubble out
+    // turns a member typo into a 500. Keep the API contract narrow and
+    // calendar-shaped; the requested date is optional.
+    if (requestedDate !== null
+        && !/^\d{4}-\d{2}-\d{2}$/.test(String(requestedDate))) {
+      return res.status(400).json({ error: 'Requested effective date must use YYYY-MM-DD.' });
+    }
+    if (requestedDate !== null) {
+      const parsed = new Date(String(requestedDate) + 'T00:00:00Z');
+      if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== String(requestedDate)) {
+        return res.status(400).json({ error: 'Requested effective date is not a valid calendar date.' });
+      }
+    }
 
     const found = await loadService(serviceType, serviceId);
     if (found.error) return res.status(404).json({ error: found.error });
