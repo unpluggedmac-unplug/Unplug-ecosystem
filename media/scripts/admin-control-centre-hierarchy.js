@@ -57,7 +57,7 @@
     if (document.querySelector('link[data-cc-hierarchy-style]')) return;
     var l = document.createElement('link');
     l.rel = 'stylesheet';
-    l.href = '/media/styles/admin-control-centre-hierarchy.css?v=20260913-1';
+    l.href = '/media/styles/admin-control-centre-hierarchy.css?v=20260920-1';
     l.setAttribute('data-cc-hierarchy-style', 'true');
     document.head.appendChild(l);
   }
@@ -242,224 +242,187 @@
 
     var model = [
       branch('dashboard', 'Dashboard', '⌂', { section: 'overview' }, [
-        nodeSection('overview', 'Overview', '⌂'),
-        nodeSection('queue', 'Needs Attention / Approval Centre', '!', { attention: true }),
-        nodeSection('manage', 'All Content', '≡'),
-        nodeSection('checkouthealth', 'Site & Checkout Health', '♥'),
-        nodeSection('activitylog', 'Recent Activity', '↺')
-      ]),
-      branch('content', 'Content & Publishing', '✎', { section: 'manage' }, [
-        branch('content-articles', 'Articles', 'A', { section: 'publish' }, [
-          nodeSection('publish', 'Articles & Publishing', '✎'),
-          nodeSection('manage', 'All Articles / Content', '≡'),
-          nodeSection('queue', 'Pending / Approval Queue', '!'),
-          nodeSection('highlights', 'Highlights / Featured', '★'),
+        nodeSection('overview', 'Platform Overview', '⌂'),
+        nodeSection('queue', 'Requires Attention', '!', { attention: true }),
+        nodeSection('activitylog', 'Recent Activity', '↺'),
+        nodeSection('checkouthealth', 'System Status', '♥')
+      ], { description: 'Your administrative overview, alerts, activity and key platform information.' }),
+
+      branch('people', 'People', '♟', { section: 'users' }, [
+        nodeSection('users', 'Members & Users', '♟'),
+        nodeSection('myunplug', 'My Unplug Profiles', '☺'),
+        nodeSection('dirprofiles', 'Directory Profiles', '⌖'),
+        nodeSection('consultants', 'Representatives', '☏'),
+        nodeSection('staff', 'Staff & Permissions', '♜'),
+        nodeSection('partmembers', 'Participation Members', '◇')
+      ], { description: 'Manage members, profiles, representatives, staff access and community participants.' }),
+
+      branch('content', 'Content', '✎', { section: 'manage' }, [
+        branch('content-stories', 'Stories & Publishing', 'A', { section: 'publish' }, [
+          nodeSection('publish', 'Publish Article', '✎'),
+          nodeSection('manage', 'Stories & Articles', '≡'),
+          nodeSection('queue', 'Submissions / Review Queue', '!'),
+          nodeSection('highlights', 'Featured Content / Highlights', '★'),
           nodeSection('contributors', 'Contributors', '☺'),
           nodeSection('tags', 'Categories & Tags', '#')
         ]),
-        branch('content-media', 'Gallery & Media', '▧', { section: 'gallerymgmt' }, [
-          nodeSection('gallerymgmt', 'Gallery', '▧'),
+        branch('content-gallery', 'Gallery', '▧', { section: 'gallerymgmt' }, [
+          nodeSection('gallerymgmt', 'Gallery Submissions', '▧'),
           nodeSection('covers', 'Cover Images', '▰')
         ]),
-        branch('content-events', 'Events & Editions', '◫', { section: 'calevents' }, [
+        branch('content-editions', 'Events & Editions', '◫', { section: 'calevents' }, [
           nodeSection('calevents', 'Events', '◫'),
           nodeSection('editions', 'Editions', 'E'),
           nodeSection('edcal', 'Editions Calendar', '▦')
         ]),
-        branch('content-engagement', 'Participation Content', '✦', { section: 'shoutouts' }, [
-          nodeSection('shoutouts', 'Shout-Outs', '✦'),
-          nodeSection('birthdays', 'Birthdays', '🎂'),
-          nodeSection('polls', 'Polls', '◉'),
-          nodeSection('comments', 'Comments', '☷'),
-          nodeSection('testimonials', 'Testimonials', '❝'),
-          // No dedicated data-section panel exists for this content type
-          // (confirmed absent from the admin dashboard) — it goes through
-          // the same Approval Centre queue every other pending content type
-          // does (adminApprovalQueue.js's 'share_card' type), same as this
-          // whole tree's convention of reusing existing views rather than
-          // inventing new ones.
-          nodeSection('queue', 'Seen & Heard / Share Cards', '❤'),
-          nodeSection('sasl', 'SASL Videos', '▶'),
-          nodeSection('deafjobs', 'Deaf Jobs', '◈'),
-          nodeSection('deafpassports', 'Deaf Passports', '◇')
-        ])
-      ]),
-      branch('forms', 'Forms', '☑', { section: 'forms' }, [
-        nodeSection('forms', 'All Forms', '☑'),
-        nodeSection('forms', 'Form Templates', '▤'),
-        nodeSection('forms', 'Published Forms', '●'),
-        nodeSection('forms', 'Draft Forms', '○'),
-        nodeSection('forms', 'Responses / Submissions', '↧'),
-        nodeSection('forms', 'Archived Forms', '□'),
-        nodeAction('forms:new', 'Create New Form', '+', function () {
-          activateSection('forms', ['Forms', 'Create New Form']);
-          setTimeout(function () { document.getElementById('fbNew')?.click(); }, 180);
-        }),
-        nodeSection('forms', 'Form Settings', '⚙')
-      ]),
-      branch('agreements', 'Agreements', '✍', { href: agreementHref() }, [
-        nodeHref(agreementHref(), 'Overview', '⌂', { adminOnly: true }),
-        nodeHref(agreementHref(), 'Agreement Generator', '✍', { adminOnly: true }),
-        nodeHref(agreementHref({ preset: 'master' }), 'Master Agreement Details', '◆', { adminOnly: true, dynamicMaster: true }),
-        branch('agreement-templates', 'Templates', '▤', { href: agreementHref() }, [
-          nodeDisabled('agreement:templates:loading', 'Loading templates…', '…', 'Templates load after sign-in')
-        ], { dynamic: 'agreementTemplates' }),
-        branch('agreement-records', 'Agreement Records', '▥', { href: agreementHref({ tab: 'agreements' }) }, [
-          nodeHref(agreementHref({ tab: 'agreements', status: 'draft' }), 'Draft Agreements', '○', { adminOnly: true, countKey: 'agreements:draft' }),
-          nodeHref(agreementHref({ tab: 'agreements', status: 'sent' }), 'Sent / Awaiting Signature', '→', { adminOnly: true, countKey: 'agreements:sent' }),
-          nodeHref(agreementHref({ tab: 'agreements', status: 'submitted' }), 'Submitted', '↧', { adminOnly: true, countKey: 'agreements:submitted' }),
-          nodeHref(agreementHref({ tab: 'agreements', status: 'signed' }), 'Signed', '✓', { adminOnly: true, countKey: 'agreements:signed' }),
-          nodeDisabled('agreement:expired', 'Expired', '◷', 'No separate expired workflow status exists yet'),
-          nodeHref(agreementHref({ tab: 'agreements', status: 'archived' }), 'Archived', '□', { adminOnly: true, countKey: 'agreements:archived' })
-        ]),
-        nodeHref('/unplug-agreements-admin.html', 'Agreement Settings / Legacy Forms', '⚙', { adminOnly: true })
-      ], { adminOnly: true }),
-      branch('growth', 'Growth', '↗', { href: growthHref() }, [
-        nodeHref(growthHref(), 'Overview', '⌂', { adminOnly: true }),
-        branch('growth-applications', 'Applications', '▥', { href: growthHref() }, [
-          nodeHref(growthHref({ status: 'new' }), 'New', '●', { adminOnly: true, countKey: 'growth:new' }),
-          nodeHref(growthHref({ status: 'in_progress' }), 'In Progress', '◐', { adminOnly: true, countKey: 'growth:in_progress' }),
-          nodeHref(growthHref(), 'Submitted', '↧', { adminOnly: true, countKey: 'growth:submitted' }),
-          nodeHref(growthHref({ status: 'under_review' }), 'Under Review', '◒', { adminOnly: true, countKey: 'growth:under_review' }),
-          nodeHref(growthHref({ status: 'completed' }), 'Completed', '✓', { adminOnly: true, countKey: 'growth:closed', note: 'Mapped to the current Closed workflow status' }),
-          nodeHref(growthHref({ status: 'archived' }), 'Archived', '□', { adminOnly: true, countKey: 'growth:closed', note: 'Mapped to the current Closed workflow status' })
-        ]),
-        branch('growth-form', 'Application Form', '☷', { href: growthHref({ tab: 'builder' }) }, [
-          nodeHref(growthHref({ tab: 'builder' }), 'Master Form Builder', '◆', { adminOnly: true }),
-          nodeHref(growthHref({ tab: 'builder' }), 'Steps & Fields', '☷', { adminOnly: true }),
-          nodeHref(growthHref({ tab: 'builder' }), 'Draft Versions', '○', { adminOnly: true }),
-          nodeHref(growthHref({ tab: 'builder' }), 'Published Version', '●', { adminOnly: true })
-        ])
-      ], { adminOnly: true }),
-      branch('directory', 'Directory', '⌖', { section: 'dirprofiles' }, [
-        branch('directory-profiles', 'Profiles', '☺', { section: 'dirprofiles' }, [
-          nodeSection('dirprofiles', 'All Profiles', '≡'),
-          nodeSection('dirprofiles', 'Individuals', '☺'),
-          nodeSection('dirprofiles', 'Businesses', '▣'),
-          nodeSection('claims', 'Pending / Listing Claims', '!'),
-          nodeSection('dirprofiles', 'Published', '✓')
-        ]),
-        nodeSection('reviews', 'Reviews', '★'),
-        nodeSection('highlights', 'Highlights', '✦'),
-        nodeSection('tags', 'Categories', '#'),
-        nodeSection('dirprofiles', 'Map / Location View', '⌖'),
-        nodeSection('projects', 'Investor Projects', '◆'),
-        nodeSection('consultants', 'Representatives', '☏'),
-        // Same reasoning as Seen & Heard / Share Cards above: no dedicated
-        // panel exists for marketplace listings themselves (as distinct from
-        // Marketplace Placements, the rate card under Pages & Layout), so
-        // this reuses the Approval Centre queue (adminApprovalQueue.js's
-        // 'marketplace' type) rather than inventing a new view.
-        nodeSection('queue', 'Marketplace Listings', '▤')
-      ]),
-      branch('community', 'Community', '♟', { section: 'users' }, [
-        nodeSection('users', 'Members & Users', '♟'),
-        nodeSection('myunplug', 'My Unplug Profiles', '☺'),
-        nodeSection('partmembers', 'Participation Members', '◇'),
-        nodeSection('staff', 'Staff & Permissions', '♜'),
+        nodeSection('forms', 'Forms & Responses', '☑')
+      ], { description: 'Create, review, manage and publish UnplugNews editorial and submission content.' }),
+
+      branch('community', 'Community', '♣', { section: 'comments' }, [
+        nodeSection('comments', 'Comments', '☷'),
+        nodeSection('shoutouts', 'Shout-Outs', '✦'),
+        nodeSection('birthdays', 'Birthdays', '🎂'),
+        nodeSection('polls', 'Polls', '◉'),
+        nodeSection('testimonials', 'Testimonials', '❝'),
+        nodeSection('queue', 'Seen & Heard / Share Cards', '❤'),
+        nodeSection('impactmakers', 'Impact Makers', '✦'),
         nodeSection('communitysettings', 'Community Settings', '⚙')
-      ]),
+      ], { description: 'Manage interaction, participation, recognition and community-facing activity.' }),
+
       branch('gamification', 'Gamification', '★', { section: 'unplugmembers' }, [
         nodeSection('unplugmembers', 'Leaderboards / Member Scores', '↟'),
         nodeSection('badges', 'Badges & Recognition', '★'),
         nodeSection('unplugmissions', 'Missions', '✓'),
-        nodeSection('unplugbizstatus', 'Business Status', '▣'),
-        nodeSection('unplugmemberstatus', 'Member Status', '☺'),
         nodeSection('unplugstreaktiers', 'Streak Tiers', '≋'),
         nodeSection('unplugpointvalues', 'Point Values', '+'),
-        nodeSection('halloffame', 'Hall of Fame', '♛')
-      ]),
-      branch('top10', 'Top 10', '10', { section: 'votebundles' }, [
-        nodeSection('votebundles', 'Charts', '▥'),
-        nodeSection('votebundles', 'Contestants', '☺'),
-        nodeSection('votebundles', 'Entries', '↧'),
-        nodeSection('votebundles', 'Free Votes', '○'),
-        nodeSection('votebundles', 'Bulk Votes', '+'),
-        nodeSection('votebundles', 'Vote Codes', '#'),
-        nodeSection('top10monthly', 'Rankings / Results', '↟'),
-        nodeSection('votebundles', 'Sponsors', '◆'),
-        nodeSection('unplugtrust', 'Settings / Trust & Anti-Cheat', '⚙')
-      ]),
-      branch('competitions', 'Competitions', '🏆', { section: 'competitions' }, [
-        nodeSection('competitions', 'Current', '●'),
-        nodeSection('competitions', 'Upcoming', '◷'),
-        nodeSection('competitions', 'Entries', '↧'),
-        nodeSection('competitions', 'Winners', '★'),
-        nodeSection('competitions', 'Prizes', '◆'),
-        nodeSection('competitions', 'Sponsors', '▣'),
-        nodeSection('competitions', 'Settings', '⚙')
-      ]),
-      branch('finance', 'Finance', 'R', { section: 'payqueue' }, [
-        nodeSection('payqueue', 'Payments', 'R'),
+        nodeSection('unplugmemberstatus', 'Member Status', '☺'),
+        nodeSection('unplugbizstatus', 'Business Status', '▣'),
+        nodeSection('halloffame', 'Hall of Fame', '♛'),
+        nodeSection('unplugtrust', 'Trust & Anti-Cheat', '⚙')
+      ], { description: 'Manage points, missions, streaks, rankings, badges and recognition systems.' }),
+
+      branch('opportunities', 'Opportunities', '↗', { href: growthHref() }, [
+        branch('opportunities-growth', 'Growth Applications', '↗', { href: growthHref() }, [
+          nodeHref(growthHref(), 'Growth Overview', '⌂', { adminOnly: true }),
+          nodeHref(growthHref({ status: 'new' }), 'New Applications', '●', { adminOnly: true, countKey: 'growth:new' }),
+          nodeHref(growthHref({ status: 'in_progress' }), 'In Progress', '◐', { adminOnly: true, countKey: 'growth:in_progress' }),
+          nodeHref(growthHref({ status: 'under_review' }), 'Under Review', '◒', { adminOnly: true, countKey: 'growth:under_review' }),
+          nodeHref(growthHref({ status: 'completed' }), 'Completed', '✓', { adminOnly: true, countKey: 'growth:closed', note: 'Mapped to the current Closed workflow status' }),
+          nodeHref(growthHref({ tab: 'builder' }), 'Master Application Form', '◆', { adminOnly: true })
+        ]),
+        branch('opportunities-competitions', 'Competitions', '🏆', { section: 'competitions' }, [
+          nodeSection('competitions', 'Competitions', '🏆'),
+          nodeSection('competitions', 'Competition Entries', '↧'),
+          nodeSection('competitions', 'Winners / Prizes / Sponsors', '★')
+        ]),
+        branch('opportunities-top10', 'Top 10', '10', { section: 'votebundles' }, [
+          nodeSection('votebundles', 'Charts & Contestants', '▥'),
+          nodeSection('votebundles', 'Entries', '↧'),
+          nodeSection('votebundles', 'Votes & Vote Codes', '+'),
+          nodeSection('top10monthly', 'Rankings / Results', '↟')
+        ]),
+        nodeSection('projects', 'Investor Projects', '◆')
+      ], { description: 'Manage Growth, competitions, Top 10 and other opportunity-based participation.' }),
+
+      branch('deaf-community', 'Deaf Community', '◇', { section: 'deafjobs' }, [
+        nodeSection('deafjobs', 'Deaf Jobs', '◈'),
+        nodeSection('deafpassports', 'Opportunity Passports', '◇'),
+        nodeSection('sasl', 'SASL / Learning Videos', '▶'),
+        nodeSection('partmembers', 'Community Participants', '☺')
+      ], { description: 'Manage Deaf Community jobs, Opportunity Passports, learning resources and participation.' }),
+
+      branch('directory-marketplace', 'Directory & Marketplace', '⌖', { section: 'dirprofiles' }, [
+        branch('directory-listings', 'Directory', '⌖', { section: 'dirprofiles' }, [
+          nodeSection('dirprofiles', 'All Directory Listings', '≡'),
+          nodeSection('claims', 'Listing Claims', '!'),
+          nodeSection('reviews', 'Reviews', '★'),
+          nodeSection('tags', 'Directory Categories', '#'),
+          nodeSection('dirprofiles', 'Map / Location View', '⌖'),
+          nodeSection('highlights', 'Directory Highlights', '✦')
+        ]),
+        nodeSection('queue', 'Marketplace Listings', '▤'),
+        nodeSection('placements', 'Marketplace Placements', '⌖'),
+        nodeSection('adbanners', 'Advertising', '▰'),
+        nodeSection('unplugsponsors', 'Media Partners / Sponsors', '◆')
+      ], { description: 'Manage public listings, Marketplace content, promotions, advertising and commercial participation.' }),
+
+      branch('commerce', 'Payments & Commerce', 'R', { section: 'payqueue' }, [
         nodeSection('payqueue', 'Orders', '▥'),
+        nodeSection('payqueue', 'Payments', 'R'),
         nodeSection('payments', 'EFT Proofs', '↧'),
-        nodeSection('payqueue', 'Invoices', 'I'),
-        nodeSection('payqueue', 'Receipts', '✓'),
         nodeSection('vouchers', 'Credits', '+'),
-        nodeSection('cancellations', 'Refunds / Cancellations', '↶'),
-        nodeSection('vouchers', 'Vouchers / Codes', '#'),
-        nodeSection('payqueue', 'Transactions', '≡'),
-        nodeSection('payqueue', 'Finance Reports', '▥'),
-        nodeSection('checkouthealth', 'Checkout Health', '♥'),
-        nodeSection('pricing', 'Service Pricing', 'R')
-      ]),
-      branch('advertising', 'Advertising', '▰', { section: 'adbanners' }, [
-        nodeSection('adbanners', 'Banner Bookings', '▰'),
-        nodeSection('adbanners', 'Homepage Banners', '⌂'),
-        nodeSection('adbanners', 'Section Banners', '▤'),
-        nodeSection('adbanners', 'Campaigns', '▶'),
-        nodeSection('adbanners', 'Advertisers', '☺'),
-        nodeSection('adbanners', 'Scheduled Banners', '◷'),
-        nodeSection('adbanners', 'Expired', '□'),
-        nodeSection('adbanners', 'Reports', '▥'),
-        nodeSection('unplugsponsors', 'Sponsor Campaigns', '◆'),
-        nodeSection('social', 'Social Feed', '@')
-      ]),
-      branch('impact-makers', 'Impact Makers', '✦', { section: 'impactmakers' }, [
-        nodeSection('impactmakers', 'Impact Makers', '✦'),
-        nodeSection('impactmakers', 'Banner Faces', '▧'),
-        nodeSection('impactmakers', 'Categories', '#')
-      ]),
-      branch('unplug-live', 'Unplug Live', '▶', null, [
-        nodeDisabled('live:events', 'Events (Coming Soon)', '◫', 'Coming Soon — this admin module has not been built yet.'),
-        nodeDisabled('live:streams', 'Streams (Coming Soon)', '▶', 'Coming Soon — this admin module has not been built yet.'),
-        nodeDisabled('live:tickets', 'Tickets / Orders (Coming Soon)', '▥', 'Coming Soon — this admin module has not been built yet.'),
-        nodeDisabled('live:viewers', 'Viewers / Replays (Coming Soon)', '☺', 'Coming Soon — this admin module has not been built yet.'),
-        nodeDisabled('live:organisers', 'Organisers / Payouts / Sponsors (Coming Soon)', '◆', 'Coming Soon — this admin module has not been built yet.'),
-        nodeDisabled('live:settings', 'Settings (Coming Soon)', '⚙', 'Coming Soon — this admin module has not been built yet.')
-      ]),
-      branch('marketing', 'Marketing & CRM', '◎', { section: 'crm' }, [
+        nodeSection('payqueue', 'Invoices & Receipts', 'I'),
+        nodeSection('pricing', 'Products / Services & Pricing', 'R'),
+        nodeSection('vouchers', 'Vouchers / Promotional Codes', '#'),
+        nodeSection('cancellations', 'Cancellations / Refunds', '↶'),
+        nodeSection('checkouthealth', 'Checkout Health', '♥')
+      ], { description: 'Manage purchases, payments, credits, pricing, vouchers, invoices and financial activity.' }),
+
+      branch('communications', 'Communications', '✉', { section: 'notifications' }, [
+        nodeSection('notifications', 'Notifications', '●'),
+        nodeSection('emailmarketing', 'Email Marketing', '✉'),
         nodeSection('crm', 'Sales & CRM', '◎'),
         nodeSection('inquiries', 'Enquiries', '?'),
-        nodeSection('emailmarketing', 'Email Marketing', '✉')
-      ]),
-      branch('pages', 'Pages & Layout', '▤', { section: 'pagecms' }, [
+        nodeSection('social', 'Social Content / Feed', '@'),
+        branch('communications-advertising', 'Advertising Campaigns', '▰', { section: 'adbanners' }, [
+          nodeSection('adbanners', 'Banner Campaigns', '▰'),
+          nodeSection('unplugsponsors', 'Sponsor Campaigns', '◆')
+        ])
+      ], { description: 'Manage member communication, enquiries, campaigns, CRM and outbound messaging.' }),
+
+      branch('media-pages', 'Media & Pages', '▤', { section: 'pagecms' }, [
         nodeSection('pagecms', 'Page Content & Sections', '▤'),
         nodeSection('pagevisibility', 'Page Visibility', '◉'),
-        nodeSection('comingsoon', 'Coming Soon Mode', '◷'),
+        nodeSection('covers', 'Images / Cover Media', '▰'),
+        nodeSection('gallerymgmt', 'Gallery Media', '▧'),
         nodeSection('sitebuttons', 'Floating Buttons', '●'),
         nodeSection('popups', 'Popups', '▣'),
-        nodeSection('placements', 'Marketplace Placements', '⌖')
-      ]),
-      branch('reports', 'Analytics & Reports', '▥', { section: 'analytics' }, [
-        nodeSection('analytics', 'Website Analytics', '▥'),
-        nodeSection('unplugpanalytics', 'Participation Analytics', '↟'),
+        nodeSection('comingsoon', 'Coming Soon Mode', '◷')
+      ], { description: 'Manage website pages, visibility, images and presentation media used across UnplugNews.' }),
+
+      branch('analytics-reports', 'Analytics & Reports', '▥', { section: 'analytics' }, [
+        nodeSection('analytics', 'Platform Overview', '▥'),
+        nodeSection('unplugpanalytics', 'Participation / Gamification Analytics', '↟'),
         nodeSection('activitylog', 'Activity & Audit Log', '↺'),
-        nodeSection('notifications', 'Notifications', '●')
-      ]),
-      branch('admin-tools', 'Admin Tools', '⚙', { section: 'sitesettings' }, [
-        nodeSection('sitesettings', 'Site Settings', '⚙'),
-        nodeSection('backups', 'Backups', '⬡'),
-        nodeSection('checkouthealth', 'System / Checkout Health', '♥'),
-        nodeSection('activitylog', 'Audit Logs', '↺'),
-        nodeSection('notifications', 'Notifications / Email Signals', '✉'),
-        nodeSection('redirects', 'Redirects & 404s', '↪'),
-        nodeSection('spam', 'Spam Filter', '⊘')
-      ]),
-      branch('danger', 'Danger Zone', '⚠', null, [
-        nodeSection('backups', 'Backup / Restore Controls', '⚠', { danger: true }),
-        nodeSection('sitesettings', 'System-Level Settings', '⚠', { danger: true })
-      ], { danger: true })
+        nodeSection('payqueue', 'Commerce / Finance Activity', 'R')
+      ], { description: 'Understand platform activity, performance, participation and administrative reporting.' }),
+
+      branch('administration', 'Administration', '⚙', { section: 'sitesettings' }, [
+        branch('administration-agreements', 'Agreements', '✍', { href: agreementHref() }, [
+          nodeHref(agreementHref(), 'Agreement Generator', '✍', { adminOnly: true }),
+          nodeHref(agreementHref({ preset: 'master' }), 'Master Agreement Details', '◆', { adminOnly: true, dynamicMaster: true }),
+          branch('agreement-templates', 'Templates', '▤', { href: agreementHref() }, [
+            nodeDisabled('agreement:templates:loading', 'Loading templates…', '…', 'Templates load after sign-in')
+          ], { dynamic: 'agreementTemplates' }),
+          branch('agreement-records', 'Agreement Records', '▥', { href: agreementHref({ tab: 'agreements' }) }, [
+            nodeHref(agreementHref({ tab: 'agreements', status: 'draft' }), 'Draft Agreements', '○', { adminOnly: true, countKey: 'agreements:draft' }),
+            nodeHref(agreementHref({ tab: 'agreements', status: 'sent' }), 'Awaiting Signature', '→', { adminOnly: true, countKey: 'agreements:sent' }),
+            nodeHref(agreementHref({ tab: 'agreements', status: 'submitted' }), 'Submitted', '↧', { adminOnly: true, countKey: 'agreements:submitted' }),
+            nodeHref(agreementHref({ tab: 'agreements', status: 'signed' }), 'Signed', '✓', { adminOnly: true, countKey: 'agreements:signed' }),
+            nodeHref(agreementHref({ tab: 'agreements', status: 'archived' }), 'Archived', '□', { adminOnly: true, countKey: 'agreements:archived' })
+          ]),
+          nodeHref('/unplug-agreements-admin.html', 'Agreement Settings / Legacy Forms', '⚙', { adminOnly: true })
+        ], { adminOnly: true }),
+        branch('administration-forms', 'Forms', '☑', { section: 'forms' }, [
+          nodeSection('forms', 'All Forms', '☑'),
+          nodeAction('forms:new', 'Create New Form', '+', function () {
+            activateSection('forms', ['Administration', 'Forms', 'Create New Form']);
+            setTimeout(function () { document.getElementById('fbNew')?.click(); }, 180);
+          }),
+          nodeSection('forms', 'Responses / Submissions', '↧')
+        ]),
+        branch('administration-settings', 'Settings', '⚙', { section: 'sitesettings' }, [
+          nodeSection('sitesettings', 'General / System Settings', '⚙'),
+          nodeSection('staff', 'Permissions', '♜'),
+          nodeSection('backups', 'Backups', '⬡'),
+          nodeSection('redirects', 'Redirects & 404s', '↪'),
+          nodeSection('spam', 'Spam Filter', '⊘')
+        ]),
+        branch('administration-danger', 'Danger Zone', '⚠', null, [
+          nodeSection('backups', 'Backup / Restore Controls', '⚠', { danger: true }),
+          nodeSection('sitesettings', 'System-Level Settings', '⚠', { danger: true })
+        ], { danger: true })
+      ], { description: 'Manage agreements, forms, permissions, backups and core platform configuration.' })
     ];
 
     function keyFor(node) {
@@ -646,7 +609,7 @@
       title.className = topLevel ? 'cc-group-title' : 'cc-branch-title';
       title.innerHTML = icon(node.icon) + '<span></span>';
       title.querySelector('span:last-child').textContent = node.label;
-      title.title = node.overview ? 'Open ' + node.label + ' overview' : node.label;
+      title.title = node.description || (node.overview ? 'Open ' + node.label + ' overview' : node.label);
       if (node.overview) title.addEventListener('click', function () { branchTarget(node, pathParts); });
       else title.disabled = true;
 
@@ -658,6 +621,12 @@
       head.appendChild(title);
       head.appendChild(toggle);
       el.appendChild(head);
+      if (topLevel && node.description) {
+        var description = document.createElement('div');
+        description.className = 'cc-group-description';
+        description.textContent = node.description;
+        el.appendChild(description);
+      }
 
       var body = document.createElement('div');
       body.className = topLevel ? 'cc-group-items nav-group-items' : 'cc-branch-items';
