@@ -133,7 +133,7 @@ export async function onRequest({ env, request }) {
       '  var api=window.UNPLUG_RUNTIME_API;',
       '  try { localStorage.setItem("unplug_api_base", api); } catch (_) {}',
       '  function apply(){',
-      '    ["apiBaseInput","forgotApiBaseInput"].forEach(function(id){ var el=document.getElementById(id); if (el) el.value=api; });',
+      '    ["apiBaseInput","forgotApiBaseInput","registerApiBaseInput"].forEach(function(id){ var el=document.getElementById(id); if (el) el.value=api; });',
       '  }',
       '  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once:true }); else apply();',
       '})();',
