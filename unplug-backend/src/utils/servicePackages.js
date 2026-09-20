@@ -28,8 +28,8 @@ async function priceFor(serviceKey, durationDays) {
   let r;
   try {
     r = await pool.query(
-      \`SELECT price FROM service_packages
-        WHERE service_key = $1 AND duration_days = $2 AND active = true\`,
+      `SELECT price FROM service_packages
+        WHERE service_key = $1 AND duration_days = $2 AND active = true`,
       [serviceKey, days]
     );
   } catch (err) {
@@ -46,10 +46,10 @@ async function priceFor(serviceKey, durationDays) {
 async function packagesFor(serviceKey) {
   try {
     const r = await pool.query(
-      \`SELECT duration_days, name, description, price
+      `SELECT duration_days, name, description, price
          FROM service_packages
         WHERE service_key = $1 AND active = true
-        ORDER BY display_order, duration_days\`,
+        ORDER BY display_order, duration_days`,
       [serviceKey]
     );
     return r.rows.map((row) => ({
