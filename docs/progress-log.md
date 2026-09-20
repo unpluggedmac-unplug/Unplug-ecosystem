@@ -3698,3 +3698,30 @@ non-blocking and no notification is part of the business transaction.
 **Regression coverage.** Added `communityEmailNotifications.test.js` to protect shared-notifier routing,
 relationship-change guards, preference checks and duplicate-row prevention. Existing profile/follow integration
 tests continue to protect the original in-app behaviour.
+
+
+## 2026-09-20 — Production deploy deadlock recovery hardening
+
+After PR #85 merged at `900bcf8a99b872cfce62417e3f8b80c927c6b35c`, Render built the backend
+successfully but the new production instance failed during startup migration replay. The exact database error
+was PostgreSQL `40P01 deadlock detected` while applying
+`204_agreement_version_approval_sync.sql`. The previous PR #84 instance remained healthy and continued
+serving production; #85 was therefore merged but not yet live.
+
+This is a concurrency failure, not invalid migration SQL: production deliberately re-runs the idempotent
+migration set while the old instance is still serving traffic. DDL can occasionally collide with a live
+read/write lock in the opposite order.
+
+**Hotfix:** migration execution now retries only PostgreSQL's two transaction-retry conditions:
+deadlock `40P01` and serialization failure `40001`. The retry budget is bounded to four attempts with
+250ms / 750ms / 1500ms backoff. Every other SQL error still fails immediately, and a persistent deadlock
+still fails the deploy after the bounded budget.
+
+**Regression coverage:** `migrationDeadlockRetry.test.js` proves transient deadlocks recover, serialization
+failures recover, syntax errors are never masked, persistent deadlocks still fail, and the production migrator
+routes each migration through the tested retry helper.
+
+**Backup audit note:** Render production logs show a real `POST /backups/run` returned 200 on
+2026-09-16. That proves the application-level encrypted backup path worked at that point. It does not prove
+nightly recurrence: the current scheduler waits 24 continuous process hours, while the free Render service can
+sleep/restart. Recurrence therefore remains an operational-code follow-up.
