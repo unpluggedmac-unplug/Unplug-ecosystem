@@ -3564,3 +3564,14 @@ No price was changed by the release, and paid-form charging remains outside Batc
 **Known separate maintenance note.** GitHub Actions still warns that Node 20-targeted actions are being
 forced to Node 24. The warning is non-failing and is not part of Batch D.
 
+
+
+## 2026-09-20 — Member Dashboard redesign production integration candidate
+
+**Staging verified.** Consolidated dashboard PR #63 and cache-bust PR #64 are merged to `staging-control-centre`. Canonical staging is serving the `20260920-2` Member Dashboard asset chain. Browser DOM validation confirmed the redesigned Home, Account Status, Quick Actions, My Unplug snapshot, My Content, Opportunities, Growth bridge, Recently Used, Gallery shortcut, and separate My Unplug/Directory presentation. No visible staging UI errors were observed.
+
+**Credential blocker.** The browser vault has no staging member credentials. Authenticated sidebar, conditional menu, secondary workspace, mobile drawer and keyboard interaction testing therefore remains blocked on a valid member session; this is not a deployment or source-code failure.
+
+**Production integration safety.** PR #66 was closed without merge after audit showed a stale merge-base causing already-released referral-attribution files from PR #62 to appear in its diff. Replacement **PR #68** starts from current main and contains only 12 Member Dashboard/runtime/docs/test files. No referral, acquisition, auth, payment, pricing or backend business-rule changes are in #68.
+
+**Automated verification.** Consolidated feature head and staging cache-bust runs are green. PR #68 triggers Member Analytics, My Unplug privacy/custom interests, My Orders status, Batch D pricing, full backend regression, Member Dashboard regression, packaged frontend and build-configuration gates before it can be considered for production.
