@@ -477,7 +477,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
            this one is who you are in the community. -->
       <div class="card">
         <h2>My Unplug Profile</h2>
-        <p class="sub">Your community identity — who you are on Unplug. This is separate from your Directory listing, and nothing here is public until you choose to publish it.</p>
+        <p class="sub">Your community identity — who you are on Unplug. This is separate from your Directory listing. Publishing makes your @username and display name public; you choose which optional fields people can see.</p>
         <div class="error-banner" id="muError"></div>
 
         <div id="muPublishState" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--paper-line); border-radius:6px; padding:12px 14px; margin-bottom:16px; background:var(--paper);">
@@ -543,6 +543,11 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div id="muInterests" class="mu-chips"></div>
         </div>
         <div class="field">
+          <label for="muCustomInterests">My custom interests <span style="font-weight:400; text-transform:none; letter-spacing:0;">— optional</span></label>
+          <input id="muCustomInterests" maxlength="620" placeholder="e.g. Sustainable fashion, Youth mentorship">
+          <span style="font-size:11.5px; color:var(--slate);">Up to 10, separated by commas. These belong only to your profile and are not added to everyone’s interest list.</span>
+        </div>
+        <div class="field">
           <label>My skills &amp; talents</label>
           <div id="muSkills" class="mu-chips"></div>
         </div>
@@ -551,6 +556,24 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <div id="muPurposes" class="mu-chips"></div>
         </div>
         <button class="btn btn-solid" id="muSaveTaxBtn" type="button" style="width:auto;">Save Selections</button>
+      </div>
+
+      <div class="card" id="muPrivacyCard">
+        <h2>Public Profile Privacy</h2>
+        <p class="sub">When your profile is published, your <strong>@username</strong> and <strong>display name</strong> are always visible. Everything below starts private for new profiles — switch on only what you want people to see.</p>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px 16px; margin:14px 0 16px;">
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="avatar"> Profile picture</label>
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="about"> About me</label>
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="country"> Country</label>
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="province"> Province</label>
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="city"> Town / City</label>
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="interests"> Interests + custom interests</label>
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="skills"> Skills &amp; talents</label>
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="purposes"> What I’m plugging into</label>
+          <label class="mu-privacy-option"><input type="checkbox" data-mu-vis="tags"> Tags / search discovery</label>
+        </div>
+        <p style="font-size:11.5px; color:var(--slate); margin:-4px 0 12px;">Private About Me and Tags are also excluded from public search matching.</p>
+        <button class="btn btn-solid" id="muSaveVisibilityBtn" type="button" style="width:auto;">Save Privacy</button>
       </div>
 
       <div class="card">
@@ -611,6 +634,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     </section>
 
     <style>
+    .mu-privacy-option{ display:flex; align-items:center; gap:9px; min-height:42px; padding:9px 11px; border:1px solid var(--paper-line); border-radius:6px; background:var(--paper); font-size:13px; cursor:pointer; }
+    .mu-privacy-option input{ width:18px; height:18px; accent-color:var(--red); flex:0 0 auto; }
     /* View Score — the member's scoreboard. A premium treatment lifted out of
        the form cards: a dark hero statement, then refined stat / passport /
        achievement cards. All brand tokens; frontend-only, IDs unchanged. */
@@ -4690,6 +4715,21 @@ function muSelectedKeys(containerId) {
   return [...document.querySelectorAll(`#${containerId} input:checked`)].map((i) => i.value);
 }
 
+function muCustomInterestValues() {
+  return String(document.getElementById('muCustomInterests')?.value || '')
+    .split(/[,\n]/)
+    .map((value) => value.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
+function muRenderVisibility() {
+  const visibility = (MU_PROFILE && MU_PROFILE.field_visibility) || {};
+  document.querySelectorAll('[data-mu-vis]').forEach((input) => {
+    input.checked = visibility[input.getAttribute('data-mu-vis')] === true;
+  });
+}
+
 function muRenderCompletion(completion) {
   if (!completion) return;
   document.getElementById('muCompletionPct').textContent = completion.percent + '%';
@@ -4780,6 +4820,7 @@ function muFillForm() {
   }
   muRenderPublishState();
   muRenderProfileView();
+  muRenderVisibility();
   muSetProfileMode(muProfileHasContent() ? 'view' : 'edit');
 }
 
@@ -4796,8 +4837,9 @@ async function loadMyUnplugProfile() {
     MU_PROFILE = mine.profile;
     muFillForm();
     muRenderCompletion(mine.completion);
-    const picked = mine.taxonomies || { interests: [], skills: [], purposes: [] };
+    const picked = mine.taxonomies || { interests: [], skills: [], purposes: [], customInterests: [] };
     document.getElementById('muInterests').innerHTML = muChipsHtml('muInterests', tax.interests, picked.interests.map((x) => x.key));
+    document.getElementById('muCustomInterests').value = (picked.customInterests || []).map((x) => x.label).join(', ');
     document.getElementById('muSkills').innerHTML = muChipsHtml('muSkills', tax.skills, picked.skills.map((x) => x.key));
     document.getElementById('muPurposes').innerHTML = muChipsHtml('muPurposes', tax.purposes, picked.purposes.map((x) => x.key));
   } catch (e) {
@@ -4860,7 +4902,7 @@ document.getElementById('muSaveBtn').addEventListener('click', async () => {
     muRenderPublishState();
     muRenderProfileView();
     muSetProfileMode('view');
-    showToast(MU_PROFILE.is_published ? 'Profile saved and updated publicly.' : 'Profile saved — still private until you publish.');
+    showToast(MU_PROFILE.is_published ? 'Profile saved. Your public-field privacy choices are unchanged.' : 'Profile saved — still private until you publish.');
   } catch (e) {
     err.textContent = e.message; err.classList.add('show');
   } finally {
@@ -4878,16 +4920,43 @@ document.getElementById('muSaveTaxBtn').addEventListener('click', async () => {
       method: 'PUT',
       body: JSON.stringify({
         interests: muSelectedKeys('muInterests'),
+        customInterests: muCustomInterestValues(),
         skills: muSelectedKeys('muSkills'),
         purposes: muSelectedKeys('muPurposes'),
       }),
     });
     muRenderCompletion(data.completion);
+    document.getElementById('muCustomInterests').value =
+      (data.taxonomies.customInterests || []).map((x) => x.label).join(', ');
     showToast('Selections saved.');
   } catch (e) {
     err.textContent = e.message; err.classList.add('show');
   } finally {
     btn.disabled = false; btn.textContent = 'Save Selections';
+  }
+});
+
+document.getElementById('muSaveVisibilityBtn').addEventListener('click', async () => {
+  const err = document.getElementById('muError');
+  err.classList.remove('show');
+  const btn = document.getElementById('muSaveVisibilityBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const visibility = {};
+    document.querySelectorAll('[data-mu-vis]').forEach((input) => {
+      visibility[input.getAttribute('data-mu-vis')] = input.checked;
+    });
+    const data = await api('/my-unplug/me/visibility', {
+      method: 'PATCH',
+      body: JSON.stringify({ visibility }),
+    });
+    MU_PROFILE = data.profile;
+    muRenderVisibility();
+    showToast('Privacy settings saved.');
+  } catch (e) {
+    err.textContent = e.message; err.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Privacy';
   }
 });
 
@@ -4897,7 +4966,7 @@ document.getElementById('muPublishBtn').addEventListener('click', async () => {
   const publishing = !(MU_PROFILE && MU_PROFILE.is_published);
   // Publishing is the moment a private page becomes world-readable, so it is
   // confirmed rather than a single stray click.
-  if (publishing && !confirm('Publish your My Unplug profile? Anyone will be able to view it. You can make it private again at any time.')) return;
+  if (publishing && !confirm('Publish your My Unplug profile? Your @username and display name will be public. Only optional fields you switched on under Public Profile Privacy will be shown. You can make the whole profile private again at any time.')) return;
   const btn = document.getElementById('muPublishBtn');
   btn.disabled = true;
   try {
