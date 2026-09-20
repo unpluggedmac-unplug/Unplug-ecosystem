@@ -8,11 +8,11 @@ edited to match these — this document is the reconciliation, and stays the rec
 was decided and why.
 
 
-## 2026-09-20 — Batch D pricing source-of-truth update (draft PR #53)
+## 2026-09-20 — Batch D pricing source-of-truth update (released via PR #53)
 
-**Approved owner decisions: 1A / 2A / 3A.** This is the current code candidate on
-`feat/batch-d-pricing-source-20260920`; PR #53 is still draft/unmerged, so these changes do **not**
-describe production until that PR is explicitly released.
+**Approved owner decisions: 1A / 2A / 3A.** This work is now production behavior. PR #53 was merged
+to `main` on 2026-09-20 as `f7f68f12d842793dda13c3f09a7bf4143ea76ca7`, and Render production
+auto-deploy `dep-danruljtqb8s73apnia0` went live on that exact merge commit.
 
 Directory package pricing now has one authoritative database source:
 `directory_package_prices`, keyed by `profile_type + tier`. Migration
@@ -34,10 +34,11 @@ price. Existing payment/order/invoice rows are not rewritten.
 
 Decision **3A** keeps paid forms outside Batch D. No form-payment charging model was added.
 
-**Pre-handover verification:** code candidate `8dab79bba072b499ca6b53a4f75b854f3b8cc8fb`
+**Verification and release:** the final feature head `75f8d8587321d57dca3ea799f0eaeee47c5fcc15`
 passed the focused Batch D pricing gate **85/85** and the complete real-PostgreSQL backend suite
-**2,467/2,467**, with 0 failures and 0 skipped. The documentation commit that contains this record
-must receive its own final-head CI pass before PR #53 is considered release-ready.
+**2,467/2,467**, with 0 failures and 0 skipped, plus the build/configuration gates. After merge,
+production applied migration 214, reported ready/database ok, and returned the six expected Directory
+prices from the new authoritative endpoint. No price changed as part of this consolidation.
 
 ## How this was checked, and what was wrong the first time
 
