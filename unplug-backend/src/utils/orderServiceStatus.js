@@ -25,6 +25,7 @@ const SUMMARY_PRIORITY = Object.freeze([
   'processing_issue',
   'changes_requested',
   'rejected',
+  'cancelled',
   'credit_issued',
   'approved',
   'pending',
@@ -43,12 +44,14 @@ function paymentStatusLabel(status) {
   return 'Awaiting payment';
 }
 
-function normaliseStandard(status) {
+function normaliseStandard(status, cancelledAt) {
+  if (cancelledAt) return { key: 'cancelled', label: 'Cancelled' };
   const key = String(status || '');
   return { key: key || 'unavailable', label: key ? statusLabel(key) : 'Status unavailable' };
 }
 
-function advertStatus(status) {
+function advertStatus(status, cancelledAt) {
+  if (cancelledAt) return { key: 'cancelled', label: 'Cancelled' };
   if (status === 'approved') return { key: 'approved', label: 'Approved' };
   if (status === 'rejected') return { key: 'rejected', label: 'Not approved' };
   if (status === 'pending_approval' || status === 'pending') {
@@ -73,10 +76,13 @@ function preSourceStatus(payment) {
 async function loadRows(table, column, ids, client) {
   if (!ids.length) return new Map();
   const result = await client.query(
-    `SELECT id, ${column} AS service_status FROM ${table} WHERE id = ANY($1::int[])`,
+    `SELECT id, ${column} AS service_status, cancelled_at FROM ${table} WHERE id = ANY($1::int[])`,
     [ids]
   );
-  return new Map(result.rows.map((row) => [Number(row.id), row.service_status]));
+  return new Map(result.rows.map((row) => [Number(row.id), {
+    status: row.service_status,
+    cancelledAt: row.cancelled_at || null,
+  }]));
 }
 
 async function loadOrderServiceStatuses(payments, client = pool) {
@@ -124,9 +130,12 @@ async function loadOrderServiceStatuses(payments, client = pool) {
         const raw = sourceMaps.get(payment.linked_type).get(id);
         service = raw == null
           ? { key: 'unavailable', label: 'Status unavailable' }
-          : normaliseStandard(raw);
+          : normaliseStandard(raw.status, raw.cancelledAt);
       } else if (payment.linked_type === 'ad_banner') {
-        service = advertStatus(sourceMaps.get('ad_banner').get(id));
+        const raw = sourceMaps.get('ad_banner').get(id);
+        service = raw == null
+          ? { key: 'unavailable', label: 'Status unavailable' }
+          : advertStatus(raw.status, raw.cancelledAt);
       } else if (payment.linked_type === 'profile_upgrade') {
         service = sourceMaps.get('profile_upgrade').get(id)
           ? { key: 'completed', label: 'Completed' }
