@@ -93,6 +93,7 @@ const TYPES = {
     sql: `
       SELECT 'article' AS type, sub.id, sub.title, sub.status,
              sub.created_at AS submitted_at, NULL::date AS expires_at,
+             sub.cancelled_at,
              pay.amount, pay.payment_status, pay.reference
         FROM articles sub
         ${PAYMENT_JOIN('article_publish')}
@@ -106,6 +107,7 @@ const TYPES = {
       SELECT 'event' AS type, sub.id, sub.name AS title, sub.status,
              sub.created_at AS submitted_at,
              COALESCE(sub.end_date, sub.event_date) AS expires_at,
+             sub.cancelled_at,
              pay.amount, pay.payment_status, pay.reference
         FROM events sub
         ${PAYMENT_JOIN('event_listing')}
@@ -122,6 +124,7 @@ const TYPES = {
              COALESCE(NULLIF(sub.headline, ''), 'Marketplace listing') AS title,
              sub.status,
              sub.created_at AS submitted_at, sub.active_to AS expires_at,
+             sub.cancelled_at,
              pay.amount, pay.payment_status, pay.reference
         FROM marketplace_listings sub
         JOIN advertisers adv ON adv.id = sub.advertiser_id
@@ -139,6 +142,7 @@ const TYPES = {
       SELECT 'advertising' AS type, sub.id, sub.name AS title,
              sub.moderation_status AS status,
              sub.created_at AS submitted_at, sub.ends_at AS expires_at,
+             sub.cancelled_at,
              pay.amount, pay.payment_status, pay.reference
         FROM ad_slots sub
         ${PAYMENT_JOIN('ad_banner')}
@@ -151,6 +155,7 @@ const TYPES = {
     sql: `
       SELECT 'competition' AS type, sub.id, c.name AS title, sub.status,
              sub.created_at AS submitted_at, NULL::date AS expires_at,
+             sub.cancelled_at,
              pay.amount, pay.payment_status, pay.reference
         FROM competition_entries sub
         JOIN competitions c ON c.id = sub.competition_id
@@ -174,6 +179,7 @@ const TYPES = {
                   ELSE sub.image_count || ' photos' END AS title,
              sub.status,
              sub.created_at AS submitted_at, NULL::date AS expires_at,
+             sub.cancelled_at,
              pay.amount, pay.payment_status, pay.reference
         FROM gallery_bundles sub
         ${PAYMENT_JOIN('gallery_bundle')}
@@ -196,6 +202,7 @@ const TYPES = {
                'Highlight') AS title,
              sub.status,
              sub.created_at AS submitted_at, sub.end_date AS expires_at,
+             sub.cancelled_at,
              pay.amount, pay.payment_status, pay.reference
         FROM highlights sub
         LEFT JOIN articles a ON sub.target_type = 'article'   AND a.id = sub.target_id
@@ -214,6 +221,7 @@ const TYPES = {
     sql: `
       SELECT 'profile' AS type, sub.id, sub.display_name AS title, sub.status,
              sub.created_at AS submitted_at, sub.renews_at::date AS expires_at,
+             sub.cancelled_at,
              pay.amount, pay.payment_status, pay.reference
         FROM profiles sub
         ${PAYMENT_JOIN('profile_package')}
@@ -273,7 +281,12 @@ async function listFor(userId, options = {}, client = pool) {
     id: r.id,
     title: r.title,
     status: r.status,
-    statusLabel: statusLabel(r.status),
+    // Cancellation deliberately reuses the underlying rejected status to take
+    // the service off public surfaces. cancelled_at is the semantic truth the
+    // member should see, so do not tell somebody "Not approved" when they
+    // themselves asked us to stop a previously approved service.
+    statusLabel: r.cancelled_at ? 'Cancelled' : statusLabel(r.status),
+    cancelledAt: r.cancelled_at || null,
     submittedAt: r.submitted_at,
     expiresAt: r.expires_at,
     amount: r.amount === null || r.amount === undefined ? null : Number(r.amount),
