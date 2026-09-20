@@ -145,3 +145,11 @@
   #section-overview #ovTotals{grid-template-columns:repeat(7,minmax(0,1fr))}
   #section-overview #ovTotals .stat-card{min-width:0}
 }
+
+
+/* Admin-only accessibility placement: keep the fixed accessibility control
+   clear of the persistent desktop Control Centre sidebar. */
+@media(min-width:801px){
+  body .a11y-fab{left:350px!important}
+  body .a11y-panel{left:350px!important}
+}
