@@ -14,43 +14,21 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
+const { runWithMigrationRetry } = require('./migrationRetry');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// PostgreSQL can abort one participant when two otherwise-valid operations take
-// locks in opposite order. That is a retryable concurrency event, not a broken
-// migration. Production deploys re-run the idempotent migrations while the old
-// instance is still serving traffic, so a DDL migration can legitimately meet
-// a live read/write at exactly the wrong moment.
-//
-// Retry ONLY the PostgreSQL errors explicitly documented as transaction-retry
-// conditions. Syntax errors, missing objects, constraint failures, permissions,
-// and every other SQL problem still fail the deploy immediately.
-const RETRYABLE_MIGRATION_CODES = new Set(['40P01', '40001']);
-const MIGRATION_MAX_ATTEMPTS = 4;
-const MIGRATION_RETRY_MS = [250, 750, 1500];
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function applyMigration(file, sql) {
-  for (let attempt = 1; attempt <= MIGRATION_MAX_ATTEMPTS; attempt += 1) {
-    try {
-      await pool.query(sql);
-      return;
-    } catch (err) {
-      const retryable = RETRYABLE_MIGRATION_CODES.has(err && err.code);
-      if (!retryable || attempt === MIGRATION_MAX_ATTEMPTS) throw err;
-
-      const waitMs = MIGRATION_RETRY_MS[attempt - 1];
+  return runWithMigrationRetry({
+    file,
+    operation: () => pool.query(sql),
+    onRetry: ({ code, nextAttempt, maxAttempts, waitMs }) => {
       console.warn(
-        `Migration ${file} hit retryable PostgreSQL error ${err.code}; `
-        + `retrying in ${waitMs}ms (attempt ${attempt + 1}/${MIGRATION_MAX_ATTEMPTS}).`
+        `Migration ${file} hit retryable PostgreSQL error ${code}; `
+        + `retrying in ${waitMs}ms (attempt ${nextAttempt}/${maxAttempts}).`
       );
-      await sleep(waitMs);
-    }
-  }
+    },
+  });
 }
 
 async function run() {
