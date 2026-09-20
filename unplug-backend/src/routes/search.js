@@ -289,7 +289,7 @@ function searchMembers(q, like, limit, offset) {
 // "Did you mean". Only ever asked when the search found nothing at all, so a
 // reader who typed "fashon" is offered "Fashion" instead of a blank page.
 //
-// word_similarity, not similarity: comparing one typed word against a whole
+// extensions.word_similarity, not similarity: comparing one typed word against a whole
 // headline scores badly, while word_similarity finds the best-matching word
 // inside it. Titles and names only — nobody mistypes their way into wanting
 // paragraph three, and indexing bodies for trigrams would be a large index
@@ -301,7 +301,7 @@ function searchMembers(q, like, limit, offset) {
 async function suggest(q) {
   try {
     const result = await pool.query(
-      `SELECT term, word_similarity($1, term) AS sim
+      `SELECT term, extensions.word_similarity($1, term) AS sim
          FROM (
            SELECT title AS term FROM articles WHERE status = 'approved'
            UNION ALL
@@ -309,7 +309,7 @@ async function suggest(q) {
            UNION ALL
            SELECT title FROM editions
          ) candidates
-        WHERE term IS NOT NULL AND word_similarity($1, term) > 0.5
+        WHERE term IS NOT NULL AND extensions.word_similarity($1, term) > 0.5
         ORDER BY sim DESC
         LIMIT 1`,
       [q]
