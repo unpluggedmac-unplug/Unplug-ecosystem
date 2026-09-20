@@ -37,6 +37,7 @@ let pool;
 let server;
 let baseUrl;
 let attribution;
+let referralAttribution;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-acq-'));
 const port = 25200 + (process.pid % 300); // unique per test file: bases are 400 apart so the offset ranges cannot overlap
 
@@ -100,6 +101,7 @@ before(async () => {
 
   jwt = require('jsonwebtoken');
   attribution = require('../src/utils/consultantAttribution');
+  referralAttribution = require('../src/utils/referralAttribution');
 
   const express = require('express');
   const { attachUser } = require('../src/middleware/auth');
@@ -304,6 +306,10 @@ test('a referral click is recorded, and an unknown code is not distinguishable',
   const fake = await req('POST', '/acquisition/referral-clicks', { body: { code: 'NOTAREALCODE' } });
   assert.equal(real.status, 200);
   assert.equal(fake.status, 200, 'a fake code must answer identically, or codes can be enumerated');
+  assert.deepEqual(Object.keys(real.body).sort(), ['clickId', 'recorded']);
+  assert.deepEqual(Object.keys(fake.body).sort(), ['clickId', 'recorded'],
+    'real and unknown codes must keep the same public response shape');
+  assert.ok(Number.isInteger(real.body.clickId) && real.body.clickId > 0);
 
   const stats = await req('GET', '/acquisition/referral-clicks/mine', { token: tokenFor(referrer) });
   assert.equal(stats.body.clicks, 1);
@@ -314,6 +320,76 @@ test('a member with no clicks reads 0%, not NaN', async () => {
   const stats = await req('GET', '/acquisition/referral-clicks/mine', { token: tokenFor(await makeUser()) });
   assert.equal(stats.body.clicks, 0);
   assert.equal(stats.body.conversionRate, 0);
+});
+
+test('a referral signup links the exact anonymous click and creates one member referral', async () => {
+  const referrer = await makeUser();
+  const referred = await makeUser();
+  const code = 'FUNNELTEST1';
+
+  await pool.query(
+    `INSERT INTO member_participation_profiles (user_id, referral_code) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET referral_code = EXCLUDED.referral_code`,
+    [referrer, code]
+  );
+
+  const click = await req('POST', '/acquisition/referral-clicks', {
+    body: { code, from: 'https://social.example/referral-post' },
+  });
+  assert.equal(click.status, 200);
+  assert.ok(click.body.clickId > 0);
+
+  const result = await referralAttribution.recordSignupReferral({
+    userId: referred,
+    referralCode: code,
+    referralClickId: click.body.clickId,
+  }, pool);
+  assert.equal(result.ok, true);
+  assert.equal(result.clickMarked, true);
+
+  const referral = await pool.query(
+    'SELECT referrer_user_id, referred_user_id FROM member_referrals WHERE referred_user_id = $1',
+    [referred]
+  );
+  assert.equal(referral.rowCount, 1);
+  assert.equal(referral.rows[0].referrer_user_id, referrer);
+
+  const converted = await pool.query(
+    'SELECT converted_user_id FROM referral_clicks WHERE id = $1',
+    [click.body.clickId]
+  );
+  assert.equal(converted.rows[0].converted_user_id, referred);
+
+  const stats = await req('GET', '/acquisition/referral-clicks/mine', { token: tokenFor(referrer) });
+  assert.equal(stats.body.clicks, 1);
+  assert.equal(stats.body.signups, 1);
+  assert.equal(stats.body.conversionRate, 100);
+});
+
+test('referral signup falls back to the latest unconverted click when an old session has no click id', async () => {
+  const referrer = await makeUser();
+  const referred = await makeUser();
+  const code = 'LEGACYFUNNEL';
+
+  await pool.query(
+    `INSERT INTO member_participation_profiles (user_id, referral_code) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET referral_code = EXCLUDED.referral_code`,
+    [referrer, code]
+  );
+  const click = await req('POST', '/acquisition/referral-clicks', { body: { code } });
+
+  const result = await referralAttribution.recordSignupReferral({
+    userId: referred,
+    referralCode: code,
+  }, pool);
+  assert.equal(result.ok, true);
+  assert.equal(result.clickMarked, true);
+
+  const converted = await pool.query(
+    'SELECT converted_user_id FROM referral_clicks WHERE id = $1',
+    [click.body.clickId]
+  );
+  assert.equal(converted.rows[0].converted_user_id, referred);
 });
 
 test('shares are recorded and summarised, and a bad type is refused', async () => {
