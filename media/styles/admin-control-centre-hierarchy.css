@@ -92,3 +92,49 @@
   .cc-overview-grid{grid-template-columns:1fr}
   .cc-overview-card{min-height:112px}
 }
+
+
+/* Primary-group purpose copy: keeps the 13-section information architecture self-explanatory. */
+.cc-group-description{
+  margin:-2px 34px 7px 38px;
+  font-size:11px;
+  line-height:1.35;
+  color:var(--muted,#6b7280);
+}
+.cc-nav-group:not(.open)>.cc-group-description{
+  display:none;
+}
+@media (max-width:800px){
+  .cc-group-description{
+    margin-left:38px;
+    margin-right:28px;
+    font-size:12px;
+  }
+}
+
+
+.cc-overview-section-label{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:14px;
+  margin:18px 0 8px;
+  padding-bottom:7px;
+  border-bottom:1px solid var(--paper-line);
+}
+.cc-overview-section-label strong{
+  font-family:'Playfair Display',serif;
+  font-size:17px;
+  color:var(--ink);
+}
+.cc-overview-section-label span{
+  font-size:11px;
+  line-height:1.45;
+  color:var(--slate);
+  text-align:right;
+}
+.cc-overview-quick-label{margin-top:22px}
+@media (max-width:800px){
+  .cc-overview-section-label{align-items:flex-start;flex-direction:column;gap:3px}
+  .cc-overview-section-label span{text-align:left}
+}

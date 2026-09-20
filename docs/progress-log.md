@@ -3575,3 +3575,30 @@ forced to Node 24. The warning is non-failing and is not part of Batch D.
 **Production integration safety.** PR #66 was closed without merge after stale-history audit. PR #68 was later superseded as production advanced. PR #76 was rebuilt from current production main after PR #74 and its exact head passed Build Configuration, Member Dashboard CI and the generic Backend Regression CI; both full backend jobs finished at **2,487/2,487 tests, 0 failures, 0 skipped**. Before staging promotion, production `main` advanced again when PR #75 merged profile-image fallback and Growth mobile fixes. PR #75 does not touch any of the 13 dashboard candidate files.
 
 **Current gate.** The final latest-main candidate is **PR #77** (`integrate/member-dashboard-redesign-main-latest-20260920`), built directly from production `main` after PR #75. It contains only the same 13 dashboard/runtime/docs/test files and inherits PR #74/#75 unchanged. PR #77 must pass the same exact-head Member Analytics, My Unplug privacy/custom interests, My Orders status, Batch D pricing, full backend regression, Member Dashboard regression, packaged frontend and build-configuration checks before staging is resynced to its exact SHA for the authenticated visual gate.
+
+
+## 2026-09-20 — Admin Dashboard information architecture restructure
+
+**Scope.** Second-pass Control Centre restructure from the 2026-09-20 Admin Dashboard UX/UI brief. This is
+an information-architecture/navigation change, not a backend or database rewrite.
+
+**What changed.** The existing Control Centre enhancement already had working permissions, deep links,
+Agreement/Growth hydration, favourites, recents, breadcrumbs and mobile drawer behaviour. Those mechanisms
+were retained. The sidebar model was reorganised into exactly 13 purpose-based primary groups:
+Dashboard; People; Content; Community; Gamification; Opportunities; Deaf Community; Directory &
+Marketplace; Payments & Commerce; Communications; Media & Pages; Analytics & Reports; Administration.
+
+Existing destinations are reused rather than duplicated. Agreement Generator and Forms live under
+Administration; Growth, Competitions and Top 10 live under Opportunities; advertising/Marketplace are
+grouped with Directory & Marketplace while campaign-facing controls remain discoverable from
+Communications through aliases to the same existing section. No new backend routes or fake features were
+introduced.
+
+**Clarity.** Every primary group now carries a concise purpose description, rendered with textContent.
+Descriptions collapse with their group to preserve visual calm. The runtime and stylesheet cache versions
+were bumped so deployed browsers receive the new navigation instead of the September 13 asset.
+
+**Regression coverage.** Added `adminInformationArchitecture.test.js` to lock the 13 primary groups,
+require purpose descriptions for all 13, confirm high-value existing destinations remain discoverable,
+and verify the description renderer/CSS. Existing Growth builder wording was retained as “Master Form
+Builder” so the prior Growth navigation regression remains valid.
