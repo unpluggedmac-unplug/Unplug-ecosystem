@@ -89,6 +89,7 @@ var PAGE_META={
   'my-articles':['My Articles','View your article submissions and their current approval or publishing status.'],
   'my-events':['My Events','View your event submissions and their current approval or publishing status.'],
   'my-listings':['My Listings','View your listing submissions and their current approval or publishing status.'],
+  'my-gallery':['My Gallery','View Gallery content you have submitted and its current approval status.'],
   'reading-list':['Reading List','Return to articles you saved so you can read them again later.'],
   'my-editions':['My Editions','View magazine editions connected to your member account.'],
   'journey-referral':['Referral Progress','Track the existing referral activity connected to your Unplug participation.'],
