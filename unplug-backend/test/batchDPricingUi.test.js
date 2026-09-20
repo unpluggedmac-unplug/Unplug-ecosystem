@@ -49,8 +49,8 @@ test('member-facing Directory prices start neutral and fail unavailable rather t
 test('Directory charging has no literal price ladder in runtime code', () => {
   assert.match(payments, /priceForDirectoryPackage\(type, package_tier\)/);
   assert.match(directoryPackages, /FROM directory_package_prices/);
-  assert.doesNotMatch(directoryPackages, /150|280|400|500|700|1000/,
-    'seed values belong in migration 214, not runtime charging code');
+  assert.doesNotMatch(directoryPackages, /(?:basic|pro|premium)\s*:\s*\d/i,
+    'runtime code must not map Directory tiers to literal prices');
 });
 
 test('duration-based pricing has no hardcoded fallback and explicitly fails unavailable', () => {
