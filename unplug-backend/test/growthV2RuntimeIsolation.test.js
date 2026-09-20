@@ -19,6 +19,17 @@ test('Growth V2 Cloudflare build injects staging runtime isolation before page c
   assert.match(builder, /Packaged Growth V2 page lost runtime isolation/i);
 });
 
+test('Growth V2 build keeps viewport metadata before runtime scripts for Android', () => {
+  const builder = fs.readFileSync(path.join(ROOT, 'scripts', 'build-growth-pages.js'), 'utf8');
+  assert.match(builder, /const viewport = \/<meta\\s\+name=/);
+
+  const page = fs.readFileSync(path.join(ROOT, 'unplug-growth-application-v2.html'), 'utf8');
+  assert.match(page, /max-device-width:820px/);
+  assert.match(page, /grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(page, /input,textarea,select\{font-size:16px/);
+  assert.match(page, /html,body\{max-width:100%;overflow-x:hidden\}/);
+});
+
 test('Growth V2 source still resolves API exclusively through runtime value before fallback', () => {
   for (const file of ['unplug-growth-application-v2.html', 'unplug-growth-applications-admin-v2.html']) {
     const page = fs.readFileSync(path.join(ROOT, file), 'utf8');
