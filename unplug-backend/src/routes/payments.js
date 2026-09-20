@@ -213,7 +213,11 @@ async function resolveAmount(linkedType, linkedId) {
     // Admin-managed price from service_packages — never the client's word for
     // it, and never a hardcoded fallback if the pricing table cannot be read.
     const price = await priceFor(highlightServiceKey(target_type), duration_days);
-    if (price === null) throw new Error('That highlight package is no longer available.');
+    if (price === null) {
+      const err = new Error('That highlight package is no longer available.');
+      err.code = 'PACKAGE_UNAVAILABLE';
+      throw err;
+    }
     return price;
   }
   if (linkedType === 'marketplace_listing') {
@@ -251,7 +255,11 @@ async function resolveAmount(linkedType, linkedId) {
     const result = await pool.query('SELECT duration_days FROM ad_slots WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Banner not found.');
     const price = await priceFor('ad_banner', result.rows[0].duration_days);
-    if (price === null) throw new Error('Invalid banner duration.');
+    if (price === null) {
+      const err = new Error('That advertising package is no longer available.');
+      err.code = 'PACKAGE_UNAVAILABLE';
+      throw err;
+    }
     return price;
   }
   if (linkedType === 'edition_download') {
@@ -607,7 +615,12 @@ router.get('/packages', async (req, res, next) => {
 router.get('/directory-packages', async (req, res, next) => {
   try {
     const rows = await directoryPackages();
-    res.json({ packages: rows, priceMap: asPriceMap(rows) });
+    const publicRows = rows.map((row) => ({
+      profile_type: row.profile_type,
+      tier: row.tier,
+      price: Number(row.price),
+    }));
+    res.json({ packages: publicRows, priceMap: asPriceMap(publicRows) });
   } catch (err) {
     if (err.code === 'PACKAGE_UNAVAILABLE') {
       return res.status(400).json({ error: err.message });
