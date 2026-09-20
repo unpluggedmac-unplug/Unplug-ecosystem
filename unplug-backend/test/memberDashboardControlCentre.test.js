@@ -64,6 +64,11 @@ test('staging runtime binds login, forgot-password, and registration forms to th
   assert.match(page, /id="registerApiBaseInput"/);
 });
 
+test('home account status cards size to available dashboard width without clipping long text', () => {
+  assert.match(css, /\.cc-home-status-grid\{[^}]*repeat\(auto-fit,minmax\(135px,1fr\)\)/);
+  assert.match(css, /\.cc-home-status-item[^\n]*overflow-wrap:anywhere/);
+});
+
 test('member asset cache version is bumped consistently through the loader chain', () => {
   const version = '20260920-2';
   assert.ok(runtime.includes(`member-dashboard-control-centre-loader.js?v=${version}`));
