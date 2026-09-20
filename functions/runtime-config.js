@@ -49,7 +49,7 @@ export async function onRequest({ env, request }) {
     ' if (p.indexOf("unplug-admin-dashboard")===-1 && p.indexOf("unplug-agreement-generator-admin")===-1 && p.indexOf("unplug-growth-applications-admin")===-1) return;',
     ' if (document.querySelector("script[data-unplug-control-centre-hierarchy]")) return;',
     ' var s=document.createElement("script");',
-    ' s.src="/media/scripts/admin-control-centre-hierarchy.js?v=20260920-1";',
+    ' s.src="/media/scripts/admin-control-centre-hierarchy.js?v=20260920-2";',
     ' s.async=false;',
     ' s.setAttribute("data-unplug-control-centre-hierarchy","true");',
     ' (document.head||document.documentElement).appendChild(s);',
