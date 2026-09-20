@@ -57,7 +57,7 @@
     if (document.querySelector('link[data-cc-hierarchy-style]')) return;
     var l = document.createElement('link');
     l.rel = 'stylesheet';
-    l.href = '/media/styles/admin-control-centre-hierarchy.css?v=20260920-3';
+    l.href = '/media/styles/admin-control-centre-hierarchy.css?v=20260920-4';
     l.setAttribute('data-cc-hierarchy-style', 'true');
     document.head.appendChild(l);
   }
@@ -197,6 +197,29 @@
     Object.keys(originalAnchors).forEach(function (k) { source.appendChild(originalAnchors[k]); });
     Object.keys(externalAnchors).forEach(function (k) { if (externalAnchors[k]) source.appendChild(externalAnchors[k]); });
     sidebar.appendChild(source);
+
+    // Desktop Admin gets a real accessibility footer slot. accessibility.js
+    // may load after this enhancement, so dock the FAB when it appears.
+    var a11ySlot = document.createElement('div');
+    a11ySlot.className = 'cc-a11y-slot';
+    a11ySlot.setAttribute('aria-label', 'Accessibility controls');
+    var viewSiteLink = sidebar.querySelector('.view-site-link');
+    if (viewSiteLink) sidebar.insertBefore(a11ySlot, viewSiteLink);
+    else sidebar.appendChild(a11ySlot);
+
+    function dockAccessibilityFab() {
+      var fab = document.querySelector('.a11y-fab');
+      if (!fab || fab.parentElement === a11ySlot) return !!fab;
+      a11ySlot.appendChild(fab);
+      return true;
+    }
+    if (!dockAccessibilityFab()) {
+      var a11yWatch = new MutationObserver(function () {
+        if (dockAccessibilityFab()) a11yWatch.disconnect();
+      });
+      a11yWatch.observe(document.body, { childList: true, subtree: true });
+      setTimeout(function () { a11yWatch.disconnect(); }, 10000);
+    }
 
     var state = {
       usedSections: new Set(),

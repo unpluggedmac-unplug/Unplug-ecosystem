@@ -3622,3 +3622,19 @@ desktop Admin-specific placement is now moved back into the sidebar footprint wi
 dedicated 92px reserved bottom pocket. The accessibility panel opens within that same
 sidebar footprint. Mobile behaviour remains unchanged. Control Centre JS/CSS cache
 version bumped to 20260920-3 and regression coverage updated.
+
+
+## 2026-09-20 — Admin accessibility structural sidebar docking
+
+Three live screenshots after PR #80 showed that a fixed accessibility FAB could still
+cover different sidebar items at different scroll positions. The previous reserved
+outer-sidebar padding could not solve this because the navigation tree is its own
+scrollable flex child.
+
+The desktop Admin implementation is now structural: a real `.cc-a11y-slot` footer
+is inserted before the View Site link, and the accessibility FAB is moved into that
+slot when `accessibility.js` appears. On desktop the FAB becomes static inside the
+sidebar flex flow, so the navigation scroll area physically ends above it. The
+accessibility panel remains fixed within the sidebar footprint. Mobile keeps the
+existing floating accessibility behaviour. Control Centre cache version bumped to
+20260920-4 and regression coverage updated.
