@@ -740,9 +740,13 @@
       favNodes.forEach(function (n) { favHost.appendChild(quickButton({ label: n.label, path: [n.label] }, n)); });
 
       recentHost.textContent = '';
+      var validRecent = recent.map(function (r) {
+        var n = findNodeByKey(r.key);
+        return n ? { item: r, node: n } : null;
+      }).filter(Boolean).slice(0, 3);
       var recentBlock = recentHost.closest('.cc-quick-block');
-      if (recentBlock) recentBlock.hidden = !recent.length;
-      recent.slice(0, 3).forEach(function (r) { recentHost.appendChild(quickButton(r, findNodeByKey(r.key))); });
+      if (recentBlock) recentBlock.hidden = !validRecent.length;
+      validRecent.forEach(function (x) { recentHost.appendChild(quickButton(x.item, x.node)); });
     }
     renderQuickLists();
 
