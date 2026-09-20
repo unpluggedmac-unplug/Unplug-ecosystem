@@ -159,7 +159,8 @@ test('member home is personalised from live DOM state without inventing a second
   assert.match(script, /function submissions\(/);
   assert.match(script, /function agreements\(/);
   assert.match(script, /Your UnplugNews member dashboard/);
-  assert.match(script, /Profile completion/);
+  assert.match(script, /function homeStatus\(/);
+  assert.match(script, /Account status/);
   assert.match(script, /My Growth/);
 });
 
