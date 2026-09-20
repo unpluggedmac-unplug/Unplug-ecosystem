@@ -42,9 +42,26 @@ const CANCELLABLE = {
     stop: `UPDATE events SET status = 'rejected', cancelled_at = now() WHERE id = $1`,
   },
   gallery_bundle: {
-    label: 'Gallery Image', table: 'gallery_images', nameColumn: 'caption',
-    ownerColumn: null, paymentTypes: ['gallery_bundle'],
-    stop: `UPDATE gallery_images SET status = 'rejected', cancelled_at = now() WHERE id = $1`,
+    // A gallery purchase is the BUNDLE, not one image inside it. Payments,
+    // orders and approval health all use gallery_bundles.id as linked_id.
+    // Cancelling therefore stops the bundle and cascades that state to every
+    // photo belonging to it.
+    label: 'Gallery submission', table: 'gallery_bundles', nameColumn: null,
+    ownerColumn: 'user_id', paymentTypes: ['gallery_bundle'],
+    stop: `
+      WITH stopped AS (
+        UPDATE gallery_bundles
+           SET status = 'rejected', cancelled_at = now()
+         WHERE id = $1
+         RETURNING id
+      ), stopped_images AS (
+        UPDATE gallery_images
+           SET status = 'rejected', cancelled_at = now()
+         WHERE bundle_id IN (SELECT id FROM stopped)
+         RETURNING id
+      )
+      SELECT id FROM stopped
+    `,
   },
   marketplace_listing: {
     label: 'Marketplace Poster', table: 'marketplace_listings', nameColumn: 'headline',
@@ -114,6 +131,19 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     if (!Number.isInteger(serviceId) || serviceId <= 0) {
       return res.status(400).json({ error: 'Which service do you want to cancel?' });
+    }
+    // PostgreSQL DATE will reject malformed input, but letting that bubble out
+    // turns a member typo into a 500. Keep the API contract narrow and
+    // calendar-shaped; the requested date is optional.
+    if (requestedDate !== null
+        && !/^\d{4}-\d{2}-\d{2}$/.test(String(requestedDate))) {
+      return res.status(400).json({ error: 'Requested effective date must use YYYY-MM-DD.' });
+    }
+    if (requestedDate !== null) {
+      const parsed = new Date(String(requestedDate) + 'T00:00:00Z');
+      if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== String(requestedDate)) {
+        return res.status(400).json({ error: 'Requested effective date is not a valid calendar date.' });
+      }
     }
 
     const found = await loadService(serviceType, serviceId);
