@@ -164,6 +164,13 @@ test('member home is personalised from live DOM state without inventing a second
   assert.match(script, /My Growth/);
 });
 
+test('Home status severity distinguishes incomplete, unread and action-required states', () => {
+  assert.match(script, /match\(\/\(\\d\+\)%\\s\*complete\//);
+  assert.match(script, /needs your attention/);
+  assert.match(script, /unread/);
+  assert.match(script, /statusClass\(value\+' '\+note\)/);
+});
+
 test('Phase 4 Home follows the approved control-centre hierarchy without a new data source', () => {
   const ordered = [
     "panel('status','Account status'",
