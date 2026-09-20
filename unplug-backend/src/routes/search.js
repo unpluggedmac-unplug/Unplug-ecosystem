@@ -32,6 +32,15 @@ const FTS = {
        coalesce(about_me, ''))`,
 };
 
+// Member search has a stricter expression than the legacy FTS.myUnplug index:
+// a private About Me must not make a public profile discoverable by words the
+// member explicitly hid. Migration 213 indexes this exact expression.
+const PUBLIC_MEMBER_FTS = `to_tsvector('english',
+       coalesce(display_name, '') || ' ' ||
+       coalesce(username, '') || ' ' ||
+       CASE WHEN COALESCE(field_visibility->>'about', 'false') = 'true'
+            THEN coalesce(about_me, '') ELSE '' END)`;
+
 // websearch_to_tsquery, never to_tsquery. This is a public endpoint taking a
 // stranger's typing: to_tsquery THROWS on anything it considers bad syntax, so
 // a reader typing `C++ & ` would get a 500. websearch_to_tsquery accepts
@@ -252,17 +261,24 @@ function searchEditions(like, limit, offset) {
 // has none by design — see migration 105.
 function searchMembers(q, like, limit, offset) {
   return pool.query(
-    `SELECT m.user_id, m.username, m.display_name, m.avatar_url, m.tags,
+    `SELECT m.user_id, m.username, m.display_name,
+            CASE WHEN COALESCE(m.field_visibility->>'avatar', 'false') = 'true'
+                 THEN m.avatar_url END AS avatar_url,
+            CASE WHEN COALESCE(m.field_visibility->>'tags', 'false') = 'true'
+                 THEN m.tags END AS tags,
             ts_rank(
               setweight(to_tsvector('english', coalesce(m.display_name, '') || ' ' ||
                                                coalesce(m.username, '')), 'A') ||
-              setweight(to_tsvector('english', coalesce(m.about_me, '')), 'C'),
+              setweight(to_tsvector('english',
+                CASE WHEN COALESCE(m.field_visibility->>'about', 'false') = 'true'
+                     THEN coalesce(m.about_me, '') ELSE '' END), 'C'),
               ${TSQ}) AS rank,
             COUNT(*) OVER() AS total_count
        FROM my_unplug_profiles m
       WHERE m.is_published = true
-        AND (${FTS.myUnplug} @@ ${TSQ}
-             OR EXISTS (SELECT 1 FROM unnest(COALESCE(m.tags, '{}')) t WHERE t ILIKE $2))
+        AND (${PUBLIC_MEMBER_FTS} @@ ${TSQ}
+             OR (COALESCE(m.field_visibility->>'tags', 'false') = 'true'
+                 AND EXISTS (SELECT 1 FROM unnest(COALESCE(m.tags, '{}')) t WHERE t ILIKE $2)))
       ORDER BY rank DESC, m.display_name ASC
       LIMIT $3 OFFSET $4`,
     [q, like, limit, offset]
@@ -306,3 +322,4 @@ async function suggest(q) {
 
 module.exports = router;
 module.exports.FTS = FTS;
+module.exports.PUBLIC_MEMBER_FTS = PUBLIC_MEMBER_FTS;
