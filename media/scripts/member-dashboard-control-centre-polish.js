@@ -78,6 +78,87 @@ function syncAccountShortcuts(){
   }
 }
 
+var PAGE_META={
+  'directory-profile':['My Directory Profile','Manage the public professional or business profile people see in the Unplug Directory.'],
+  'directory-performance':['Directory Performance','Review the existing analytics connected to your public Directory presence and published work.'],
+  'community-profile':['My Profile','Manage your personal Unplug profile, identity details and community visibility.'],
+  'profile-completion':['Profile Completion','See what is complete and exactly what still needs attention on your personal profile.'],
+  'public-profile':['Preview My Unplug Profile','Open the existing public-profile preview for your personal Unplug identity.'],
+  'growth-overview':['My Growth Journey','Continue your existing Growth Application, assigned tasks and development progress.'],
+  'my-submissions':['My Submissions','View content and entries you have submitted and check their current status.'],
+  'my-articles':['My Articles','View your article submissions and their current approval or publishing status.'],
+  'my-events':['My Events','View your event submissions and their current approval or publishing status.'],
+  'my-listings':['My Listings','View your listing submissions and their current approval or publishing status.'],
+  'reading-list':['Reading List','Return to articles you saved so you can read them again later.'],
+  'my-editions':['My Editions','View magazine editions connected to your member account.'],
+  'journey-referral':['Referral Progress','Track the existing referral activity connected to your Unplug participation.'],
+  'my-referrals':['My Referrals','View members connected to your existing referral or representative activity.'],
+  'my-clients':['My Clients','View members connected to your existing representative or consultant role.'],
+  'journey-status':['My Score & Level','See your current Unplug Score, status level, streak and recognition progress.'],
+  'journey-today':['Missions','View the current missions already available through your My Unplug participation.'],
+  'journey-week':["This Week's Mission",'View the current weekly mission and your existing progress.'],
+  'journey-month':["This Month's Challenge",'View the current monthly challenge and your existing progress.'],
+  'journey-achievements':['My Achievements','Review achievements already awarded through your Unplug participation.'],
+  'journey-passport':['Unplug Passport','Review the passport stamps and milestones already earned on your journey.'],
+  'leaderboard':['Leaderboard','View the existing Unplug rankings and participation leaderboard.'],
+  'my-competitions':['My Competitions','View competition entries connected to your account and their status.'],
+  'my-votes':['My Votes','Review votes and vote packages already connected to your account.'],
+  'browse-competitions':['Browse Competitions','Explore competition opportunities currently available on UnplugNews.'],
+  'browse-services':['Browse Services','Explore the existing UnplugNews services available to members.'],
+  'my-services':['My Services','View services already connected to your account and their current state.'],
+  'my-advertising':['My Advertising','View advertising submissions connected to your account and their current status.'],
+  'my-orders':['My Orders','Review your existing orders, references and current payment or approval state.'],
+  'payments':['Payments','Review payment records already connected to your member account.'],
+  'my-credits':['Unplug Credits','Review your available Unplug Credit and existing credit history.'],
+  'my-invoices':['My Invoices','Open invoices already issued for your member purchases.'],
+  'notifications':['All Notifications','Review important member, account and activity notifications in one place.'],
+  'my-agreements':['My Agreements','Review agreements currently connected to your member account.'],
+  'available-agreements':['Available Agreements','View agreement templates currently available for you to complete.'],
+  'contact-support':['Contact Support','Use the existing UnplugNews contact channel when you need help.'],
+  'account-settings':['Account Details','Manage the account controls already available in your member workspace.'],
+  'login-security':['Login & Security','Manage your password and existing two-step sign-in controls.'],
+  'communication-preferences':['Notification Preferences','Choose which non-essential account notifications UnplugNews sends you.'],
+  'your-data':['Privacy & Your Data','Review privacy controls and the data tools available to your account.'],
+  'download-data':['Download My Data','Use the existing privacy export tool to download your account data.']
+};
+function pageActive(){return q('#ccMemberNav .cc-member-nav-action.active')||q('#ccMemberNav [aria-current="page"]')}
+function pageLabel(button){var x=button&&q('.cc-member-label',button);return String((x&&x.textContent)||(button&&button.textContent)||'Member Dashboard').replace(/\s+/g,' ').trim()}
+function pageStatus(id,section){
+  var label='',note='';
+  if(id==='community-profile'||id==='profile-completion'||id==='public-profile'){
+    var p=q('#muCompletionPct'),pub=q('#muPublishLabel');
+    label=String((pub&&pub.textContent)||(p&&p.textContent)||'In progress').trim();
+    note=p&&p.textContent?'Profile completion '+String(p.textContent).trim():'Personal profile status';
+  }else if(id==='directory-profile'||id==='directory-performance'){
+    var pill=section&&q('.status-pill',section);
+    label=String((pill&&pill.textContent)||'Current profile').trim();
+    note='Directory status';
+  }else if(id==='notifications'){
+    var badge=q('#notifCountBadge'),n=String(badge&&badge.textContent||'').trim();
+    label=n?(n+' unread'):'Up to date';note='Notification status';
+  }else if(id==='my-submissions'||/^my-(articles|events|listings|advertising|competitions)$/.test(id)){
+    var rows=section?qa('.subs-row',section).length:0;
+    label=rows+' item'+(rows===1?'':'s');note='Current submission view';
+  }else{
+    label='Ready';note='This area is available to use.';
+  }
+  return {label:label,note:note};
+}
+function syncPageHeader(){
+  var home=q('#ccMemberHome');
+  if(home&&!home.classList.contains('section-hidden'))return;
+  var section=qa('.ms-section[data-ms-section]').find(function(x){return !x.classList.contains('section-hidden')&&!x.hidden});
+  if(!section)return;
+  var active=pageActive(),id=active&&active.dataset&&(active.dataset.id||active.dataset.accountShortcut)||'',label=pageLabel(active);
+  var meta=PAGE_META[id]||[label,'View and manage this part of your UnplugNews member account.'];
+  var status=pageStatus(id,section),sig=[id,meta[0],meta[1],status.label,status.note].join('|');
+  var head=q('[data-cc-page-head]',section);
+  if(!head){head=document.createElement('div');head.className='cc-member-page-head';head.dataset.ccPageHead='true';section.insertBefore(head,section.firstChild)}
+  if(head.dataset.signature===sig)return;
+  head.dataset.signature=sig;
+  head.innerHTML='<div class="cc-member-page-head-copy"><span>MEMBER DASHBOARD</span><h1>'+meta[0]+'</h1><p>'+meta[1]+'</p></div><div class="cc-member-page-status '+(/^Ready$/.test(status.label)?'is-neutral':'')+'"><small>'+status.note+'</small><strong>'+status.label+'</strong></div>';
+}
+
 function patchNavigationA11y(){
   qa('#ccMemberNav .cc-member-branch').forEach(function(branch){
     var toggle=q(':scope > .cc-member-branch-head > .cc-member-toggle',branch);
@@ -244,6 +325,7 @@ function apply(){
   scheduled=0;
   if(!q('#ccMemberNav'))return;
   syncAccountShortcuts();
+  syncPageHeader();
   patchNavigationA11y();
   patchHomeA11y();
   syncProfileChecklist();
