@@ -159,6 +159,22 @@ function syncPageHeader(){
   head.innerHTML='<div class="cc-member-page-head-copy"><span>MEMBER DASHBOARD</span><h1>'+meta[0]+'</h1><p>'+meta[1]+'</p></div><div class="cc-member-page-status '+(/^Ready$/.test(status.label)?'is-neutral':'')+'"><small>'+status.note+'</small><strong>'+status.label+'</strong></div>';
 }
 
+function patchMobileMenuA11y(){
+  var button=q('#msMenuBtn'),side=q('#msSidebar');
+  if(!button||!side)return;
+  button.setAttribute('aria-controls','msSidebar');
+  button.setAttribute('aria-expanded',side.classList.contains('open')?'true':'false');
+  if(button.dataset.ccMobileBound)return;
+  button.dataset.ccMobileBound='true';
+  button.addEventListener('click',function(){setTimeout(function(){button.setAttribute('aria-expanded',side.classList.contains('open')?'true':'false')},0)});
+  document.addEventListener('keydown',function(ev){
+    if(ev.key!=='Escape'||!matchMedia('(max-width:820px)').matches||!side.classList.contains('open'))return;
+    side.classList.remove('open');
+    button.setAttribute('aria-expanded','false');
+    button.focus();
+  });
+}
+
 function patchNavigationA11y(){
   qa('#ccMemberNav .cc-member-branch').forEach(function(branch){
     var toggle=q(':scope > .cc-member-branch-head > .cc-member-toggle',branch);
@@ -326,6 +342,7 @@ function apply(){
   if(!q('#ccMemberNav'))return;
   syncAccountShortcuts();
   syncPageHeader();
+  patchMobileMenuA11y();
   patchNavigationA11y();
   patchHomeA11y();
   syncProfileChecklist();
