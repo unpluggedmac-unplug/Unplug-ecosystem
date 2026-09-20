@@ -62,7 +62,7 @@ export async function onRequest({ env, request }) {
     ' if (p.indexOf("unplug-member-dashboard")===-1) return;',
     ' if (document.querySelector("script[data-unplug-member-control-centre-loader]")) return;',
     ' var s=document.createElement("script");',
-    ' s.src="/media/scripts/member-dashboard-control-centre-loader.js?v=20260913-1";',
+    ' s.src="/media/scripts/member-dashboard-control-centre-loader.js?v=20260920-2";',
     ' s.async=false;',
     ' s.setAttribute("data-unplug-member-control-centre-loader","true");',
     ' (document.head||document.documentElement).appendChild(s);',
