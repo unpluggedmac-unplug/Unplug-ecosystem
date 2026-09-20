@@ -175,8 +175,9 @@ verified live after the fact.
 2. **Run the session check** if the auth errors recur, and send the output.
 3. **Check the first few consultant payouts by hand.** Commission attribution
    changed — see section 15.
-4. Pre-existing and still open: Supabase database backups, Google Workspace,
-   the mobile consent-bar horizontal scroll.
+4. Pre-existing and still open: Supabase database backups and Google Workspace.
+   The mobile consent-bar horizontal-scroll issue was fixed on 20 September 2026
+   with explicit narrow-screen width/wrapping constraints and regression coverage.
 
 ## 12. The Approval Queue
 
@@ -352,9 +353,10 @@ those before relying on them.**
 6. Cancelling sets a service's status to `rejected` plus `cancelled_at`; the
    admin distinguishes them, but a raw database query would need to check both.
 7. The Render instance sleeps; the first request after idle can take ~50s.
-8. Referral **click→signup attribution** needs the frontend to call
-   `POST /acquisition/referral-clicks` when a referral link is opened. The
-   endpoint is live; the call site is not yet wired.
+8. Referral **click→signup attribution is now wired**. The public magazine loads
+   `unplug-participation-sdk.js`, referral links record `POST /acquisition/referral-clicks`,
+   and member registration submits the stored referral code plus exact click id.
+   Signup/acquisition regression tests cover the conversion path.
 
 ## 19. Recommended next steps
 
@@ -364,14 +366,13 @@ those before relying on them.**
 3. Check the first consultant payout run by hand.
 
 **Soon**
-4. Wire the referral-click call so the funnel populates.
-5. Turn on Supabase database backups. Still the largest single risk to the
+4. Turn on Supabase database backups. Still the largest single risk to the
    business, and unrelated to anything in this programme.
-6. Email notifications for profile/community events (parked since July).
+5. Email notifications for profile/community events (parked since July).
 
 **When there is time**
-7. Revisit leaderboards joining Directory listings to members (section 13).
-8. Ozow and PayFast, once the accounts exist — the checkout already has slots.
+6. Revisit leaderboards joining Directory listings to members (section 13).
+7. Ozow and PayFast, once the accounts exist — the checkout already has slots.
 
 ---
 

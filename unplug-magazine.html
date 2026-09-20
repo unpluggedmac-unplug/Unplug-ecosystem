@@ -1313,7 +1313,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .consent-close{ position:absolute; top:10px; right:12px; background:none; border:none; font-size:26px;
   line-height:1; color:var(--slate,#7a726a); cursor:pointer; padding:4px 8px; }
 .consent-close:hover{ color:var(--maroon,#7a1f2b); }
-@media(max-width:640px){ .consent-actions{ flex-direction:column; } }
+@media(max-width:640px){
+  .consent-bar{ padding:12px; overflow-x:hidden; }
+  .consent-card{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    padding:30px 18px 20px;
+    overflow-x:hidden;
+  }
+  .consent-card h2,
+  .consent-card p,
+  .consent-card a{ max-width:100%; overflow-wrap:anywhere; word-break:break-word; }
+  .consent-actions{ flex-direction:column; width:100%; min-width:0; }
+  .consent-actions .btn{
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    justify-content:center;
+    white-space:normal;
+    text-align:center;
+  }
+}
 /* ---- admin-added page blocks ---- */
 /* Welcome gate overlay (first-visit greeting on the homepage). */
 .welcome-overlay{ position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(20,14,12,0.72); backdrop-filter:blur(4px); }

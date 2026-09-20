@@ -3652,3 +3652,25 @@ The Control Centre navigation remains its own scrollable flex child, while the
 accessibility footer slot, View Site link and account footer remain visible inside
 the viewport. Mobile behaviour is unchanged. Control Centre asset version bumped to
 20260920-5 and regression coverage added.
+
+
+## 2026-09-20 — Mobile POPIA consent horizontal-overflow hotfix
+
+**Audit correction.** The finalisation handover still listed referral click → signup attribution as unwired.
+That note is stale: `unplug-magazine.html` already loads `unplug-participation-sdk.js`, the SDK records
+`?ref=` visits through `POST /acquisition/referral-clicks`, and the member registration flow carries both
+the referral code and exact click id into `POST /auth/register`. Existing signup/acquisition tests cover the
+conversion. No duplicate referral implementation was added.
+
+**Actual open mobile issue.** The POPIA consent overlay had only one narrow-screen rule (stack the two action
+buttons). The card itself, long translated/privacy copy, and buttons had no explicit shrink/wrap constraints,
+leaving the known mobile horizontal-scroll risk documented in `HANDOVER-FINALISATION.md`.
+
+**Fix.** At <=640px the consent overlay now uses 12px viewport padding; the card is explicitly
+`width/max-width:100%`, `min-width:0`, and `overflow-x:hidden`; headings/body/links may wrap anywhere;
+the action container is shrinkable and full width; and both consent buttons are full-width, shrinkable and
+allowed to wrap. Desktop styling and consent behaviour are unchanged.
+
+**Regression coverage.** Added `mobileConsentOverflow.test.js` to lock the viewport, wrapping, and button
+constraints. The existing production Playwright smoke remains a post-deploy check rather than a branch gate
+against the still-old live site.
