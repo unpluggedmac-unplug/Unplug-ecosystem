@@ -36,7 +36,10 @@ async function priceForDirectoryPackage(profileType, tier, client = pool) {
     throw pricingUnavailable();
   }
   if (result.rowCount !== 1) {
-    throw pricingUnavailable('That Directory package is not currently available.');
+    const err = new Error('That Directory package is not currently available.');
+    err.code = 'PACKAGE_UNAVAILABLE';
+    err.statusCode = 400;
+    throw err;
   }
   return Number(result.rows[0].price);
 }
