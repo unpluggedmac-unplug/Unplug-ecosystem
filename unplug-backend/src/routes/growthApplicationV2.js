@@ -3,6 +3,7 @@
 const express = require('express');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { withMemberStatus } = require('../utils/growthMemberStatus');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -262,7 +263,7 @@ router.get('/applications', async (req, res, next) => {
         ORDER BY created_at DESC`,
       [req.user.id],
     );
-    return res.json({ applications: result.rows });
+    return res.json({ applications: result.rows.map(withMemberStatus) });
   } catch (err) { return next(err); }
 });
 
@@ -289,7 +290,7 @@ router.post('/applications', async (req, res, next) => {
     );
     if (existingDraft.rowCount) {
       await client.query('ROLLBACK');
-      return res.status(200).json({ application: existingDraft.rows[0], resumed: true });
+      return res.status(200).json({ application: withMemberStatus(existingDraft.rows[0]), resumed: true });
     }
     const active = await activeForm(type, client);
     if (!active) {
@@ -314,7 +315,7 @@ router.post('/applications', async (req, res, next) => {
       [application.id, req.user.id],
     );
     await client.query('COMMIT');
-    return res.status(201).json({ application, form: active, answers: await answers(application.id) });
+    return res.status(201).json({ application: withMemberStatus(application), form: active, answers: await answers(application.id) });
   } catch (err) {
     await client.query('ROLLBACK');
     return next(err);
@@ -337,7 +338,7 @@ router.get('/applications/:id', async (req, res, next) => {
           ORDER BY opened_at`,
         [applicationId],
       );
-      const payload = { application, informationRequests: requests, reopenedFields: reopened.rows };
+      const payload = { application: withMemberStatus(application), informationRequests: requests, reopenedFields: reopened.rows };
       if (reopened.rowCount) {
         const full = await form(application.form_version_id, application.applicant_type);
         const keys = reopened.rows.map((row) => row.field_key);
@@ -352,7 +353,7 @@ router.get('/applications/:id', async (req, res, next) => {
     }
 
     return res.json({
-      application,
+      application: withMemberStatus(application),
       form: await form(application.form_version_id, application.applicant_type),
       answers: await answers(applicationId),
       informationRequests: requests,
@@ -578,7 +579,7 @@ router.post('/applications/:id/submit', async (req, res, next) => {
       [applicationId, req.user.id],
     );
     await client.query('COMMIT');
-    return res.json({ application: { id: applicationId, status: 'submitted', completionPercent: 100 } });
+    return res.json({ application: withMemberStatus({ id: applicationId, status: 'submitted', completionPercent: 100 }) });
   } catch (err) {
     await client.query('ROLLBACK');
     return next(err);
@@ -616,7 +617,7 @@ router.post('/applications/:id/withdraw', async (req, res, next) => {
       [applicationId, current.rows[0].status, req.user.id],
     );
     await client.query('COMMIT');
-    return res.json({ application: { id: applicationId, status: 'withdrawn' } });
+    return res.json({ application: withMemberStatus({ id: applicationId, status: 'withdrawn' }) });
   } catch (err) {
     await client.query('ROLLBACK');
     return next(err);

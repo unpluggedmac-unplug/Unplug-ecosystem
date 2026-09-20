@@ -22,6 +22,8 @@ on:
       - 'unplug-backend/src/routes/growthApplicationV2.js'
       - 'unplug-backend/src/routes/growthApplicationUpload.js'
       - 'unplug-backend/src/routes/growthAdmin.js'
+      - 'unplug-backend/src/utils/growthMemberStatus.js'
+      - 'unplug-backend/test/growthMemberStatus.test.js'
       - 'unplug-backend/src/utils/staffPermissions.js'
       - 'unplug-backend/src/app.js'
       - 'unplug-backend/test/growthApplicationRelease.test.js'
@@ -70,6 +72,8 @@ jobs:
           node --check src/routes/growthApplicationV2.js
           node --check src/routes/growthApplicationUpload.js
           node --check src/routes/growthAdmin.js
+          node --check src/utils/growthMemberStatus.js
+          node --check test/growthMemberStatus.test.js
           node --check src/utils/staffPermissions.js
           node --check test/growthApplicationRelease.test.js
           node --check ../growth-private-upload-helper.js
