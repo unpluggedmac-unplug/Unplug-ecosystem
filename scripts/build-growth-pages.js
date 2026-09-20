@@ -50,7 +50,13 @@ function injectRuntimeIsolation(file, html) {
   // normal runtime config and shared layer remain authoritative afterwards.
   const guard = '<script src="/media/scripts/staging-runtime-guard.js"></script>';
   if (!html.includes('src="/media/scripts/staging-runtime-guard.js"')) {
-    html = html.replace('<head>', `<head>\n  ${guard}`);
+    // Keep charset/viewport metadata ahead of blocking runtime scripts. Some
+    // Android WebViews lock in their initial 980px layout viewport when a
+    // script is encountered first, leaving the mobile media query inactive
+    // and shrinking the whole Growth form into an unreadable desktop page.
+    const viewport = /<meta\s+name=["']viewport["'][^>]*>/i;
+    if (viewport.test(html)) html = html.replace(viewport, (tag) => `${tag}\n  ${guard}`);
+    else html = html.replace('<head>', `<head>\n  ${guard}`);
   }
   if (!html.includes('src="/runtime-config"')) {
     html = html.replace(guard, `${guard}\n  <script src="/runtime-config"></script>`);
