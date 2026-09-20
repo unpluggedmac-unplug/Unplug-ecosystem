@@ -3373,3 +3373,43 @@ task live until both the frontend and backend are on the same merged candidate.
 **Still queued, unchanged:** Growth "visible status"; My Unplug custom interests plus per-field public/private
 controls; My Orders approval-state modelling; and Batch D money/schema work. Each remains a separate task and
 still needs its own review/approval before implementation.
+
+## 2026-09-20 — Growth member-visible status completed on draft PR #50 (not merged)
+
+**What changed.** Growth V2 already had a detailed internal/Admin workflow vocabulary, so this task did
+not add another database status column. New `src/utils/growthMemberStatus.js` derives two additive
+member-facing fields — `member_status` and `member_status_label` — while preserving the existing raw
+`status` as the authoritative internal workflow value. The approved mapping is: draft → Draft;
+new/submitted → Submitted; under_review/assessment_in_progress → Under review;
+information_requested → Action needed; contacted → We’ve contacted you;
+plan_in_progress/in_progress → Growth support in progress; completed → Completed; withdrawn → Withdrawn;
+closed → Closed.
+
+**Member API/UI.** Growth V2 list, create/resume, detail, submit and withdraw responses now carry the
+member-facing fields alongside the unchanged internal `status`. The member Growth workspace displays the
+backend-provided member label in both the application list and status view, but all lifecycle decisions
+(draft editing, delete eligibility, withdraw eligibility and completed/closed handling) still use the raw
+internal status. That keeps the presentation vocabulary separate from workflow behaviour.
+
+**Admin and safety.** `growthAdmin.js` is unchanged and continues to use detailed internal states such as
+`assessment_in_progress` and `plan_in_progress`. There is no migration, schema change, payment/pricing,
+order, credit or vote change in this task. A newly introduced unknown internal state fails closed to
+"Under review" on the member surface instead of leaking an unexplained internal label; the regression test
+also reads the current Admin status vocabulary and fails if any current internal state lacks an explicit
+member mapping.
+
+**Verification.** Code candidate `2d1be76afcf696300bfe8d7db9f25e6ad9ac7303` passed the Build
+configuration contract gate, Growth V2 production frontend build, source syntax checks, PostgreSQL migration
+sweep, and the complete backend suite: **2,439 passing, 0 failing**. The migration sweep also passed even
+though this task adds no migration.
+
+**Release state.** Draft PR **#50** (`fix/growth-visible-status-20260920` → `main`) remains deliberately
+unmerged. Production is untouched. After owner review/sign-off: merge the PR, allow Cloudflare to deploy the
+frontend, manually deploy the exact merged backend commit in Render, confirm `/health` reports that commit,
+then smoke-test at least Submitted, Under review and Action needed from a member account while confirming
+Admin still sees the detailed raw workflow status.
+
+**Still queued, unchanged:** My Unplug custom interests + per-field public/private controls; My Orders
+approval-state modelling; and Batch D money/schema work. Each remains a separate task requiring its own
+review/approval before implementation.
+
