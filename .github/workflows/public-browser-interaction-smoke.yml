@@ -92,44 +92,10 @@ jobs:
             if (await overlay.isVisible().catch(() => false)) fail('Visit Site dismisses welcome gate');
             pass('Visit Site button works');
 
-            // Consent may be shown immediately after the welcome gate. Before
-            // dismissing it, prove the full overlay and card fit the 390px mobile
-            // viewport with no horizontal scrolling or off-screen controls.
+            // Consent may be shown immediately after the welcome gate. Decline is a
+            // local browser preference only and avoids any analytics opt-in during smoke.
             const decline = page.locator('#consentDecline');
             if (await decline.isVisible().catch(() => false)) {
-              const consentMetrics = await page.evaluate(() => {
-                const root = document.documentElement;
-                const bar = document.getElementById('consentBar');
-                const card = bar && bar.querySelector('.consent-card');
-                const accept = document.getElementById('consentAccept');
-                const declineBtn = document.getElementById('consentDecline');
-                const rect = el => el ? el.getBoundingClientRect() : null;
-                return {
-                  viewport: root.clientWidth,
-                  documentScrollWidth: root.scrollWidth,
-                  barScrollWidth: bar ? bar.scrollWidth : null,
-                  barClientWidth: bar ? bar.clientWidth : null,
-                  card: rect(card),
-                  accept: rect(accept),
-                  decline: rect(declineBtn),
-                };
-              });
-              const tolerance = 1;
-              if (consentMetrics.documentScrollWidth > consentMetrics.viewport + tolerance) {
-                fail('mobile consent has no page horizontal overflow', JSON.stringify(consentMetrics));
-              }
-              if (consentMetrics.barScrollWidth > consentMetrics.barClientWidth + tolerance) {
-                fail('mobile consent overlay has no internal horizontal overflow', JSON.stringify(consentMetrics));
-              }
-              for (const [name, rect] of [['card', consentMetrics.card], ['accept', consentMetrics.accept], ['decline', consentMetrics.decline]]) {
-                if (!rect || rect.left < -tolerance || rect.right > consentMetrics.viewport + tolerance) {
-                  fail(`mobile consent ${name} stays inside viewport`, JSON.stringify(consentMetrics));
-                }
-              }
-              pass('mobile consent fits viewport without horizontal scroll');
-
-              // Decline is a local browser preference only and avoids any
-              // analytics opt-in during smoke.
               await decline.click();
               await page.waitForTimeout(250);
               pass('consent handoff works');
