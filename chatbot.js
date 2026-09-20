@@ -61,10 +61,10 @@
       reply: 'To submit a story or article, use the <b>Submit a Story</b> button (top of the site) — it takes you to the Member Dashboard where you sign in (free) and submit. Publishing a paid article is charged there.',
       chips: ['Pricing', 'Contact'] },
     { id: 'directory', label: 'Join the Directory', kw: ['directory', 'listing', 'profile', 'get listed', 'join'],
-      reply: 'The Directory lists people and businesses. Pick a package on the <b>Directory</b> page, then check out. Individual: Basic R150 / Pro R280 / Premium R400. Business: Basic R600 / Pro R1000 / Premium R1500 (once-off).',
+      reply: 'The Directory lists people and businesses. Current package pricing is loading — open the <b>Directory</b> page for the live package options.',
       chips: ['Pricing', 'Deaf-owned badge', 'Submit a story'] },
-    { id: 'pricing', label: 'Pricing', kw: ['price', 'pricing', 'cost', 'how much', 'fee', 'package', 'r150', 'payment', 'pay'],
-      reply: 'Directory (once-off) — Individual: R150 / R280 / R400. Business: R600 / R1000 / R1500. Article publishing, event listings, edition downloads (R50) and competition entries are priced at checkout. Payment is by EFT to our FNB account, or card once live.',
+    { id: 'pricing', label: 'Pricing', kw: ['price', 'pricing', 'cost', 'how much', 'fee', 'package', 'payment', 'pay'],
+      reply: 'Current Directory pricing is loading. Other paid services show their current amount at checkout. Payment is by EFT for now.',
       chips: ['How to pay (EFT)', 'Join the Directory'] },
     { id: 'eft', label: 'How to pay (EFT)', kw: ['eft', 'bank', 'account', 'transfer', 'fnb'],
       reply: 'We accept manual EFT. At checkout you’ll get our FNB account details and a unique reference — use that exact reference so we can match your payment. An admin confirms it once it reflects.',
@@ -94,6 +94,50 @@
       reply: 'Email us at <a href="mailto:' + EMAIL + '">' + EMAIL + '</a> and we’ll get back to you. You can also use the Contact page.',
       chips: ['Submit a story', 'Pricing'] },
   ];
+
+
+  function directoryPriceLine(label, rows) {
+    var order = ['basic', 'pro', 'premium'];
+    var names = { basic: 'Basic', pro: 'Pro', premium: 'Premium' };
+    var parts = order.map(function (tier) {
+      var row = rows.find(function (p) { return p.tier === tier && p.active !== false; });
+      return row ? names[tier] + ' R' + Number(row.price).toFixed(0) : null;
+    }).filter(Boolean);
+    return label + ': ' + (parts.length ? parts.join(' / ') : 'currently unavailable');
+  }
+
+  // The chatbot never owns a Directory price. It reads the same public rows
+  // checkout charges, and if those rows cannot be read it leaves the generic
+  // non-price answer above rather than inventing or retaining an old amount.
+  (function loadDirectoryPricing() {
+    var base;
+    try {
+      base = localStorage.getItem('unplug_api_base') || window.UNPLUG_RUNTIME_API
+        || 'https://unplug-ecosystem.onrender.com';
+    } catch (e) {
+      base = 'https://unplug-ecosystem.onrender.com';
+    }
+    fetch(base.replace(/\/$/, '') + '/payments/directory-packages')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !Array.isArray(d.packages)) return;
+        var individual = d.packages.filter(function (p) { return p.profile_type === 'individual'; });
+        var business = d.packages.filter(function (p) { return p.profile_type === 'business'; });
+        var directory = KB.find(function (x) { return x.id === 'directory'; });
+        var pricing = KB.find(function (x) { return x.id === 'pricing'; });
+        var lines = directoryPriceLine('Individual', individual) + '. '
+          + directoryPriceLine('Business', business) + '.';
+        if (directory) {
+          directory.reply = 'The Directory lists people and businesses. Pick a package on the <b>Directory</b> page, then check out. '
+            + lines + ' Prices are once-off.';
+        }
+        if (pricing) {
+          pricing.reply = 'Directory (once-off) — ' + lines
+            + ' Other paid services show their current amount at checkout. Payment is by EFT for now.';
+        }
+      })
+      .catch(function () { /* generic no-price answer remains */ });
+  })();
 
   var GREETING = 'Hi! I’m the Unplug Assistant 👋 How can I help? Pick a topic below or type your question.';
   var DEFAULT_CHIPS = ['Submit a story', 'Pricing', 'Deaf Community', 'Jobs', 'Contact'];
