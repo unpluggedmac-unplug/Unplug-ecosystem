@@ -18,7 +18,7 @@ function loadCss(){
   if(q('link[data-member-control-centre-polish-css]'))return;
   var link=document.createElement('link');
   link.rel='stylesheet';
-  link.href='/media/styles/member-dashboard-control-centre-polish.css?v=20260913-1';
+  link.href='/media/styles/member-dashboard-control-centre-polish.css?v=20260920-2';
   link.setAttribute('data-member-control-centre-polish-css','true');
   (document.head||document.documentElement).appendChild(link);
 }
