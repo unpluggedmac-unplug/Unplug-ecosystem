@@ -368,11 +368,16 @@ those before relying on them.**
 **Soon**
 4. Turn on Supabase database backups. Still the largest single risk to the
    business, and unrelated to anything in this programme.
-5. Email notifications for profile/community events (parked since July).
+
+**Completed 20 September 2026**
+- Profile/community email notifications now extend the existing in-app
+  Like/Dislike/Save/approved Comment/Review and Follow/Unfollow events. They use
+  the shared member notification preferences; email failure never blocks the
+  community action.
 
 **When there is time**
-6. Revisit leaderboards joining Directory listings to members (section 13).
-7. Ozow and PayFast, once the accounts exist — the checkout already has slots.
+5. Revisit leaderboards joining Directory listings to members (section 13).
+6. Ozow and PayFast, once the accounts exist — the checkout already has slots.
 
 ---
 
