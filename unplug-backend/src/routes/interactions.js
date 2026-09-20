@@ -17,6 +17,7 @@ const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { isCommunityFeatureEnabled } = require('../utils/communitySettings');
 const { recordParticipationAsync } = require('../utils/participation');
+const { notifyMember } = require('../utils/memberNotify');
 
 const router = express.Router();
 
@@ -67,11 +68,22 @@ async function notifyProfileOwner(actorUserId, targetType, targetId, emoji, verb
     [actorUserId]
   );
   const name = actorName.rows[0] ? actorName.rows[0].name : 'Someone';
-  await pool.query(
-    `INSERT INTO notifications (user_id, type, title, body, link_url)
-     VALUES ($1, 'profile_interaction', $2, $3, '/unplug-member-dashboard.html')`,
-    [owner.rows[0].user_id, `${emoji} Profile activity`, `${name} ${verb} your profile.`]
-  );
+  const title = `${emoji} Profile activity`;
+  const body = `${name} ${verb} your profile.`;
+  await notifyMember({
+    userId: owner.rows[0].user_id,
+    type: 'profile_interaction',
+    title,
+    body,
+    linkUrl: '/unplug-member-dashboard.html',
+    email: {
+      subject: 'Profile activity on Unplug',
+      text: `${body}\n\nSign in to Unplug: https://www.unplugnews.com/unplug-member-dashboard.html`,
+    },
+    // Keep likes/saves/comments responsive: the in-app row is committed
+    // before this returns, while the external email request is best-effort.
+    deferEmail: true,
+  });
 }
 
 // GET /interactions/:targetType/:targetId/stats — public counts, no auth.

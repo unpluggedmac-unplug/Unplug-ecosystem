@@ -3674,3 +3674,27 @@ allowed to wrap. Desktop styling and consent behaviour are unchanged.
 **Regression coverage.** Added `mobileConsentOverflow.test.js` to lock the viewport, wrapping, and button
 constraints. The existing production Playwright smoke remains a post-deploy check rather than a branch gate
 against the still-old live site.
+
+
+## 2026-09-20 — Profile/community email notifications
+
+Closed the handover item “Email notifications for profile/community events (parked since July)” by extending
+the notification path already used by the Members/Profile Social system rather than adding another mailer.
+
+**Profile interactions.** `notifyProfileOwner()` no longer inserts directly into `notifications`. It now
+uses the shared `memberNotify.js` boundary, so the existing in-app event and the new email both respect the
+member's saved notification preferences. Email delivery is deferred after the in-app row is committed, so a
+Like/Dislike/Save or an approved Comment/Review is not held open by the external email provider.
+
+**Follow / unfollow.** PostgreSQL's `follow_member()` / `unfollow_member()` functions still own the existing
+in-app notification, points and idempotency. The HTTP route adds email-only delivery through a new
+`notifyMemberEmailAsync()` helper, avoiding duplicate in-app rows. A repeated follow sends no second email;
+an unfollow email is queued only when a relationship was actually removed.
+
+**Shared notification utility.** `memberNotify.js` now supports deferred email for combined web+email events
+and a preference-aware email-only path for events whose web notification is created elsewhere. Failures remain
+non-blocking and no notification is part of the business transaction.
+
+**Regression coverage.** Added `communityEmailNotifications.test.js` to protect shared-notifier routing,
+relationship-change guards, preference checks and duplicate-row prevention. Existing profile/follow integration
+tests continue to protect the original in-app behaviour.
