@@ -3335,7 +3335,7 @@ Roadmap batches: **A** quick wins, **B** Profile/Menu-1 polish, **C** display pa
 
 **Delivery/verification notes for the next session:** direct cloud push blocked (proxy) → use the GitHub-Desktop bridge (edit → `device_commit_files` into `~/OneDrive/Documents/GitHub/Unplug-ecosystem` → user commits + pushes → Cloudflare auto-deploys frontend; Render backend deploy is manual). Always re-stage the target file and diff before committing — the uploads copy goes stale after a re-stage, and the member dashboard file in particular has now carried several stacked changes. Backend suite (`node --test`) cannot be validly run in this cloud session (stale clone, no backend `node_modules`, pull blocked) — rely on repo CI as authoritative.
 
-## 2026-09-20 — My Analytics real data completed on draft PR #48 (not merged)
+## 2026-09-20 — My Analytics real data released via PR #48
 
 **What the audit found.** The 2026-09-17 handover said My Analytics still "needs backend", but
 `GET /profile-analytics/me/private` already existed, was authenticated, and read real participation,
@@ -3364,17 +3364,16 @@ asset closure/CSP verification. GitHub Actions on candidate `c05c9b5fc0f6a3541af
 Member Analytics backend checks **14/14 pass**, Member Dashboard regression checks pass, Member Dashboard
 packaged asset check passes, and Build configuration contract gate passes.
 
-**Release state.** Draft PR **#48** (`fix/my-analytics-real-data-20260920` → `main`) is deliberately unmerged.
-Production is untouched. After owner review/sign-off: mark ready/merge, let Cloudflare deploy the frontend,
-manually deploy the exact merged backend commit in Render, confirm `/health` reports that exact commit, then
-sign in as a member and smoke-test My Analytics at 7/30/90 days (including a zero-data member). Do not call the
-task live until both the frontend and backend are on the same merged candidate.
+**Release state.** PR **#48** was merged to `main` on 2026-09-20 as
+`c0a4979e9c8c628c2c93954300b9e5fb7b45f0cb`. Render production deploy
+`dep-dannqinf3r2c73e6h0qg` went live on that exact merge SHA; `/health` returned `{"status":"ok"}`,
+`/health/ready` returned `{"status":"ready","database":"ok"}`, and the production dashboard served
+the new Analytics UI. The private Analytics endpoint correctly remained authenticated (401 when unsigned).
 
-**Still queued, unchanged:** Growth "visible status"; My Unplug custom interests plus per-field public/private
-controls; My Orders approval-state modelling; and Batch D money/schema work. Each remains a separate task and
-still needs its own review/approval before implementation.
+**Subsequent 2026-09-20 work:** Growth member-visible status (#50), My Unplug privacy/custom interests (#51),
+My Orders payment/service status (#52), and Batch D pricing (#53) were all subsequently completed and released.
 
-## 2026-09-20 — Growth member-visible status completed on draft PR #50 (not merged)
+## 2026-09-20 — Growth member-visible status released via PR #50
 
 **What changed.** Growth V2 already had a detailed internal/Admin workflow vocabulary, so this task did
 not add another database status column. New `src/utils/growthMemberStatus.js` derives two additive
@@ -3403,17 +3402,16 @@ configuration contract gate, Growth V2 production frontend build, source syntax 
 sweep, and the complete backend suite: **2,439 passing, 0 failing**. The migration sweep also passed even
 though this task adds no migration.
 
-**Release state.** Draft PR **#50** (`fix/growth-visible-status-20260920` → `main`) remains deliberately
-unmerged. Production is untouched. After owner review/sign-off: merge the PR, allow Cloudflare to deploy the
-frontend, manually deploy the exact merged backend commit in Render, confirm `/health` reports that commit,
-then smoke-test at least Submitted, Under review and Action needed from a member account while confirming
-Admin still sees the detailed raw workflow status.
+**Release state.** PR **#50** was merged to `main` on 2026-09-20 as
+`79283a96f1aea1815095009dbd86557328e1a3a7`. Render production deploy
+`dep-danpnruq1p3s73cl9t9g` successfully deployed that exact merge SHA; it was later superseded by subsequent
+production releases. The member-facing Growth status mapping is therefore part of production while Admin
+continues to use the detailed internal workflow states.
 
-**Still queued, unchanged:** My Unplug custom interests + per-field public/private controls; My Orders
-approval-state modelling; and Batch D money/schema work. Each remains a separate task requiring its own
-review/approval before implementation.
+**Subsequent 2026-09-20 work:** My Unplug privacy/custom interests (#51), My Orders payment/service status
+(#52), and Batch D pricing (#53) were all subsequently completed and released.
 
-## 2026-09-20 — My Unplug custom interests + per-field privacy completed on draft PR #51 (not merged)
+## 2026-09-20 — My Unplug custom interests + per-field privacy released via PR #51
 
 **Approved product decisions.** Owner approved 1A / 2A / 3A / 4B. Custom interests are member-owned and
 never become global taxonomy options. A published My Unplug profile always exposes only the public identity
@@ -3450,17 +3448,16 @@ PostgreSQL backend suite passed **2,450/2,450 tests, 0 failures, 0 skipped**. Sy
 routes/tests and migration re-run/idempotency coverage are included in CI. GitHub Actions currently warns that
 Node 20 actions are being forced to Node 24; it is non-failing and is a separate CI-maintenance concern.
 
-**Release state.** Draft PR **#51** (`feat/my-unplug-privacy-custom-interests-20260920` → `main`) remains
-deliberately unmerged. Production is untouched. After owner review/sign-off: merge PR #51, verify the Cloudflare
-frontend deployment, verify Render production auto-deploys the exact merge commit from `main`, confirm
-`/health/ready` is healthy, then smoke-test a new member (defaults private), an existing published member
-(backwards-compatible visibility), custom interests, individual field toggles, search privacy and featured-card
-privacy before calling the release live.
+**Release state.** PR **#51** was merged to `main` on 2026-09-20 as
+`4dd81330af6a886af42c97dd2ecfc9ea78996d40`. Render auto-deploy
+`dep-danqd1u8bjmc73aot070` went live on that exact merge commit. Production logs confirmed migration
+`213_my_unplug_privacy_custom_interests.sql` applied, readiness remained HTTP 200, and the live member
+dashboard contained the custom-interest input plus all nine Public Profile Privacy controls.
 
-**Still queued:** My Orders approval-state modelling (separate payment status from service/approval state), then
-Batch D money/schema work. Both remain separate backend tasks and require their own review/approval before build.
+**Subsequent 2026-09-20 work:** My Orders payment/service status (#52) and Batch D pricing (#53) were both
+subsequently completed and released.
 
-## 2026-09-20 — My Orders payment/service status split completed on draft PR #52 (not merged)
+## 2026-09-20 — My Orders payment/service status split released via PR #52
 
 **Approved product decision.** Owner chose the detailed mixed summary for multi-service orders. My Orders now
 treats payment state and service/review state as separate facts. A paid cart can therefore truthfully say
@@ -3491,15 +3488,16 @@ The focused tests cover a paid mixed order, per-line approval status, Directory-
 fulfilment-failure masking, ownership, stored totals and an empty unpaid order. GitHub's Node 20 -> Node 24
 warning remains non-failing and unrelated.
 
-**Release state.** Draft PR **#52** (`feat/my-orders-service-status-20260920` → `main`) remains deliberately
-unmerged. Production is unchanged by this task. After owner sign-off: merge PR #52, verify the frontend
-deployment and Render's exact merge-commit auto-deploy, then smoke-test one paid mixed-status order in a signed-in
-member account before calling it live.
+**Release state.** PR **#52** was merged to `main` on 2026-09-20 as
+`6d634c566389f9a3b643cd7f7e7bdda75d731867`. Render auto-deploy
+`dep-danqvl6q1p3s73cm784g` went live on that exact merge commit; production `/health/ready` returned
+`{"status":"ready","database":"ok"}`. The live Member Dashboard contains the released explanation that
+payment and service approval are shown separately. No migration was part of this release.
 
-**Still queued:** Batch D money/schema work remains the next high-risk backend task and requires its own review
-and explicit approval before implementation.
+**Subsequent 2026-09-20 work:** Batch D pricing (#53) was subsequently approved, completed, fully tested,
+merged and released.
 
-## 2026-09-20 — Batch D pricing source-of-truth completed on draft PR #53 (not merged)
+## 2026-09-20 — Batch D pricing source-of-truth released via PR #53
 
 **Approved product decisions.** Owner approved **1A / 2A / 3A**. Directory package pricing must have
 one Admin-managed source; pricing failures must **fail closed** rather than charge a stale fallback; paid
@@ -3554,17 +3552,14 @@ The workflow path filters now include the Batch D commercial-checkout guard plus
 `docs/progress-log.md` and `docs/pricing-comparison.md`, so this documentation-only handover commit
 must itself receive the same final-head CI verification.
 
-**Release state / next checkpoint.** PR **#53**
-(`feat/batch-d-pricing-source-20260920` → `main`) remains deliberately **draft and unmerged**.
-Batch D has not been released to production. Do not mark it live from the pre-handover results above.
-Required next sequence: verify every CI job on the final documentation head is green; record that exact
-head/result on PR #53; only after explicit owner release approval mark ready and merge using the expected
-head SHA; let production Render auto-deploy from `main` (do not manually trigger while auto-deploy is on);
-confirm migration 214 is applied, `/health/ready` is healthy, and the deployed commit is the merge commit;
-then verify the live public Directory pricing endpoint, Directory package cards, checkout and Admin Service
-Pricing. A signed-in smoke should confirm an Admin price change would affect only **new** orders and an
-inactive tier cannot be purchased. Keep the existing price values unchanged unless the owner separately
-authorizes a pricing change.
+**Release state.** PR **#53** was merged to `main` on 2026-09-20 as
+`f7f68f12d842793dda13c3f09a7bf4143ea76ca7`. Render auto-deploy
+`dep-danruljtqb8s73apnia0` went **LIVE** on that exact merge commit. Production logs confirmed
+`214_directory_package_pricing.sql` applied followed by `All migrations applied.`; `/health/ready`
+reported ready/database ok. The live Directory pricing endpoint returned Individual R150/R280/R400 and
+Business R500/R700/R1,000; browser checkout rendered the database-backed Individual prices; the chatbot
+loaded the same pricing endpoint; and the Admin pricing endpoint remained correctly protected (401 unsigned).
+No price was changed by the release, and paid-form charging remains outside Batch D.
 
 **Known separate maintenance note.** GitHub Actions still warns that Node 20-targeted actions are being
 forced to Node 24. The warning is non-failing and is not part of Batch D.
