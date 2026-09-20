@@ -66,7 +66,7 @@ before(async () => {
   await pg.start();
   await pg.createDatabase('unplug_test');
 
-  process.env.DATABASE_URL = \`postgres://postgres:postgres@localhost:\${port}/unplug_test\`;
+  process.env.DATABASE_URL = `postgres://postgres:postgres@localhost:${port}/unplug_test`;
   process.env.JWT_SECRET = 'batch-d-pricing-secret';
   process.env.UNPLUG_DISABLE_RATE_LIMITS = '1';
 
@@ -75,15 +75,15 @@ before(async () => {
   await runAllMigrations();
 
   await pool.query(
-    \`INSERT INTO users (id, email, full_name, password_hash, role)
+    `INSERT INTO users (id, email, full_name, password_hash, role)
      VALUES ($1,'batchd-member@test.com','Batch D Member','x','member'),
-            ($2,'batchd-admin@test.com','Batch D Admin','x','admin')\`,
+            ($2,'batchd-admin@test.com','Batch D Admin','x','admin')`,
     [MEMBER, ADMIN]
   );
   const p = await pool.query(
-    \`INSERT INTO profiles (user_id, type, package_tier, slug, display_name, status)
+    `INSERT INTO profiles (user_id, type, package_tier, slug, display_name, status)
      VALUES ($1,'business','pro','batch-d-business','Batch D Business','awaiting_payment')
-     RETURNING id\`,
+     RETURNING id`,
     [MEMBER]
   );
   profileId = p.rows[0].id;
@@ -102,7 +102,7 @@ before(async () => {
   app.use('/orders', require('../src/routes/orders'));
   app.use((err, _req, res, _next) => res.status(err.statusCode || 500).json({ error: err.message }));
   await new Promise((resolve) => { server = app.listen(0, resolve); });
-  baseUrl = \`http://127.0.0.1:\${server.address().port}\`;
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
 }, { timeout: 120000 });
 
 after(async () => {
@@ -113,13 +113,13 @@ after(async () => {
 
 test('migration 214 seeds the exact six prices already charged before Batch D', async () => {
   const r = await pool.query(
-    \`SELECT profile_type, tier, price
+    `SELECT profile_type, tier, price
        FROM directory_package_prices
-      ORDER BY profile_type, tier\`
+      ORDER BY profile_type, tier`
   );
   assert.equal(r.rowCount, 6);
   const got = Object.fromEntries(r.rows.map((x) => [
-    \`\${x.profile_type}:\${x.tier}\`, Number(x.price),
+    `${x.profile_type}:${x.tier}`, Number(x.price),
   ]));
   assert.deepEqual(got, {
     'business:basic': 500,
@@ -141,12 +141,12 @@ test('public Directory pricing is sourced from those active rows', async () => {
 
 test('an Admin price edit becomes both the public price and the server quote', async () => {
   const row = await pool.query(
-    \`SELECT id FROM directory_package_prices
-      WHERE profile_type='business' AND tier='pro'\`
+    `SELECT id FROM directory_package_prices
+      WHERE profile_type='business' AND tier='pro'`
   );
   const id = row.rows[0].id;
 
-  const saved = await req('PATCH', \`/payments/admin/directory-packages/\${id}\`, {
+  const saved = await req('PATCH', `/payments/admin/directory-packages/${id}`, {
     token: adminToken,
     body: { price: 777 },
   });
@@ -169,8 +169,8 @@ test('an Admin price edit becomes both the public price and the server quote', a
 test('re-running migration 214 never resets an Admin price edit', async () => {
   await rerun214();
   const r = await pool.query(
-    \`SELECT price FROM directory_package_prices
-      WHERE profile_type='business' AND tier='pro'\`
+    `SELECT price FROM directory_package_prices
+      WHERE profile_type='business' AND tier='pro'`
   );
   assert.equal(Number(r.rows[0].price), 777,
     'ON CONFLICT must leave the admin-set price untouched');
@@ -178,12 +178,12 @@ test('re-running migration 214 never resets an Admin price edit', async () => {
 
 test('switching off one tier hides and refuses only that tier', async () => {
   const row = await pool.query(
-    \`SELECT id FROM directory_package_prices
-      WHERE profile_type='business' AND tier='pro'\`
+    `SELECT id FROM directory_package_prices
+      WHERE profile_type='business' AND tier='pro'`
   );
   const id = row.rows[0].id;
 
-  const off = await req('PATCH', \`/payments/admin/directory-packages/\${id}\`, {
+  const off = await req('PATCH', `/payments/admin/directory-packages/${id}`, {
     token: adminToken,
     body: { active: false },
   });
@@ -202,7 +202,7 @@ test('switching off one tier hides and refuses only that tier', async () => {
   assert.equal(quote.status, 400);
   assert.match(quote.body.error, /not currently available/i);
 
-  await req('PATCH', \`/payments/admin/directory-packages/\${id}\`, {
+  await req('PATCH', `/payments/admin/directory-packages/${id}`, {
     token: adminToken,
     body: { active: true },
   });
