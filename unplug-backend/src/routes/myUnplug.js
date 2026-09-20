@@ -277,18 +277,14 @@ router.put('/me/taxonomy', requireAuth, async (req, res, next) => {
 
     if (Array.isArray(req.body.customInterests)) {
       const custom = normaliseCustomInterests(req.body.customInterests);
-      const globalLabels = await client.query('SELECT lower(trim(label)) AS normalized FROM mu_interests');
-      const global = new Set(globalLabels.rows.map((r) => r.normalized));
-      const own = custom.filter((item) => !global.has(item.normalized));
-
       await client.query('DELETE FROM mu_profile_custom_interests WHERE user_id = $1', [req.user.id]);
-      for (let i = 0; i < own.length; i++) {
+      for (let i = 0; i < custom.length; i++) {
         await client.query(
           `INSERT INTO mu_profile_custom_interests (user_id, label, normalized_label, sort_order)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (user_id, normalized_label) DO UPDATE
              SET label = EXCLUDED.label, sort_order = EXCLUDED.sort_order`,
-          [req.user.id, own[i].label, own[i].normalized, i]
+          [req.user.id, custom[i].label, custom[i].normalized, i]
         );
       }
     }
