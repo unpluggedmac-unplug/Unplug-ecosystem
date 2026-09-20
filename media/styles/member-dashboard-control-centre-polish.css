@@ -37,7 +37,7 @@
 .cc-home-profile-item.done{ color:var(--ink); }
 .cc-home-profile-item.done b{ color:var(--ink); }
 
-@media(max-width:760px){
+@media(max-width:820px){
   .cc-member-page-head{ flex-direction:column; padding:15px 16px; }
   .cc-member-page-status{ width:100%; text-align:left; }
   .cc-member-page-head-copy h1{ font-size:23px; }
