@@ -1295,10 +1295,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
    never be on screen together. */
 .consent-bar[hidden]{ display:none; }
 .consent-bar{ position:fixed; inset:0; z-index:1100; display:flex; align-items:center; justify-content:center;
-  padding:20px; background:rgba(20,14,12,0.78); backdrop-filter:blur(4px); }
-.consent-card{ background:var(--cream,#faf6f0); color:var(--ink,#22201e); max-width:520px; width:100%;
+  padding:20px; background:rgba(20,14,12,0.78); backdrop-filter:blur(4px); overflow-x:hidden; }
+.consent-card{ background:var(--cream,#faf6f0); color:var(--ink,#22201e); max-width:min(520px,100%); width:100%; min-width:0;
   padding:34px 32px 28px; border:1px solid var(--paper-line,#e7ded2); border-top:3px solid var(--red);
-  box-shadow:0 24px 60px rgba(0,0,0,0.28); position:relative; max-height:92vh; overflow-y:auto; }
+  box-shadow:0 24px 60px rgba(0,0,0,0.28); position:relative; max-height:92vh; overflow-y:auto; overflow-x:hidden; }
 .consent-card h2{ font-family:'Playfair Display',serif; font-size:clamp(21px,3.4vw,27px); margin:0 0 10px; }
 .consent-bar p{ font-size:14px; line-height:1.65; margin:0 0 10px; color:var(--slate,#7a726a); }
 /* Scoped to the card: .consent-note is already used for the small grey
@@ -1308,12 +1308,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .consent-bar a{ color:var(--maroon,#7a1f2b); text-decoration:underline; }
 /* Both choices are the same size and sit side by side. A choice is only
    freely given if refusing is as easy as agreeing. */
-.consent-actions{ display:flex; gap:10px; margin-top:20px; }
-.consent-actions .btn{ flex:1; }
+.consent-actions{ display:flex; gap:10px; margin-top:20px; min-width:0; }
+.consent-actions .btn{ flex:1 1 0; min-width:0; justify-content:center; text-align:center; white-space:normal; overflow-wrap:anywhere; }
 .consent-close{ position:absolute; top:10px; right:12px; background:none; border:none; font-size:26px;
   line-height:1; color:var(--slate,#7a726a); cursor:pointer; padding:4px 8px; }
 .consent-close:hover{ color:var(--maroon,#7a1f2b); }
-@media(max-width:640px){ .consent-actions{ flex-direction:column; } }
+@media(max-width:640px){
+  .consent-bar{ padding:12px; }
+  .consent-card{ max-width:100%; padding:28px 18px 22px; }
+  .consent-actions{ flex-direction:column; width:100%; }
+  .consent-actions .btn{ width:100%; max-width:100%; }
+}
 /* ---- admin-added page blocks ---- */
 /* Welcome gate overlay (first-visit greeting on the homepage). */
 .welcome-overlay{ position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(20,14,12,0.72); backdrop-filter:blur(4px); }
