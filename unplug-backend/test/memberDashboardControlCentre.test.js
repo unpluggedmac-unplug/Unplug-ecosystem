@@ -99,7 +99,7 @@ test('Phase 2 groups keep each existing function in one clear conceptual home', 
   ];
   for (const label of labels) assert.ok(script.includes(label), `missing hierarchy label: ${label}`);
   for (const oldLabel of ['My Identity', 'My Unplug Journey', 'Money & Purchases', 'Account & Privacy']) {
-    assert.ok(!script.includes(label:'${oldLabel}'), `retired top-level label still present: ${oldLabel}`);
+    assert.ok(!script.includes(`label:'${oldLabel}'`), `retired top-level label still present: ${oldLabel}`);
   }
 });
 
@@ -158,7 +158,7 @@ test('member home is personalised from live DOM state without inventing a second
   assert.match(script, /function actions\(/);
   assert.match(script, /function submissions\(/);
   assert.match(script, /function agreements\(/);
-  assert.match(script, /Your personal Unplug home/);
+  assert.match(script, /Your UnplugNews member dashboard/);
   assert.match(script, /Profile completion/);
   assert.match(script, /My Growth/);
 });
