@@ -140,3 +140,13 @@ test('desktop accessibility control is docked in a real Admin sidebar footer slo
   assert.match(css, /\.cc-a11y-slot \.a11y-fab\{/);
   assert.match(css, /position:static!important/);
 });
+
+
+test('desktop Admin sidebar is viewport-height so the accessibility footer stays visible', () => {
+  const css = read('media/styles/admin-control-centre-hierarchy.css');
+  assert.match(css, /\.sidebar\{\n    position:sticky!important;/);
+  assert.match(css, /height:100vh/);
+  assert.match(css, /max-height:100vh/);
+  assert.match(css, /overflow:hidden/);
+  assert.match(css, /\.cc-nav-root\{overscroll-behavior:contain\}/);
+});

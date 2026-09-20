@@ -3638,3 +3638,17 @@ sidebar flex flow, so the navigation scroll area physically ends above it. The
 accessibility panel remains fixed within the sidebar footprint. Mobile keeps the
 existing floating accessibility behaviour. Control Centre cache version bumped to
 20260920-4 and regression coverage updated.
+
+
+## 2026-09-20 — Admin sidebar viewport-height accessibility footer
+
+Three live screenshots after PR #81 confirmed the accessibility overlap was gone, but
+also showed the docked accessibility footer was no longer visible in the viewport.
+The cause was the desktop sidebar stretching to the full page height while the
+navigation itself scrolls internally.
+
+Desktop Admin now keeps the sidebar as a sticky 100vh panel with overflow contained.
+The Control Centre navigation remains its own scrollable flex child, while the
+accessibility footer slot, View Site link and account footer remain visible inside
+the viewport. Mobile behaviour is unchanged. Control Centre asset version bumped to
+20260920-5 and regression coverage added.
