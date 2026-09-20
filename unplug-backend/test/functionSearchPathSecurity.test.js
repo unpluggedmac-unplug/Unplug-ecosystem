@@ -105,3 +105,15 @@ test('migration 215 is safe to run repeatedly', async () => {
   `);
   assert.ok(r.rows[0].n > 0, 'the migration should harden real application functions');
 });
+
+
+test('pg_trgm is not installed in the public schema when available', async () => {
+  const r = await pool.query(`
+    SELECT n.nspname AS schema
+      FROM pg_extension e
+      JOIN pg_namespace n ON n.oid = e.extnamespace
+     WHERE e.extname = 'pg_trgm'
+  `);
+  if (!r.rowCount) return; // embedded-postgres CI build does not ship pg_trgm
+  assert.equal(r.rows[0].schema, 'extensions');
+});
