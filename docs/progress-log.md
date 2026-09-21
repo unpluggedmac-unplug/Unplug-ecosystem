@@ -3750,3 +3750,16 @@ A fresh audit was completed after the Admin Dashboard release sequence and subse
 - Resend domain `unplugnews.com` is verified and sending, but **0 webhooks** are configured, so the implemented delivered/bounced/complained feedback endpoint is not operationally wired.
 
 Canonical details and next priority order are now in `docs/FINAL-HANDOVER-2026-09-21.md`.
+
+
+## 2026-09-21 — Handover follow-up after PR #90
+
+The final handover was refreshed after production advanced beyond the first 2026-09-21 audit snapshot.
+
+**Current production:** `main` is `aeb4333ba124bb5675f077d7d97f5e04a5f017ea` (PR #90, 300-character article Opening Story). Exact-production CI passed Backend Regression **2,527/2,527**, Member Dashboard full regression **2,527/2,527**, focused dashboard **43/43**, and the build configuration/artifact gate. Render deploy `dep-daobkp0473hc739mritg` is LIVE on that SHA with no error-level logs in the checked post-merge window.
+
+**Repository security:** still **PUBLIC** with unprotected `main`. The GitHub integration returns 403 for branch-protection administration and exposes no repository-visibility mutation, so Private + protected-main remains an owner/manual P0 action.
+
+**Backups:** draft PR #89 head `109a28baca27184665482b9b4d9a8f2f8a3a0756` has green exact-head Build Configuration, Backend Regression, Member Dashboard and Growth V2 CI. It is now behind current `main` by six commits and must be rebuilt/retested before merge.
+
+**Fresh operational audit:** production Supabase still has one INFO RLS/no-policy advisor item on empty `share_card_requests`; 6 retired-Supabase-host references remain; 1 published paid edition remains unsecured; staging remains at `8dc065638a4885c4be1f1884e42d36f7dc77556a`. Resend now has one enabled production webhook subscribed to delivered/bounced/complained events; a real signed event still needs end-to-end confirmation.
