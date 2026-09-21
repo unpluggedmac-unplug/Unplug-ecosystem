@@ -56,6 +56,7 @@ backupPassphrase.length >= 16
   : fail('UNPLUG_BACKUP_PASSPHRASE is missing or shorter than 16 characters; production backups are disabled');
 
 present('UNPLUG_CLEANUP_SECRET') ? ok('UNPLUG_CLEANUP_SECRET is set') : warn('UNPLUG_CLEANUP_SECRET is missing; scheduled cleanup/email/recovery endpoints cannot be securely called');
+present('UNPLUG_BACKUP_CRON_SECRET') ? ok('UNPLUG_BACKUP_CRON_SECRET is set') : warn('UNPLUG_BACKUP_CRON_SECRET is missing; reliable external backup scheduling is disabled');
 present('BIRTHDAY_CRON_SECRET') ? ok('BIRTHDAY_CRON_SECRET is set') : warn('BIRTHDAY_CRON_SECRET is missing; birthday scheduled delivery may not run securely');
 
 if (enabled('ADMIN_PASSWORD_RESET')) {
