@@ -60,6 +60,40 @@ h1,h2,h3{ font-family:'Playfair Display', serif; }
 .svc-ab-frame img{ max-width:100%; max-height:120px; object-fit:contain; display:block; }
 .svc-ab-cta{ display:inline-block; margin-top:8px; background:var(--red); color:#fff; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:6px 14px; }
 
+/* Article submission guidance: make the introduction/sections workflow explicit. */
+.article-opening-note{
+  border:2px solid var(--red); background:#fff6f3; padding:14px 16px; margin:0 0 10px;
+}
+.article-opening-note strong,
+.article-sections-note strong,
+.article-writing-flow > strong{
+  display:block; font-size:12px; letter-spacing:.055em; text-transform:uppercase; color:var(--red); margin-bottom:5px;
+}
+.article-opening-note p,
+.article-sections-note p{
+  margin:0; font-size:13px; line-height:1.55; color:var(--ink);
+}
+.article-opening-meta{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-top:6px;
+}
+#art-body-count{ font-size:12px; font-weight:700; color:var(--slate); }
+#art-body-count.at-limit{ color:var(--red); }
+#art-body-limit-message{ font-size:12px; color:var(--red); line-height:1.4; min-height:1.4em; }
+.article-writing-flow{
+  border:1px solid var(--paper-line); background:var(--cream); padding:12px 14px; margin:8px 0 14px;
+}
+.article-writing-flow-step{ font-size:12.5px; line-height:1.45; color:var(--ink); }
+.article-writing-flow-arrow{ color:var(--red); font-weight:800; line-height:1.2; margin:2px 0; }
+.article-sections-note{
+  border-left:4px solid var(--red); background:var(--paper); padding:12px 14px; margin-bottom:10px;
+}
+.article-sections-note p + p{ margin-top:7px; }
+@media(max-width:700px){
+  .article-opening-note, .article-writing-flow, .article-sections-note{ padding:12px; }
+  .article-opening-meta{ display:block; }
+  #art-body-limit-message{ display:block; margin-top:4px; }
+}
+
 /* Article Story Builder — unlimited reorderable sections. */
 .art-section{ border:1px solid var(--paper-line); background:#fff; padding:16px; margin-bottom:14px; }
 .art-section-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:10px; }
@@ -1020,8 +1054,28 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           </div>
         </div>
 
-        <div class="field"><label for="art-body">Opening / main story</label><textarea id="art-body" rows="4" placeholder="Write the opening of the story here."></textarea></div>
-        <p id="art-readtime-hint" style="font-size:12px; color:var(--slate); margin-top:-4px;">Aim for a 3-6 minute read (roughly 600-1200 words). Current: 0 words, ~0 min.</p>
+        <div class="article-opening-note" id="art-opening-note" role="note">
+          <strong>OPENING STORY — INTRODUCTION ONLY</strong>
+          <p>Your Opening Story is limited to 300 characters. Use this space to introduce your article and capture the reader's attention. To write the complete article, use the “+ Add section” option below to add additional sections, headings, paragraphs and images.</p>
+        </div>
+        <div class="field">
+          <label for="art-body">Opening Story — Introduction</label>
+          <textarea id="art-body" rows="4" maxlength="300" aria-describedby="art-opening-note art-body-count art-body-limit-message" placeholder="Introduce your article and capture the reader's attention."></textarea>
+          <div class="article-opening-meta">
+            <span id="art-body-count" aria-live="polite">0 / 300 characters</span>
+            <span id="art-body-limit-message" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="article-writing-flow" aria-label="Article writing workflow">
+          <strong>Article writing flow</strong>
+          <div class="article-writing-flow-step">1. Opening Story — Introduction (maximum 300 characters)</div>
+          <div class="article-writing-flow-arrow" aria-hidden="true">↓</div>
+          <div class="article-writing-flow-step">2. Add Section — Continue your article</div>
+          <div class="article-writing-flow-arrow" aria-hidden="true">↓</div>
+          <div class="article-writing-flow-step">3. Add additional sections as needed</div>
+          <div class="article-writing-flow-arrow" aria-hidden="true">↓</div>
+          <div class="article-writing-flow-step">4. Conclusion — Optional</div>
+        </div>
         <div class="field">
           <label for="art-video">Video link <span style="font-weight:400; opacity:0.7;">&mdash; optional</span></label>
           <input id="art-video" type="url" placeholder="Paste a YouTube, TikTok, Instagram or Google Drive link">
@@ -1039,11 +1093,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
           <button type="button" class="btn btn-line" style="width:auto; margin-top:8px;" id="art-add-link">+ Add a link</button>
         </div>
         <div class="field">
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-            <label style="margin:0;">Sections (optional)</label>
+          <div class="article-sections-note" role="note">
+            <strong>Build your complete article using sections</strong>
+            <p>The Opening Story is only your introduction. Use “+ Add section” to continue writing the full article and divide your story into clear sections.</p>
+            <p id="art-readtime-hint">Aim for a 3-6 minute read (roughly 600-1200 words) across your complete article. Current: 0 words, ~0 min.</p>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:10px; flex-wrap:wrap;">
+            <label style="margin:0;">Sections — Complete Article</label>
             <button type="button" class="btn btn-line" style="width:auto;" id="art-add-section">+ Add section</button>
           </div>
-          <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:8px;">Break your story into parts, each with its own sub heading, paragraph and picture. Reorder with the arrows. Leave any field blank if you don&#39;t need it.</span>
+          <span style="font-size:12px; color:var(--slate); display:block; margin-bottom:8px;">Each section can include its own sub heading, paragraph and picture. Reorder with the arrows. Add as many sections as you need; leave any field blank if you do not need it.</span>
           <div id="artSections"></div>
         </div>
         <div class="field"><label for="art-conclusion">Conclusion (optional)</label>
@@ -3026,12 +3085,82 @@ async function loadProfile() {
 // Submit & Pay — one form covering Article, Event, Gallery, Top 10, Marketplace
 // ---------------------------------------------------------------------------
 const SUBMIT_FIELD_IDS = ['article', 'event', 'gallery', 'top10', 'marketplace', 'ad_banner'];
-  document.getElementById('art-body').addEventListener('input', () => {
-  const words = document.getElementById('art-body').value.trim().split(/\s+/).filter(Boolean).length;
-  const minutes = Math.max(1, Math.round(words / 200));
-  document.getElementById('art-readtime-hint').textContent =
-    `Aim for a 3-6 minute read (roughly 600-1200 words). Current: ${words} words, ~${minutes} min.`;
+const ARTICLE_OPENING_MAX_CHARS = 300;
+const articleOpeningBox = document.getElementById('art-body');
+
+function articleOpeningWithinLimit() {
+  return !articleOpeningBox || articleOpeningBox.value.length <= ARTICLE_OPENING_MAX_CHARS;
+}
+
+function renderArticleOpeningCounter(message) {
+  if (!articleOpeningBox) return;
+  const count = document.getElementById('art-body-count');
+  const warning = document.getElementById('art-body-limit-message');
+  const length = articleOpeningBox.value.length;
+  if (count) {
+    count.textContent = `${length} / ${ARTICLE_OPENING_MAX_CHARS} characters`;
+    count.classList.toggle('at-limit', length >= ARTICLE_OPENING_MAX_CHARS);
+  }
+  if (warning) warning.textContent = message || (length > ARTICLE_OPENING_MAX_CHARS
+    ? `Opening Story must be ${ARTICLE_OPENING_MAX_CHARS} characters or fewer. Use + Add section for the rest of your article.`
+    : '');
+}
+
+function updateArticleReadtime() {
+  const hint = document.getElementById('art-readtime-hint');
+  if (!hint) return;
+  const parts = [
+    articleOpeningBox ? articleOpeningBox.value : '',
+    ...[...document.querySelectorAll('#artSections .art-sec-para')].map((el) => el.value),
+    (document.getElementById('art-conclusion') || {}).value || '',
+  ];
+  const words = parts.join(' ').trim().split(/\s+/).filter(Boolean).length;
+  const minutes = words === 0 ? 0 : Math.max(1, Math.round(words / 200));
+  hint.textContent =
+    `Aim for a 3-6 minute read (roughly 600-1200 words) across your complete article. Current: ${words} words, ~${minutes} min.`;
+}
+
+if (articleOpeningBox) {
+  articleOpeningBox.addEventListener('paste', (event) => {
+    const pasted = (event.clipboardData || window.clipboardData)?.getData('text') || '';
+    const start = Number.isInteger(articleOpeningBox.selectionStart) ? articleOpeningBox.selectionStart : articleOpeningBox.value.length;
+    const end = Number.isInteger(articleOpeningBox.selectionEnd) ? articleOpeningBox.selectionEnd : start;
+    const nextLength = articleOpeningBox.value.length - (end - start) + pasted.length;
+    if (nextLength > ARTICLE_OPENING_MAX_CHARS) {
+      event.preventDefault();
+      renderArticleOpeningCounter(
+        `That paste would make your Opening Story ${nextLength} characters. Keep it to ${ARTICLE_OPENING_MAX_CHARS} or fewer and use + Add section for the rest.`
+      );
+    }
+  });
+
+  articleOpeningBox.addEventListener('beforeinput', (event) => {
+    if (!event.inputType || !event.inputType.startsWith('insert') || event.inputType === 'insertFromPaste') return;
+    const start = Number.isInteger(articleOpeningBox.selectionStart) ? articleOpeningBox.selectionStart : articleOpeningBox.value.length;
+    const end = Number.isInteger(articleOpeningBox.selectionEnd) ? articleOpeningBox.selectionEnd : start;
+    const inserted = typeof event.data === 'string' ? event.data : '';
+    if (articleOpeningBox.value.length - (end - start) + inserted.length > ARTICLE_OPENING_MAX_CHARS) {
+      event.preventDefault();
+      renderArticleOpeningCounter(
+        `Opening Story is limited to ${ARTICLE_OPENING_MAX_CHARS} characters. Use + Add section to continue your article.`
+      );
+    }
+  });
+
+  articleOpeningBox.addEventListener('input', () => {
+    renderArticleOpeningCounter();
+    updateArticleReadtime();
+  });
+}
+
+document.getElementById('fields-article').addEventListener('input', (event) => {
+  if (event.target && (event.target.matches('.art-sec-para') || event.target.id === 'art-conclusion')) {
+    updateArticleReadtime();
+  }
 });
+
+renderArticleOpeningCounter();
+updateArticleReadtime();
 
 // The same category list the admin publish screen uses, from the same public
 // endpoint. Loaded once when the page loads rather than when the Article fields
@@ -3636,8 +3765,13 @@ document.getElementById('fields-ad_banner').addEventListener('img-upload:done', 
 async function createSubmission(type) {
   if (type === 'article') {
     const title = document.getElementById('art-title').value.trim();
-    const body = document.getElementById('art-body').value.trim();
-    if (!title || !body) throw new Error('Title and story are required.');
+    const openingStory = document.getElementById('art-body').value;
+    if (openingStory.length > ARTICLE_OPENING_MAX_CHARS) {
+      renderArticleOpeningCounter();
+      throw new Error('Opening Story must be 300 characters or fewer. Use + Add section to continue your article.');
+    }
+    const body = openingStory.trim();
+    if (!title || !body) throw new Error('Headline and Opening Story are required.');
     const data = await api('/articles', {
       method: 'POST',
       // Every field the admin publish screen sends when it creates an
@@ -3998,8 +4132,10 @@ function restoreDraftForType(type, data) {
     artRenumber();
     artProbeSectionOrientations();
   }
-  // Restoring values directly doesn't fire input/change on its own — the
-  // price box, previews and progress bar need an explicit nudge to catch up.
+  // Restoring values directly doesn't fire input/change on its own — keep the
+  // introduction counter/read-time guidance and the rest of the UI in sync.
+  renderArticleOpeningCounter();
+  updateArticleReadtime();
   updateSubmitOrderDetails();
   renderEvtPreview(); renderMktPreview(); renderAbPreview();
   renderSubmitProgress();
@@ -4015,8 +4151,13 @@ function saveDraftNow() {
   // offering, before they ever got to click Restore.
   const banner = document.getElementById('draftRecoveryBanner');
   if (banner && banner.style.display === 'block' && banner.dataset.type === type) return;
-  const data = collectDraftForType(type);
   const statusEl = document.getElementById('draftSaveStatus');
+  if (type === 'article' && !articleOpeningWithinLimit()) {
+    renderArticleOpeningCounter();
+    if (statusEl) statusEl.textContent = 'Draft not saved — shorten Opening Story to 300 characters.';
+    return;
+  }
+  const data = collectDraftForType(type);
   if (!draftHasContent(data)) {
     localStorage.removeItem(draftStorageKey(type));
     if (statusEl) statusEl.textContent = '';
