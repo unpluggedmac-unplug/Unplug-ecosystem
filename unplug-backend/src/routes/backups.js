@@ -18,11 +18,26 @@
 // achieves is a copy of data it could already read through the dashboard.
 
 const express = require('express');
+const crypto = require('crypto');
 const { requireRole } = require('../middleware/auth');
 const { logActivity } = require('./activityLog');
 const runner = require('../utils/backupRunner');
 
 const router = express.Router();
+
+function cronSecretMatches(submitted) {
+  const actual = process.env.UNPLUG_BACKUP_CRON_SECRET;
+  if (!actual || !submitted) return false;
+  const a = Buffer.from(String(submitted));
+  const b = Buffer.from(String(actual));
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function backupSummary(report) {
+  return `${report.filename} — ${report.rows} rows to `
+    + report.destinations.filter((d) => d.ok).map((d) => d.provider).join(', ');
+}
 
 // GET /backups — what exists, where, and whether it is actually working.
 router.get('/', requireRole('admin'), async (req, res, next) => {
@@ -49,13 +64,47 @@ router.get('/', requireRole('admin'), async (req, res, next) => {
 router.post('/run', requireRole('admin'), async (req, res, next) => {
   try {
     const report = await runner.run();
-    logActivity(req.user.id, 'backup_taken',
-      `${report.filename} — ${report.rows} rows to ${report.destinations.filter((d) => d.ok).map((d) => d.provider).join(', ')}`);
+    logActivity(req.user.id, 'backup_taken', backupSummary(report));
     res.json(report);
   } catch (err) {
     // The message matters here: the usual failure is a missing passphrase, and
     // that has a specific fix.
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /backups/scheduled-run — scheduler-only entry point.
+//
+// This deliberately does NOT accept an admin cookie/token. The human path
+// remains /backups/run above. A dedicated secret means the cron worker can
+// trigger a backup without receiving DATABASE_URL, R2 credentials, or the
+// encryption passphrase.
+//
+// The secret comparison is constant-time after a length check. Missing
+// configuration returns 503 so an apparently-successful cron cannot create
+// false confidence that nightly backups exist.
+router.post('/scheduled-run', async (req, res) => {
+  const configured = process.env.UNPLUG_BACKUP_CRON_SECRET;
+  if (!configured) {
+    return res.status(503).json({ error: 'Backup scheduler secret is not configured.' });
+  }
+  if (!cronSecretMatches(req.get('X-Backup-Cron-Secret'))) {
+    return res.status(401).json({ error: 'Not authorised.' });
+  }
+
+  try {
+    const report = await runner.run();
+    logActivity(
+      null,
+      'backup_taken',
+      `Scheduled backup: ${backupSummary(report)}`,
+      { ip: req.ip || null, userAgent: req.get('user-agent') || 'render-cron', actorRole: 'system' },
+      'system'
+    );
+    return res.json({ ok: true, report });
+  } catch (err) {
+    console.error('[backup] scheduled run failed:', err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
