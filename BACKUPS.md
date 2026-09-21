@@ -2,10 +2,10 @@
 
 What is backed up, where it goes, and how to get it back.
 
-**Nothing is being backed up until you do the two setup steps below.** The code
-is deployed and the nightly job is running, but with no passphrase and no
-bucket it logs one warning and stops. That is deliberate — see *Why it refuses
-to run* below.
+Backups are encrypted before storage and refuse to run without a passphrase.
+Production uses two layers: an in-process 24-hour fallback and a Render Cron
+Job that calls the scheduler-only backup endpoint once per day. The external
+cron is the reliability guarantee because the web service can sleep or restart.
 
 ---
 
@@ -69,17 +69,36 @@ with one account is then not a problem with the backups. Either alone works.
 | `B2_SECRET_ACCESS_KEY` | the applicationKey |
 | `B2_REGION` | `eu-central-003` |
 
-### 3. Check it worked
+### 3. Configure reliable daily scheduling
+
+Set a separate random secret on the **web service** as
+`UNPLUG_BACKUP_CRON_SECRET`. The Render Cron Job carries only that same
+secret and calls:
+
+```text
+POST /backups/scheduled-run
+X-Backup-Cron-Secret: <UNPLUG_BACKUP_CRON_SECRET>
+```
+
+The cron worker does **not** receive `DATABASE_URL`, R2/B2 credentials, or
+`UNPLUG_BACKUP_PASSPHRASE`; those remain only on the backend that actually
+creates and encrypts the backup. The human `POST /backups/run` endpoint
+remains admin-session only.
+
+### 4. Check it worked
 
 As an admin, `GET /backups` reports what is configured and what is stored, or
 press the button on the dashboard. It says plainly when it is writing to local
 disk only.
 
-Then take one immediately rather than waiting for the nightly run:
+Take one immediately rather than waiting for the daily run:
 
 ```bash
 npm run backup
 ```
+
+For scheduled runs, Render Cron logs must show HTTP 2xx and the backend audit
+log records the action as `backup_taken` by the system actor.
 
 ---
 
