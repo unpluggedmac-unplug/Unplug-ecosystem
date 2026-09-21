@@ -366,8 +366,10 @@ those before relying on them.**
 3. Check the first consultant payout run by hand.
 
 **Soon**
-4. Turn on Supabase database backups. Still the largest single risk to the
-   business, and unrelated to anything in this programme.
+4. Application-level encrypted backups are operational. Reliable daily execution
+   is now handled by a dedicated Render Cron Job rather than depending on 24
+   continuous web-service hours. Supabase-native/PITR remains an optional
+   platform-level second layer when plan/tooling permits.
 
 **Completed 20 September 2026**
 - Profile/community email notifications now extend the existing in-app
