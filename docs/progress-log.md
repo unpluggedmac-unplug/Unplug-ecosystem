@@ -3725,3 +3725,28 @@ routes each migration through the tested retry helper.
 2026-09-16. That proves the application-level encrypted backup path worked at that point. It does not prove
 nightly recurrence: the current scheduler waits 24 continuous process hours, while the free Render service can
 sleep/restart. Recurrence therefore remains an operational-code follow-up.
+
+
+## 2026-09-21 — Final release handover and fresh remaining-site audit
+
+A fresh audit was completed after the Admin Dashboard release sequence and subsequent production work.
+
+**PR #78 exact-head evidence:** head `eec0db52836de4384a9f9ed19899159700db7ae1` passed Build Configuration, Backend Regression and Member Dashboard Control Centre CI. Both full backend jobs were **2,497/2,497 passing, 0 failing, 0 skipped**; the dashboard regression job was **43/43 passing**. PR #78 merged as `921dd9b60f4bc779b3064e3f9616e5a0ef97fa90`.
+
+**Admin visual gate:** the production Admin Control Centre was visually reviewed after #78. The 13-group information architecture was confirmed live. Screenshot findings were fixed and released through #79 (dashboard polish), #80 (accessibility placement), #81 (structural accessibility docking) and #82 (sticky viewport-height sidebar/footer).
+
+**Current production advanced further:** #84 fixed mobile POPIA consent overflow; #85 added preference-aware community email notifications; #86 hardened production migration replay against transient PostgreSQL deadlock/serialization failures. Current `main` at audit time is `e820d892b792957268b33cf07b7858b554299b99`. Render deploy `dep-dao2u6btqb8s73b0fdt0` is LIVE, logged `All migrations applied.`, continues to return `/health/ready 200`, and has no error-level logs after the successful #86 deploy. Current-main full backend CI is **2,515/2,515 passing, 0 failing, 0 skipped**.
+
+**Repository security remains a manual P0 blocker:** GitHub reports the repository as **public** and `main` as **unprotected**. The connected GitHub tool does not expose repository visibility/ruleset mutation. Target state is Private + protected `main` with required release checks.
+
+**Fresh operational audit:**
+- stale draft PR #83 was closed as superseded by already-released #84; open PR count is now zero;
+- staging is stale: `staging-control-centre` remains at `8dc065638a4885c4be1f1884e42d36f7dc77556a` while production main is `e820d892...`;
+- production Supabase security advisor has only one INFO item: RLS enabled/no policy on `share_card_requests`; the table currently has 0 rows;
+- performance advisor reports INFO debt: 178 unindexed FKs, 370 no-primary-key findings and 134 unused indexes; do not bulk-fix;
+- retired Supabase-host scan now finds **6 remaining references**: `project_sponsors.logo_url` rows 1/5/6/7/8 and `settings.youtube_image_url`;
+- published edition id 4 / issue 1 / R50 still has no private download URL and no `download_secured_at`;
+- Render shows one successful real `POST /backups/run 200` on 2026-09-16 but no proof of recurring nightly execution;
+- Resend domain `unplugnews.com` is verified and sending, but **0 webhooks** are configured, so the implemented delivered/bounced/complained feedback endpoint is not operationally wired.
+
+Canonical details and next priority order are now in `docs/FINAL-HANDOVER-2026-09-21.md`.
