@@ -9,6 +9,7 @@ const { recordConversionAsync } = require('../utils/analyticsRecorder');
 const { normaliseTags } = require('../utils/tags');
 const { publishesFree, statusForNewSubmission } = require('../utils/publishingRights');
 const { recordParticipationAsync } = require('../utils/participation');
+const { validateMemberOpeningStory } = require('../utils/articleOpeningStory');
 
 const { applyGate, previewWords } = require('../utils/accountGate');
 
@@ -295,6 +296,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     if (!title || !body) {
       return res.status(400).json({ error: 'title and body are required.' });
     }
+    const openingStoryError = validateMemberOpeningStory(req.user, body);
+    if (openingStoryError) {
+      return res.status(400).json({ error: openingStoryError });
+    }
     if (emotion && !ALLOWED_EMOTIONS.includes(emotion)) {
       return res.status(400).json({ error: 'emotion must be one of: ' + ALLOWED_EMOTIONS.join(', ') + '.' });
     }
@@ -345,8 +350,8 @@ router.post('/', requireAuth, async (req, res, next) => {
          slug, key_takeaways, keywords, tags, suggested_category_id,
          gallery_images, links, body_format, author_name,
          video_url, video_platform, video_embed_url, video_thumbnail_url,
-         requires_account)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
+         requires_account, member_opening_story_limited)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
        RETURNING *`,
       [
         req.user.id, categoryId || null, title, body, kickerSuppliedBy || null,
@@ -377,6 +382,10 @@ router.post('/', requireAuth, async (req, res, next) => {
         // to place an article must not be able to decide who may read it.
         // Anyone else sending requiresAccount is simply ignored.
         req.user.role === 'admin' ? req.body.requiresAccount === true : false,
+        // Only member-side submissions are constrained to a 300-character
+        // introduction at the database layer. Admin/editor-created legacy
+        // articles may still use body for a longer main story.
+        req.user.role !== 'admin',
       ]
     );
     const article = result.rows[0];
@@ -441,7 +450,18 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
     const values = [];
 
     if (title !== undefined) { values.push(title); setClauses.push(`title = $${values.length}`); }
-    if (body !== undefined) { values.push(body); setClauses.push(`body = $${values.length}`); }
+    if (body !== undefined) {
+      const openingStoryError = validateMemberOpeningStory(req.user, body);
+      if (openingStoryError) {
+        return res.status(400).json({ error: openingStoryError });
+      }
+      values.push(body); setClauses.push(`body = $${values.length}`);
+      // Keep the database constraint aligned with who is editing the body:
+      // member-side edits remain introduction-only, while an admin may
+      // deliberately expand a legacy/editorial body beyond 300 characters.
+      values.push(req.user.role !== 'admin');
+      setClauses.push(`member_opening_story_limited = $${values.length}`);
+    }
     if (kickerSuppliedBy !== undefined) { values.push(kickerSuppliedBy); setClauses.push(`kicker_supplied_by = $${values.length}`); }
     if (req.body.authorName !== undefined) {
       values.push(String(req.body.authorName).trim() || null);
