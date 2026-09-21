@@ -92,18 +92,20 @@ storage; they cost nothing and nothing points at them.
 
 ## Scheduled work
 
-Render's free tier sleeps when idle and has no cron, so every recurring job in
-this codebase runs on an in-process timer AND is exposed as an endpoint an
-external scheduler can call. The timer covers the common case; the endpoint is
-there when a guarantee is needed.
+The web service can sleep when idle, so long in-process timers are never the
+reliability guarantee. Recurring work keeps an in-process fallback where useful
+and exposes a scheduler-safe endpoint. Backups use a dedicated Render Cron Job
+so a web-service restart cannot reset the 24-hour clock.
 
 | Job | Timer | Endpoint | Secret |
 |---|---|---|---|
 | Birthday greetings | hourly | `POST /birthdays/send-greetings` | `BIRTHDAY_CRON_SECRET` |
 | Database cleanup | daily | `POST /maintenance/cleanup` | `UNPLUG_CLEANUP_SECRET` |
+| Encrypted database backup | daily | `POST /backups/scheduled-run` | `UNPLUG_BACKUP_CRON_SECRET` |
 
-Both are idempotent — calling them repeatedly does no extra work — so an uptime
-pinger hitting them on a schedule is safe.
+Birthday and cleanup runs are idempotent. Backups are additive and retained by
+the backup runner, so the production cron calls them once per day rather than
+using an uptime pinger.
 
 ```bash
 curl -X POST https://unplug-ecosystem.onrender.com/maintenance/cleanup \
