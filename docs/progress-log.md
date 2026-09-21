@@ -3725,3 +3725,32 @@ routes each migration through the tested retry helper.
 2026-09-16. That proves the application-level encrypted backup path worked at that point. It does not prove
 nightly recurrence: the current scheduler waits 24 continuous process hours, while the free Render service can
 sleep/restart. Recurrence therefore remains an operational-code follow-up.
+
+
+## 2026-09-21 — Reliable daily encrypted backup scheduling
+
+Production verification after PR #86 confirmed the backend is healthy and current on
+`e820d892b792957268b33cf07b7858b554299b99`. The next operational gap was backup
+recurrence: a real manual `POST /backups/run` succeeded on 2026-09-16, but the
+existing in-process backup timer waits 24 continuous process hours. A Render web
+service that sleeps or restarts can therefore reset the timer indefinitely.
+
+**Architecture.** The human `POST /backups/run` route remains admin-session only.
+A new scheduler-only `POST /backups/scheduled-run` route accepts a dedicated
+`UNPLUG_BACKUP_CRON_SECRET` in `X-Backup-Cron-Secret`. The secret comparison is
+constant-time, missing configuration fails closed with 503, a wrong secret returns
+401, and the route reuses the existing encrypted `backupRunner`.
+
+**Least privilege.** The Render cron worker only needs the dedicated scheduler secret.
+It does not receive `DATABASE_URL`, R2/B2 credentials, or
+`UNPLUG_BACKUP_PASSPHRASE`; those stay on the backend service. Scheduled backups are
+written to the audit log as a system actor.
+
+**Fallback.** The old 24-hour in-process timer remains as best effort, but is now
+documented explicitly as fallback-only. The Render Cron Job is the daily reliability
+mechanism.
+
+**Regression coverage.** Added `backupCron.test.js` to lock the admin-only human
+route, scheduler-secret boundary, encrypted-runner reuse, system audit entry, and
+least-privilege cron trigger. Environment examples, production readiness, BACKUPS.md,
+OPERATIONS.md and the finalisation handover were updated to match.
