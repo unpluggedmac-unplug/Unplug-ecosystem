@@ -2,11 +2,35 @@
 
 **Prepared:** 2026-09-21  
 **Canonical production branch:** `main`  
-**Current main SHA at handover start:** `e820d892b792957268b33cf07b7858b554299b99`  
-**Current production Render deploy:** `dep-dao2u6btqb8s73b0fdt0` — LIVE  
+**Current main SHA at latest refresh:** `aeb4333ba124bb5675f077d7d97f5e04a5f017ea`  
+**Current production Render deploy:** `dep-daobkp0473hc739mritg` — LIVE  
 **Production backend:** `https://unplug-ecosystem.onrender.com`
 
 This document supersedes the stale operational wording in older handovers. Historical notes remain useful for context, but the state below is the current baseline verified on 2026-09-21.
+
+## Latest follow-up refresh — 2026-09-21
+
+Production advanced again after the first handover snapshot. PR #90 (member article Opening Story 300-character limit) merged as `aeb4333ba124bb5675f077d7d97f5e04a5f017ea`. Its exact production SHA passed:
+- Backend regression CI — **2,527 / 2,527 passing**, 0 failing, 0 skipped
+- Member Dashboard full regression — **2,527 / 2,527 passing**, 0 failing, 0 skipped
+- Member Dashboard focused regression — **43 / 43 passing**
+- Build configuration contract/artifact gate — PASS
+- GitHub Pages build/deployment — PASS
+
+Render production is LIVE on the same SHA via deploy `dep-daobkp0473hc739mritg`; no error-level production logs were found in the post-merge window.
+
+PR #89, which replaces the best-effort in-process backup cadence with a Render cron trigger, remains **open and draft**. Its current head `109a28baca27184665482b9b4d9a8f2f8a3a0756` has green exact-head Build Configuration, Backend Regression, Member Dashboard and Growth V2 CI, but it is now **diverged** from current `main` (behind by 6 commits). It must be rebuilt/rebased onto current `main` and re-run exact-head CI before any merge.
+
+Repository security is still unresolved: GitHub reports the repository **public** and `main` **unprotected**. The current GitHub integration cannot mutate repository visibility or branch protection/rulesets; owner action in GitHub Settings remains required.
+
+Resend operational state improved after the original audit: one enabled production webhook now exists at the implemented backend endpoint and subscribes to `email.delivered`, `email.bounced`, and `email.complained`. No webhook receipt was found in the checked Render log window after creation, so signed-delivery acceptance should still be proven with a real event before this item is marked fully verified.
+
+The remaining-site audit was re-run. Current unchanged findings are:
+- Supabase security advisor: one INFO `rls_enabled_no_policy` finding on `share_card_requests`; table row count 0
+- performance advisor: 178 unindexed-FK findings, 370 no-primary-key findings, 134 unused-index findings; do not bulk-fix
+- retired Supabase host references: **6**
+- published paid editions still unsecured: **1**
+- `staging-control-centre` remains stale at `8dc065638a4885c4be1f1884e42d36f7dc77556a`
 
 ---
 
@@ -59,7 +83,7 @@ PR #85's first production instance hit PostgreSQL `40P01 deadlock detected` whil
 
 `e820d892b792957268b33cf07b7858b554299b99`
 
-Current production Render deploy:
+Historical PR #86 production Render deploy at that point:
 `dep-dao2u6btqb8s73b0fdt0`
 
 Current production evidence:
@@ -107,7 +131,7 @@ Do not mark repository security closed until GitHub reports `private: true` and 
 
 Fresh branch audit:
 
-- production `main`: `e820d892b792957268b33cf07b7858b554299b99`
+- production `main` at latest refresh: `aeb4333ba124bb5675f077d7d97f5e04a5f017ea`
 - `staging-control-centre`: `8dc065638a4885c4be1f1884e42d36f7dc77556a`
 
 Staging is therefore materially behind production.
@@ -220,23 +244,15 @@ Resend domain state:
 - open tracking: off
 - click tracking: off
 
-Resend currently has **0 webhooks configured**.
-
-The backend already exposes:
+A production webhook is now configured and **enabled** at:
 `POST https://unplug-ecosystem.onrender.com/email/webhooks/resend`
 
-Expected events:
+Subscribed events:
 - `email.delivered`
 - `email.bounced`
 - `email.complained`
 
-Required operational setup:
-1. Create the Resend webhook for the production endpoint.
-2. Subscribe to the three events above.
-3. Put the generated `whsec_...` value into Render as `RESEND_WEBHOOK_SECRET`.
-4. Verify one signed webhook is accepted.
-
-Until this is configured, outbound mail still sends, but bounce/complaint feedback cannot reliably suppress dead/problem addresses through the implemented webhook path.
+This closes the earlier “0 webhooks configured” setup gap. The remaining verification step is to observe at least one correctly signed delivery at the backend and confirm the expected event is persisted/handled. The connected Render tool does not expose environment-variable reads, so the presence/value of `RESEND_WEBHOOK_SECRET` cannot be independently read back from this chat.
 
 ---
 
@@ -256,16 +272,17 @@ These are not current CI failures.
 
 ## 11. Current release quality baseline
 
-At this handover:
-- current main full backend regression: **2,515 / 2,515 PASS**
-- Member Dashboard regression: **43 / 43 PASS**
-- production Render: **LIVE**
-- production readiness endpoint: repeated **HTTP 200**
-- migrations: **completed**
-- no new production error-level logs after PR #86
-- open PRs: **0**
-- stale PR #83: **closed**
+At the latest refresh:
+- current `main`: `aeb4333ba124bb5675f077d7d97f5e04a5f017ea`
+- current main full backend regression: **2,527 / 2,527 PASS**
+- Member Dashboard full regression: **2,527 / 2,527 PASS**
+- Member Dashboard focused regression: **43 / 43 PASS**
+- build configuration / production artifact gate: **PASS**
+- production Render deploy `dep-daobkp0473hc739mritg`: **LIVE**
+- no error-level Render logs found after the PR #90 production deployment
+- open PRs: **1** — draft PR #89 (backup cron), currently behind `main` and not release-ready until rebuilt/retested
 - production DB security advisor: no error/warning-level findings; one INFO RLS/no-policy item
+- repository security remains unresolved: public + unprotected `main`
 - current critical operational risks are configuration/ops items, not a known failing production test suite
 
 ---
@@ -277,12 +294,12 @@ At this handover:
 2. Protect `main`.
 
 **P1 — production operational safety**
-3. Secure the paid edition download.
-4. Configure recurring external encrypted backups and verify restore.
-5. Configure the Resend delivery/bounce/complaint webhook.
+3. Rebuild PR #89 on current `main`, rerun exact-head CI, merge/deploy, then configure the Render cron and prove one scheduled encrypted backup plus a controlled restore.
+4. Secure the paid edition download.
+5. Verify one signed Resend webhook delivery end-to-end. The webhook itself is now configured.
 
 **P1 — environment consistency**
-6. Resync `staging-control-centre` to the current production baseline and verify both staging deployments.
+6. Resync `staging-control-centre` to the current production baseline and verify Cloudflare staging, Render staging, readiness and logs.
 
 **P2 — storage cleanup**
 7. Repoint the remaining six retired-Supabase URLs, then rerun the storage audit to zero.
