@@ -1,38 +1,27 @@
 # Next session — kickoff
 
-Paste the block below to start the next Unplug Ecosystem session (after the Sept 23 usage reset).
-Prepared 2026-09-17.
+Prepared 2026-09-21.
 
----
+Start by reading `docs/FINAL-HANDOVER-2026-09-21.md`, then re-fetch current `main`, open PRs and the current Render production deploy before changing anything. Parallel sessions may have advanced the repository after the handover was written.
 
-New session — Unplug Ecosystem build. First, read the latest entry (dated 2026-09-17) in
-`docs/progress-log.md` in my connected GitHub folder (`~/OneDrive/Documents/GitHub/Unplug-ecosystem`)
-— it's the handover from our last session with the full state, the delivery pipeline, and what's queued.
+Current verified baseline at handover start:
+- `main`: `e820d892b792957268b33cf07b7858b554299b99`
+- PR #78 Admin Control Centre restructure released and visually validated; follow-up visual fixes #79–#82 also released
+- PR #84 mobile POPIA overflow fix released
+- PR #85 community email notifications merged
+- PR #86 migration-deadlock retry hotfix released
+- current full backend regression: 2,515 / 2,515 passing
+- current production Render deploy healthy, migrations complete, readiness 200
+- open PRs: 0 after superseded PR #83 was closed
 
-All the frontend-safe work is done (Batches A, B, C, E, F). Now that my usage has reset, I want to start
-the held backend work: Batch D (money & schema) plus My Analytics real data, Growth "visible status",
-custom interests, and the My Orders approval-status split.
+Before starting new feature work, close the remaining operational/security items in this order:
+1. GitHub repo must be made PRIVATE and `main` protected (manual GitHub repository-admin action; current connector cannot mutate visibility/rules).
+2. Secure the published paid edition download.
+3. Configure a reliable external recurring encrypted-backup schedule and verify restore.
+4. Configure the Resend delivery/bounce/complaint webhook + Render signing secret.
+5. Resync `staging-control-centre` to current production main and verify staging frontend/backend exact SHA.
+6. Repoint the six remaining retired-Supabase URLs, then rerun storage audit to zero.
+7. Review Supabase performance INFO findings only against real query evidence; do not bulk-apply indexes/PKs.
 
-Work the same way as before — review and question before building, one task at a time. These are
-backend + database changes, so this is higher-risk than last session: show me a short plan and get my OK
-before writing anything, especially anything touching money or the schema. Deliver through GitHub Desktop
-like last time (you edit and commit into my folder, I commit + push; backend also needs my manual Render
-deploy). Note the backend test suite can't run in the cloud, so rely on the repo's CI. At the end, append
-an updated handover to `docs/progress-log.md`.
-
-Let's start with [pick one: Batch D / My Analytics / whichever you recommend].
-
----
-
-## Before you open it
-- Start the session from the **Claude desktop app on this same computer**, linked like last time, so it can
-  reach this GitHub folder (otherwise it can't read the handover — you'd have to paste it).
-- Swap the last line for whichever item you want first; leave it as "whichever you recommend" if unsure.
-
-## What's held for this backend session
-- **Batch D** — money & schema (high-risk; full test + your sign-off before anything ships).
-- **My Analytics** — real data (needs backend).
-- **Growth "visible status"** (needs backend).
-- **Custom interests** + public/private per-field toggle on the My Unplug profile (needs backend/schema).
-- **My Orders** waiting-vs-approved split — `order.status` is payment vocabulary (confirmed/failed/awaiting),
-  not approval status, so this needs a backend clarification before building.
+Release discipline stays unchanged:
+exact-head CI → staging when applicable → production exact commit → migrations/readiness/logs → authenticated/visual verification for UI changes.
