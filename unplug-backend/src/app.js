@@ -365,9 +365,10 @@ setInterval(() => {
     .catch((err) => console.error('[cleanup] failed:', err.message));
 }, CLEANUP_INTERVAL_MS);
 
-// Nightly backup. Same in-process pattern as the others, with the same caveat:
-// it only fires while the instance is awake, so POST /backups/run with
-// UNPLUG_CLEANUP_SECRET is there for a scheduler that wants a guarantee.
+// Best-effort in-process backup fallback. It only fires after 24 continuous
+// hours of process uptime, so it is NOT the production guarantee on a service
+// that can sleep or restart. The reliable daily path is the external Render
+// Cron Job calling POST /backups/scheduled-run with UNPLUG_BACKUP_CRON_SECRET.
 //
 // SILENT UNLESS CONFIGURED. With no passphrase set this logs once and stops
 // trying, rather than writing an error every night that everybody learns to
