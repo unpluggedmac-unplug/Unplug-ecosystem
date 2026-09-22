@@ -533,9 +533,10 @@ test('the queue reaches every spine service that can be resubmitted', () => {
   const canResubmit = SUB.SUBMISSION_TABLES.filter((t) => SUB.isLiveFor('resubmitted', t));
   const unreachable = canResubmit.filter((t) => !new RegExp(`FROM ${t}\\b`).test(src));
 
-  // gallery_bundles is reviewed through its images rather than as a row of its
-  // own, which is why the queue selects gallery_images.
-  assert.deepEqual(unreachable, ['gallery_bundles'],
+  // Gallery bundles are now first-class approval rows because one R100
+  // purchase is one submission containing up to three images. Every spine
+  // service that can be resubmitted must therefore be directly reachable.
+  assert.deepEqual(unreachable, [],
     'spine services that accept resubmitted but never appear in the queue: ' + unreachable.join(', '));
 });
 
