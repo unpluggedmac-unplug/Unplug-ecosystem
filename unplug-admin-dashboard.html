@@ -4870,10 +4870,27 @@ async function aqOpenReview(row) {
     : `<span style="font-size:12.5px; color:var(--slate);">This kind of submission has no public page of its own — what is below is all of it.</span>`;
 
   let form = '';
+  if (Array.isArray(data.bundleImages) && data.bundleImages.length) {
+    form += '<div style="margin:14px 0 18px;">'
+      + '<div style="font-size:11px; text-transform:uppercase; letter-spacing:0.07em; color:var(--slate); margin-bottom:8px;">Images in this submission</div>'
+      + '<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px;">'
+      + data.bundleImages.map((img, index) => `
+          <div style="border:1px solid var(--paper-line,#e2ddd6); background:#fff; padding:8px;">
+            <div style="font-size:11px; font-weight:700; margin-bottom:6px;">Image ${index + 1} of ${data.bundleImages.length}</div>
+            <a href="${escapeAttrAdmin(img.imageUrl)}" target="_blank" rel="noopener">
+              <img src="${escapeAttrAdmin(img.imageUrl)}" alt="" style="width:100%; height:180px; object-fit:contain; background:var(--paper,#f4f1ec); display:block;" onerror="this.style.display='none';">
+            </a>
+            ${img.caption ? `<div style="font-size:12px; margin-top:7px; color:var(--slate);">${escapeHtmlAdmin(img.caption)}</div>` : ''}
+          </div>`).join('')
+      + '</div></div>';
+  }
+
   if (!data.fields.length) {
-    form = '<p style="font-size:13px; color:var(--slate); background:var(--paper,#f4f1ec); padding:12px 14px;">'
-      + 'Nothing on this kind of submission can be edited here. Money and status are deliberately not editable &mdash; '
-      + 'a payment records what actually happened at the gateway, and approving is what the Approve button is for.</p>';
+    form += '<p style="font-size:13px; color:var(--slate); background:var(--paper,#f4f1ec); padding:12px 14px;">'
+      + (Array.isArray(data.bundleImages) && data.bundleImages.length
+          ? 'This gallery submission is reviewed as one bundle. Approving it publishes every image shown above together.'
+          : 'Nothing on this kind of submission can be edited here. Money and status are deliberately not editable &mdash; a payment records what actually happened at the gateway, and approving is what the Approve button is for.')
+      + '</p>';
   } else {
     form = data.fields.map((f) => {
       const raw = data.item[f.col];
@@ -5113,12 +5130,15 @@ async function loadApprovalQueue() {
       // finding out what they had published by reading the live site. Review
       // opens the whole submission, lets it be corrected, and links to the
       // real public page.
+      const bundleCount = row.type === 'gallery_bundle' && Array.isArray(row.galleryImages) ? row.galleryImages.length : 0;
+      const approveLabel = bundleCount ? `Approve all ${bundleCount}` : 'Approve';
+      const rejectLabel = bundleCount ? `Reject all ${bundleCount}` : 'Reject';
       actionTd.innerHTML = '<div class="row-actions">'
         + '<button class="aq-review" style="background:#fff; border:1px solid var(--ink,#272626); color:var(--ink,#272626);">Review</button>'
         + (canApprove
-            ? '<button class="approve">Approve</button>'
-            : `<button class="approve" disabled title="${escapeHtmlAdmin(row.approveBlockedReason || 'Not available for this item.')}" style="opacity:0.45; cursor:not-allowed;">Approve</button>`)
-        + '<button class="reject">Reject</button></div>';
+            ? `<button class="approve">${approveLabel}</button>`
+            : `<button class="approve" disabled title="${escapeHtmlAdmin(row.approveBlockedReason || 'Not available for this item.')}" style="opacity:0.45; cursor:not-allowed;">${approveLabel}</button>`)
+        + `<button class="reject">${rejectLabel}</button></div>`;
       actionTd.querySelector('.aq-review').addEventListener('click', () => aqOpenReview(row));
       if (canApprove) {
         actionTd.querySelector('.approve').addEventListener('click', async () => {
@@ -5130,7 +5150,10 @@ async function loadApprovalQueue() {
         });
       }
       actionTd.querySelector('.reject').addEventListener('click', async () => {
-        if (!confirm(`Reject this ${row.typeLabel.toLowerCase()}?`)) return;
+        const rejectQuestion = row.type === 'gallery_bundle' && Array.isArray(row.galleryImages)
+          ? `Reject this entire gallery submission of ${row.galleryImages.length} image${row.galleryImages.length === 1 ? '' : 's'}?`
+          : `Reject this ${row.typeLabel.toLowerCase()}?`;
+        if (!confirm(rejectQuestion)) return;
         try {
           const res = await aqRunAction(row, 'reject');
           showToast((res && res.message) || `${row.typeLabel} rejected.`);
