@@ -34,6 +34,7 @@ let baseUrl;
 let adminToken;
 let memberToken;
 let otherToken;
+let deletedAccountToken;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unplug-gate-'));
 const port = 43200 + (process.pid % 300); // bases are 400 apart so ranges cannot overlap
 
@@ -98,6 +99,10 @@ before(async () => {
   adminToken = sign(570001, 'gateadmin@test.com', 'admin');
   memberToken = sign(570002, 'gatemember@test.com', 'member');
   otherToken = sign(570003, 'gateother@test.com', 'member');
+  // A still-valid JWT for an account that no longer exists must not unlock
+  // gated content. This mirrors a deleted account whose browser retained an
+  // unexpired token in localStorage.
+  deletedAccountToken = sign(579999, 'deleted@test.com', 'member');
 
   await pool.query(`INSERT INTO categories (id, name, type) VALUES (9501, 'Community', 'news')
                     ON CONFLICT (id) DO NOTHING`);
@@ -164,6 +169,15 @@ test('ANY account passes — the gate asks for an account, not a payment', async
   const { body } = await api('GET', '/articles/9601', null, otherToken);
   assert.equal(body.article.gated, false);
   assert.ok(body.article.body.includes(SECRET));
+});
+
+test('A TOKEN WITHOUT A LIVE ACCOUNT DOES NOT UNLOCK THE ARTICLE', async () => {
+  const { status, body } = await api('GET', '/articles/9601', null, deletedAccountToken);
+  assert.equal(status, 200);
+  assert.equal(body.article.gated, true,
+    'a JWT is not membership when its user row no longer exists');
+  assert.ok(!body.article.body.includes(SECRET));
+  assert.deepEqual(body.sections, []);
 });
 
 test('an admin can always read a gated piece, to check what it says', async () => {

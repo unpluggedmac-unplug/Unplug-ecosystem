@@ -62,6 +62,23 @@ function previewOf(body, words) {
   return parts.slice(0, words).join(' ') + '…';
 }
 
+// A JWT proves that the token was issued by us; it does not prove that the
+// account still exists. A deleted account may keep a not-yet-expired token in
+// localStorage, so a content gate must verify the account against the database
+// before treating the viewer as a member. If that verification cannot be done,
+// fail closed for gated content and serve the preview rather than the full text.
+async function verifiedViewer(viewer) {
+  if (!viewer || !viewer.id) return null;
+  try {
+    const r = await pool.query('SELECT id, role FROM users WHERE id = $1 LIMIT 1', [viewer.id]);
+    if (!r.rowCount) return null;
+    return { ...viewer, role: r.rows[0].role || viewer.role };
+  } catch (err) {
+    console.error('[account-gate] could not verify viewer:', err.message);
+    return null;
+  }
+}
+
 // Mutates and returns the article row. `viewer` is req.user (or undefined).
 //
 // An admin reads everything — they have to be able to check what a gated piece
@@ -94,4 +111,4 @@ function applyGate(article, viewer, words) {
   return article;
 }
 
-module.exports = { applyGate, previewOf, previewWords, resetCache, DEFAULT_PREVIEW_WORDS };
+module.exports = { applyGate, previewOf, previewWords, resetCache, verifiedViewer, DEFAULT_PREVIEW_WORDS };
