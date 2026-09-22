@@ -857,6 +857,157 @@ router.get('/gallery/pending', requireRole('admin'), async (req, res, next) => {
   }
 });
 
+// PATCH /admin/gallery-bundles/:id/approve
+// A paid gallery submission is one moderation decision, even when it contains
+// three images. Approving the bundle and its images in one transaction prevents
+// partial publication (e.g. image 1 approved while images 2-3 are still pending).
+router.patch('/gallery-bundles/:id/approve', requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const bundleId = Number(req.params.id);
+    if (!Number.isInteger(bundleId)) {
+      return res.status(400).json({ error: 'A valid gallery bundle id is required.' });
+    }
+
+    await client.query('BEGIN');
+
+    const bundleResult = await client.query(
+      `SELECT * FROM gallery_bundles WHERE id = $1 FOR UPDATE`,
+      [bundleId]
+    );
+    if (!bundleResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Gallery submission not found.' });
+    }
+    const bundle = bundleResult.rows[0];
+
+    // Free/package-credit submissions arrive as pending and need no payment.
+    // If the bundle is still awaiting_payment, direct API calls may only
+    // approve it when a confirmed gallery_bundle payment exists.
+    if (bundle.status === 'awaiting_payment') {
+      const paid = await client.query(
+        `SELECT id FROM payments
+          WHERE linked_type = 'gallery_bundle'
+            AND linked_id = $1
+            AND status = 'confirmed'
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [bundleId]
+      );
+      if (!paid.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'This gallery submission has not been paid for yet.' });
+      }
+    }
+
+    const images = await client.query(
+      `UPDATE gallery_images
+          SET status = 'approved'
+        WHERE bundle_id = $1
+        RETURNING *`,
+      [bundleId]
+    );
+    if (!images.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'This gallery submission has no images to approve.' });
+    }
+
+    const approvedBundle = await client.query(
+      `UPDATE gallery_bundles
+          SET status = 'approved'
+        WHERE id = $1
+        RETURNING *`,
+      [bundleId]
+    );
+
+    await client.query('COMMIT');
+
+    // Business listing photo bundles can affect listing completeness.
+    const profileOwnerIds = [...new Set(images.rows
+      .filter((img) => img.owner_type === 'profile' && img.owner_id)
+      .map((img) => img.owner_id))];
+    profileOwnerIds.forEach((profileId) => {
+      pool.query('SELECT check_and_update_business_status($1)', [profileId]).catch(() => {});
+    });
+
+    await logActivity(
+      req.user.id,
+      'gallery_bundle_approved',
+      `Gallery bundle #${bundleId} — ${images.rows.length} image${images.rows.length === 1 ? '' : 's'} approved together`
+    );
+
+    res.json({
+      bundle: approvedBundle.rows[0],
+      images: images.rows,
+      message: `${images.rows.length} gallery image${images.rows.length === 1 ? '' : 's'} approved together.`,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// PATCH /admin/gallery-bundles/:id/reject
+// Rejecting a bundle is likewise all-or-nothing so the member's one R100
+// submission cannot split into mixed moderation states.
+router.patch('/gallery-bundles/:id/reject', requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    const bundleId = Number(req.params.id);
+    if (!Number.isInteger(bundleId)) {
+      return res.status(400).json({ error: 'A valid gallery bundle id is required.' });
+    }
+
+    await client.query('BEGIN');
+
+    const bundleResult = await client.query(
+      `SELECT * FROM gallery_bundles WHERE id = $1 FOR UPDATE`,
+      [bundleId]
+    );
+    if (!bundleResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Gallery submission not found.' });
+    }
+
+    const images = await client.query(
+      `UPDATE gallery_images
+          SET status = 'rejected'
+        WHERE bundle_id = $1
+        RETURNING *`,
+      [bundleId]
+    );
+
+    const rejectedBundle = await client.query(
+      `UPDATE gallery_bundles
+          SET status = 'rejected'
+        WHERE id = $1
+        RETURNING *`,
+      [bundleId]
+    );
+
+    await client.query('COMMIT');
+
+    await logActivity(
+      req.user.id,
+      'gallery_bundle_rejected',
+      `Gallery bundle #${bundleId} — ${images.rows.length} image${images.rows.length === 1 ? '' : 's'} rejected together`
+    );
+
+    res.json({
+      bundle: rejectedBundle.rows[0],
+      images: images.rows,
+      message: `${images.rows.length} gallery image${images.rows.length === 1 ? '' : 's'} rejected together.`,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
 // PATCH /admin/gallery/:id/approve
 router.patch('/gallery/:id/approve', requireRole('admin'), async (req, res, next) => {
   try {

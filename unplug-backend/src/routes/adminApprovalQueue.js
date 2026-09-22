@@ -41,6 +41,7 @@ const router = express.Router();
 const TYPES = {
   article:             { label: 'Article',             group: 'content' },
   directory_profile:   { label: 'Directory Listing',   group: 'service' },
+  gallery_bundle:      { label: 'Gallery Submission',  group: 'content' },
   gallery:             { label: 'Gallery Image',       group: 'content' },
   event:               { label: 'Event',               group: 'content' },
   competition_entry:   { label: 'Competition Entry',   group: 'content' },
@@ -212,17 +213,61 @@ const SOURCES = [
     }),
   },
   {
+    // Paid gallery submissions are sold and reviewed as ONE bundle: R100 buys
+    // up to three images. The old queue joined the payment to each image id,
+    // even though payments.linked_id points at gallery_bundles.id, and then
+    // rendered the three images as three unrelated approval rows. That made it
+    // impossible for an admin to see which photos belonged to the same sale
+    // and easy to approve only part of what the member submitted.
+    type: 'gallery_bundle',
+    sql: `SELECT b.id,
+                 b.image_count || '-image gallery submission' AS title,
+                 b.image_count || ' image' || CASE WHEN b.image_count = 1 THEN '' ELSE 's' END || ' in this submission' AS subtitle,
+                 COALESCE(pay.payer_name, u.full_name) AS customer_name,
+                 COALESCE(pay.payer_email, u.email) AS customer_email,
+                 b.user_id, b.created_at AS submitted_at, b.status AS item_status,
+                 pay.gateway_reference AS reference, pay.pay_status, pay.pay_amount,
+                 pay.pop_url, pay.invoice_url,
+                 COALESCE(
+                   json_agg(
+                     json_build_object(
+                       'id', g.id,
+                       'imageUrl', g.image_url,
+                       'caption', g.caption,
+                       'status', g.status
+                     )
+                     ORDER BY g.id
+                   ) FILTER (WHERE g.id IS NOT NULL),
+                   '[]'::json
+                 ) AS gallery_images
+            FROM gallery_bundles b
+            JOIN users u ON u.id = b.user_id
+            LEFT JOIN gallery_images g ON g.bundle_id = b.id
+            ${payLateral(['gallery_bundle'], 'b.id')}
+           WHERE b.status IN ('pending', 'awaiting_payment', 'resubmitted')
+           GROUP BY b.id, pay.payer_name, pay.payer_email, pay.payer_id,
+                    pay.gateway_reference, pay.pay_status, pay.pay_amount,
+                    pay.pop_url, pay.invoice_url, u.full_name, u.email`,
+    actions: (r) => ({
+      approve: { method: 'PATCH', path: `/admin/gallery-bundles/${r.id}/approve` },
+      reject: { method: 'PATCH', path: `/admin/gallery-bundles/${r.id}/reject` },
+    }),
+  },
+  {
+    // Legacy/admin-added gallery rows that predate bundles remain individually
+    // reviewable. Bundle images are intentionally excluded so one submission
+    // can never appear both as a bundle row and as three image rows.
     type: 'gallery',
     sql: `SELECT g.id, COALESCE(NULLIF(g.caption, ''), 'Gallery image') AS title,
                  g.supplied_by AS subtitle,
-                 pay.payer_name AS customer_name, pay.payer_email AS customer_email,
-                 pay.payer_id AS user_id, g.created_at AS submitted_at,
+                 NULL AS customer_name, g.supplied_by AS customer_email,
+                 NULL::integer AS user_id, g.created_at AS submitted_at,
                  g.status AS item_status,
-                 pay.gateway_reference AS reference, pay.pay_status, pay.pay_amount,
-                 pay.pop_url, pay.invoice_url
+                 NULL AS reference, NULL AS pay_status, NULL::numeric AS pay_amount,
+                 NULL AS pop_url, NULL AS invoice_url
             FROM gallery_images g
-            ${payLateral(['gallery_bundle'], 'g.id')}
-           WHERE g.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
+           WHERE g.bundle_id IS NULL
+             AND g.status IN ('pending', 'awaiting_payment', 'resubmitted')`,
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/gallery/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/gallery/${r.id}/reject` },
@@ -529,6 +574,18 @@ function fileList(row) {
   // the picture goes onto a card carrying the masthead, and approving an image
   // you were never shown is not approval, it is a rubber stamp.
   if (row.photo_url) files.push({ label: 'Card photo', url: row.photo_url });
+  if (Array.isArray(row.gallery_images)) {
+    row.gallery_images.forEach((img, index) => {
+      if (img && img.imageUrl) {
+        files.push({
+          label: `Image ${index + 1}`,
+          url: img.imageUrl,
+          caption: img.caption || null,
+          imageId: img.id,
+        });
+      }
+    });
+  }
   return files;
 }
 
@@ -572,6 +629,7 @@ router.get('/', requireRole('admin'), async (req, res, next) => {
           paymentStatus: paymentLabel(r),
           itemStatus: r.item_status,
           files: fileList(r),
+          galleryImages: Array.isArray(r.gallery_images) ? r.gallery_images : [],
           ...approvability(r, source),
         }));
       } catch (err) {
@@ -669,6 +727,11 @@ const DETAILS = {
              f('city', 'Town'), f('province', 'Province'),
              f('feature_image_url', 'Feature image', 'image')],
     preview: (r) => (r.slug ? `?p=profile&slug=${encodeURIComponent(r.slug)}` : null),
+  },
+  gallery_bundle: {
+    table: 'gallery_bundles',
+    fields: [],
+    preview: () => '?p=gallery',
   },
   gallery: {
     table: 'gallery_images',
@@ -781,10 +844,23 @@ router.get('/:type/:id', requireRole('admin'), async (req, res, next) => {
     if (!result.rows.length) return res.status(404).json({ error: 'Not found.' });
     const item = result.rows[0];
 
+    let bundleImages = [];
+    if (type === 'gallery_bundle') {
+      const images = await pool.query(
+        `SELECT id, image_url AS "imageUrl", caption, status
+           FROM gallery_images
+          WHERE bundle_id = $1
+          ORDER BY id`,
+        [id]
+      );
+      bundleImages = images.rows;
+    }
+
     res.json({
       type,
       typeLabel: TYPES[type] ? TYPES[type].label : type,
       item,
+      bundleImages,
       fields: d.fields,
       // Null where the thing has no public page of its own. Saying so beats a
       // button that opens the homepage and looks broken.
