@@ -807,12 +807,14 @@ router.get('/admin/members', requireRole('admin'), async (req, res, next) => {
     const orderBy = ORDER[sort] || ORDER.score;
 
     const params = [];
-    let where = '';
+    // Participation is a member programme. Admin accounts must stay out of
+    // this list and its counts/rankings, even if they have an enrolment row.
+    let where = `WHERE COALESCE(u.role, 'member') <> 'admin'`;
     if (q) {
       params.push(`%${q}%`);
-      where = `WHERE (u.email ILIKE $1 OR u.full_name ILIKE $1
-                      OR COALESCE(dp.display_name, '') ILIKE $1
-                      OR mpp.referral_code ILIKE $1)`;
+      where += ` AND (u.email ILIKE $1 OR u.full_name ILIKE $1
+                       OR COALESCE(dp.display_name, '') ILIKE $1
+                       OR mpp.referral_code ILIKE $1)`;
     }
 
     const rows = await pool.query(
@@ -861,10 +863,12 @@ router.get('/admin/members', requireRole('admin'), async (req, res, next) => {
               COUNT(*) FILTER (WHERE pp.last_at >= now() - INTERVAL '30 days')::int AS active_30d,
               COUNT(*) FILTER (WHERE mpp.show_on_leaderboard = FALSE)::int AS hidden_from_leaderboard
          FROM member_participation_profiles mpp
+         JOIN users u ON u.id = mpp.user_id
          LEFT JOIN score_cache sc ON sc.user_id = mpp.user_id
          LEFT JOIN LATERAL (
            SELECT MAX(created_at) AS last_at FROM participation_points WHERE user_id = mpp.user_id
-         ) pp ON TRUE`
+         ) pp ON TRUE
+        WHERE COALESCE(u.role, 'member') <> 'admin'`
     );
 
     // matched drives paging when a search is on; enrolled is the true total.
