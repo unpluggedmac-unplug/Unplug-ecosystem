@@ -1033,14 +1033,31 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
         <div class="panel-head"><h3>Link a representative to their member account</h3></div>
         <div class="panel-body">
           <p style="font-size:13px; color:var(--slate); margin:0 0 12px; line-height:1.6;">
-            The representative record and the person's own account stay separate — this only says which account belongs to which representative, so their referrals can be attributed.
-            A representative with no account is normal, and unlinking never affects past commissions.
+            Choose the representative and then choose the exact signed-up account from the dropdown. No account numbers or typed IDs are needed.
+            The representative record and member account stay separate, and unlinking never affects past commissions.
           </p>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <input id="clSearch" placeholder="Search representatives by name or email…" style="flex:1; min-width:240px; padding:7px 10px; font-size:13px;">
-            <button class="btn btn-line" id="clSearchBtn" style="width:auto; padding:6px 14px;">Search</button>
+          <div class="form-row" style="align-items:flex-end;">
+            <div>
+              <label for="clRepresentativeSelect">Representative</label>
+              <select id="clRepresentativeSelect"><option value="">Loading representatives…</option></select>
+            </div>
+            <div>
+              <label for="clMemberSelect">Member account</label>
+              <select id="clMemberSelect"><option value="">Loading member accounts…</option></select>
+            </div>
+            <div style="display:flex; gap:8px; align-items:flex-end;">
+              <button class="btn btn-solid" id="clLinkBtn" style="width:auto;">Save link</button>
+              <button class="btn btn-line" id="clUnlinkBtn" style="width:auto;">Unlink</button>
+            </div>
           </div>
-          <div id="clBody" style="margin-top:12px;">Loading…</div>
+          <div id="clLinkStatus" style="font-size:12px; color:var(--slate); margin-top:6px;"></div>
+          <div style="border-top:1px solid var(--paper-line); margin-top:18px; padding-top:14px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <input id="clSearch" placeholder="Filter representatives by name, email or linked account…" style="flex:1; min-width:240px; padding:7px 10px; font-size:13px;">
+              <button class="btn btn-line" id="clSearchBtn" style="width:auto; padding:6px 14px;">Filter</button>
+            </div>
+            <div id="clBody" style="margin-top:12px;">Loading…</div>
+          </div>
         </div>
       </div>
 
@@ -5445,77 +5462,149 @@ document.getElementById('plListingSearchBtn').addEventListener('click', loadProf
 document.getElementById('plListingSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadProfileLinks(); });
 
 // --- Sales consultant <-> account linking -----------------------------------
+let _consultantLinkRows = [];
+let _consultantMemberOptions = [];
+
+function consultantMemberLabel(m) {
+  const name = (m.full_name || '').trim();
+  return name ? `${name} — ${m.email}` : m.email;
+}
+
+function syncConsultantMemberPicker() {
+  const repSelect = document.getElementById('clRepresentativeSelect');
+  const memberSelect = document.getElementById('clMemberSelect');
+  const unlinkBtn = document.getElementById('clUnlinkBtn');
+  const status = document.getElementById('clLinkStatus');
+  const rep = _consultantLinkRows.find((r) => Number(r.id) === Number(repSelect.value));
+
+  memberSelect.innerHTML = '<option value="">— choose a member account —</option>';
+  _consultantMemberOptions.forEach((m) => {
+    const option = document.createElement('option');
+    option.value = String(m.id);
+    option.textContent = consultantMemberLabel(m)
+      + (m.existing_consultant_id && Number(m.existing_consultant_id) !== Number(rep && rep.id)
+        ? ` (already linked to ${m.existing_consultant_name})` : '');
+    option.disabled = !!(m.existing_consultant_id
+      && Number(m.existing_consultant_id) !== Number(rep && rep.id));
+    if (rep && Number(rep.user_id) === Number(m.id)) option.selected = true;
+    memberSelect.appendChild(option);
+  });
+
+  memberSelect.disabled = !rep;
+  unlinkBtn.disabled = !(rep && rep.user_id);
+  status.textContent = rep
+    ? (rep.linked_email
+      ? `Currently linked to ${rep.linked_name || rep.linked_email} (${rep.linked_email}).`
+      : 'This representative is not linked to a member account yet.')
+    : 'Choose a representative first.';
+}
+
+function renderConsultantLinksTable() {
+  const body = document.getElementById('clBody');
+  const q = document.getElementById('clSearch').value.trim().toLowerCase();
+  const rows = _consultantLinkRows.filter((c) => {
+    if (!q) return true;
+    return [c.name, c.email, c.linked_name, c.linked_email]
+      .some((v) => String(v || '').toLowerCase().includes(q));
+  });
+  if (!rows.length) {
+    body.innerHTML = '<div class="empty-state">No representatives match that filter.</div>';
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Representative</th><th>Record email</th><th>Linked member account</th><th></th></tr>';
+  rows.forEach((c) => {
+    const tr = document.createElement('tr');
+    const linked = c.linked_email
+      ? `${escapeHtmlAdmin(c.linked_name || c.linked_email)}<div style="font-size:11px; color:var(--slate);">${escapeHtmlAdmin(c.linked_email)}</div>`
+      : '<span style="color:var(--slate);">not linked</span>';
+    tr.innerHTML = `<td><strong>${escapeHtmlAdmin(c.name)}</strong>${c.active ? '' : '<br><span style="font-size:11.5px; color:var(--slate);">inactive</span>'}</td>`
+      + `<td>${escapeHtmlAdmin(c.email || '—')}</td>`
+      + `<td>${linked}</td>`
+      + '<td><button class="btn btn-line cl-edit-link" style="width:auto; padding:5px 12px;">Choose / change</button></td>';
+    tr.querySelector('.cl-edit-link').addEventListener('click', () => {
+      document.getElementById('clRepresentativeSelect').value = String(c.id);
+      syncConsultantMemberPicker();
+      document.getElementById('clMemberSelect').focus();
+    });
+    table.appendChild(tr);
+  });
+  body.innerHTML = '';
+  body.appendChild(table);
+}
+
 async function loadConsultantLinks() {
   const body = document.getElementById('clBody');
+  const repSelect = document.getElementById('clRepresentativeSelect');
+  const memberSelect = document.getElementById('clMemberSelect');
   body.innerHTML = '<div class="loading-state">Loading…</div>';
-  const q = document.getElementById('clSearch').value.trim();
+  repSelect.innerHTML = '<option value="">Loading representatives…</option>';
+  memberSelect.innerHTML = '<option value="">Loading member accounts…</option>';
+
   try {
-    const data = await api('/admin/links/consultants' + (q ? `?q=${encodeURIComponent(q)}` : ''));
-    const rows = data.consultants || [];
-    if (!rows.length) { body.innerHTML = '<div class="empty-state">No representatives match that.</div>'; return; }
-    const table = document.createElement('table');
-    const head = document.createElement('tr');
-    head.innerHTML = '<th>Representative</th><th>Record email</th><th>Linked account</th><th></th>';
-    table.appendChild(head);
-    rows.forEach((c) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td><strong>${escapeHtmlAdmin(c.name)}</strong>${c.active ? '' : '<br><span style="font-size:11.5px; color:var(--slate);">inactive</span>'}</td>`
-        + `<td>${escapeHtmlAdmin(c.email || '—')}</td>`
-        + `<td>${c.linked_email ? escapeHtmlAdmin(c.linked_email) : '<span style="color:var(--slate);">not linked</span>'}</td>`
-        + '<td><div class="row-actions"><button class="approve">'
-        + (c.linked_email ? 'Change account' : 'Link account') + '</button>'
-        + (c.linked_email ? '<button class="reject">Unlink</button>' : '') + '</div></td>';
-      tr.querySelector('.approve').addEventListener('click', () => clStartLink(c));
-      const un = tr.querySelector('.reject');
-      if (un) un.addEventListener('click', () => clUnlink(c));
-      table.appendChild(tr);
+    const [consultantData, memberData] = await Promise.all([
+      api('/admin/links/consultants'),
+      api('/admin/links/members'),
+    ]);
+    _consultantLinkRows = consultantData.consultants || [];
+    _consultantMemberOptions = memberData.members || [];
+
+    repSelect.innerHTML = '<option value="">— choose a representative —</option>';
+    _consultantLinkRows.forEach((r) => {
+      const option = document.createElement('option');
+      option.value = String(r.id);
+      option.textContent = r.name + (r.email ? ` — ${r.email}` : '');
+      repSelect.appendChild(option);
     });
-    body.innerHTML = '';
-    body.appendChild(table);
+
+    syncConsultantMemberPicker();
+    renderConsultantLinksTable();
   } catch (err) {
     body.innerHTML = `<div class="empty-state">Could not load: ${escapeHtmlAdmin(err.message)}</div>`;
+    repSelect.innerHTML = '<option value="">Could not load representatives</option>';
+    memberSelect.innerHTML = '<option value="">Could not load accounts</option>';
   }
 }
 
-// Never matched on name automatically — the admin picks the exact account.
-async function clStartLink(consultant) {
-  const q = prompt(`Link representative "${consultant.name}" to which account?\n\nType part of their email or name to search:`);
-  if (q === null || !q.trim()) return;
-  let members;
-  try {
-    const data = await api(`/admin/links/members?q=${encodeURIComponent(q.trim())}`);
-    members = data.members || [];
-  } catch (err) { showToast(err.message, true); return; }
-  if (!members.length) { showToast('No accounts match that.', true); return; }
-
-  const lines = members.slice(0, 20).map((m, i) => `${i + 1}. ${m.email}${m.full_name ? ' — ' + m.full_name : ''}`).join('\n');
-  const pick = prompt(`Which account?\n\n${lines}\n\nEnter a number:`);
-  if (pick === null) return;
-  const chosen = members[Number(pick) - 1];
-  if (!chosen) { showToast('That was not one of the numbers listed.', true); return; }
+async function saveConsultantMemberLink() {
+  const consultantId = Number(document.getElementById('clRepresentativeSelect').value);
+  const userId = Number(document.getElementById('clMemberSelect').value);
+  if (!consultantId) { showToast('Choose a representative first.', true); return; }
+  if (!userId) { showToast('Choose the member account to link.', true); return; }
 
   try {
-    const res = await api(`/admin/links/consultants/${consultant.id}`, {
-      method: 'POST', body: JSON.stringify({ userId: chosen.id }),
+    const res = await api(`/admin/links/consultants/${consultantId}`, {
+      method: 'POST', body: JSON.stringify({ userId }),
     });
     showToast(res.message || 'Linked.');
-    loadConsultantLinks();
+    _userRepresentativeOptions = null;
+    await loadConsultantLinks();
   } catch (err) { showToast(err.message, true); }
 }
 
-async function clUnlink(consultant) {
-  if (!confirm(`Unlink "${consultant.name}" from ${consultant.linked_email}? Their record and past commissions are unchanged.`)) return;
+async function unlinkSelectedConsultant() {
+  const consultantId = Number(document.getElementById('clRepresentativeSelect').value);
+  const rep = _consultantLinkRows.find((r) => Number(r.id) === consultantId);
+  if (!rep) { showToast('Choose a representative first.', true); return; }
+  if (!rep.user_id) { showToast('That representative is not linked to an account.', true); return; }
+  if (!confirm(`Unlink "${rep.name}" from ${rep.linked_email}? Their representative record and past commissions stay unchanged.`)) return;
+
   try {
-    const res = await api(`/admin/links/consultants/${consultant.id}`, {
+    const res = await api(`/admin/links/consultants/${consultantId}`, {
       method: 'POST', body: JSON.stringify({ userId: null }),
     });
     showToast(res.message || 'Unlinked.');
-    loadConsultantLinks();
+    _userRepresentativeOptions = null;
+    await loadConsultantLinks();
   } catch (err) { showToast(err.message, true); }
 }
 
-document.getElementById('clSearchBtn').addEventListener('click', loadConsultantLinks);
-document.getElementById('clSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadConsultantLinks(); });
+document.getElementById('clRepresentativeSelect').addEventListener('change', syncConsultantMemberPicker);
+document.getElementById('clLinkBtn').addEventListener('click', saveConsultantMemberLink);
+document.getElementById('clUnlinkBtn').addEventListener('click', unlinkSelectedConsultant);
+document.getElementById('clSearchBtn').addEventListener('click', renderConsultantLinksTable);
+document.getElementById('clSearch').addEventListener('input', renderConsultantLinksTable);
 
 // --- Promote an existing member to Representative, in one step -------------
 async function loadPromoteCandidates() {
@@ -10304,6 +10393,14 @@ const USERS_PAGE_SIZE = 50;
 let _allUsers = [];
 let _usersTotal = 0;
 let _usersOffset = 0;
+let _userRepresentativeOptions = null;
+
+async function ensureUserRepresentativeOptions() {
+  if (_userRepresentativeOptions !== null) return _userRepresentativeOptions;
+  const data = await api('/admin/links/consultants');
+  _userRepresentativeOptions = data.consultants || [];
+  return _userRepresentativeOptions;
+}
 
 // Loads the FIRST page for the current search term (server-side now — see
 // GET /admin/users?q=&limit=&offset= — the old version fetched every account
@@ -10329,7 +10426,10 @@ async function fetchUsersPage(replace) {
   try {
     const params = new URLSearchParams({ limit: USERS_PAGE_SIZE, offset: _usersOffset });
     if (q) params.set('q', q);
-    const data = await api(`/admin/users?${params}`);
+    const [data] = await Promise.all([
+      api(`/admin/users?${params}`),
+      ensureUserRepresentativeOptions(),
+    ]);
     _usersTotal = data.total;
     _allUsers = replace ? (data.users || []) : _allUsers.concat(data.users || []);
     _usersOffset += (data.users || []).length;
@@ -10372,6 +10472,10 @@ function userRowHtml(u) {
     `<option value="${r}"${u.role === r ? ' selected' : ''}>${r}</option>`).join('');
   const typeOpts = ['', 'individual', 'business'].map((t) =>
     `<option value="${t}"${(u.member_type || '') === t ? ' selected' : ''}>${t || '— not set —'}</option>`).join('');
+  const consultantOpts = ['<option value="">— none —</option>'].concat(
+    (_userRepresentativeOptions || []).map((r) =>
+      `<option value="${r.id}"${Number(u.sales_consultant_id) === Number(r.id) ? ' selected' : ''}>${escapeHtmlAdmin(r.name)}${r.email ? ' — ' + escapeHtmlAdmin(r.email) : ''}</option>`)
+  ).join('');
 
   const deleteTitle = ['admin', 'staff'].includes(u.role)
     ? 'Admin and staff accounts are managed through Staff & Permissions.'
@@ -10385,8 +10489,6 @@ function userRowHtml(u) {
       </div>
       <div style="font-size:12px; color:#666;">
         ${escapeHtmlAdmin(u.email)} · joined ${new Date(u.created_at).toLocaleDateString()} · ${escapeHtmlAdmin(ownsLabel)}
-        · Representative: ${u.sales_consultant_name ? escapeHtmlAdmin(u.sales_consultant_name) : '<span style="color:var(--slate);">none</span>'}
-        ${canManageMembers ? `<a href="#" onclick="event.preventDefault(); linkUserConsultant(${u.id}, ${u.sales_consultant_id || 'null'})" style="margin-left:4px;">${u.sales_consultant_name ? 'change' : 'link'}</a>` : ''}
       </div>
     </div>
     <div class="grid-2">
@@ -10395,6 +10497,8 @@ function userRowHtml(u) {
       <div class="field"><label>Role${isSelf ? ' — you cannot change your own' : (u.role === 'staff' ? ' — managed in Staff & Permissions' : '')}</label>
         <select class="u-role"${roleLocked ? ' disabled style="opacity:0.6;"' : ''}>${roleOpts}</select></div>
       <div class="field"><label>Member type</label><select class="u-type"${canManageMembers ? '' : ' disabled'}>${typeOpts}</select></div>
+      <div class="field"><label>Assigned representative <span style="font-weight:400; color:var(--slate);">(this member is their client)</span></label>
+        <select class="u-consultant"${canManageMembers ? '' : ' disabled'}>${consultantOpts}</select></div>
     </div>
     <div style="margin-bottom:10px;">
       <label style="font-weight:400; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
@@ -10430,38 +10534,6 @@ function userRowHtml(u) {
   </div>`;
 }
 
-// Link (or change/unlink) which representative this member belongs to —
-// the single standing link everywhere else reads from (My Clients' Growth,
-// Clients' Agreements, the commission report). Independent of any specific
-// payment: an admin can set this before the member ever pays, and it's the
-// same field a confirmed referred payment updates automatically.
-async function linkUserConsultant(id, currentConsultantId) {
-  let consultants;
-  try {
-    consultants = (await api('/sales-consultants')).consultants || [];
-  } catch (e) { showToast(e.message, true); return; }
-  if (!consultants.length) { showToast('No representatives exist yet — add one in Representatives first.', true); return; }
-
-  const lines = consultants.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
-  const pick = prompt(`Link this member to which representative?\n\n0. None\n${lines}\n\nEnter a number:`);
-  if (pick === null) return;
-  if (pick.trim() === '0') {
-    try {
-      await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ salesConsultantId: null }) });
-      showToast('Unlinked.');
-      loadUsers();
-    } catch (e) { showToast(e.message, true); }
-    return;
-  }
-  const chosen = consultants[Number(pick) - 1];
-  if (!chosen) { showToast('That was not one of the numbers listed.', true); return; }
-  try {
-    await api(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ salesConsultantId: chosen.id }) });
-    showToast(`Linked to ${chosen.name}.`);
-    loadUsers();
-  } catch (e) { showToast(e.message, true); }
-}
-
 async function toggleSuspendUser(id, currentlySuspended) {
   const payload = { isSuspended: !currentlySuspended };
   if (!currentlySuspended) {
@@ -10486,6 +10558,8 @@ async function saveUser(id) {
     fullName: row.querySelector('.u-name').value,
     phone: row.querySelector('.u-phone').value,
     memberType: row.querySelector('.u-type').value || null,
+    salesConsultantId: row.querySelector('.u-consultant').value
+      ? Number(row.querySelector('.u-consultant').value) : null,
     freePublishingEnabled: row.querySelector('.u-free-publishing').checked,
   };
   const exceptionCheckbox = row.querySelector('.u-consultant-exception');
