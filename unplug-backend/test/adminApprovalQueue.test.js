@@ -182,6 +182,58 @@ test('a pending article shows its reference code and payment status', async () =
   assert.equal(row.actions.approve.path, `/admin/articles/${a.rows[0].id}/approve`);
 });
 
+test('a 3-image gallery purchase appears as ONE submission with all three images', async () => {
+  const userId = await makeUser();
+  const bundle = await pool.query(
+    `INSERT INTO gallery_bundles (user_id, image_count, price, status)
+     VALUES ($1, 3, 100, 'pending') RETURNING id`,
+    [userId]
+  );
+  const bundleId = bundle.rows[0].id;
+
+  await pool.query(
+    `INSERT INTO gallery_images (owner_type, image_url, caption, supplied_by, bundle_id, status)
+     VALUES
+       ('general', 'https://example.com/gallery-1.jpg', 'First image', 'member@example.com', $1, 'pending'),
+       ('general', 'https://example.com/gallery-2.jpg', 'Second image', 'member@example.com', $1, 'pending'),
+       ('general', 'https://example.com/gallery-3.jpg', 'Third image', 'member@example.com', $1, 'pending')`,
+    [bundleId]
+  );
+  await makePayment(userId, 'gallery_bundle', bundleId, {
+    reference: 'GALBUNDLE1',
+    status: 'confirmed',
+    amount: 100,
+  });
+
+  const res = await req('GET', '/admin/approval-queue?type=gallery_bundle', { token: adminToken });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.items.length, 1, 'one paid submission must be one approval row');
+
+  const row = res.body.items[0];
+  assert.equal(row.type, 'gallery_bundle');
+  assert.equal(row.typeLabel, 'Gallery Submission');
+  assert.equal(row.reference, 'GALBUNDLE1');
+  assert.equal(row.amount, 100);
+  assert.equal(row.galleryImages.length, 3);
+  assert.deepEqual(row.galleryImages.map((img) => img.caption), ['First image', 'Second image', 'Third image']);
+  assert.equal(row.files.filter((file) => /^Image /.test(file.label)).length, 3,
+    'the queue must expose all images in the submission');
+  assert.equal(row.actions.approve.path, `/admin/gallery-bundles/${bundleId}/approve`);
+  assert.equal(row.actions.reject.path, `/admin/gallery-bundles/${bundleId}/reject`);
+
+  const detail = await req('GET', `/admin/approval-queue/gallery_bundle/${bundleId}`, { token: adminToken });
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.bundleImages.length, 3, 'Review must show the entire bundle, not one image');
+});
+
+test('bundle images do not also appear as separate gallery-image approval rows', async () => {
+  const res = await req('GET', '/admin/approval-queue?type=gallery', { token: adminToken });
+  assert.equal(res.status, 200);
+  const bundled = res.body.items.filter((row) =>
+    row.title === 'First image' || row.title === 'Second image' || row.title === 'Third image');
+  assert.equal(bundled.length, 0, 'bundle images must not be duplicated as individual decisions');
+});
+
 test('an unpaid submission reads "Awaiting payment", not blank', async () => {
   const userId = await makeUser();
   const a = await pool.query(
