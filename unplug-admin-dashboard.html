@@ -4875,11 +4875,13 @@ async function aqOpenReview(row) {
       + '<div style="font-size:11px; text-transform:uppercase; letter-spacing:0.07em; color:var(--slate); margin-bottom:8px;">Images in this submission</div>'
       + '<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px;">'
       + data.bundleImages.map((img, index) => `
-          <div style="border:1px solid var(--paper-line,#e2ddd6); background:#fff; padding:8px;">
-            <div style="font-size:11px; font-weight:700; margin-bottom:6px;">Image ${index + 1} of ${data.bundleImages.length}</div>
-            <a href="${escapeAttrAdmin(img.imageUrl)}" target="_blank" rel="noopener">
-              <img src="${escapeAttrAdmin(img.imageUrl)}" alt="" style="width:100%; height:180px; object-fit:contain; background:var(--paper,#f4f1ec); display:block;" onerror="this.style.display='none';">
+          <div style="border:1px solid var(--paper-line,#e2ddd6); background:#fff; padding:10px;">
+            <div style="font-size:11px; font-weight:700; margin-bottom:7px;">Image ${index + 1} of ${data.bundleImages.length}</div>
+            <a href="${escapeAttrAdmin(img.imageUrl)}" target="_blank" rel="noopener" style="display:block;">
+              <img src="${escapeAttrAdmin(img.imageUrl)}" alt="Gallery image ${index + 1}" style="width:100%; height:260px; object-fit:contain; background:var(--paper,#f4f1ec); display:block; border:1px solid var(--paper-line,#e2ddd6);" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+              <span style="display:none; height:260px; align-items:center; justify-content:center; text-align:center; color:var(--red); background:var(--paper,#f4f1ec); border:1px solid var(--paper-line,#e2ddd6);">This image could not be loaded. Open the original to check it.</span>
             </a>
+            <a href="${escapeAttrAdmin(img.imageUrl)}" target="_blank" rel="noopener" style="display:inline-block; margin-top:7px; font-size:11.5px; font-weight:700;">Open full-size image &rarr;</a>
             ${img.caption ? `<div style="font-size:12px; margin-top:7px; color:var(--slate);">${escapeHtmlAdmin(img.caption)}</div>` : ''}
           </div>`).join('')
       + '</div></div>';
@@ -5113,9 +5115,30 @@ async function loadApprovalQueue() {
       tr.appendChild(dateTd);
 
       const filesTd = document.createElement('td');
-      filesTd.innerHTML = row.files.length
-        ? row.files.map((f) => `<a href="${escapeHtmlAdmin(f.url)}" target="_blank" rel="noopener" style="font-size:11.5px;">${escapeHtmlAdmin(f.label)}</a>`).join('<br>')
-        : '<span style="color:var(--slate);">—</span>';
+      if (row.type === 'gallery_bundle' && Array.isArray(row.galleryImages) && row.galleryImages.length) {
+        // Gallery is visual content: an admin must see the ACTUAL submitted
+        // photos before making a moderation decision. Small thumbnails live
+        // directly in the queue; clicking one opens the original full-size
+        // asset in a new tab. This is deliberately more than a filename/link.
+        filesTd.innerHTML = '<div style="display:grid; grid-template-columns:repeat(3,68px); gap:6px; min-width:216px;">'
+          + row.galleryImages.map((img, index) => `
+              <a href="${escapeAttrAdmin(img.imageUrl)}" target="_blank" rel="noopener"
+                 title="Open image ${index + 1} full size"
+                 style="display:block; text-decoration:none;">
+                <img src="${escapeAttrAdmin(img.imageUrl)}"
+                     alt="Gallery image ${index + 1}"
+                     style="width:68px; height:68px; object-fit:cover; display:block; border:1px solid var(--paper-line,#e2ddd6); background:var(--paper,#f4f1ec);"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <span style="display:none; width:68px; height:68px; align-items:center; justify-content:center; text-align:center; font-size:10px; color:var(--red); border:1px solid var(--paper-line,#e2ddd6);">Image unavailable</span>
+              </a>`).join('')
+          + '</div>'
+          + '<div style="font-size:10.5px; color:var(--slate); margin-top:5px;">'
+          + row.galleryImages.length + ' image' + (row.galleryImages.length === 1 ? '' : 's') + ' submitted</div>';
+      } else {
+        filesTd.innerHTML = row.files.length
+          ? row.files.map((f) => `<a href="${escapeAttrAdmin(f.url)}" target="_blank" rel="noopener" style="font-size:11.5px;">${escapeHtmlAdmin(f.label)}</a>`).join('<br>')
+          : '<span style="color:var(--slate);">—</span>';
+      }
       tr.appendChild(filesTd);
 
       const actionTd = document.createElement('td');
@@ -5133,8 +5156,9 @@ async function loadApprovalQueue() {
       const bundleCount = row.type === 'gallery_bundle' && Array.isArray(row.galleryImages) ? row.galleryImages.length : 0;
       const approveLabel = bundleCount ? `Approve all ${bundleCount}` : 'Approve';
       const rejectLabel = bundleCount ? `Reject all ${bundleCount}` : 'Reject';
+      const reviewLabel = bundleCount ? `Preview ${bundleCount} image${bundleCount === 1 ? '' : 's'}` : 'Review';
       actionTd.innerHTML = '<div class="row-actions">'
-        + '<button class="aq-review" style="background:#fff; border:1px solid var(--ink,#272626); color:var(--ink,#272626);">Review</button>'
+        + `<button class="aq-review" style="background:#fff; border:1px solid var(--ink,#272626); color:var(--ink,#272626);">${reviewLabel}</button>`
         + (canApprove
             ? `<button class="approve">${approveLabel}</button>`
             : `<button class="approve" disabled title="${escapeHtmlAdmin(row.approveBlockedReason || 'Not available for this item.')}" style="opacity:0.45; cursor:not-allowed;">${approveLabel}</button>`)
