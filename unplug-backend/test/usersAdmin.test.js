@@ -160,6 +160,34 @@ test('q searches by email or name, server-side, and only matching accounts are r
   assert.equal(noMatch.body.total, 0);
 });
 
+
+test('legacy import content-owner accounts are hidden without deleting their profiles', async () => {
+  await pool.query(
+    `INSERT INTO users (id, email, password_hash, role, is_system_account, is_suspended)
+     VALUES (350, 'legacy-preserved-person@import.unplugnews.com', 'x', 'member', true, true)
+     ON CONFLICT DO NOTHING`
+  );
+  await pool.query(
+    `INSERT INTO profiles (user_id, type, package_tier, slug, display_name, status)
+     VALUES (350, 'individual', 'premium', 'legacy-preserved-person', 'Legacy Preserved Person', 'approved')
+     ON CONFLICT (slug) DO NOTHING`
+  );
+
+  const list = await req('GET', '/admin/users?q=legacy-preserved-person', { token: adminToken });
+  assert.equal(list.status, 200);
+  assert.equal(list.body.users.length, 0);
+  assert.equal(list.body.total, 0);
+
+  const profile = await pool.query(
+    `SELECT p.display_name, p.status
+       FROM profiles p
+       JOIN users u ON u.id = p.user_id
+      WHERE p.slug = 'legacy-preserved-person'`
+  );
+  assert.equal(profile.rowCount, 1, 'hiding the backing account must not delete its profile');
+  assert.equal(profile.rows[0].status, 'approved');
+});
+
 // ----------------------------------------------------------------------- edit
 
 test('admin can change a name, phone, role and member type', async () => {
