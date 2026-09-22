@@ -12055,6 +12055,15 @@ function renderAccountNav(user) {
     document.body.classList.remove('is-member');
     renderAccountNav(null);
     showToast('Signed out.');
+
+    // If a gated story is already open, remove the member-only copy from the
+    // page immediately. Clearing the token alone is not enough: the full text
+    // that was fetched while signed in would otherwise remain in the DOM until
+    // the next navigation or refresh. Re-fetching after the token is cleared
+    // makes the server return only the public preview and the sign-in gate.
+    if (window.__currentArticleId) {
+      loadArticleDetail(window.__currentArticleId);
+    }
   });
 })();
 
