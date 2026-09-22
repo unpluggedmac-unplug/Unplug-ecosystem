@@ -153,3 +153,25 @@ test('THE ADMIN DASHBOARD RENDERS A REAL <img> PREVIEW FOR AN "image" FIELD, ESC
   // an admin can still correct/replace it exactly as before this feature.
   assert.match(body, /type="url"/);
 });
+
+
+test('GALLERY BUNDLES SHOW THEIR ACTUAL IMAGES IN THE QUEUE AND REVIEW MODAL', () => {
+  const dashPath = path.join(__dirname, '..', '..', 'unplug-admin-dashboard.html');
+  const html = fs.readFileSync(dashPath, 'utf8');
+
+  assert.match(
+    html,
+    /row\.type === 'gallery_bundle'[\s\S]{0,1800}<img src="\$\{escapeAttrAdmin\(img\.imageUrl\)\}"/,
+    'the Approval Centre queue itself must draw gallery thumbnails, not only text links'
+  );
+  assert.match(
+    html,
+    /Preview \$\{bundleCount\} image/,
+    'the gallery action should make it explicit that Review is an image preview'
+  );
+  assert.match(
+    html,
+    /data\.bundleImages\.map[\s\S]{0,1800}Open full-size image/,
+    'the Review modal must show every bundle image and offer the original full-size asset'
+  );
+});
