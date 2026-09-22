@@ -38,7 +38,10 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
 
-    const whereClause = q ? `WHERE u.email ILIKE $1 OR u.full_name ILIKE $1` : '';
+    const visibilityClause = `u.is_system_account = false`;
+    const whereClause = q
+      ? `WHERE ${visibilityClause} AND (u.email ILIKE $1 OR u.full_name ILIKE $1)`
+      : `WHERE ${visibilityClause}`;
     const searchParams = q ? [`%${q}%`] : [];
 
     // Each account carries a count of the PUBLISHED content it owns. Deleting a
