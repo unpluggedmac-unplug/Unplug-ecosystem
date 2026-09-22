@@ -13,7 +13,7 @@ router.get('/public-stats', async (req, res, next) => {
   try {
     const [views, members, articlesPublished] = await Promise.all([
       pool.query(`SELECT COUNT(DISTINCT session_id) AS c FROM page_views`),
-      pool.query(`SELECT COUNT(*) AS c FROM users`),
+      pool.query(`SELECT COUNT(*) AS c FROM users WHERE role = 'member' AND COALESCE(is_system_account, false) = false`),
       pool.query(`SELECT COUNT(*) AS c FROM articles WHERE status = 'approved'`),
     ]);
     res.json({
@@ -85,7 +85,7 @@ router.get('/media-kit', async (req, res, next) => {
       Promise.all([
         pool.query(`SELECT COUNT(*)::int AS c FROM articles WHERE status = 'approved'`),
         pool.query(`SELECT COUNT(*)::int AS c FROM profiles WHERE status = 'approved'`),
-        pool.query(`SELECT COUNT(*)::int AS c FROM users`),
+        pool.query(`SELECT COUNT(*)::int AS c FROM users WHERE role = 'member' AND COALESCE(is_system_account, false) = false`),
         pool.query(`SELECT COUNT(*)::int AS c FROM newsletter_subscribers`),
       ]),
     ]);
@@ -149,7 +149,7 @@ router.get('/investor-snapshot', async (req, res, next) => {
            FROM analytics_sessions WHERE started_at >= $1 AND started_at < $2`,
         [since60, since30]
       ),
-      pool.query(`SELECT COUNT(*)::int AS c FROM users`),
+      pool.query(`SELECT COUNT(*)::int AS c FROM users WHERE role = 'member' AND COALESCE(is_system_account, false) = false`),
       pool.query(`SELECT COUNT(*)::int AS c FROM articles WHERE status = 'approved'`),
       pool.query(`SELECT COUNT(*)::int AS c FROM profiles WHERE status = 'approved'`),
       pool.query(`SELECT COUNT(*)::int AS c FROM gallery_images WHERE status = 'approved'`),
