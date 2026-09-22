@@ -11,7 +11,7 @@ const { publishesFree, statusForNewSubmission } = require('../utils/publishingRi
 const { recordParticipationAsync } = require('../utils/participation');
 const { validateMemberOpeningStory } = require('../utils/articleOpeningStory');
 
-const { applyGate, previewWords } = require('../utils/accountGate');
+const { applyGate, previewWords, verifiedViewer } = require('../utils/accountGate');
 
 const router = express.Router();
 
@@ -140,7 +140,10 @@ router.get('/', async (req, res, next) => {
     // request to /articles and the gate is decorative. Cards only ever show
     // the first 140 characters, so a truncated body costs them nothing.
     const words = await previewWords();
-    result.rows.forEach((a) => applyGate(a, req.user, words));
+    const listViewer = result.rows.some((a) => a.requires_account)
+      ? await verifiedViewer(req.user)
+      : req.user;
+    result.rows.forEach((a) => applyGate(a, listViewer, words));
 
     res.json({
       articles: result.rows,
@@ -178,7 +181,10 @@ router.get('/most-viewed', async (req, res, next) => {
       [String(days), limit]
     );
     const mvWords = await previewWords();
-    result.rows.forEach((a) => applyGate(a, req.user, mvWords));
+    const mostViewedViewer = result.rows.some((a) => a.requires_account)
+      ? await verifiedViewer(req.user)
+      : req.user;
+    result.rows.forEach((a) => applyGate(a, mostViewedViewer, mvWords));
     res.json({ articles: result.rows, windowDays: days });
   } catch (err) {
     next(err);
@@ -269,7 +275,8 @@ router.get('/:id', async (req, res, next) => {
     // everyone else gets a preview. Truncation happens HERE rather than in the
     // browser — see utils/accountGate.js.
     const gateWords = await previewWords();
-    applyGate(article, req.user, gateWords);
+    const gateViewer = article.requires_account ? await verifiedViewer(req.user) : req.user;
+    applyGate(article, gateViewer, gateWords);
 
     res.json({
       article,
