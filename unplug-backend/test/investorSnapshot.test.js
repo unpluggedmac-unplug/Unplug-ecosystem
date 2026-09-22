@@ -61,6 +61,14 @@ before(async () => {
   );
   const authorId = author.rows[0].id;
 
+  // Synthetic legacy owners and admin accounts are database users, but they
+  // are not registered members and must never inflate public-facing counts.
+  await pool.query(
+    `INSERT INTO users (email, password_hash, role, is_system_account, is_suspended)
+     VALUES ('legacy-count-test@import.unplugnews.com', 'x', 'member', true, true),
+            ('invsnap-admin@test.com', 'x', 'admin', false, false)`
+  );
+
   await pool.query(`INSERT INTO articles (author_user_id, title, body, status) VALUES ($1, 'A', 'body', 'approved')`, [authorId]);
   await pool.query(`INSERT INTO articles (author_user_id, title, body, status) VALUES ($1, 'B', 'body', 'pending')`, [authorId]); // must NOT be counted
 
@@ -131,11 +139,16 @@ test('CONTENT COUNTS ONLY APPROVED ROWS — A PENDING ARTICLE OR PHOTO IS NOT PU
   assert.equal(body.content.editionsPublished, 1);
 });
 
-test('COMMUNITY FIGURES ARE REAL COUNTS, INCLUDING VOTES ACTUALLY CAST', async () => {
-  const { body } = await req('/analytics/investor-snapshot');
-  assert.equal(body.community.votesCast, 2);
-  assert.ok(body.community.registeredMembers >= 1);
-  assert.equal(body.community.directoryProfiles, 1);
+test('COMMUNITY FIGURES COUNT REAL MEMBERS ONLY, EXCLUDING SYSTEM OWNERS AND ADMINS', async () => {
+  const snapshot = await req('/analytics/investor-snapshot');
+  assert.equal(snapshot.body.community.votesCast, 2);
+  assert.equal(snapshot.body.community.registeredMembers, 1);
+  assert.equal(snapshot.body.community.directoryProfiles, 1);
+
+  const homepage = await req('/analytics/public-stats');
+  assert.equal(homepage.status, 200);
+  assert.equal(homepage.body.registeredMembers, 1,
+    'homepage registered-members total must exclude the legacy import owner and admin account');
 });
 
 test('NO REVENUE OR PAYMENT FIGURE APPEARS ANYWHERE IN THE RESPONSE — asked, and the answer was to leave it out', async () => {
