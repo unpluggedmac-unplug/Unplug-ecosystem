@@ -63,6 +63,7 @@ function withGrowthIntegration(response, pathname) {
 // view gains no latency.
 const SOCIAL_CRAWLER = /facebookexternalhit|Facebot|Twitterbot|WhatsApp|LinkedInBot|Slackbot|TelegramBot|Discordbot|Pinterest|redditbot|Googlebot|Google-InspectionTool|bingbot|Applebot|SkypeUriPreview|vkShare|Embedly|Iframely/i;
 const META_PAGES = /^\/(?:index|unplug-magazine)?(?:\.html)?$/i;
+const ARTICLE_PATH = /^\/articles\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/i;
 
 function absoluteImage(u) {
   const s = String(u || '');
@@ -78,6 +79,25 @@ async function articleMeta(api, id) {
   });
   if (!res.ok) return null;
   const a = await res.json();
+  if (!a || (!a.title && !a.seo_title)) return null;
+  const title = a.seo_title || a.title;
+  return {
+    title,
+    pageTitle: /unplug\s*magazine\s*$/i.test(title) ? title : title + ' — Unplug Magazine',
+    description: (a.meta_description && String(a.meta_description).trim()) || firstText(a.body, 200),
+    image: absoluteImage(a.banner_image_url) || 'https://www.unplugnews.com/social-banner.jpg',
+  };
+}
+
+async function articleMetaBySlug(api, slug) {
+  const res = await fetch(`${api}/articles/by-slug/${encodeURIComponent(slug)}`, {
+    headers: { Accept: 'application/json' },
+    redirect: 'manual',
+    signal: AbortSignal.timeout(4000),
+  });
+  if (!res.ok) return null;
+  const payload = await res.json();
+  const a = payload && payload.article;
   if (!a || (!a.title && !a.seo_title)) return null;
   const title = a.seo_title || a.title;
   return {
@@ -119,7 +139,8 @@ async function projectMeta(api, id) {
 }
 async function withSocialMeta(response, request, url, api) {
   if (!SOCIAL_CRAWLER.test(request.headers.get('user-agent') || '')) return response;
-  if (!META_PAGES.test(url.pathname)) return response;
+  const articlePath = ARTICLE_PATH.exec(url.pathname);
+  if (!META_PAGES.test(url.pathname) && !articlePath) return response;
   const type = String(response.headers.get('content-type') || '').toLowerCase();
   if (!type.includes('text/html')) return response;
 
@@ -127,13 +148,14 @@ async function withSocialMeta(response, request, url, api) {
   const p = params.get('p');
   let meta = null;
   try {
-    if (p === 'article' && params.get('id')) meta = await articleMeta(api, params.get('id'));
+    if (articlePath) meta = await articleMetaBySlug(api, articlePath[1].toLowerCase());
+    else if (p === 'article' && params.get('id')) meta = await articleMeta(api, params.get('id'));
     else if (p === 'profile' && params.get('slug')) meta = await profileMeta(api, params.get('slug'));
     else if (p === 'project' && params.get('id')) meta = await projectMeta(api, params.get('id'));
   } catch (_) { meta = null; }
   if (!meta) return response;
 
-  const pageUrl = 'https://www.unplugnews.com' + url.pathname + (url.search || '');
+  const pageUrl = 'https://www.unplugnews.com' + url.pathname + (articlePath ? '' : (url.search || ''));
   const setC = (val) => ({ element(el) { el.setAttribute('content', val); } });
 
   return new HTMLRewriter()
@@ -212,6 +234,40 @@ export async function onRequest(context) {
         + '<p style="font:16px system-ui;padding:2rem">The Growth Application link cannot be checked right now. Please try again shortly.</p>',
         { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
+    }
+  }
+
+  // Clean article paths are validated server-side before the SPA is served.
+  // This gives missing stories a real 404 status and preserves historical
+  // shared links with a permanent redirect when an editor changes the slug.
+  const cleanArticle = ARTICLE_PATH.exec(url.pathname);
+  if (request.method === 'GET' && cleanArticle) {
+    try {
+      const slug = cleanArticle[1].toLowerCase();
+      const lookup = await fetch(`${api}/articles/by-slug/${encodeURIComponent(slug)}`, {
+        headers: { Accept: 'application/json' },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(4000),
+      });
+      if (lookup.status === 301) {
+        const data = await lookup.json().catch(() => null);
+        if (data && data.redirectSlug) {
+          return Response.redirect(
+            new URL('/articles/' + encodeURIComponent(data.redirectSlug), url.origin).toString(),
+            301
+          );
+        }
+      }
+      if (lookup.status === 404) {
+        return new Response(
+          '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Article not found</title>'
+          + '<p style="font:16px system-ui;padding:2rem">That article could not be found. <a href="/">Go to Unplug Magazine</a>.</p>',
+          { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
+    } catch (_) {
+      // Backend failure should not turn a real article into a false 404.
+      // Continue to the normal site response; the reader page can retry.
     }
   }
 
