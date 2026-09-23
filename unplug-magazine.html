@@ -14,6 +14,9 @@
 <meta property="og:description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.">
 <meta property="og:image" content="https://www.unplugnews.com/social-banner.jpg">
 <meta property="og:url" content="https://www.unplugnews.com">
+<meta property="article:published_time" content="">
+<meta property="article:modified_time" content="">
+<meta property="article:section" content="">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Unplug Magazine — Real People. Real Impact.">
 <meta name="twitter:description" content="Unplug Magazine is a purpose-driven platform celebrating inspiring people, real impact, and the stories behind them.">
@@ -7182,6 +7185,7 @@ async function loadArticleDetail(idOrSlug) {
     seoSetDescription(a.meta_description || (a.body || '').replace(/<[^>]*>/g, '').trim());
     seoSetTitle(a.seo_title || a.title);
     seoSetImage(a.banner_image_url);
+    seoSetArticleMeta(a);
 
     // Structured data, written now that the story it describes is on the page.
     // The trail and the BreadcrumbList come from the same array, so the thing
@@ -9253,7 +9257,9 @@ document.querySelectorAll('.print-mark').forEach((el, i) => {
 // Keep the canonical + og:url in sync with the current deep-link URL.
 function seoSetUrl(query){
   const base = 'https://www.unplugnews.com';
-  const url = base + '/' + (query || '');
+  const raw = String(query || '');
+  const path = raw ? (raw.startsWith('/') ? raw : '/' + raw) : '/';
+  const url = base + path;
   const c = document.querySelector('link[rel="canonical"]'); if (c) c.href = url;
   const o = document.querySelector('meta[property="og:url"]'); if (o) o.setAttribute('content', url);
 }
@@ -9313,6 +9319,33 @@ function seoSetTitle(title){
   ['meta[property="og:title"]', 'meta[name="twitter:title"]'].forEach((sel) => {
     const el = document.querySelector(sel);
     if (el) el.setAttribute('content', title);
+  });
+}
+
+function seoSetArticleMeta(article) {
+  const type = document.querySelector('meta[property="og:type"]');
+  if (type) type.setAttribute('content', 'article');
+  const values = {
+    'meta[property="article:published_time"]': article && article.published_at ? article.published_at : '',
+    'meta[property="article:modified_time"]': article && (article.updated_at || article.published_at) ? (article.updated_at || article.published_at) : '',
+    'meta[property="article:section"]': article && article.category ? article.category : '',
+  };
+  Object.entries(values).forEach(([sel, value]) => {
+    const el = document.querySelector(sel);
+    if (el) el.setAttribute('content', value);
+  });
+}
+
+function seoResetContentType() {
+  const type = document.querySelector('meta[property="og:type"]');
+  if (type) type.setAttribute('content', 'website');
+  [
+    'meta[property="article:published_time"]',
+    'meta[property="article:modified_time"]',
+    'meta[property="article:section"]',
+  ].forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (el) el.setAttribute('content', '');
   });
 }
 
@@ -10776,6 +10809,7 @@ function goToPage(pageId){
     refunds: 'Terms & Policies — Unplug Magazine',
   };
   document.title = PAGE_TITLES[pageId] || 'Unplug Magazine';
+  seoResetContentType();
 
   // Deep-linkable URL: reflect the current page in the address bar so pages
   // are shareable, bookmarkable and individually indexable. Query params are
