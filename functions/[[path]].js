@@ -78,7 +78,8 @@ async function articleMeta(api, id) {
     headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(4000),
   });
   if (!res.ok) return null;
-  const a = await res.json();
+  const payload = await res.json();
+  const a = payload && (payload.article || payload);
   if (!a || (!a.title && !a.seo_title)) return null;
   const title = a.seo_title || a.title;
   return {
@@ -86,6 +87,10 @@ async function articleMeta(api, id) {
     pageTitle: /unplug\s*magazine\s*$/i.test(title) ? title : title + ' — Unplug Magazine',
     description: (a.meta_description && String(a.meta_description).trim()) || firstText(a.body, 200),
     image: absoluteImage(a.banner_image_url) || 'https://www.unplugnews.com/social-banner.jpg',
+    kind: 'article',
+    publishedTime: a.published_at || '',
+    modifiedTime: a.updated_at || a.published_at || '',
+    section: a.category || '',
   };
 }
 
@@ -105,6 +110,10 @@ async function articleMetaBySlug(api, slug) {
     pageTitle: /unplug\s*magazine\s*$/i.test(title) ? title : title + ' — Unplug Magazine',
     description: (a.meta_description && String(a.meta_description).trim()) || firstText(a.body, 200),
     image: absoluteImage(a.banner_image_url) || 'https://www.unplugnews.com/social-banner.jpg',
+    kind: 'article',
+    publishedTime: a.published_at || '',
+    modifiedTime: a.updated_at || a.published_at || '',
+    section: a.category || '',
   };
 }
 // Directory profiles (?p=profile&slug=) and projects (?p=project&id=) are shared
@@ -162,6 +171,7 @@ async function withSocialMeta(response, request, url, api) {
     .on('title', { element(el) { el.setInnerContent(meta.pageTitle); } })
     .on('link[rel="canonical"]', { element(el) { el.setAttribute('href', pageUrl); } })
     .on('meta[name="description"]', setC(meta.description))
+    .on('meta[property="og:type"]', setC(meta.kind === 'article' ? 'article' : 'website'))
     .on('meta[property="og:title"]', setC(meta.title))
     .on('meta[property="og:description"]', setC(meta.description))
     .on('meta[property="og:image"]', setC(meta.image))
@@ -169,6 +179,9 @@ async function withSocialMeta(response, request, url, api) {
     .on('meta[name="twitter:title"]', setC(meta.title))
     .on('meta[name="twitter:description"]', setC(meta.description))
     .on('meta[name="twitter:image"]', setC(meta.image))
+    .on('meta[property="article:published_time"]', setC(meta.publishedTime || ''))
+    .on('meta[property="article:modified_time"]', setC(meta.modifiedTime || ''))
+    .on('meta[property="article:section"]', setC(meta.section || ''))
     .transform(response);
 }
 
