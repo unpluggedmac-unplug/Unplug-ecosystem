@@ -5340,6 +5340,18 @@ function textExcerpt(html, len) {
   return escapeHtml(text.slice(0, len)) + (text.length > len ? '…' : '');
 }
 
+function articlePublicPath(article, fallbackId) {
+  const slug = article && String(article.slug || '').trim();
+  if (slug && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(slug)) {
+    return '/articles/' + encodeURIComponent(slug.toLowerCase());
+  }
+  return '/?p=article&id=' + encodeURIComponent(fallbackId || (article && article.id) || '');
+}
+
+function articlePublicUrl(article, fallbackId) {
+  return location.origin + articlePublicPath(article, fallbackId);
+}
+
 function newsCardHtml(article) {
   const title = escapeHtml(article.title);
   const excerpt = textExcerpt(article.body, 140);
@@ -5348,7 +5360,7 @@ function newsCardHtml(article) {
   const thumbImg = coverImgTag(article.banner_image_url, article.title);
   // The share row sits OUTSIDE the card anchor — nesting links inside an <a>
   // is invalid and would also trigger the card's navigation handler.
-  return `<div class="card-shell"><a href="#" class="story-card" data-id="${article.id}"><div class="story-thumb" ${coverAnimAttr(article.cover_animation_effect)} style="${coverAnimDurStyle(article.cover_transition_duration_ms)}">${thumbImg}</div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(absUrl('?p=article&id=' + article.id), article.title)}<div class="int-bar-compact" id="news-int-${article.id}"></div></div>`;
+  return `<div class="card-shell"><a href="${articlePublicPath(article, article.id)}" class="story-card" data-id="${article.id}" data-slug="${escapeHtml(article.slug || '')}"><div class="story-thumb" ${coverAnimAttr(article.cover_animation_effect)} style="${coverAnimDurStyle(article.cover_transition_duration_ms)}">${thumbImg}</div><span class="story-tag">${category}</span>${emotionBadge(article.emotion)}${kicker ? `<span class="story-kicker">${kicker}</span>` : ''}<h3>${title}</h3><p>${excerpt}</p><span class="story-meta">${readMinutes(article.body)} min read</span></a>${shareRow(articlePublicUrl(article, article.id), article.title)}<div class="int-bar-compact" id="news-int-${article.id}"></div></div>`;
 }
 
 // Share buttons (WhatsApp / Facebook / X / native / copy) used on the article
@@ -7077,17 +7089,23 @@ async function loadRelatedStories(a, id) {
   } catch (e) { /* silently skip related on error */ }
 }
 
-async function loadArticleDetail(id) {
+async function loadArticleDetail(idOrSlug) {
   if (window.__stopArticleSpeak) window.__stopArticleSpeak();
   const el = document.getElementById('articleDetailContent');
   el.innerHTML = '<div class="dir-empty-state">Loading story…</div>';
-  // Which article the reader is on, so the read/listen signals know what to
-  // report. Set before the fetch so it is never stale from the last article.
-  window.__currentArticleId = Number(id) || null;
-  trackPageView('article-' + id, { entityType: 'article', entityId: Number(id) });
+  const lookup = String(idOrSlug || '').trim();
+  const bySlug = lookup && !/^\d+$/.test(lookup);
+  // Clear first so signals from a failed navigation can never be credited to
+  // the previously-open article. The real numeric id is set after resolution.
+  window.__currentArticleId = null;
   try {
-    const data = await api('/articles/' + id);
+    const data = await api(bySlug
+      ? '/articles/by-slug/' + encodeURIComponent(lookup)
+      : '/articles/' + encodeURIComponent(lookup));
     const a = data.article;
+    const id = Number(a.id);
+    window.__currentArticleId = id;
+    trackPageView('article-' + id, { entityType: 'article', entityId: id });
     // WHO WROTE IT and WHO SENT IT IN are two different facts and get two
     // different labels. author_name is the byline; kicker_supplied_by records
     // who supplied the story. Collapsing them under one label was what made
@@ -7101,7 +7119,7 @@ async function loadArticleDetail(id) {
     const writerLink = a.contributor_slug ? '?p=contributor&slug=' + encodeURIComponent(a.contributor_slug) : '';
     const submitter = a.kicker_supplied_by || '';
     const dateStr = a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
-    const shareUrl = location.origin + '/?p=article&id=' + id;
+    const shareUrl = articlePublicUrl(a, id);
     el.innerHTML = `
       <div id="articleBreadcrumb" hidden></div>
       <div style="position:relative; margin-bottom:24px;">${articleBannerHtml(a)}<div class="print-mark" style="position:absolute; top:12px; left:12px; width:40px; height:40px; background:rgba(255,255,255,0.92); border-radius:50%; padding:6px; box-sizing:border-box;"></div></div>
@@ -7154,8 +7172,8 @@ async function loadArticleDetail(id) {
     loadSaslFor('article', id, document.getElementById('articleSasl'));
     // Deep-link this article: distinct, shareable, indexable URL + its own
     // title/description (replaceState overwrites the ?p=articledetail entry).
-    const q = '?p=article&id=' + id;
-    history.replaceState({ p: 'article', id }, '', q);
+    const q = articlePublicPath(a, id);
+    history.replaceState({ p: 'article', id, slug: a.slug || null }, '', q);
     seoSetUrl(q);
     document.title = brandedTitle(a.seo_title || a.title);
     // Prefer the meta description an editor wrote or approved; only fall back
@@ -7188,8 +7206,8 @@ async function loadArticleDetail(id) {
     // Logged, not just shown. This try covers eighty lines of rendering, so a
     // mistake in here looks exactly like the API being down — and "couldn't
     // load this story" sends anyone debugging it to the wrong place entirely.
-    console.error('[article] failed to render article ' + id + ':', err);
-    el.innerHTML = errorStateHtml("Couldn't load this story right now.", 'loadArticleDetail(window.__currentArticleId)');
+    console.error('[article] failed to render article ' + idOrSlug + ':', err);
+    el.innerHTML = errorStateHtml("Couldn't load this story right now.", 'routeFromUrl()');
   }
 }
 // Delegated on the whole document so it works for every story-card grid — the
@@ -7199,7 +7217,7 @@ async function loadArticleDetail(id) {
 function openStoryCard(card) {
   if (!card || !card.dataset.id) return;
   goToPage('articledetail');
-  loadArticleDetail(card.dataset.id);
+  loadArticleDetail(card.dataset.slug || card.dataset.id);
 }
 document.addEventListener('click', (e) => {
   const card = e.target.closest('.story-card[data-id]');
@@ -9321,6 +9339,11 @@ function formSlugFromPath() {
   return m ? m[1] : null;
 }
 
+function articleSlugFromPath() {
+  const m = location.pathname.replace(/\/+$/, '').match(/^\/articles\/([a-z0-9]+(?:-[a-z0-9]+)*)$/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
 // On first load and on browser back/forward, route from the URL so deep
 // links (e.g. shared article/profile URLs) open the right content.
 function routeFromUrl(){
@@ -9328,7 +9351,8 @@ function routeFromUrl(){
   try {
     const params = new URLSearchParams(location.search);
     const p = params.get('p');
-    if (p === 'article' && params.get('id')) { goToPage('articledetail'); loadArticleDetail(params.get('id')); }
+    if (articleSlugFromPath()) { goToPage('articledetail'); loadArticleDetail(articleSlugFromPath()); }
+    else if (p === 'article' && params.get('id')) { goToPage('articledetail'); loadArticleDetail(params.get('id')); }
     else if (p === 'project' && params.get('id')) { goToPage('project'); loadProject(params.get('id')); }
     else if (p === 'profile' && params.get('slug')) { goToPage('directoryprofile'); loadProfileDetail(params.get('slug')); }
     else if (p === 'contributor' && params.get('slug')) { goToPage('contributor'); loadContributor(params.get('slug')); }
@@ -12095,7 +12119,7 @@ setInterval(loadLiveVisitors, 30000);
 // called for it and the page sat on the homepage while the address bar said
 // /nominate. It could not be caught locally: the static dev server has no
 // Cloudflare rewrite, so the path form only exists in production.
-if (location.search || cleanPathPage()) routeFromUrl();
+if (location.search || cleanPathPage() || articleSlugFromPath()) routeFromUrl();
 
 // ---------------------------------------------------------------------------
 // Accessibility: skip-to-content link + modal focus management. For a
