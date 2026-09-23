@@ -6387,7 +6387,7 @@ function articleGateHtml(a) {
   // defensively at the other end — a `next` that could point anywhere is an
   // open redirect, and this one is on the end of a link we invite people to
   // click.
-  const back = encodeURIComponent('?p=article&id=' + a.id);
+  const back = encodeURIComponent(articlePublicPath(a, a.id));
   // NAV-002: signup=1 is what lets the welcome modal's "Sign Up" button skip
   // straight to the sign-up form instead of the generic sign-in/sign-up
   // choice \u2014 this button promised the same thing but never carried it,
@@ -7077,14 +7077,14 @@ async function loadRelatedStories(a, id) {
     const others = (data.articles || []).filter(x => String(x.id) !== String(id)).slice(0, 3);
     if (!others.length) return;
     wrap.innerHTML = '<h3>More in ' + escapeHtml(a.category) + '</h3><div class="related-grid">' +
-      others.map(x => `<a class="related-card" href="?p=article&id=${x.id}" data-related-id="${x.id}">
+      others.map(x => `<a class="related-card" href="${articlePublicPath(x, x.id)}" data-related-id="${x.id}" data-related-slug="${escapeHtml(x.slug || '')}">
         <span class="rc-tag">${escapeHtml(x.category || 'Story')}</span>
         <h4>${escapeHtml(x.title)}</h4>
         <span class="rc-meta">${readMinutes(x.body)} min read</span></a>`).join('') + '</div>';
     wrap.querySelectorAll('[data-related-id]').forEach(card => card.addEventListener('click', (e) => {
       e.preventDefault();
       window.scrollTo(0, 0);
-      loadArticleDetail(card.getAttribute('data-related-id'));
+      loadArticleDetail(card.getAttribute('data-related-slug') || card.getAttribute('data-related-id'));
     }));
   } catch (e) { /* silently skip related on error */ }
 }
@@ -8083,14 +8083,14 @@ function homeStoryCardHtml(article, idPrefix) {
         ? `<span class="story-kicker">Supplied by <strong>${escapeHtml(article.kicker_supplied_by)}</strong></span>`
         : '');
   const thumbImg = coverImgTag(article.banner_image_url, article.title);
-  return `<article class="story-card" data-id="${article.id}" role="link" tabindex="0" style="cursor:pointer;">
+  return `<article class="story-card" data-id="${article.id}" data-slug="${escapeHtml(article.slug || '')}" role="link" tabindex="0" style="cursor:pointer;">
         <div class="story-thumb" ${coverAnimAttr(article.cover_animation_effect)} style="${coverAnimDurStyle(article.cover_transition_duration_ms)}">${thumbImg}</div>
         <span class="story-tag">${category}</span>${article.requires_account ? '<span class="story-lock">Members</span>' : ''}
         <h3>${title}</h3>
         <p>${excerpt}</p>
         <span class="story-meta">${readMinutes(article.body)} min read${category ? ' · ' + category : ''}</span>
       ${kicker}
-${shareRow(absUrl('?p=article&id=' + article.id), article.title)}
+${shareRow(articlePublicUrl(article, article.id), article.title)}
 <div class="int-bar-compact" id="${prefix}-int-${article.id}"></div>
 </article>`;
 }
@@ -8100,7 +8100,7 @@ ${shareRow(absUrl('?p=article&id=' + article.id), article.title)}
 // used before. No new table and no second admin screen — a slider with its
 // own list of picks would mean two places to keep correct.
 function featuredSlideHtml(a, index, total) {
-  const href = '?p=article&id=' + encodeURIComponent(a.id);
+  const href = articlePublicPath(a, a.id);
   const category = escapeHtml(a.category || '');
   const by = a.contributor_name || a.published_by || a.author_name || a.kicker_supplied_by || '';
   // This slider is manually swiped (wireFeaturedSlider toggles [hidden], not
@@ -9483,7 +9483,7 @@ async function loadContributor(slug) {
         : 'Stories'}</h2>
       ${articles.length === 0
         ? '<p style="color:var(--slate);">Nothing published under this byline yet.</p>'
-        : articles.map((a) => `<a href="?p=article&id=${a.id}" class="related-card" style="display:block; padding:12px 0; border-bottom:1px solid var(--paper-line); color:inherit; text-decoration:none;">
+        : articles.map((a) => `<a href="${articlePublicPath(a, a.id)}" class="related-card" style="display:block; padding:12px 0; border-bottom:1px solid var(--paper-line); color:inherit; text-decoration:none;">
             <strong>${escapeHtml(a.title)}</strong>
             ${a.subtitle ? `<br><span style="font-size:13px; color:var(--slate);">${escapeHtml(a.subtitle)}</span>` : ''}
             ${a.category ? `<br><span style="font-size:11.5px; color:var(--slate);">${escapeHtml(a.category)}</span>` : ''}
