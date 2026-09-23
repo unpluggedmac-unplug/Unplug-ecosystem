@@ -103,6 +103,14 @@
 /nominate     /unplug-magazine    200
 /nominate/    /unplug-magazine    200
 
+# /articles/<slug> — permanent, human-readable article URLs.
+#
+# This is a 200 rewrite, not a redirect. The browser and every social crawler
+# keep the exact article URL in the address bar while Cloudflare serves the
+# magazine SPA behind it. The SPA resolves the slug against the public article
+# API; the edge function injects article-specific Open Graph metadata.
+/articles/*    /unplug-magazine    200
+
 # /form/<slug> — an admin-built form at its own address.
 #
 # A wildcard rather than a list, because the slug is whatever an admin typed

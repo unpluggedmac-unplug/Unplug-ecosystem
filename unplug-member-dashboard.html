@@ -2095,18 +2095,22 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 // Where to send somebody after they sign in, when they arrived here from a
 // gated article and we promised to take them back to it.
 //
-// SAME-ORIGIN, RELATIVE, QUERY-ONLY, ON PURPOSE. `next` travels in a URL we
-// hand out on a link people are invited to click, which is the exact shape of
-// an open redirect: if this accepted "https://evil.example" it would turn the
-// Unplug sign-in page into a credible way of sending a member somewhere else.
-// So the value must look like a magazine query string and nothing else, and it
-// is appended to a FIXED relative page rather than being used as a URL.
+// SAME-ORIGIN AND RELATIVE, ON PURPOSE. `next` travels in a URL we hand out
+// on a link people are invited to click, which is the exact shape of an open
+// redirect. We accept only the magazine's legacy query form or the canonical
+// /articles/<slug> path — never a scheme, host, // URL, fragment or arbitrary
+// site path.
 function gatedReturnTarget() {
   try {
     const next = new URLSearchParams(location.search).get('next');
     if (!next) return null;
-    if (!/^\?p=[a-zA-Z]+(&[a-zA-Z0-9_]+=[^&#]*)*$/.test(next)) return null;
-    return 'unplug-magazine.html' + next;
+    if (/^\?p=[a-zA-Z]+(&[a-zA-Z0-9_]+=[^&#]*)*$/.test(next)) {
+      return 'unplug-magazine.html' + next;
+    }
+    if (/^\/articles\/[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(next)) {
+      return next;
+    }
+    return null;
   } catch (e) {
     return null;
   }

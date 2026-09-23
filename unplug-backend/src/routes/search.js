@@ -176,7 +176,7 @@ function searchArticles(q, like, limit, offset, categoryId, from, to) {
   const off = `$${params.length}`;
 
   return pool.query(
-    `SELECT a.id, a.title, a.kicker_supplied_by, a.tags, a.banner_image_url,
+    `SELECT a.id, a.slug, a.title, a.kicker_supplied_by, a.tags, a.banner_image_url,
             a.published_at, c.name AS category, a.requires_account,
             -- A GATED ARTICLE NEVER GETS A BODY SNIPPET.
             --
