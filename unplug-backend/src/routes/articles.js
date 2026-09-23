@@ -22,7 +22,15 @@ async function uniqueSlug(base, excludeId) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     const candidate = attempt === 0 ? root : `${root}-${attempt + 1}`;
     const clash = await pool.query(
-      'SELECT 1 FROM articles WHERE slug = $1 AND ($2::int IS NULL OR id <> $2)',
+      `SELECT 1
+         FROM (
+           SELECT id, slug FROM articles
+           UNION ALL
+           SELECT article_id AS id, old_slug AS slug FROM article_slug_redirects
+         ) reserved
+        WHERE reserved.slug = $1
+          AND ($2::int IS NULL OR reserved.id <> $2)
+        LIMIT 1`,
       [candidate, excludeId || null]
     );
     if (clash.rowCount === 0) return candidate;
@@ -113,7 +121,7 @@ router.get('/', async (req, res, next) => {
     );
 
     const result = await pool.query(
-      `SELECT a.id, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at,
+      `SELECT a.id, a.slug, a.title, a.body, a.kicker_supplied_by, a.emotion, a.published_at,
               a.banner_image_url, a.subtitle, c.name AS category, a.requires_account,
               a.cover_animation_effect, a.cover_transition_duration_ms,
               a.author_name, con.name AS contributor_name, con.slug AS contributor_slug,
@@ -218,6 +226,66 @@ router.get('/admin/all', requireRole('admin'), async (req, res, next) => {
         LIMIT 300`
     );
     res.json({ articles: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /articles/by-slug/:slug — public clean-URL resolver.
+// Current slugs return the same article payload as the numeric route. A
+// historical slug returns a permanent API redirect to the current slug; the
+// Cloudflare edge turns that into the public /articles/<current-slug> redirect.
+router.get('/by-slug/:slug', async (req, res, next) => {
+  try {
+    const slug = String(req.params.slug || '').trim().toLowerCase();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return res.status(404).json({ error: 'Article not found.' });
+    }
+
+    const result = await pool.query(
+      `SELECT a.*, c.name AS category,
+              con.name AS contributor_name, con.slug AS contributor_slug,
+              con.role_title AS contributor_role, con.photo_url AS contributor_photo,
+              COALESCE(NULLIF(TRIM(a.author_name), ''),
+                       NULLIF(TRIM(au.full_name), '')) AS published_by
+         FROM articles a
+         LEFT JOIN categories c ON c.id = a.category_id
+         LEFT JOIN contributors con ON con.id = a.contributor_id
+         LEFT JOIN users au ON au.id = a.author_user_id
+        WHERE a.slug = $1
+          AND a.status = 'approved'
+          AND (a.scheduled_for IS NULL OR a.scheduled_for <= CURRENT_DATE)
+        LIMIT 1`,
+      [slug]
+    );
+
+    if (result.rows.length === 0) {
+      const old = await pool.query(
+        `SELECT a.slug
+           FROM article_slug_redirects r
+           JOIN articles a ON a.id = r.article_id
+          WHERE r.old_slug = $1
+            AND a.status = 'approved'
+            AND (a.scheduled_for IS NULL OR a.scheduled_for <= CURRENT_DATE)
+          LIMIT 1`,
+        [slug]
+      );
+      if (old.rows.length) {
+        res.set('Location', '/articles/by-slug/' + encodeURIComponent(old.rows[0].slug));
+        return res.status(301).json({ redirectSlug: old.rows[0].slug });
+      }
+      return res.status(404).json({ error: 'Article not found.' });
+    }
+
+    const article = result.rows[0];
+    article.tags = cleanTopicTerms(article.tags);
+    article.keywords = cleanTopicTerms(article.keywords);
+    const gateWords = await previewWords();
+    applyGate(article, req.user, gateWords);
+    res.json({
+      article,
+      sections: article.gated ? [] : await loadSections(article.id),
+    });
   } catch (err) {
     next(err);
   }
@@ -552,6 +620,29 @@ router.patch('/:id', requireOwnerOrAdmin(getArticleOwnerId), async (req, res, ne
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // If the slug changes, preserve the old public address before updating.
+      // ON CONFLICT keeps retries/idempotent saves harmless.
+      if (slug !== undefined && String(slug).trim()) {
+        const before = await client.query('SELECT slug FROM articles WHERE id = $1 FOR UPDATE', [req.params.id]);
+        if (before.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'Article not found.' });
+        }
+        const oldSlug = before.rows[0].slug;
+        const nextSlugClause = setClauses.findIndex((x) => /^slug = \$/.test(x));
+        if (oldSlug && nextSlugClause !== -1) {
+          const match = setClauses[nextSlugClause].match(/\$(\d+)/);
+          const nextSlug = match ? values[Number(match[1]) - 1] : null;
+          if (nextSlug && oldSlug !== nextSlug) {
+            await client.query(
+              `INSERT INTO article_slug_redirects (article_id, old_slug)
+               VALUES ($1, $2)
+               ON CONFLICT (old_slug) DO NOTHING`,
+              [req.params.id, oldSlug]
+            );
+          }
+        }
+      }
       let article = null;
       if (setClauses.length > 0) {
         values.push(req.params.id);
