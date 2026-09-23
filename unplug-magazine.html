@@ -8402,7 +8402,7 @@ async function loadDiscovery() {
       blocks.push(`
         <div>
           <h4 style="font-size:14px; margin-bottom:10px;">📖 Stories worth finding</h4>
-          ${articles.map((a) => `<a href="?p=article&id=${a.id}" class="discovery-row" style="display:block; padding:8px 0; border-bottom:1px solid var(--paper-line); color:inherit; text-decoration:none;">
+          ${articles.map((a) => `<a href="${articlePublicPath(a, a.id)}" class="discovery-row" style="display:block; padding:8px 0; border-bottom:1px solid var(--paper-line); color:inherit; text-decoration:none;">
             <div style="font-weight:600; font-size:13.5px;">${escapeHtml(a.title)}</div>
             <div style="font-size:11.5px; color:var(--slate);">${escapeHtml(a.category || '')}</div>
           </a>`).join('')}
@@ -11704,8 +11704,8 @@ async function runSitePageSearch() {
 
   const parts = [];
   parts.push(searchGroupHtml('Stories', (r.articles || []).map((a) => searchHitHtml({
-    href: '?p=article&id=' + encodeURIComponent(a.id),
-    nav: 'article:' + a.id,
+    href: articlePublicPath(a, a.id),
+    nav: 'article:' + (a.slug || a.id),
     title: a.title,
     snippet: searchSnippet(a.snippet),
     meta: [a.category, a.published_at ? new Date(a.published_at).toLocaleDateString('en-ZA',
