@@ -19,6 +19,10 @@ test('frontend routes, shares and canonicalises articles by permanent slug', () 
   assert.match(html, /loadArticleDetail\(articleSlugFromPath\(\)\)/);
   assert.match(html, /const shareUrl = articlePublicUrl\(a, id\)/);
   assert.match(html, /history\.replaceState\(\{ p: 'article', id, slug: a\.slug \|\| null \}, '', q\)/);
+  assert.match(html, /meta property="article:published_time"/);
+  assert.match(html, /function seoSetArticleMeta\(/);
+  assert.match(html, /linkedin\.com\/sharing\/share-offsite/);
+  assert.match(html, /mailto:\?subject=/);
 });
 
 test('edge validates clean article paths and injects crawler metadata', () => {
@@ -28,6 +32,10 @@ test('edge validates clean article paths and injects crawler metadata', () => {
   assert.match(edge, /\/articles\/by-slug\//);
   assert.match(edge, /lookup\.status === 404/);
   assert.match(edge, /Response\.redirect[\s\S]*301/);
+  assert.match(edge, /meta\[property="og:type"\]/);
+  assert.match(edge, /article:published_time/);
+  assert.match(edge, /article:modified_time/);
+  assert.match(edge, /article:section/);
 });
 
 test('backend resolves current slugs and preserves historical ones', () => {
@@ -44,4 +52,14 @@ test('sitemap advertises clean article URLs', () => {
   const sitemap = read('unplug-backend/src/routes/sitemap.js');
   assert.match(sitemap, /SELECT id, slug, published_at, created_at FROM articles/);
   assert.match(sitemap, /SITE_URL\}\/articles\/\$\{encodeURIComponent\(a\.slug\)\}/);
+});
+
+
+test('member sign-in return path and admin editor understand canonical article URLs', () => {
+  const member = read('unplug-member-dashboard.html');
+  const admin = read('unplug-admin-dashboard.html');
+  assert.match(member, /\^\\\/articles\\\//);
+  assert.match(admin, /id="artPublicUrl"/);
+  assert.match(admin, /https:\/\/www\.unplugnews\.com\/articles\//);
+  assert.match(admin, /id="artCopyPublicUrl"/);
 });
