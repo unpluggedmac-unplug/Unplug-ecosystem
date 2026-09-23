@@ -1648,6 +1648,16 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
             <div style="grid-column:1/-2;"><label>SEO title <span style="color:var(--slate);">(defaults to the headline)</span></label><input id="artSeoTitle" placeholder="Title used by Google and browser tabs"></div>
             <div><label for="artSlug">URL slug</label><input id="artSlug" placeholder="auto-generated"></div>
           </div>
+          <div id="artPublicUrlBox" class="form-row" style="display:none; margin-top:0;">
+            <div style="grid-column:1/-1;">
+              <label>Public article URL</label>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <a id="artPublicUrl" href="#" target="_blank" rel="noopener" style="font-size:13px; overflow-wrap:anywhere;"></a>
+                <button type="button" class="btn btn-line" id="artCopyPublicUrl" style="width:auto; padding:6px 12px;">Copy Link</button>
+              </div>
+              <small id="artPublicUrlNote" style="color:var(--slate);"></small>
+            </div>
+          </div>
           <div class="form-row">
             <div style="grid-column:1/-1;"><label>Meta description <span style="color:var(--slate);">(the summary shown when this is shared on social media)</span></label>
               <input id="artMeta" maxlength="320" placeholder="Left blank, this is written for you from the article">
@@ -7331,6 +7341,42 @@ let ART_EDITING_ID = null;
 // publish a draft or just amend a live piece.
 let ART_EDITING_STATUS = null;
 
+function artUpdatePublicUrl(article) {
+  const box = document.getElementById('artPublicUrlBox');
+  const link = document.getElementById('artPublicUrl');
+  const note = document.getElementById('artPublicUrlNote');
+  const slug = String((article && article.slug) || document.getElementById('artSlug').value || '').trim().toLowerCase();
+  if (!box || !link) return;
+  if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    box.style.display = 'none';
+    link.textContent = '';
+    link.removeAttribute('href');
+    return;
+  }
+  const url = 'https://www.unplugnews.com/articles/' + encodeURIComponent(slug);
+  box.style.display = '';
+  link.href = url;
+  link.textContent = url;
+  if (note) note.textContent = article && article.status === 'approved'
+    ? 'This is the permanent URL shared to Facebook and other platforms.'
+    : 'This URL is reserved; it becomes publicly accessible when the article is published.';
+}
+
+document.getElementById('artCopyPublicUrl').addEventListener('click', async () => {
+  const link = document.getElementById('artPublicUrl');
+  if (!link || !link.href) return;
+  try {
+    await navigator.clipboard.writeText(link.href);
+    showToast('Article link copied.');
+  } catch (_) {
+    prompt('Copy this article URL:', link.href);
+  }
+});
+document.getElementById('artSlug').addEventListener('input', () => artUpdatePublicUrl({
+  slug: document.getElementById('artSlug').value,
+  status: ART_EDITING_STATUS,
+}));
+
 // Unlike every other image field on this form, .art-figure img is
 // height:auto with no forced crop box, so whichever shape is chosen actually
 // shows at its own real proportions on the article page — landscape/portrait
@@ -7569,6 +7615,7 @@ function artReset() {
   artApplyStatusUi(null); // new article: Publish Live + Save as Draft both shown
   document.getElementById('artNote').textContent = '';
   document.getElementById('artMetaCount').textContent = '';
+  artUpdatePublicUrl(null);
 }
 
 document.getElementById('artResetBtn').addEventListener('click', artReset);
@@ -7612,6 +7659,7 @@ document.getElementById('artLoadBtn').addEventListener('click', async () => {
     document.getElementById('artSubtitle').value = a.subtitle || '';
     document.getElementById('artSeoTitle').value = a.seo_title || '';
     document.getElementById('artSlug').value = a.slug || '';
+    artUpdatePublicUrl(a);
     document.getElementById('artMeta').value = a.meta_description || '';
     document.getElementById('artKicker').value = a.kicker_supplied_by || '';
     document.getElementById('artAuthor').value = a.author_name || '';
@@ -7733,9 +7781,10 @@ async function artSave(asDraft) {
     document.getElementById('artDeleteBtn').style.display = '';
     document.getElementById('artDiscardBtn').style.display = '';
     document.getElementById('artSlug').value = a.slug || '';
+    artUpdatePublicUrl(a);
     artShowDerived(a);
     note.innerHTML = a.status === 'approved'
-      ? `Live — <a href="unplug-magazine.html?p=article&id=${a.id}" target="_blank" rel="noopener">view it on the site</a>.`
+      ? `Live — <a href="https://www.unplugnews.com/articles/${encodeURIComponent(a.slug)}" target="_blank" rel="noopener">view it on the site</a>.`
       : `Saved as ${a.status} — not visible on the public site yet.`;
     showToast(res.message || 'Saved.');
     artLoadPickList();
