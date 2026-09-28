@@ -7,7 +7,6 @@ const ROOT = path.join(__dirname, '..', '..');
 const RUNTIME = path.join(ROOT, 'functions', 'runtime-config.js');
 const TOOLS = path.join(ROOT, 'media', 'scripts', 'unplug-account-tools.js');
 const CHECKOUT = path.join(ROOT, 'unplug-checkout.html');
-const VOTE = path.join(ROOT, 'unplug-vote.html');
 
 function read(file) {
   assert.ok(fs.existsSync(file), `${path.relative(ROOT, file)} should exist`);
@@ -44,13 +43,11 @@ test('standalone sign-in and sign-out rebuild the same portal from the new sessi
     'both sign-in and sign-out should refresh standalone portal state');
 });
 
-test('checkout and bulk-vote portals still expose the same mandatory Terms gate', () => {
-  for (const file of [CHECKOUT, VOTE]) {
-    const src = read(file);
-    assert.match(src, /class="[^"]*viewTermsLink/);
-    assert.match(src, /id="termsAcceptChk"[^>]*disabled/);
-    assert.match(src, /id="payBtn"[^>]*disabled/);
-  }
+test('checkout still exposes the mandatory Terms gate', () => {
+  const src = read(CHECKOUT);
+  assert.match(src, /class="[^"]*viewTermsLink/);
+  assert.match(src, /id="termsAcceptChk"[^>]*disabled/);
+  assert.match(src, /id="payBtn"[^>]*disabled/);
 });
 
 test('Terms links now preserve checkout state and require explicit acceptance on the real policy page', () => {

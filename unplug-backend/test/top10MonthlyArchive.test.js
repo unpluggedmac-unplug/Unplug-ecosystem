@@ -2,10 +2,8 @@
 //
 // The guarantees worth testing hardest, in order of what would hurt most:
 //
-//   1. PAID VOTES ARE NEVER DELETED. Vote rows carry payment_id and
-//      vote_bundle_id — they are the record of what someone bought. The reset
-//      must be a change of period, not a deletion. If this test ever fails,
-//      the site has lost the ability to answer "what did I pay for?".
+//   1. NORMAL VOTES ARE NEVER DELETED. The reset is a period change, not a
+//      deletion, so existing individual vote history remains intact.
 //   2. The new month starts everyone on ZERO but IN THE CLOSING ORDER, and a
 //      single real vote outranks any carried position. That is the whole
 //      brief: "restart at zero points but remain in their position, when
@@ -101,9 +99,9 @@ let _voteSeq = 0;
 // uniqueness indexes allow one free vote per session per entry.
 async function addVotes(entryId, count, period, opts = {}) {
   const r = await pool.query(
-    `INSERT INTO votes (entry_id, session_id, bundle_size, vote_period, payment_id, vote_bundle_id)
-     VALUES ($1, $2, $3, $4::date, $5, $6) RETURNING id`,
-    [entryId, `arch-sess-${_voteSeq++}`, count, period, opts.paymentId || null, opts.bundleId || null]
+    `INSERT INTO votes (entry_id, session_id, bundle_size, vote_period, payment_id)
+     VALUES ($1, $2, $3, $4::date, $5) RETURNING id`,
+    [entryId, `arch-sess-${_voteSeq++}`, count, period, opts.paymentId || null]
   );
   return r.rows[0].id;
 }
@@ -225,40 +223,19 @@ test('a vote inserted without a period lands in the current month', async () => 
 // THE MONEY GUARANTEE
 // ---------------------------------------------------------------------------
 
-test('capturing a month DELETES NO VOTES — paid rows keep their payment link', async () => {
-  // If this ever fails, a bulk-vote buyer asking "what did I pay for?" three
-  // months later cannot be answered. That is why the reset is a period change
-  // rather than a delete.
-  const e = await makeEntry(top10Id, 'Paid Contestant', '2026-03-05');
-
-  const buyer = await makeUser();
-  const pay = await pool.query(
-    `INSERT INTO payments (user_id, amount, method, gateway_reference, status, linked_type, linked_id)
-     VALUES ($1, 500, 'eft', $2, 'confirmed', 'competition_entry', $3) RETURNING id`,
-    [buyer, `ARCHPAY-${_voteSeq}`, e.entryId]
-  );
-  const bundle = await pool.query(
-    `INSERT INTO vote_bundles (entry_id, buyer_user_id, vote_count, price, reference, status)
-     VALUES ($1, $2, 100, 500, $3, 'confirmed') RETURNING id`,
-    [e.entryId, buyer, `ARCHTEST${_voteSeq}`]
-  );
-  const voteId = await addVotes(e.entryId, 100, PERIOD(2026, 3), {
-    paymentId: pay.rows[0].id, bundleId: bundle.rows[0].id,
-  });
+test('capturing a month DELETES NO NORMAL VOTES', async () => {
+  const e = await makeEntry(top10Id, 'Normal Voter', '2026-03-05');
+  const voteId = await addVotes(e.entryId, 1, PERIOD(2026, 3));
 
   await capture.captureMonth({ year: 2026, month: 3, adminUserId: adminId, auto: false });
 
   const after = await pool.query(
-    `SELECT bundle_size, payment_id, vote_bundle_id,
-            to_char(vote_period, 'YYYY-MM-DD') AS vote_period
+    `SELECT bundle_size, to_char(vote_period, 'YYYY-MM-DD') AS vote_period
        FROM votes WHERE id = $1`, [voteId]
   );
-  assert.equal(after.rows.length, 1, 'THE PAID VOTE ROW MUST STILL EXIST AFTER A MONTH IS CAPTURED');
-  assert.equal(after.rows[0].bundle_size, 100, 'the number of votes bought must be unchanged');
-  assert.equal(after.rows[0].payment_id, pay.rows[0].id, 'the link to the payment must survive');
-  assert.equal(after.rows[0].vote_bundle_id, bundle.rows[0].id, 'the link to the bundle must survive');
-  assert.equal(after.rows[0].vote_period, '2026-03-01',
-    'and it must still belong to the month it was cast in');
+  assert.equal(after.rows.length, 1, 'the normal vote row must survive month capture');
+  assert.equal(after.rows[0].bundle_size, 1);
+  assert.equal(after.rows[0].vote_period, '2026-03-01');
 });
 
 // ---------------------------------------------------------------------------

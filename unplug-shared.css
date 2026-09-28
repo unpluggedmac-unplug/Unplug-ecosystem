@@ -57,8 +57,7 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
 
 /* Mobile: keep the fixed accessibility button (bottom-left) and chat button
-   (bottom-right) from covering tappable content at the bottom of a page.
-   This was hiding the Terms links and the "Buy Bulk Votes" button on phones. */
+   (bottom-right) from covering tappable content at the bottom of a page. */
 @media (max-width: 600px) {
   body { padding-bottom: 88px; }
 }

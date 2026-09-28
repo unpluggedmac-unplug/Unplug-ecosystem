@@ -52,7 +52,6 @@ This version uses three sources:
 | Column | Source | How |
 |---|---|---|
 | **Spec** | `docs/spec-extracted.md` | as written |
-| **System** | production API | `GET /vote-bundle-tiers`, `/highlights/packages`, `/ad-banners/options` on `unplug-ecosystem.onrender.com`, plus the constants in `payments.js`, `profiles.js`, `marketplace.js`, `editions.js`, `competitions.js` |
 | **Shown** | `https://www.unplugnews.com` | the live page, fetched and searched |
 
 The seed-based figures turned out to be correct — nobody has edited those tables — but that
@@ -140,7 +139,6 @@ paragraph is the record that Article Highlight and Directory Highlight are two s
 different-priced products, and the spec's single "Featured Listing" figure does not describe either
 of them precisely.
 
-**Bulk votes (§9.5)** — verified live via `GET /vote-bundle-tiers`.
 
 | Spec tier | Spec | Spec/vote | System | System/vote |
 |---|---|---|---|---|
@@ -164,7 +162,6 @@ cannot be compared row by row. Two things stand independently of which list is c
   do not exist in the database.
 
 **RESOLVED 2026-09-03: kept the system's 6 tiers and 300-vote cap; fixed the non-monotonic
-pricing.** Migration `169_vote_bundle_monotonic_pricing.sql`. 10 and 50 votes are unchanged
 (R10.00, R20.00) — the site owner chose to correct by lowering the tiers above them rather than
 raising these two. 70/150/200/300 are now a flat R0.40/vote (the rate 50 votes already charged):
 70 → R28.00 (was R50.00), 150 → R60.00 (was R100.00), 200 → R80.00 (was R150.00), 300 → R120.00
@@ -255,9 +252,7 @@ section, and the resolution notes inline above, are the record of what was decid
    before this document's re-check found anything to decide.
 2. ~~**Featured listing**~~ — **kept as two products** (Article Highlight, Directory Highlight).
    No price changed.
-3. ~~**Bulk votes**~~ — **kept the system's 6 tiers and 300-vote cap; fixed the non-monotonic
    pricing.** 10 and 50 votes unchanged; 70/150/200/300 lowered to a flat R0.40/vote. Migration
-   `169_vote_bundle_monotonic_pricing.sql`.
 4. ~~**Homepage banner**~~ — **§6.1's R1,000 means the 28-day package.** No system change.
 5. ~~**Event promotion**~~ — **dropped, not built.** No code change — there was none to make.
 6. ~~**Directory middle tier**~~ — **kept `pro` as built.** No live change.

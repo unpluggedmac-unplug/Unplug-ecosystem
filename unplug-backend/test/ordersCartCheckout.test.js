@@ -130,12 +130,12 @@ after(async () => {
   await stopPostgres(pg, dataDir);
 });
 
-test('the cart portal requires login, unlike the anonymous Bulk Votes portal', async () => {
+test('the cart portal requires login', async () => {
   const { status } = await req('POST', '/orders/quote', { body: { items: [{ linkedType: 'article_publish', linkedId: 1 }] } });
   assert.equal(status, 401);
 });
 
-test('edition_download and vote_bundle are refused as cart items — they have their own portals', async () => {
+test('edition_download is refused as a cart item', async () => {
   const user = await makeUser();
   const { status, body } = await req('POST', '/orders/quote', {
     token: tokenFor(user), body: { items: [{ linkedType: 'edition_download', linkedId: 1 }] },

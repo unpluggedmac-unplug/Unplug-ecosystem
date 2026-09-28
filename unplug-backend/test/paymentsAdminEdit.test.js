@@ -202,22 +202,6 @@ test('a payment behind an edition purchase cannot be deleted', async () => {
   assert.equal(kept.rows[0].n, 1, "the customer's edition purchase lost its payment");
 });
 
-test('a payment behind paid votes cannot be deleted', async () => {
-  const id = await makePayment({ status: 'confirmed', linkedType: 'vote_bundle' });
-  const comp = await pool.query(`SELECT id FROM competitions WHERE slug = 'top-10'`);
-  await pool.query(`INSERT INTO competition_entries (id, competition_id, profile_id, manual_name, entry_fee, status)
-                    VALUES (900, $1, NULL, 'Voted For', 0, 'approved') ON CONFLICT DO NOTHING`, [comp.rows[0].id]);
-  await pool.query(
-    `INSERT INTO votes (entry_id, session_id, bundle_size, payment_id) VALUES (900, 'sess-pay', 5, $1)`, [id]
-  );
-
-  const r = await req('DELETE', `/payments/admin/${id}`, { token: adminToken });
-  assert.equal(r.status, 409);
-
-  const kept = await pool.query('SELECT COUNT(*)::int AS n FROM votes WHERE payment_id = $1', [id]);
-  assert.equal(kept.rows[0].n, 1, 'paid votes were destroyed');
-});
-
 test('deleting a banner payment keeps the banner, with its payment link cleared', async () => {
   // ad_slots.payment_id is ON DELETE SET NULL, so this one is allowed — but the
   // admin should be told the banner survived rather than discovering it later.

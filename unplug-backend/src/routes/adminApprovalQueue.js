@@ -100,9 +100,8 @@ function payLateral(types, idColumn) {
 // one bad item cannot block a whole cart). Reading the payment directly means
 // such an item unblocks itself here the moment an admin looks at it, instead
 // of needing someone to notice it in the database.
-// ONLY applies to things an admin PUBLISHES. For anything in the 'payment'
-// group — a bulk vote purchase, a cart order, a service payment, an edition
-// purchase — approving IS the act of confirming the money arrived. Those rows
+// ONLY applies to things an admin PUBLISHES. For items in the 'payment' group,
+// approving IS the act of confirming the money arrived. Those rows
 // sit at 'awaiting_payment' by definition: that is what an EFT waiting to be
 // checked off looks like, and gating them would mean the admin could never
 // confirm a payment at all. They are always approvable.
@@ -328,29 +327,6 @@ const SOURCES = [
     actions: (r) => ({
       approve: { method: 'PATCH', path: `/admin/top10-entries/${r.id}/approve` },
       reject: { method: 'PATCH', path: `/admin/top10-entries/${r.id}/reject` },
-    }),
-  },
-  {
-    // Bulk vote purchases. The reference code is the contestant's entry code,
-    // which is the whole point of showing them here: the admin can read the
-    // bank statement and the queue in the same breath.
-    type: 'top10_votes',
-    sql: `SELECT vb.id, COALESCE(ce.manual_name, pr.display_name, 'Contestant') AS title,
-                 vb.vote_count || ' votes' AS subtitle,
-                 COALESCE(bu.full_name, 'Anonymous buyer') AS customer_name,
-                 bu.email AS customer_email, vb.buyer_user_id AS user_id,
-                 vb.created_at AS submitted_at, vb.status AS item_status,
-                 vb.reference, vb.status AS pay_status, vb.price AS pay_amount,
-                 vb.pop_url, vb.invoice_url,
-                 ce.entry_code
-            FROM vote_bundles vb
-            JOIN competition_entries ce ON ce.id = vb.entry_id
-            LEFT JOIN profiles pr ON pr.id = ce.profile_id
-            LEFT JOIN users bu ON bu.id = vb.buyer_user_id
-           WHERE vb.status = 'awaiting_payment'`,
-    actions: (r) => ({
-      approve: { method: 'PATCH', path: `/admin/vote-bundles/${r.id}/approve` },
-      reject: { method: 'PATCH', path: `/admin/vote-bundles/${r.id}/reject` },
     }),
   },
   {
@@ -819,7 +795,6 @@ const DETAILS = {
   },
   cart_order: { table: 'orders', fields: [], preview: () => null },
   service_payment: { table: 'payments', fields: [], preview: () => null },
-  top10_votes: { table: 'vote_bundles', fields: [], preview: () => '?p=top10' },
 };
 
 // Every column name that may appear in SQL, gathered once from the constants

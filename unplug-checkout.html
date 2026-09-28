@@ -79,7 +79,7 @@ body{ min-height:100vh; }
        payment happened to land here" — see enterCheckout() below. -->
   <div class="card section-hidden" id="noServiceCard">
     <h2>Nothing to check out</h2>
-    <p class="sub">This checkout link doesn't specify what you're paying for. Head back to the site and choose a service — Directory listing, Top 10 bulk votes, or an edition download — and you'll be brought straight back here with everything filled in.</p>
+    <p class="sub">This checkout link doesn't specify what you're paying for. Head back to the site and choose a service — Directory listing or an edition download — and you'll be brought straight back here with everything filled in.</p>
     <a class="btn btn-solid" href="unplug-magazine.html" style="display:inline-block; text-decoration:none; text-align:center;">Back to Unplug</a>
   </div>
 
@@ -130,36 +130,6 @@ body{ min-height:100vh; }
     <button class="btn btn-solid" id="createProfileBtn" disabled>Continue to Payment</button>
   </div>
 
-  <!-- BULK VOTE checkout — reached via unplug-checkout.html?type=vote_bundle&id=<entryId>
-       (a click from the Top 10 page, which already knows which entry) or with
-       no id at all, in which case the entrant's 10-digit code is entered here
-       directly. Either path resolves to the same entry, then the same tier
-       picker and the same payment step every other checkout mode uses. -->
-  <div class="card section-hidden" id="voteBundleCard">
-    <div class="step-label" data-step-for="voteBundleCard"></div>
-    <h2>Buy Bulk Votes</h2>
-
-    <div class="field section-hidden" id="voteCodeField">
-      <label>Entry Code</label>
-      <p class="sub" style="margin-top:-4px;">Enter the entrant's 10-digit Entry Code — shown next to their name on the Top 10 page.</p>
-      <input id="voteCodeInput" placeholder="e.g. 0004821037" maxlength="10" inputmode="numeric" style="font-family:monospace; letter-spacing:0.06em;">
-      <div class="error-banner" id="voteCodeError"></div>
-      <button class="btn btn-solid" id="voteCodeSubmitBtn" style="margin-top:10px;">Find Entry</button>
-    </div>
-
-    <div class="section-hidden" id="voteEntryResolved">
-      <div style="background:var(--paper); border:1px solid var(--paper-line); border-radius:6px; padding:14px 16px; margin-bottom:16px;">
-        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);" id="voteEntryCompetition"></div>
-        <div style="font-weight:700; font-size:16px; margin-top:2px;" id="voteEntryName"></div>
-      </div>
-      <label style="display:block; font-weight:700; font-size:13px; margin-bottom:8px;">Choose how many votes</label>
-      <div class="tier-options" id="voteTierOptions" style="grid-template-columns:repeat(3,1fr);"></div>
-      <br>
-      <div class="error-banner" id="voteTierError"></div>
-      <button class="btn btn-solid" id="voteContinueBtn" disabled>Continue to Payment</button>
-    </div>
-  </div>
-
   <!-- STEP 2: payment window with referral source -->
   <div class="card section-hidden" id="paymentCard">
     <div class="step-label" data-step-for="paymentCard"></div>
@@ -173,7 +143,7 @@ body{ min-height:100vh; }
     </div>
     <!-- PAY-003: a Directory package is the one checkout mode with a real
          review/approval step after payment (see DIR-003's "How it works" on
-         the Directory page itself) — an edition download or a vote bundle
+         the Directory page itself) — an edition download or an edition download
          needs no such note, since paying settles those immediately. Shown
          here so it isn't only found by reading the Directory page first. -->
     <p class="sub" id="paymentNextSteps" style="display:none;">What happens after you pay: we confirm your EFT, then your profile is reviewed, then it goes live on the Directory. You'll see the reference and current status on the next screen and in your dashboard's Payment History.</p>
@@ -286,10 +256,6 @@ let CURRENT_PAYMENT_LINKED_TYPE = 'profile_package';
 // e.g. unplug-checkout.html?type=edition_download&id=3
 const CHECKOUT_PARAMS = new URLSearchParams(window.location.search);
 const EDITION_MODE = CHECKOUT_PARAMS.get('type') === 'edition_download' && CHECKOUT_PARAMS.get('id');
-// Unlike EDITION_MODE, the id is OPTIONAL here: a click from the Top 10 page
-// arrives with one already; someone who was just given a code and came here
-// directly did not, and enters it on this page instead.
-const VOTE_BUNDLE_MODE = CHECKOUT_PARAMS.get('type') === 'vote_bundle';
 // Directory package purchase — its own distinct service, reached either
 // via an explicit type=directory_package or (for backward compatibility
 // with existing links) the ptype/tier preselection params below. This is
@@ -299,8 +265,7 @@ const VOTE_BUNDLE_MODE = CHECKOUT_PARAMS.get('type') === 'vote_bundle';
 const DIRECTORY_MODE = CHECKOUT_PARAMS.get('type') === 'directory_package'
   || CHECKOUT_PARAMS.has('ptype') || CHECKOUT_PARAMS.has('tier');
 // PAY-003: only a Directory package has a review/approval step after
-// payment — an edition download or a vote bundle settles the moment
-// payment is confirmed, so this note would be misleading there.
+// payment — an edition download settles immediately once payment is confirmed.
 if (DIRECTORY_MODE) document.getElementById('paymentNextSteps').style.display = 'block';
 
 // Package preselection from the public site's Directory page,
@@ -496,10 +461,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 
 // SPEC 19 — "Step X of Y with a progress indicator".
 //
-// The path is not fixed: a Directory listing has a package step, a bulk-vote
-// purchase has a votes step, and an edition download has neither. That is
-// exactly why two cards were both hand-labelled "Step 2" — with the path
-// computed per mode, the numbers cannot disagree with each other again.
+// The path is not fixed: a Directory listing has a package step and an edition download does not.
 //
 // Drawn by watching the cards rather than by editing every place that shows
 // one: the flow logic below stays untouched, and a card shown from anywhere
@@ -507,7 +469,6 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 function checkoutStepPath(){
   var middle = [];
   if (typeof DIRECTORY_MODE !== 'undefined' && DIRECTORY_MODE) middle = [['packageCard','Your package']];
-  else if (typeof VOTE_BUNDLE_MODE !== 'undefined' && VOTE_BUNDLE_MODE) middle = [['voteBundleCard','Your votes']];
   return [['loginCard','Sign in']].concat(middle, [['paymentCard','Payment'], ['resultCard','Done']]);
 }
 
@@ -544,7 +505,7 @@ function updateCheckoutSteps(){
   if (!window.MutationObserver) return;
   var observer = new MutationObserver(function(){ updateCheckoutSteps(); });
   document.addEventListener('DOMContentLoaded', function(){
-    ['loginCard','packageCard','voteBundleCard','paymentCard','resultCard'].forEach(function(id){
+    ['loginCard','packageCard','paymentCard','resultCard'].forEach(function(id){
       var card = document.getElementById(id);
       if (card) observer.observe(card, { attributes: true, attributeFilter: ['class'] });
     });
@@ -556,7 +517,6 @@ function enterCheckout(user){
   document.getElementById('statusLine').textContent = `Signed in as ${user.email}`;
   document.getElementById('loginCard').classList.add('section-hidden');
   if (EDITION_MODE) { enterEditionCheckout(); return; }
-  if (VOTE_BUNDLE_MODE) { enterVoteBundleCheckout(); return; }
   if (DIRECTORY_MODE) { document.getElementById('packageCard').classList.remove('section-hidden'); return; }
   // No recognised mode at all — do NOT default to selling a Directory
   // package. That step only belongs to people who actually came here to
@@ -586,111 +546,6 @@ async function enterEditionCheckout(){
     showError('paymentError', 'Could not load that edition — ' + err.message);
   }
 }
-
-// Bulk-vote checkout: resolve an entry either by the id in the URL (arrived
-// via the "Buy Bulk Votes" button on the Top 10 page) or by the entry's
-// 10-digit code typed in here (arrived directly, e.g. from someone who was
-// just handed a code), then let the buyer pick one of the fixed vote-bundle
-// tiers before handing off to the existing payment step.
-let VOTE_BUNDLE_ENTRY = null;
-let VOTE_BUNDLE_SELECTED_TIER = null;
-
-async function enterVoteBundleCheckout(){
-  document.getElementById('voteBundleCard').classList.remove('section-hidden');
-  const id = CHECKOUT_PARAMS.get('id');
-  if (id) {
-    try {
-      const data = await api('/entries/' + encodeURIComponent(id));
-      resolveVoteBundleEntry(data.entry);
-    } catch (err) {
-      document.getElementById('voteCodeField').classList.remove('section-hidden');
-      showError('voteCodeError', 'Could not load that entry — enter its Entry Code below instead.');
-    }
-  } else {
-    document.getElementById('voteCodeField').classList.remove('section-hidden');
-  }
-}
-
-function resolveVoteBundleEntry(entry){
-  VOTE_BUNDLE_ENTRY = entry;
-  document.getElementById('voteCodeField').classList.add('section-hidden');
-  document.getElementById('voteEntryCompetition').textContent = entry.competition_name;
-  document.getElementById('voteEntryName').textContent = entry.display_name;
-  document.getElementById('voteEntryResolved').classList.remove('section-hidden');
-  loadVoteBundleTierOptions();
-}
-
-document.getElementById('voteCodeSubmitBtn').addEventListener('click', async () => {
-  hideError('voteCodeError');
-  const code = document.getElementById('voteCodeInput').value.trim();
-  if (!/^[0-9]{10}$/.test(code)) {
-    showError('voteCodeError', 'Enter the full 10-digit Entry Code exactly as shown on the Top 10 page.');
-    return;
-  }
-  const btn = document.getElementById('voteCodeSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Finding...';
-  try {
-    const data = await api('/entries/by-code/' + encodeURIComponent(code));
-    resolveVoteBundleEntry(data.entry);
-  } catch (err) {
-    showError('voteCodeError', err.message || 'No approved entry matches that code.');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Find Entry';
-  }
-});
-
-async function loadVoteBundleTierOptions(){
-  const wrap = document.getElementById('voteTierOptions');
-  wrap.innerHTML = '<div class="sub">Loading tiers...</div>';
-  try {
-    const data = await api('/vote-bundle-tiers');
-    wrap.innerHTML = (data.tiers || []).map((t) => `
-      <div class="tier-option" data-votes="${t.votes}" data-price="${t.price}">
-        <div style="font-weight:700;">${t.votes} votes</div>
-        <div class="price">R${Number(t.price).toFixed(0)}</div>
-      </div>
-    `).join('');
-  } catch (err) {
-    wrap.innerHTML = '<div class="sub">Could not load Bundle Vote options — please try again shortly.</div>';
-  }
-}
-
-document.getElementById('voteTierOptions').addEventListener('click', (e) => {
-  const el = e.target.closest('.tier-option[data-votes]');
-  if (!el) return;
-  document.querySelectorAll('#voteTierOptions .tier-option').forEach((o) => o.classList.remove('selected'));
-  el.classList.add('selected');
-  VOTE_BUNDLE_SELECTED_TIER = { votes: Number(el.dataset.votes), price: Number(el.dataset.price) };
-  document.getElementById('voteContinueBtn').disabled = false;
-});
-
-document.getElementById('voteContinueBtn').addEventListener('click', async () => {
-  hideError('voteTierError');
-  if (!VOTE_BUNDLE_ENTRY || !VOTE_BUNDLE_SELECTED_TIER) return;
-  const btn = document.getElementById('voteContinueBtn');
-  btn.disabled = true; btn.textContent = 'Please wait...';
-  try {
-    const data = await api('/entries/' + VOTE_BUNDLE_ENTRY.id + '/vote-bundle', {
-      method: 'POST',
-      body: JSON.stringify({ votes: VOTE_BUNDLE_SELECTED_TIER.votes }),
-    });
-    CURRENT_PAYMENT_LINKED_TYPE = 'vote_bundle';
-    CURRENT_PROFILE_ID = data.bundle.id;
-    showOrderDetails(
-      `Bulk Votes — ${VOTE_BUNDLE_ENTRY.display_name}`,
-      `${VOTE_BUNDLE_SELECTED_TIER.votes} extra votes for entry code ${VOTE_BUNDLE_ENTRY.entry_code}.`,
-      data.bundle.price
-    );
-    document.getElementById('voteBundleCard').classList.add('section-hidden');
-    document.getElementById('paymentCard').classList.remove('section-hidden');
-    initCheckoutGate(Number(data.bundle.price));
-    loadConsultants();
-  } catch (err) {
-    showError('voteTierError', err.message || 'Could not start this purchase — please try again.');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Continue to Payment';
-  }
-});
 
 // On page load, restore a saved session rather than forcing a fresh
 // login after every refresh.

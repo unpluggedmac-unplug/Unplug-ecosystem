@@ -116,8 +116,7 @@
 }
 
 /* Mobile: keep the fixed accessibility button (bottom-left) and chat button
-   (bottom-right) from covering tappable content at the bottom of a page —
-   e.g. the Terms links and the "Buy Bulk Votes" button on phones. Placed
+   (bottom-right) from covering tappable content at the bottom of a page. Placed
    here because unplug-tokens.css is loaded by every page. */
 @media (max-width: 600px) {
   body { padding-bottom: 88px; }

@@ -58,7 +58,6 @@ file) · 155 numbered SQL migrations, all re-run on every deploy. Repo:
   prices have all done this). If you find a second copy of a value, consolidate it.
 
 ## Decisions already made — implement as-is, do not re-ask
-1. ~~Bulk vote EFT reference = contestant code + unique suffix (`1234567890-K3M9`).~~
    **SUPERSEDED by migration 106 (2026-09-03).** The reference is now the BARE contestant
    code — one code, called the Reference Code, everywhere a customer sees it. The concern
    behind the original decision is real and was accepted deliberately: two buyers for the

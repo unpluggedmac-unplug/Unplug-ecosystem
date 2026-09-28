@@ -19,7 +19,6 @@ A digital visibility and promotion platform
 A community platform where users can publish, participate, compete, vote and discover opportunities
 The platform must allow both individuals and businesses to participate.
 The most important user journeys are:
-- Join Unplug · Create a profile · Publish a story · Submit an event · Purchase visibility · Enter competitions · Vote · Purchase bulk votes
 Discover businesses, individuals and events
 Manage all activity through My Unplug
 
@@ -32,7 +31,6 @@ A visitor who has not created an account can:
 View marketplace listings
 - View gallery content · View competitions · Vote online · View public rankings
 An account is NOT required for:
-- Reading articles · Online voting · Purchasing bulk votes
 An account IS required for:
 - Publishing an article · Submitting an event · Buying advertising
 Creating/managing profiles
@@ -356,25 +354,20 @@ A unique 10-digit contestant code is generated:
 AFTER PAYMENT AND ADMIN APPROVAL
 - The code is: · Unique · Public
 Associated with the contestant
-Used for bulk voting
-Used as the EFT payment reference for bulk votes
 
 ### §8.4 Contestant public profile
 
 The contestant profile must display relevant public information.
 It must include the contestant's:
 10-digit voting code
-The public can use the code when purchasing bulk votes.
 
 ### §8.5 Contestant dashboard
 
 - The contestant can see: · Competition entered · Contestant code
 Exact verified vote count
-- Online vote count · Bulk vote count · Current ranking · Voting activity · Competition closing date · Competition status
 The contestant must see the:
 EXACT NUMBER OF VERIFIED VOTES
 
-## MODULE 9 — VOTING, BULK VOTES & RANKINGS
 
 ### §9.1 Online voting
 
@@ -410,9 +403,7 @@ The objective is to prevent:
 - Bots · Automated voting · Vote manipulation · Excessive voting · Scripted submissions
 while minimizing legitimate voters being incorrectly blocked.
 
-### §9.5 Bulk votes
 
-- Bulk voting packages: · Package · Votes · Price · Starter
 10
 - R10 · Supporter
 50
@@ -427,37 +418,29 @@ while minimizing legitimate voters being incorrectly blocked.
 R500
 These should be ADMIN-CONFIGURABLE.
 
-### §9.6 Bulk vote payment
 
-- Bulk votes can be paid: · Online · EFT
 The contestant's unique 10-digit code must be used as the EFT reference.
 - Example: · Contestant Code:
 1234567890
 EFT Reference:
 1234567890
 
-### §9.7 Bulk vote approval
 
-Bulk vote transactions require:
 ADMIN APPROVAL
 Votes are NOT added to the contestant's verified total until payment has been verified/approved.
 
-### §9.8 Bulk vote workflow — EFT
 
 Public selects contestant
 ↓
 Enters 10-digit contestant code
 ↓
-Chooses bulk vote package
 - ↓ · Chooses EFT · ↓
 System creates payment/reference
 - ↓ · User makes EFT payment · ↓ · Admin verifies payment · ↓ · Admin approves · ↓ · Votes added · ↓
 Ranking immediately recalculated
 - ↓ · Contestant notification
 
-### §9.9 Bulk vote workflow — Online
 
-- Select contestant · ↓ · Select bulk vote package · ↓ · Online payment · ↓ · Payment verified · ↓ · Admin approval · ↓ · Votes added · ↓
 Ranking immediately recalculated
 
 ### §9.10 Rankings
@@ -468,7 +451,6 @@ Immediately after verified votes are added.
 Relevant public information
 Contestant sees:
 Exact verified vote count
-- Online votes · Bulk votes · Ranking
 
 ### §9.11 Tie-breaking
 
@@ -483,7 +465,6 @@ Admin manually closing
 Automatic competition closure
 Once closed:
 New online votes rejected
-New bulk vote submissions rejected or placed into pending review according to admin configuration
 Rankings become final after all valid pending votes have been processed
 Competition status changes to CLOSED
 
@@ -593,7 +574,6 @@ Admin dashboard should display:
 EFT awaiting verification
 - Paid · Verified · Failed
 Refunded/credited where applicable
-- Competitions · Entries · Contestants · Codes · Online votes · Bulk votes · Pending votes · Rankings
 Suspicious voting activity
 - Competition closure · Content · Articles · Events · Profiles · Directory · Marketplace · Gallery · Advertising
 
@@ -634,7 +614,6 @@ Service approaching expiry
 - Service expired · Renewal available · Upgrade available
 Competition entry approved
 Contestant code generated
-- Bulk vote received · Bulk vote approved · Votes added · Ranking changes · Competition closes
 
 ## §11. UNIVERSAL SUBMISSION DESIGN
 
@@ -766,7 +745,6 @@ Caption/credit/photographer supported
 - Admin approval · Competition · Paid entry · Admin approval · Unique 10-digit code
 Public contestant profile
 Code displayed
-Bulk votes connected to code
 - Online votes work · Rankings update · Tie-breaking works
 Competition closes correctly
 - Voting · No account required
@@ -825,7 +803,6 @@ Every significant action must be logged.
 
 ## §22. MASTER SERVICE MATRIX
 
-- Service · Account · Paid · Admin Approval · Reference · Auto Expiry · Membership · No/Yes · Free · No · No · No · Individual Profile · Yes · Configurable · No · If paid · Configurable · Business Profile · Yes · Configurable · No · If paid · Configurable · Directory Listing · Yes · Yes · Yes · Yes · Yes · Featured Listing · Yes · Yes · Yes · Yes · Yes · Publish Article · Yes · Yes · Yes · Yes · Publication-based · Event Listing · Yes · Yes · Yes · Yes · Event date/time · Event Promotion · Yes · Yes · Yes · Yes · Yes · Homepage Banner · Yes · Yes · Yes · Yes · Yes · Page Banner · Yes · Yes · Yes · Yes · Yes · Marketplace · Yes · Yes · Yes · Yes · Configurable · Gallery · Yes · Yes · Yes · Yes · Configurable · Competition Entry · Yes · Yes · Yes · Yes · Competition · Online Voting · No · Free · No · No · Competition · Bulk Voting · No/Yes · Yes · Yes · Contestant code · Competition
 
 ## §23. MOST IMPORTANT NAVIGATION STRUCTURE
 
@@ -840,7 +817,6 @@ All navigation remains accessible through the hamburger menu.
 ## §24. SERVICES MENU
 
 The Services menu should make the platform understandable.
-- Recommended structure: · CONTENT · Publish an Article · PROFILES & DIRECTORY · Individual Profile · Business Profile · Directory Listing · Featured Listing · EVENTS · Event Listing · Event Promotion · ADVERTISING · Homepage Banner · Page Banner · MARKETPLACE · Marketplace Listing · Gallery Submission · COMPETITIONS · Top 10 / Top 20 · Other Competitions · Vote · Buy Bulk Votes
 Each service page should explain:
 WHAT IT IS → WHO IT IS FOR → PRICE → WHAT'S INCLUDED → WHAT YOU NEED → HOW IT WORKS → START
 
@@ -855,7 +831,6 @@ Competitions and voting extend this architecture with:
 - CONTESTANT · ↓
 10-DIGIT CODE
 ↓
-ONLINE VOTES / BULK VOTES
 - ↓ · VERIFICATION · ↓ · VERIFIED VOTE TOTAL · ↓ · RANKING · ↓ · COMPETITION CLOSURE
 This common architecture is important because it will make Unplug easier to maintain, expand and monetise as new services are introduced.
 

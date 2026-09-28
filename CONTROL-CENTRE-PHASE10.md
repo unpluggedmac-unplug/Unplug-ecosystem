@@ -15,7 +15,6 @@ Date: 6 September 2026
 - Highlights (article + directory)
 - Page Banner advertising
 - Edition Download
-- Bulk Vote bundles
 - Multi-service cart orders
 - Vouchers, Unplug Credit, EFT confirmation, gateway readiness, payment fulfilment, reporting
 
@@ -119,7 +118,6 @@ The screen is read-only except the explicit fulfilment retry action. It does not
 | Article/Directory highlight | admin-managed service package | highlight → pending, run dates prepared | Yes |
 | Page Banner | admin-managed service package | banner → pending_approval | Yes |
 | Edition download | edition.download_price | approved edition purchase/download access | Immediate product fulfilment |
-| Bulk Vote bundle | vote tier stored in database | paid votes inserted/confirmed | Immediate/portal-specific confirmation |
 | Multi-service cart | sum of each real server-priced item | each real payments row applies its own effect | Depends on each service |
 
 ## Testing added

@@ -21,7 +21,6 @@ item that is **not** fully closed.
 | 5 | **Top 10 entries added by an admin were invisible in the Approval Queue** | The old query inner-joined `profiles`; entries with `manual_name` and no profile row never appeared. Now a LEFT JOIN (`F2`) |
 | 6 | No reference codes anywhere in the Approval Queue | Every row now carries its Reference Code (`F2`) |
 | 7 | Page banners, edition purchases and listing claims could not be approved from any queue | All now in the unified queue (`F2`) |
-| 8 | Second buyer for the same Top 10 contestant would have hit a duplicate-key error at checkout | `vote_bundles.reference` UNIQUE dropped (`F3`, migration 106) |
 | 9 | **Entry codes are public, so making them the Reference Code would have let anyone open or attach files to a stranger's vote order** | Orders now carry a private `lookup_token`; the public entry code is never accepted as a credential (`F3`) |
 | 10 | Business Management profile loading | Same root cause as #1–#3; fixed by `F1` |
 | 11 | **Paid edition downloads served from a public bucket URL** | Admin screen now names the affected editions and offers a one-click move to private storage (`F7`) |
@@ -30,9 +29,7 @@ item that is **not** fully closed.
 ## 2. Every feature added
 
 - **One Approval Queue** merging 18 sources, with reference code, payment status, customer, supporting files and actions per row (`F2`)
-- **Top 10 section** (renamed from Bulk Votes, label-only) showing every entry with photo, entry code, live vote total and status (`F3`)
 - **Admin vote adjustment** with mandatory reason, floor at zero, before/after in the audit log (`F3`)
-- **Reference Code = entry code** for bulk vote purchases (`F3`)
 - **Directory listing ↔ member account linking**, with history and a working undo (`F4`)
 - **Sales consultant ↔ member account linking**, with unlink (`F5`)
 - **Service cancellation requests** — member asks, admin decides, service stops immediately, admin-chosen refund (`F6`)
@@ -105,13 +102,11 @@ All five are **additive**. No column was dropped, no data rewritten.
 
 | Migration | What it does |
 |---|---|
-| `106_vote_reference_is_entry_code.sql` | Adds `vote_bundles.lookup_token` (backfilled from existing references, so old links keep working); **drops the UNIQUE constraint on `reference`** so two buyers can quote the same entry code |
 | `107_profile_link_history.sql` | New `profile_link_history` — makes a Directory re-link reversible |
 | `108_service_cancellations.sql` | New `service_cancellations`; adds `cancelled_at` to the nine cancellable service tables |
 | `109_edition_order_confirmation.sql` | `edition_purchases.confirmation_url`, `editions.download_secured_at` |
 | `110_acquisition_and_attribution.sql` | Acquisition + assignment columns on `users`, new `consultant_assignment_history`, `referral_clicks`, `share_events`; `consultant_source` on `payments` and `orders` |
 
-**The one destructive-shaped change** is dropping `vote_bundles_reference_key`
 in 106. It is required — without it the second person to buy votes for a
 contestant cannot check out. No rows were changed.
 
@@ -138,8 +133,6 @@ POST   /acquisition/shares
 ```
 
 **Changed (backward compatible)**
-- `POST /entries/:id/vote-bundle` — now also returns `lookupToken` and `procedure`
-- `GET /vote-bundles/status/:ref` and `PATCH /vote-bundles/:ref/proof` — accept the
   lookup token or a legacy reference; **reject a bare entry code**
 - `POST /editions/:id/purchase` — now returns `procedure` and `confirmationAvailable`
 - `GET /editions/admin/all` — adds `downloadFileIsPublic`, `hasPrivateDownloadCopy`
@@ -234,7 +227,6 @@ if you ever want members ranked without a Directory presence.
 
 ## 14. Top 10 and vote approval
 
-Admin → **Top 10** (formerly Bulk Votes; label-only rename — no tables,
 routes or URLs were renamed, so existing payments and history are intact).
 
 **Entries** — every contestant with photo, entry code, live vote total, status.

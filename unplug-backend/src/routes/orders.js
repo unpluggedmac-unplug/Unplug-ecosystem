@@ -1,7 +1,5 @@
 // Payment Portal Redevelopment — Phase 3: Unplug Services Payment Portal,
 // multi-service cart checkout. Members-only (requireAuth throughout),
-// separate from the anonymous Bulk Votes portal (routes/competitions.js,
-// Phase 2) — the two "must never interfere with each other".
 //
 // Reuses payments.js's resolveAmount/applyVoucher/applyPaymentEffect
 // completely unchanged (see the exports added there) rather than
@@ -29,8 +27,7 @@ const { assertPurchasableByUser } = require('../utils/purchaseOwnership');
 const router = express.Router();
 
 // The 10 services the brief's Portal 1 Step 2 actually lists as
-// cart-selectable. edition_download and vote_bundle are deliberately
-// absent — see the migration's header comment for why.
+// cart-selectable. Edition downloads are deliberately handled separately.
 const CART_ELIGIBLE_TYPES = [
   'profile_package', 'profile_upgrade', 'competition_entry', 'highlight',
   'marketplace_listing', 'article_publish', 'event_listing', 'gallery_bundle',
