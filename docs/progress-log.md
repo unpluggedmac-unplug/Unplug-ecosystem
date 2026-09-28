@@ -68,7 +68,6 @@ code. Both now use `crypto`, via the shared helper. Same shape, same length; a g
 discount code was the one that actually mattered.
 
 **Formats deliberately NOT unified.** They are different things, not five spellings of one:
-`vote_bundles.reference` and `edition_purchases.download_reference` are `VARCHAR(10)`, so a
 `UNP-` prefix does not fit without migrating columns live rows already use; the vote bundle
 reference IS the contestant's public entry code by design (migration 106); and a voucher code
 is not a reference at all. Reasoning recorded at the bottom of `reference.js`.
@@ -91,7 +90,6 @@ against what the site actually charges.
 
 **Result: 3 match, 10 differ, 3 specified but not built, 5 charged live but absent from the spec.**
 
-**The big ones.** Bulk vote tiers are the largest gap: only 10 votes / R10 matches, and the live
 tiers have different VOTE COUNTS as well as prices, so they do not line up row by row. The live
 ladder also stops at 300 votes where the spec goes to 1,000, and its per-vote price is not
 monotonic — 50 votes twice (R40) buys more than 70 votes once (R50). Featured listing: the spec
@@ -311,7 +309,6 @@ the admin screen entirely.
 `h.status = 'pending'` — equality, easy to miss by eye. My first pass found eight; the test found the
 other two. All ten now include `resubmitted`.
 
-**Left alone deliberately:** `orders`, `payments`, `vote_bundles` (payment vocabularies) and
 `share_cards`, `shoutout_nominations`, `profile_claims` (separate review flows outside the spine).
 The coverage test asks `SUBMISSION_TABLES` rather than hardcoding that judgement, so it can't drift.
 
@@ -804,14 +801,12 @@ token.
 a `session_id`, and the anonymous ones belong to a browser, not a person. This shows a member only
 what they did **while signed in**, and says so on the page. It does not try to infer that a session
 was probably them — telling someone "you voted for X" when they did not is worse than showing them
-less. The same applies to bulk vote purchases (§9.5), which can also be bought without an account.
 
 **Two things a member would otherwise count by hand:** total votes cast, and total spent on
 packages. `totalVotes` sums **votes, not rows** — a bundle row of 50 is fifty votes, and counting
 rows would tell someone who bought the Ultimate package that they had cast one. Only *confirmed*
 bundles count toward what was spent; an unpaid one is not money anybody has spent.
 
-**A real bug the tests caught.** `vote_bundles.status` allows **four** values live —
 `awaiting_payment, confirmed, rejected, reversed` — not the two in its original CREATE TABLE;
 `rejected` and `reversed` arrived in migration 095. My first wording map had only two, so a member
 whose bundle had been reversed would have been shown the word "reversed" straight out of the
@@ -822,7 +817,6 @@ it — the same guard that has now paid off twice (credits, and here).
 then stopped counting, which is a different thing to a purchase that was never accepted.
 
 **Two mistakes of mine, both in the tests rather than the code**, recorded because they will recur:
-- `idx_votes_once_user` allows one vote per member per entry, so the bulk-vote fixture needed its
   own entry.
 - `SELECT id FROM competitions LIMIT 1` picked up **"The Arena"**, which a migration seeds. A test
   that wants its own competition has to name it.
@@ -944,7 +938,6 @@ Suite **1744**, 0 failing. Smoke **51/51**. Audit **PASS**.
 "currently doesn't exist at all". It does, and it is careful work: migration **070** added the
 column, a `^[0-9]{10}$` CHECK, a partial unique index, and a **trigger** that issues the code the
 moment an entry becomes `approved` — deliberately a trigger, because three separate code paths can
-approve an entry and a fourth would forget. Migration **106** already makes it the bulk-vote EFT
 reference. It is displayed publicly. **§8.3 and §8.4 need nothing.**
 
 What *was* missing is **§8.5, the contestant's own view** — `/entries/mine` returned a bare total
@@ -977,7 +970,6 @@ panel showing code `9890741601`, 253 verified votes (3 online / 250 bought), pos
 **STOPPED HERE, as the task requires — no competition has been flipped.** Cutover options are in the
 report to the owner; the rule goes live only on their explicit go-ahead.
 
-**Also flagged:** CLAUDE.md decision 1 (bulk-vote reference = code + suffix) is **stale** — migration
 106 deliberately reversed it and added `lookup_token`, because a publicly-printed code cannot be a
 credential. The file should be updated so the next reader does not "restore" the suffix.
 
@@ -1052,7 +1044,6 @@ votes, 26 approved entries — identical to before. Nothing was created, destroy
 
 One shared component in `unplug-shared.js` (`UnplugSteps`), wired into checkout. **It found a real
 bug:** two different cards were both hand-labelled "Step 2" (the Directory package step and the
-bulk-vote step, which are alternative paths), and an edition download showed "Step 3 of 4" for what
 is really step 2 of 3. The path is now computed per mode, so the numbers cannot disagree again.
 
 Wired by *observing* the cards rather than editing the dozen places that show one — less invasive,
