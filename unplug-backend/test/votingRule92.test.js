@@ -21,7 +21,6 @@
 //   * NOTHING CHANGES WHILE THE LIMIT IS NULL. It ships NULL, and every
 //     existing competition must behave exactly as it does today.
 //   * The cap is per COMPETITION per DAY, not per entry.
-//   * Paid bundle votes are never capped — they were bought.
 //   * The day is the South African one, not UTC.
 
 const { test, before, after } = require('node:test');
@@ -254,25 +253,6 @@ test('concurrent votes do not exceed the cap', async () => {
   assert.equal(stored.rows[0].n, 5, 'and the database holds exactly five');
 });
 
-// ------------------------------------------------------- paid votes exempt
-
-test('PAID BULK VOTES ARE NEVER CAPPED', async () => {
-  // They were bought. A cap on them would be taking somebody's money and not
-  // giving them what they paid for.
-  const bundle = await pool.query(
-    `INSERT INTO vote_bundles (entry_id, buyer_user_id, vote_count, price, status, reference)
-     VALUES ($1,$2,500,300.00,'confirmed','VB-CAP-1') RETURNING id`, [cappedEntries[0], ME]);
-  await pool.query(
-    `INSERT INTO votes (entry_id, voter_user_id, bundle_size, vote_bundle_id)
-     VALUES ($1,$2,500,$3)`, [cappedEntries[0], ME, bundle.rows[0].id]);
-
-  const r = await pool.query(
-    `SELECT COALESCE(SUM(v.bundle_size),0)::int AS n FROM votes v
-       JOIN competition_entries ce ON ce.id = v.entry_id
-      WHERE ce.competition_id = $1 AND v.voter_user_id = $2`, [cappedId, ME]);
-  assert.equal(r.rows[0].n, 505, '5 free + 500 paid');
-});
-
 // ------------------------------------------------- §8.5 contestant dashboard
 
 test('§8.5: A CONTESTANT SEES THEIR CODE AND EXACT VERIFIED VOTES', async () => {
@@ -283,17 +263,11 @@ test('§8.5: A CONTESTANT SEES THEIR CODE AND EXACT VERIFIED VOTES', async () =>
     `INSERT INTO competition_entries (competition_id, profile_id, status)
      VALUES ($1,$2,'approved') RETURNING id, entry_code`, [uncappedId, prof.rows[0].id]);
 
-  // 3 online, 100 bulk, 7 by admin adjustment.
+  // 3 normal public votes and 7 by admin adjustment.
   await pool.query(
     `INSERT INTO votes (entry_id, session_id, bundle_size, vote_day)
      VALUES ($1,'guest-a',1,CURRENT_DATE), ($1,'guest-b',1,CURRENT_DATE), ($1,'guest-c',1,CURRENT_DATE)`,
     [entry.rows[0].id]);
-  const b = await pool.query(
-    `INSERT INTO vote_bundles (entry_id, session_id, vote_count, price, status, reference)
-     VALUES ($1,'guest-a',100,80.00,'confirmed','VB-85-1') RETURNING id`, [entry.rows[0].id]);
-  await pool.query(
-    `INSERT INTO votes (entry_id, session_id, bundle_size, vote_bundle_id)
-     VALUES ($1,'guest-a',100,$2)`, [entry.rows[0].id, b.rows[0].id]);
   await pool.query(
     `INSERT INTO votes (entry_id, session_id, bundle_size)
      VALUES ($1,'admin-adjust:x',7)`, [entry.rows[0].id]);
@@ -303,12 +277,12 @@ test('§8.5: A CONTESTANT SEES THEIR CODE AND EXACT VERIFIED VOTES', async () =>
   assert.ok(mine, 'the contestant should see their own entry');
 
   assert.match(mine.entryCode, /^[0-9]{10}$/, 'the 10-digit code, issued on approval');
-  assert.equal(mine.verifiedVotes, 110, 'EXACT: 3 online + 100 bulk + 7 adjusted');
-  assert.equal(mine.bulkVotes, 100);
+  assert.equal(mine.verifiedVotes, 10, 'EXACT: 3 normal votes + 7 adjusted');
   assert.equal(mine.onlineVotes, 3, 'an admin adjustment is not a public vote');
   assert.equal(mine.adjustmentVotes, 7);
-  assert.equal(mine.verifiedVotes, mine.onlineVotes + mine.bulkVotes + mine.adjustmentVotes,
-    'the split must add up to the exact total');
+  assert.equal('bulkVotes' in mine, false, 'removed bulk-vote analytics must not be exposed');
+  assert.equal(mine.verifiedVotes, mine.onlineVotes + mine.adjustmentVotes,
+    'the normal vote + adjustment split must add up to the exact total');
 });
 
 test('§8.5: ranking, closing date and competition status are all there', async () => {
