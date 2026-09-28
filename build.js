@@ -47,7 +47,6 @@ const PAGES = [
   'unplug-admin-dashboard.html',
   'unplug-member-dashboard.html',
   'unplug-checkout.html',
-  'unplug-vote.html',
   'index.html',
   'offline.html',
 ];
