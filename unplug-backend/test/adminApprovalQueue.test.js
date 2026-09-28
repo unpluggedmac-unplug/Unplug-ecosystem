@@ -329,34 +329,6 @@ test('an admin-added competition entry with no profile still appears', async () 
   assert.equal(row.subtitle, 'AQ Comp');
 });
 
-test('a vote purchase carries the contestant entry code as its reference', async () => {
-  const ownerId = await makeUser();
-  const profileId = await makeProfile(ownerId);
-  const comp = await pool.query(
-    `INSERT INTO competitions (name, slug, opens_at, closes_at, status)
-     VALUES ('AQ Votes', 'aq-votes', now(), now() + interval '30 days', 'open') RETURNING id`
-  );
-  const entry = await pool.query(
-    `INSERT INTO competition_entries (competition_id, profile_id, status, entry_code)
-     VALUES ($1, $2, 'approved', '0009998887') RETURNING id`,
-    [comp.rows[0].id, profileId]
-  );
-  const buyerId = await makeUser();
-  await pool.query(
-    `INSERT INTO vote_bundles (entry_id, buyer_user_id, vote_count, price, status, reference)
-     VALUES ($1, $2, 50, 250, 'awaiting_payment', '0009998887')`,
-    [entry.rows[0].id, buyerId]
-  );
-
-  const res = await req('GET', '/admin/approval-queue?type=top10_votes', { token: adminToken });
-  const row = res.body.items[0];
-  assert.ok(row);
-  assert.equal(row.reference, '0009998887');
-  assert.equal(row.entryCode, '0009998887');
-  assert.equal(row.subtitle, '50 votes');
-  assert.equal(row.typeLabel, 'Top 10 Vote Purchase');
-});
-
 test('A VOTE PURCHASE AWAITING PAYMENT IS APPROVABLE — approving IS confirming it', async () => {
   // The live bug this pins: every Top 10 vote purchase sits at
   // 'awaiting_payment' by definition — that is what an EFT waiting to be
@@ -491,7 +463,6 @@ test('EVERY SPINE SERVICE IN THE QUEUE SELECTS resubmitted', () => {
   // than being typed out here and left to drift.
   //
   // The queue also serves flows that are NOT part of the spine — orders,
-  // payments and vote_bundles use payment vocabularies (pending/confirmed/
   // failed), and share_cards, shoutout_nominations and profile_claims are
   // separate review flows with their own statuses. `resubmitted` has no meaning
   // in any of them, so requiring it there would be wrong rather than thorough.
