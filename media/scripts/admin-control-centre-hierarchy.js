@@ -354,7 +354,6 @@
           nodeSection('votebundles', 'Contestants', '☺'),
           nodeSection('votebundles', 'Entries', '↧'),
           nodeSection('votebundles', 'Free Votes', '○'),
-          nodeSection('votebundles', 'Bulk Votes', '+'),
           nodeSection('votebundles', 'Vote Codes', '#'),
           nodeSection('top10monthly', 'Rankings / Results', '↟'),
           nodeSection('votebundles', 'Sponsors', '◆'),

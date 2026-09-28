@@ -182,20 +182,16 @@ async function fetchPrivateObject(url) {
   return fetch(signedUrl);
 }
 
-// POST /uploads/proof — proof of payment for an EFT. Deliberately NOT behind
-// requireAuth: the standalone Bulk Votes portal (095_vote_bundle_standalone_
-// portal.sql) has no login at all, and this same endpoint has to work for an
-// anonymous vote-bundle buyer too. Uploading bytes is harmless on its own;
-// what actually needs authorising is ATTACHING the resulting URL to a real
-// payment/order/vote-bundle, which each do their own auth-or-reference check
-// (PATCH /payments/:id/proof, /orders/:id/proof, /vote-bundles/:reference/proof).
+// POST /uploads/proof — authenticated proof-of-payment upload for EFT orders.
+// Bulk voting was the only anonymous purchaser using this endpoint, so after
+// that feature's removal proof uploads return to the normal member auth boundary.
 //
 // Goes to the PRIVATE bucket, not the public one images use: a bank screenshot
 // can show the account's balance and other transactions, which is materially
 // more sensitive than a magazine photo — same reasoning as the private edition
 // download PDF (094_edition_download_pdf.sql), reusing that existing bucket
 // and upload function rather than inventing a second private-storage path.
-router.post('/proof', (req, res) => {
+router.post('/proof', requireAuth, (req, res) => {
   if (!r2PrivateConfigured) {
     return res.status(400).json({ error: 'File storage is not configured on this server yet — proof of payment cannot be uploaded right now. Please contact us instead.' });
   }

@@ -149,7 +149,7 @@ const generateReference = () =>
 const SERVICE_LABELS = {
   profile_package: 'Directory Package', profile_upgrade: 'Package Upgrade',
   competition_entry: 'Competition Entry', highlight: 'Highlight',
-  marketplace_listing: 'Marketplace Poster', vote_bundle: 'Vote Bundle',
+  marketplace_listing: 'Marketplace Poster',
   article_publish: 'Article Submission', event_listing: 'Event Listing',
   gallery_bundle: 'Gallery Bundle', top10_entry: 'Top 10 Entry',
   edition_download: 'Edition Download', ad_banner: 'Page Banner',
@@ -224,11 +224,6 @@ async function resolveAmount(linkedType, linkedId) {
     const result = await pool.query('SELECT id FROM marketplace_listings WHERE id = $1', [linkedId]);
     if (result.rows.length === 0) throw new Error('Marketplace listing not found.');
     return MARKETPLACE_LISTING_PRICE;
-  }
-  if (linkedType === 'vote_bundle') {
-    const result = await pool.query('SELECT price FROM vote_bundles WHERE id = $1', [linkedId]);
-    if (result.rows.length === 0) throw new Error('Vote bundle not found.');
-    return Number(result.rows[0].price);
   }
   if (linkedType === 'article_publish') {
     const result = await pool.query('SELECT id FROM articles WHERE id = $1', [linkedId]);
@@ -479,32 +474,6 @@ async function applyPaymentEffect(payment) {
           payment.amount, reference,
         ]
       );
-    }
-  } else if (payment.linked_type === 'vote_bundle') {
-    const bundleResult = await pool.query('SELECT * FROM vote_bundles WHERE id = $1', [payment.linked_id]);
-    if (bundleResult.rows.length > 0) {
-      const bundle = bundleResult.rows[0];
-      // A plain insert into the bundle's own votes row. This used to be an
-      // upsert that merged into the buyer's existing free-vote row, because
-      // the old one-row-per-voter indexes made a duplicate impossible to
-      // insert. 098_daily_voting.sql replaced those indexes, so the old
-      // ON CONFLICT clauses no longer match any index at all — Postgres
-      // rejects such a statement outright, which would have failed every
-      // online paid vote. Paid rows are excluded from the new uniqueness
-      // indexes, so they need no conflict handling.
-      await pool.query(
-        `INSERT INTO votes (entry_id, voter_user_id, session_id, bundle_size, payment_id, vote_bundle_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          bundle.entry_id,
-          bundle.buyer_user_id || null,
-          bundle.buyer_user_id ? null : bundle.session_id,
-          bundle.vote_count,
-          payment.id,
-          bundle.id,
-        ]
-      );
-      await pool.query(`UPDATE vote_bundles SET status = 'confirmed' WHERE id = $1`, [bundle.id]);
     }
   }
   // Every paid feature now follows the identical pattern:
@@ -1368,7 +1337,6 @@ router.get('/pending-eft', requireRole('admin'), async (req, res, next) => {
 // working unchanged, while orders.js (Payment Portal Redevelopment Phase 3
 // — the multi-service cart) can reuse the exact same per-service pricing,
 // voucher and "what actually happens once paid" logic rather than
-// re-implementing an 11-branch (now 12, with vote_bundle excluded — see
 // 095) copy that could drift from this one. Same pattern already used by
 // interactions.js's notifyProfileOwner.
 router.resolveAmount = resolveAmount;

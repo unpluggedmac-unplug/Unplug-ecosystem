@@ -202,8 +202,8 @@ test('a payment behind an edition purchase cannot be deleted', async () => {
   assert.equal(kept.rows[0].n, 1, "the customer's edition purchase lost its payment");
 });
 
-test('a payment behind paid votes cannot be deleted', async () => {
-  const id = await makePayment({ status: 'confirmed', linkedType: 'vote_bundle' });
+test('a payment referenced by historical vote records cannot be deleted', async () => {
+  const id = await makePayment({ status: 'confirmed', linkedType: 'competition_entry' });
   const comp = await pool.query(`SELECT id FROM competitions WHERE slug = 'top-10'`);
   await pool.query(`INSERT INTO competition_entries (id, competition_id, profile_id, manual_name, entry_fee, status)
                     VALUES (900, $1, NULL, 'Voted For', 0, 'approved') ON CONFLICT DO NOTHING`, [comp.rows[0].id]);
@@ -215,7 +215,7 @@ test('a payment behind paid votes cannot be deleted', async () => {
   assert.equal(r.status, 409);
 
   const kept = await pool.query('SELECT COUNT(*)::int AS n FROM votes WHERE payment_id = $1', [id]);
-  assert.equal(kept.rows[0].n, 1, 'paid votes were destroyed');
+  assert.equal(kept.rows[0].n, 1, 'historical vote records were destroyed');
 });
 
 test('deleting a banner payment keeps the banner, with its payment link cleared', async () => {

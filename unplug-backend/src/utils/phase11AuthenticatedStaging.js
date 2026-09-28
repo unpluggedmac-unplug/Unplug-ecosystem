@@ -104,7 +104,7 @@ async function uploadTinyPng(base, token, proof = false) {
   const form = new FormData();
   form.append('file', new Blob([png], { type: 'image/png' }), proof ? 'phase11-proof.png' : 'phase11-image.png');
   return request(base, 'POST', proof ? '/uploads/proof' : '/uploads', {
-    token: proof ? undefined : token,
+    token,
     body: form,
     expected: [201],
   });

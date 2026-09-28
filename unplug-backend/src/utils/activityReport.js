@@ -195,7 +195,6 @@ function render(report) {
   });
 }
 
-// 'vote_bundle_reversed' -> 'Vote bundle reversed'
 function readable(action) {
   const words = String(action).replace(/_/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);

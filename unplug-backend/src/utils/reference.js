@@ -86,16 +86,13 @@ module.exports = { REFERENCE_ALPHABET, REFERENCE_LENGTH, randomCode, randomDigit
 //
 //   orders.reference               UNP- + 10   the order/submission reference
 //   edition_purchases.download_ref 10          typed back in to claim a download
-//   vote_bundles.reference         10          or the contestant's entry code
 //   payments.gateway_reference     10 digits   numeric-only field
 //   vouchers.code                  UNP- + 6    a discount code, not a reference
 //
 // These are not five spellings of one idea:
 //
-//   * vote_bundles.reference and edition_purchases.download_reference are
 //     VARCHAR(10). A UNP- prefix does not fit, and widening a column that live
 //     rows already use is a migration, not a tidy-up.
-//   * The vote bundle reference IS the contestant's public entry code by
 //     deliberate design (migration 106). It is not random and must not be.
 //   * A voucher code is not a reference at all. It shares the UNP- prefix,
 //     which is worth revisiting, because a customer looking at UNP-K3M9XQ and

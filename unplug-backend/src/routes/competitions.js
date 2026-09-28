@@ -6,6 +6,7 @@ const { eftInstructions } = require('../utils/eftDetails');
 const { logActivity, logSubmission } = require('./activityLog');
 const { recordParticipationAsync } = require('../utils/participation');
 const { captureMonth, currentPeriod, previousPeriod } = require('../utils/top10MonthlyCapture');
+const contestantDashboard = require('../utils/contestantDashboard');
 
 const router = express.Router();
 
@@ -28,66 +29,6 @@ function voteCountExpr(monthlyParam, periodParam) {
   return `COALESCE(SUM(v.bundle_size) FILTER (
             WHERE NOT ${monthlyParam}::boolean OR v.vote_period = ${periodParam}::date
           ), 0)`;
-}
-
-// Reference codes for vote_bundles — same alphabet/shape as
-// utils/editionAccess.js (O/0, I/1 excluded — read off a screen, typed
-// into an EFT), but checked against vote_bundles.reference specifically,
-// so it isn't reused as-is from that file.
-// Alphabet and retry loop from src/utils/reference.js — one place decides what
-// a code looks like. The vote bundle's own rule (the reference IS the entry
-// code) stays here, because that is this feature's decision, not a general one.
-const { generateUnique } = require('../utils/reference');
-const contestantDashboard = require('../utils/contestantDashboard');
-
-// The Reference Code the buyer puts on their EFT IS the contestant's entry
-// code — one code, under one name, everywhere a customer sees it. See
-// 106_vote_reference_is_entry_code.sql for what that costs and why it is
-// still what we do.
-//
-// A contestant who has not been issued an entry code yet (they are only
-// assigned on approval) falls back to a generated code, because a purchase
-// with no reference at all cannot be matched to a payment by anyone.
-async function generateVoteBundleReference(entryCode) {
-  if (/^[0-9]{10}$/.test(String(entryCode || ''))) return String(entryCode);
-  return generateUnique({ table: 'vote_bundles', column: 'reference' });
-}
-
-// The buyer's private handle on their own purchase. Never shown as "your
-// reference" and never typed in by hand — it lives in the link they are given
-// at checkout. It exists because the Reference Code is now a public entry
-// code, and this portal has no login, so something else has to be the thing
-// only the buyer knows.
-async function generateVoteBundleLookupToken() {
-  return generateUnique({ table: 'vote_bundles', column: 'lookup_token', length: 24 });
-}
-
-// Resolves whatever the buyer came back with to exactly one bundle.
-//
-// Accepts the lookup token, or a LEGACY reference (the pre-106 random or
-// entry-code-plus-suffix form), because those were unguessable and are still
-// quoted in links already sent out. It deliberately does NOT accept a bare
-// 10-digit entry code: that is printed publicly beside every contestant, so
-// treating it as a credential would let anyone open — or attach files to —
-// a stranger's purchase.
-function isBareEntryCode(value) {
-  return /^[0-9]{10}$/.test(String(value || '').trim());
-}
-
-async function resolveVoteBundle(handle) {
-  const value = String(handle || '').trim().toUpperCase();
-  if (!value) return { error: 'A reference is required.' };
-  const byToken = await pool.query('SELECT id FROM vote_bundles WHERE lookup_token = $1', [value]);
-  if (byToken.rowCount === 1) return { id: byToken.rows[0].id };
-  if (isBareEntryCode(value)) {
-    return { error: 'Please use the link you were given after checkout. An entry code on its own identifies the contestant, not your order.' };
-  }
-  const byRef = await pool.query('SELECT id FROM vote_bundles WHERE reference = $1', [value]);
-  if (byRef.rowCount === 1) return { id: byRef.rows[0].id };
-  if (byRef.rowCount > 1) {
-    return { error: 'That reference matches more than one order. Please use the link you were given after checkout.' };
-  }
-  return { error: 'No purchase found for that reference.' };
 }
 
 // Note: there is no global ENTRY_FEE constant — each competition sets its
@@ -716,7 +657,6 @@ router.get('/entries/mine', requireAuth, async (req, res, next) => {
 // UUID stored in a cookie/localStorage by the frontend) so the unique
 // index in the migration can enforce one vote each.
 //
-// For paid extra votes ("Bundle Vote"), see POST /entries/:id/vote-bundle
 // below — priced from the admin-configurable `bundle_vote_price` setting
 // rather than a hardcoded number, since no business decision on price was
 // made during planning.
@@ -872,7 +812,6 @@ async function votesUsedToday(userId, sessionId, competitionId) {
 // in directly at the payment portal). Only ever returns an APPROVED entry —
 // the code exists so a stranger can find who to vote for, not so a pending
 // entry can be discovered before it's public.
-// vote_count and category added for the Bulk Votes portal (Payment Portal
 // Redevelopment Phase 2) — it shows Photo/Name/Category/Current Votes as
 // soon as a contestant is found, matching GET /competitions/:slug's own
 // vote_count computation exactly, so the two never disagree.
@@ -901,7 +840,6 @@ const ENTRY_LOOKUP_SELECT = `
 `;
 
 // GET /entries/search?q=&competitionSlug= — public. "Search contestant" (as
-// opposed to the code lookup below) for the Bulk Votes portal — Portal 2
 // Step 1, Option A. Capped at 10 results; a name search returning hundreds
 // of rows isn't a "pick who you mean" list any more.
 router.get('/entries/search', async (req, res, next) => {
@@ -958,135 +896,6 @@ router.get('/entries/:id', async (req, res, next) => {
     const result = await pool.query(`${ENTRY_LOOKUP_SELECT} WHERE ce.id = $1 AND ce.status = 'approved'`, [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Entry not found.' });
     res.json({ entry: result.rows[0] });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /vote-bundle-tiers — public. The fixed set of purchasable bundles
-// (10 votes/R10, 50/R20, 70/R50, 150/R100, 200/R150, 300/R200), so the
-// frontend can render them as buttons rather than a free-text amount.
-router.get('/vote-bundle-tiers', async (req, res, next) => {
-  try {
-    const result = await pool.query('SELECT votes, price FROM vote_bundle_tiers ORDER BY votes ASC');
-    res.json({ tiers: result.rows });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /entries/:id/vote-bundle — buy extra votes at one of the fixed tier
-// prices (see GET /vote-bundle-tiers). This is the Bulk Votes portal's
-// entire purchase step: creates the bundle AND returns a reference + EFT
-// instructions in one call (there's nothing further to configure after
-// picking a tier, unlike e.g. a Highlight's duration/start-date, so
-// create-then-separately-pay would just be an extra round trip for
-// nothing). Fully anonymous — works with just a sessionId, no account —
-// and deliberately does NOT go through POST /payments/initiate: see
-// 095_vote_bundle_standalone_portal.sql for why this portal has its own
-// independent payment path rather than sharing the one every other paid
-// service uses.
-router.post('/entries/:id/vote-bundle', async (req, res, next) => {
-  try {
-    const { votes, sessionId, termsAccepted } = req.body;
-    if (!req.user && !sessionId) {
-      return res.status(400).json({ error: 'sessionId is required for guest bundle purchases.' });
-    }
-    // MANDATORY Terms & Conditions gate — same rule as every other payment
-    // portal on the site, enforced server-side.
-    if (termsAccepted !== true) {
-      return res.status(400).json({ error: 'You must read and accept the current Unplug Terms & Conditions and Cancellation, Refund & Account Credit Policy before checkout.' });
-    }
-
-    // entry_code comes back too — it becomes the visible prefix of the EFT
-    // reference, so a buyer's bank statement says who they voted for.
-    const entryCheck = await pool.query(
-      `SELECT id, entry_code FROM competition_entries WHERE id = $1 AND status = 'approved'`,
-      [req.params.id]
-    );
-    if (entryCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Entry not found or not open for voting.' });
-    }
-
-    const tierResult = await pool.query('SELECT price FROM vote_bundle_tiers WHERE votes = $1', [votes]);
-    if (tierResult.rows.length === 0) {
-      return res.status(400).json({ error: 'votes must match one of the published Bundle Vote tiers — see GET /vote-bundle-tiers.' });
-    }
-    const price = Number(tierResult.rows[0].price);
-    const entryCode = entryCheck.rows[0].entry_code;
-    const reference = await generateVoteBundleReference(entryCode);
-    const lookupToken = await generateVoteBundleLookupToken();
-
-    const bundle = await pool.query(
-      `INSERT INTO vote_bundles (entry_id, buyer_user_id, session_id, vote_count, price, reference, lookup_token, terms_accepted_at, terms_version)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8)
-       RETURNING *`,
-      [req.params.id, req.user ? req.user.id : null, req.user ? null : sessionId, votes, price, reference, lookupToken, String(req.body.termsVersion || '')]
-    );
-
-    res.status(201).json({
-      bundle: bundle.rows[0],
-      reference,
-      entryCode,
-      // The buyer's private handle. Named plainly so nothing downstream is
-      // tempted to show it as "your reference" — that is what `reference` is.
-      lookupToken,
-      instructions: eftInstructions(reference,
-        entryCode
-          ? `Make a standard bank EFT to the account above using this exact Reference Code: ${entryCode}. It is the entry code of the contestant you are voting for. Your votes are added once our team confirms the payment, usually within one business day.`
-          : 'Make a standard bank EFT to the account above using this exact Reference Code. Your votes are added once our team confirms the payment — usually within one business day.'),
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /entries/:id/vote-bundles/:reference — public. Lets the buyer check
-// their own purchase's status later (e.g. "did my votes get added yet?")
-// without needing an account — same spirit as editions' reference+email
-// claim, but a vote bundle has no separate content to protect behind it,
-// so no email match is needed, just the reference itself.
-router.get('/vote-bundles/status/:reference', async (req, res, next) => {
-  try {
-    const found = await resolveVoteBundle(req.params.reference);
-    if (found.error) return res.status(404).json({ error: found.error });
-    const result = await pool.query(
-      `SELECT vb.status, vb.vote_count, vb.confirmed_at, vb.reference, ce.entry_code,
-              COALESCE(p.display_name, ce.manual_name) AS display_name
-         FROM vote_bundles vb
-         JOIN competition_entries ce ON ce.id = vb.entry_id
-         LEFT JOIN profiles p ON p.id = ce.profile_id
-        WHERE vb.id = $1`,
-      [found.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'No purchase found for that reference.' });
-    res.json({ purchase: result.rows[0] });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /vote-bundles/:reference/proof — attaches a proof-of-payment URL
-// (already uploaded via POST /uploads/proof) to a vote bundle. Deliberately
-// NOT behind requireAuth, matching GET /vote-bundles/status/:reference right
-// above: this whole portal has no login.
-//
-// What stands in for a login is the lookup token, not the Reference Code.
-// The Reference Code is now the contestant's entry code, which is printed
-// publicly beside every contestant — so accepting it here would let anyone
-// read a code off the Top 10 page and attach a file to a stranger's order.
-router.patch('/vote-bundles/:reference/proof', async (req, res, next) => {
-  try {
-    const url = String(req.body.url || '').trim();
-    if (!url) return res.status(400).json({ error: 'A file URL is required — upload via POST /uploads/proof first.' });
-    const found = await resolveVoteBundle(req.params.reference);
-    if (found.error) return res.status(404).json({ error: found.error });
-    const result = await pool.query(
-      `UPDATE vote_bundles SET pop_url = $1 WHERE id = $2 RETURNING id, pop_url`,
-      [url, found.id]
-    );
-    if (result.rowCount === 0) return res.status(404).json({ error: 'No purchase found for that reference.' });
-    res.json({ bundle: result.rows[0], message: 'Proof of payment attached — thank you.' });
   } catch (err) {
     next(err);
   }
@@ -1436,13 +1245,9 @@ router.delete('/hall-of-fame/:id', requireRole('admin'), async (req, res, next) 
 });
 
 // ---------------------------------------------------------------------------
-// Bulk Votes admin queue (Payment Portal Redevelopment Phase 2) — its own
-// dedicated approve/reject/reverse, independent of the shared /payments
-// admin routes, matching the standalone EFT flow above.
+// Admin vote adjustment — normal voting support only.
 // ---------------------------------------------------------------------------
 
-// GET /admin/vote-bundles?status=&q=&from=&to= — search by contestant name,
-// reference or entry code, filter by status and/or date range.
 // POST /admin/entries/:id/adjust-votes — corrects an entry's vote total.
 //
 // Recorded as a votes row rather than by rewriting a stored total, because
@@ -1511,143 +1316,6 @@ router.post('/admin/entries/:id/adjust-votes', requireRole('admin'), async (req,
       adjusted: true, before, after, delta,
       message: `Vote total changed from ${before} to ${after}.`,
     });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get('/admin/vote-bundles', requireRole('admin'), async (req, res, next) => {
-  try {
-    const conditions = [];
-    const values = [];
-    if (req.query.status) { values.push(req.query.status); conditions.push(`vb.status = $${values.length}`); }
-    if (req.query.from) { values.push(req.query.from); conditions.push(`vb.created_at >= $${values.length}`); }
-    if (req.query.to) { values.push(req.query.to); conditions.push(`vb.created_at <= $${values.length}`); }
-    if (req.query.q) {
-      values.push(`%${req.query.q}%`);
-      conditions.push(`(vb.reference ILIKE $${values.length} OR ce.entry_code ILIKE $${values.length} OR COALESCE(p.display_name, ce.manual_name) ILIKE $${values.length})`);
-    }
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const result = await pool.query(
-      `SELECT vb.id, vb.vote_count, vb.price, vb.status, vb.reference, vb.session_id, vb.buyer_user_id,
-              vb.created_at, vb.confirmed_at, vb.rejected_at,
-              ce.entry_code, COALESCE(p.display_name, ce.manual_name) AS contestant_name,
-              u.email AS buyer_email
-         FROM vote_bundles vb
-         JOIN competition_entries ce ON ce.id = vb.entry_id
-         LEFT JOIN profiles p ON p.id = ce.profile_id
-         LEFT JOIN users u ON u.id = vb.buyer_user_id
-         ${where}
-        ORDER BY vb.created_at DESC
-        LIMIT 500`,
-      values
-    );
-    res.json({ bundles: result.rows });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /admin/vote-bundles/:id/approve — confirms EFT payment and
-// allocates the votes as their own votes row (see the insert below).
-//
-// This used to merge into the buyer's existing free-vote row, because the
-// old one-row-per-voter unique indexes left nowhere else to put them. Daily
-// voting removed that limitation and made merging actively wrong, so the
-// bundle now stands on its own. Totals are unaffected either way: every
-// caller sums bundle_size rather than reading a stored counter.
-router.patch('/admin/vote-bundles/:id/approve', requireRole('admin'), async (req, res, next) => {
-  try {
-    const bundle = await pool.query(`SELECT * FROM vote_bundles WHERE id = $1`, [req.params.id]);
-    if (bundle.rows.length === 0) return res.status(404).json({ error: 'Bundle not found.' });
-    const b = bundle.rows[0];
-    if (b.status !== 'awaiting_payment') {
-      return res.status(400).json({ error: `This bundle is already ${b.status}.` });
-    }
-
-    // The bundle gets its OWN votes row, tagged with vote_bundle_id, rather
-    // than being merged into the buyer's free-vote row. Under daily voting a
-    // voter has one row PER DAY, so there is no single row left to merge
-    // into — and a dedicated row is what lets reverse below subtract exactly
-    // this bundle instead of guessing. Paid rows are excluded from the
-    // uniqueness indexes (098_daily_voting.sql), so no ON CONFLICT is needed.
-    await pool.query(
-      `INSERT INTO votes (entry_id, voter_user_id, session_id, bundle_size, vote_bundle_id)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [b.entry_id, b.buyer_user_id || null, b.buyer_user_id ? null : b.session_id, b.vote_count, b.id]
-    );
-
-    const updated = await pool.query(
-      `UPDATE vote_bundles SET status = 'confirmed', confirmed_at = now() WHERE id = $1 RETURNING *`,
-      [req.params.id]
-    );
-    logActivity(req.user.id, 'vote_bundle_approved', `Bundle #${b.id} (${b.reference}) — ${b.vote_count} votes`);
-    res.json({ bundle: updated.rows[0], message: `${b.vote_count} votes added.` });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /admin/vote-bundles/:id/reject — no votes ever allocated, so this
-// is just a status flip, unlike reverse below.
-router.patch('/admin/vote-bundles/:id/reject', requireRole('admin'), async (req, res, next) => {
-  try {
-    const result = await pool.query(
-      `UPDATE vote_bundles SET status = 'rejected', rejected_at = now()
-        WHERE id = $1 AND status = 'awaiting_payment' RETURNING *`,
-      [req.params.id]
-    );
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Only a bundle still awaiting payment can be rejected.' });
-    logActivity(req.user.id, 'vote_bundle_rejected', `Bundle #${result.rows[0].id} (${result.rows[0].reference})`);
-    res.json({ bundle: result.rows[0] });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /admin/vote-bundles/:id/reverse — undoes a mistaken/fraudulent
-// approval. Now exact for anything approved since 098_daily_voting.sql: the
-// bundle owns its votes row, so removing that row removes precisely this
-// bundle's votes and nothing else. Older merged bundles still fall back to
-// subtraction, which stays "best effort" for the reason the merge design
-// always had — a voter's free vote and their bundles shared one row.
-router.post('/admin/vote-bundles/:id/reverse', requireRole('admin'), async (req, res, next) => {
-  try {
-    const bundle = await pool.query(`SELECT * FROM vote_bundles WHERE id = $1`, [req.params.id]);
-    if (bundle.rows.length === 0) return res.status(404).json({ error: 'Bundle not found.' });
-    const b = bundle.rows[0];
-    if (b.status !== 'confirmed') {
-      return res.status(400).json({ error: 'Only a confirmed bundle has votes to reverse.' });
-    }
-
-    // Bundles approved since 098_daily_voting.sql own their votes row, so the
-    // reversal is exact: delete that row and precisely this bundle's votes go.
-    const owned = await pool.query(`DELETE FROM votes WHERE vote_bundle_id = $1 RETURNING id`, [b.id]);
-
-    // Bundles approved BEFORE that migration were merged into the buyer's
-    // single free-vote row, so they must still be unwound by subtraction.
-    // Safe to scope by voter here precisely because the old schema allowed
-    // only one such row per voter per entry — the very constraint that made
-    // merging necessary also makes this WHERE unambiguous for that old data.
-    if (owned.rowCount === 0) {
-      if (b.buyer_user_id) {
-        await pool.query(
-          `UPDATE votes SET bundle_size = GREATEST(bundle_size - $1, 0)
-            WHERE entry_id = $2 AND voter_user_id = $3 AND vote_bundle_id IS NULL AND vote_day IS NULL`,
-          [b.vote_count, b.entry_id, b.buyer_user_id]
-        );
-      } else {
-        await pool.query(
-          `UPDATE votes SET bundle_size = GREATEST(bundle_size - $1, 0)
-            WHERE entry_id = $2 AND session_id = $3 AND vote_bundle_id IS NULL AND vote_day IS NULL`,
-          [b.vote_count, b.entry_id, b.session_id]
-        );
-      }
-    }
-
-    const updated = await pool.query(`UPDATE vote_bundles SET status = 'reversed' WHERE id = $1 RETURNING *`, [req.params.id]);
-    logActivity(req.user.id, 'vote_bundle_reversed', `Bundle #${b.id} (${b.reference}) — ${b.vote_count} votes removed`);
-    res.json({ bundle: updated.rows[0], message: `${b.vote_count} votes reversed.` });
   } catch (err) {
     next(err);
   }

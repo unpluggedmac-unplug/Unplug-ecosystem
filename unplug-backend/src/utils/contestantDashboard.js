@@ -4,11 +4,9 @@
 //
 //   "The contestant must see the: EXACT NUMBER OF VERIFIED VOTES"
 //
-// plus their contestant code, the online/bulk split, their current ranking, the
 // competition's closing date and its status.
 //
 // WHY THE COUNT HERE IS ALREADY "VERIFIED": a row only ever appears in `votes`
-// once the vote is real. A free vote is inserted when it is cast; a paid bundle
 // inserts its row when the payment is CONFIRMED (routes/payments.js) or when an
 // admin approves it (routes/competitions.js) — never at purchase. So there is no
 // such thing as an unverified row to filter out, and SUM(bundle_size) is the
@@ -20,17 +18,10 @@
 
 const pool = require('../db');
 
-// One vote row can be one of three things, and the split has to say which:
-//
-//   - from a paid bundle   vote_bundle_id IS NOT NULL   -> BULK
-//   - an admin adjustment  session_id LIKE 'admin-adjust:%'
-//   - everything else                                   -> ONLINE
-//
-// §8.5 asks for two numbers, online and bulk, so an adjustment is counted in
-// the total (it is a real, verified vote) and reported on its own rather than
-// being quietly folded into "online", which would tell a contestant they
-// received votes from the public that they did not.
-const BULK = `v.vote_bundle_id IS NOT NULL`;
+// Historical paid-vote rows may still exist in the shared votes table.
+// They remain preserved for record integrity, but are excluded from the
+// normal public-vote figure. Admin adjustments are also reported separately.
+const NORMAL = `v.vote_bundle_id IS NULL AND v.session_id NOT LIKE 'admin-adjust:%'`;
 const ADJUSTMENT = `v.session_id LIKE 'admin-adjust:%'`;
 
 // Every entry belonging to this member, with everything §8.5 lists.
@@ -48,7 +39,7 @@ async function entriesFor(userId, client = pool) {
        SELECT ce.id AS entry_id,
               ce.competition_id,
               COALESCE(SUM(v.bundle_size), 0)::int AS total_votes,
-              COALESCE(SUM(v.bundle_size) FILTER (WHERE ${BULK}), 0)::int AS bulk_votes,
+              COALESCE(SUM(v.bundle_size) FILTER (WHERE ${NORMAL}), 0)::int AS online_votes,
               COALESCE(SUM(v.bundle_size) FILTER (WHERE ${ADJUSTMENT}), 0)::int AS adjustment_votes
          FROM competition_entries ce
          LEFT JOIN votes v ON v.entry_id = ce.id
@@ -60,7 +51,7 @@ async function entriesFor(userId, client = pool) {
        SELECT t.entry_id,
               t.competition_id,
               t.total_votes,
-              t.bulk_votes,
+              t.online_votes,
               t.adjustment_votes,
               RANK() OVER (PARTITION BY t.competition_id ORDER BY t.total_votes DESC) AS position,
               COUNT(*) OVER (PARTITION BY t.competition_id) AS contestants
@@ -78,7 +69,7 @@ async function entriesFor(userId, client = pool) {
             c.status AS competition_status,
             c.closes_at,
             COALESCE(r.total_votes, 0)      AS total_votes,
-            COALESCE(r.bulk_votes, 0)       AS bulk_votes,
+            COALESCE(r.online_votes, 0)     AS online_votes,
             COALESCE(r.adjustment_votes, 0) AS adjustment_votes,
             r.position,
             r.contestants
@@ -92,7 +83,6 @@ async function entriesFor(userId, client = pool) {
 
   return r.rows.map((row) => {
     const total = Number(row.total_votes);
-    const bulk = Number(row.bulk_votes);
     const adjustments = Number(row.adjustment_votes);
     return {
       id: row.id,
@@ -112,10 +102,8 @@ async function entriesFor(userId, client = pool) {
 
       // §8.5's headline. Every row counted here is already verified.
       verifiedVotes: total,
-      bulkVotes: bulk,
-      // Online is what is left after paid bundles and admin adjustments — the
       // votes the public actually cast.
-      onlineVotes: total - bulk - adjustments,
+      onlineVotes: Number(row.online_votes),
       adjustmentVotes: adjustments,
 
       // null for an entry that is not approved: it has no position in a

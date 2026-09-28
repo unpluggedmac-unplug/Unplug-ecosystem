@@ -31,7 +31,6 @@ jobs:
           test -s dist/unplug-shared.css
           test -s dist/unplug-magazine.html
           test -s dist/unplug-checkout.html
-          test -s dist/unplug-vote.html
           echo "Critical repaired dist assets are present."
 
   backend:
