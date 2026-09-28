@@ -183,12 +183,8 @@ async function fetchPrivateObject(url) {
 }
 
 // POST /uploads/proof — proof of payment for an EFT. Deliberately NOT behind
-// requireAuth: the standalone Bulk Votes portal (095_vote_bundle_standalone_
 // portal.sql) has no login at all, and this same endpoint has to work for an
-// anonymous vote-bundle buyer too. Uploading bytes is harmless on its own;
 // what actually needs authorising is ATTACHING the resulting URL to a real
-// payment/order/vote-bundle, which each do their own auth-or-reference check
-// (PATCH /payments/:id/proof, /orders/:id/proof, /vote-bundles/:reference/proof).
 //
 // Goes to the PRIVATE bucket, not the public one images use: a bank screenshot
 // can show the account's balance and other transactions, which is materially
