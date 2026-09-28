@@ -247,6 +247,32 @@ test('the member picker flags accounts that already hold a listing', async () =>
   assert.equal(row.existing_profile_name, 'Picker Flag Listing');
 });
 
+test('the member picker excludes hidden system accounts and shows existing representative links', async () => {
+  const normalId = await makeUser();
+  const consultant = await pool.query(
+    `INSERT INTO sales_consultants (name, email, user_id)
+     VALUES ('Dropdown Rep', 'dropdown-rep@test.com', $1) RETURNING id`,
+    [normalId]
+  );
+
+  const hiddenId = _nextUserId++;
+  await pool.query(
+    `INSERT INTO users (id, email, password_hash, role, full_name, is_system_account, is_suspended)
+     VALUES ($1, $2, 'x', 'member', 'Hidden Legacy Owner', true, true)`,
+    [hiddenId, `hidden-${hiddenId}@import.unplugnews.com`]
+  );
+
+  const res = await req('GET', '/admin/links/members', { token: adminToken });
+  assert.equal(res.status, 200);
+  assert.ok(!res.body.members.some((m) => m.id === hiddenId),
+    'system-owned legacy accounts must never appear in the admin member-account dropdown');
+
+  const normal = res.body.members.find((m) => m.id === normalId);
+  assert.ok(normal);
+  assert.equal(normal.existing_consultant_id, consultant.rows[0].id);
+  assert.equal(normal.existing_consultant_name, 'Dropdown Rep');
+});
+
 test('an admin can link and unlink a sales consultant', async () => {
   const userId = await makeUser();
   const c = await pool.query(

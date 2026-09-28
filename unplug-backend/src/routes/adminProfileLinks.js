@@ -59,18 +59,20 @@ router.get('/members', requireRole('admin'), async (req, res, next) => {
   try {
     const q = String(req.query.q || '').trim();
     const values = [];
-    let where = '';
+    const filters = [`COALESCE(u.is_system_account, false) = false`];
     if (q) {
       values.push(`%${q}%`);
-      where = `WHERE u.email ILIKE $1 OR u.full_name ILIKE $1`;
+      filters.push(`(u.email ILIKE $1 OR u.full_name ILIKE $1)`);
     }
     const result = await pool.query(
       `SELECT u.id, u.email, u.full_name, u.role,
-              p.id AS existing_profile_id, p.display_name AS existing_profile_name
+              p.id AS existing_profile_id, p.display_name AS existing_profile_name,
+              sc.id AS existing_consultant_id, sc.name AS existing_consultant_name
          FROM users u
          LEFT JOIN profiles p ON p.user_id = u.id
-         ${where}
-        ORDER BY u.email
+         LEFT JOIN sales_consultants sc ON sc.user_id = u.id
+        WHERE ${filters.join(' AND ')}
+        ORDER BY COALESCE(NULLIF(u.full_name, ''), u.email), u.email
         LIMIT 300`,
       values
     );
