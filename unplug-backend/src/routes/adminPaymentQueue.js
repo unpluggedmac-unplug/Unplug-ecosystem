@@ -1,20 +1,4 @@
-// Payment Portal Redevelopment — Phase 6: the unified cross-portal admin
-// queue deferred from Phases 2 and 3 (see the header comments in
-// 095_vote_bundle_standalone_portal.sql and orders.js's own GET /admin/all).
-//
-// This router does NOT reimplement approving/rejecting a payment, order or
-// vote bundle — each portal already has its own correct, tested endpoint
-// for that (PATCH /payments/admin/:id, PATCH /orders/admin/:id/confirm-eft,
-// PATCH /admin/vote-bundles/:id/approve|reject) and the admin UI calls
-// whichever one matches a row's `source`. What was actually missing was:
-// one place to SEE all three at once, and the POP/invoice/receipt/email
-// actions that didn't exist for any of them yet.
-//
-// Merging happens in JS rather than a SQL UNION: the three source tables
-// are shaped too differently (vote_bundles has no user_id at all — an
-// anonymous buyer — and orders groups N payments rows under one reference)
-// to line up as literal UNION-able columns without either lying about types
-// or a much uglier query than three simple ones combined afterward.
+// Unified payment/order administration queue.
 const express = require('express');
 const pool = require('../db');
 const { requireRole } = require('../middleware/auth');
@@ -28,7 +12,7 @@ const router = express.Router();
 const SERVICE_LABELS = {
   profile_package: 'Directory Package', profile_upgrade: 'Package Upgrade',
   competition_entry: 'Competition Entry', highlight: 'Highlight',
-  marketplace_listing: 'Marketplace Poster', vote_bundle: 'Vote Bundle',
+  marketplace_listing: 'Marketplace Poster',
   article_publish: 'Article Submission', event_listing: 'Event Listing',
   gallery_bundle: 'Gallery Bundle', top10_entry: 'Top 10 Entry',
   edition_download: 'Edition Download', ad_banner: 'Page Banner',
@@ -195,7 +179,6 @@ router.get('/', requireRole('admin'), async (req, res, next) => {
     const runners = [];
     if (!wantSource || wantSource === 'payment') runners.push(queryPayments(filters));
     if (!wantSource || wantSource === 'order') runners.push(queryOrders(filters));
-    if (!wantSource || wantSource === 'vote_bundle') runners.push(queryVoteBundles(filters));
     const results = (await Promise.all(runners)).flat();
     results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     res.json({ items: results.slice(0, 500) });
@@ -252,34 +235,14 @@ async function loadRecord(source, id) {
       row: o,
     };
   }
-  if (source === 'vote_bundle') {
-    const r = await pool.query(
-      `SELECT vb.*, ce.entry_code, COALESCE(p.display_name, ce.manual_name) AS contestant_name, u.email AS buyer_email
-         FROM vote_bundles vb
-         JOIN competition_entries ce ON ce.id = vb.entry_id
-         LEFT JOIN profiles p ON p.id = ce.profile_id
-         LEFT JOIN users u ON u.id = vb.buyer_user_id
-        WHERE vb.id = $1`,
-      [id]
-    );
-    if (r.rowCount === 0) return null;
-    const vb = r.rows[0];
-    return {
-      reference: vb.reference, customerName: vb.buyer_email || null, customerEmail: vb.buyer_email,
-      userId: vb.buyer_user_id, method: 'eft', status: vb.status, createdAt: vb.created_at,
-      subtotal: Number(vb.price), voucherDiscount: 0, creditUsed: 0, total: Number(vb.price),
-      items: [{ label: `${vb.vote_count} votes — ${vb.contestant_name}`, amount: Number(vb.price) }],
-      row: vb,
-    };
-  }
   return null;
 }
 
-const TABLE_BY_SOURCE = { payment: 'payments', order: 'orders', vote_bundle: 'vote_bundles' };
+const TABLE_BY_SOURCE = { payment: 'payments', order: 'orders' };
 
 function assertValidSource(source, res) {
   if (!TABLE_BY_SOURCE[source]) {
-    res.status(400).json({ error: 'source must be payment, order or vote_bundle.' });
+    res.status(400).json({ error: 'source must be payment or order.' });
     return false;
   }
   return true;
