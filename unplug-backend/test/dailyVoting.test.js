@@ -264,3 +264,18 @@ test('re-running every migration is idempotent — the voting rules and indexes 
   const flag = await pool.query(`SELECT daily_voting FROM competitions WHERE slug = 'top-10'`);
   assert.equal(flag.rows[0].daily_voting, true);
 });
+
+
+test('retired bulk-voting API routes return 404', async () => {
+  const entry = await makeApprovedEntry('Normal Only');
+  const voter = await makeUser();
+  const admin = await makeUser('admin');
+  const checks = [
+    await req('GET', '/vote-bundle-tiers'),
+    await req('POST', `/entries/${entry}/vote-bundle`, { token: tokenFor(voter), body: { votes: 10 } }),
+    await req('GET', '/vote-bundles/status/OLDREFERENCE'),
+    await req('PATCH', '/vote-bundles/OLDREFERENCE/proof', { body: { url: 'https://example.test/proof' } }),
+    await req('GET', '/admin/vote-bundles', { token: tokenFor(admin, 'admin') }),
+  ];
+  checks.forEach((res) => assert.equal(res.status, 404));
+});
