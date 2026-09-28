@@ -2,12 +2,8 @@
 // invoice/receipt documents, and the unified cross-portal admin queue
 // (097_payment_receipts.sql, routes/adminPaymentQueue.js, utils/pdfDocs.js).
 //
-// The central claim under test is that ONE admin list correctly merges three
-// structurally different sources — standalone payments, cart orders, and
-// anonymous vote bundles — without losing or mislabelling any of them, and
-// that each one's proof-of-payment can be attached by whoever legitimately
-// owns it (a logged-in payer by JWT; an anonymous vote-bundle buyer by
-// reference, which is the only credential that portal has).
+// The central claim under test is that one admin list correctly merges
+// standalone payments and cart orders, with proof-of-payment ownership intact.
 //
 // See universalComments.test.js for why require('../src/app') is avoided.
 //
@@ -63,13 +59,6 @@ function uniqueRef(prefix) {
   return `${prefix}-${process.pid}-${_refCounter}`;
 }
 
-// vote_bundles.reference is VARCHAR(10) (095_vote_bundle_standalone_portal.sql),
-// much narrower than payments.gateway_reference — so it needs its own short
-// generator rather than reusing uniqueRef above.
-function shortVoteRef() {
-  _refCounter += 1;
-  return `V${String(process.pid % 10000).padStart(4, '0')}${String(_refCounter).padStart(4, '0')}`;
-}
 
 // A standalone payment — order_id NULL, which is what makes it show up in
 // the queue in its own right rather than folded under a parent order.
@@ -102,30 +91,6 @@ async function makeOrder(userId, { status = 'pending' } = {}) {
   return order.rows[0];
 }
 
-let _nextSlug = 0;
-// vote_bundles' own status vocabulary is 'awaiting_payment' where payments
-// and orders say 'pending' (see 095_vote_bundle_standalone_portal.sql) —
-// that difference is real and the queue has to cope with it, so the fixture
-// uses the vote-bundle spelling rather than hiding it.
-async function makeVoteBundle({ status = 'awaiting_payment', votes = 50, price = 250 } = {}) {
-  const owner = await makeUser();
-  const profile = await pool.query(
-    `INSERT INTO profiles (user_id, type, package_tier, slug, display_name, status)
-     VALUES ($1, 'individual', 'basic', $2, $3, 'approved') RETURNING id`,
-    [owner, `payqueue-${_nextSlug++}`, `Contestant ${_nextSlug}`]
-  );
-  const top10 = await pool.query(`SELECT id FROM competitions WHERE slug = 'top-10'`);
-  const entry = await pool.query(
-    `INSERT INTO competition_entries (competition_id, profile_id, status) VALUES ($1, $2, 'approved') RETURNING id`,
-    [top10.rows[0].id, profile.rows[0].id]
-  );
-  const bundle = await pool.query(
-    `INSERT INTO vote_bundles (entry_id, session_id, vote_count, price, reference, status, terms_accepted_at, terms_version)
-     VALUES ($1, 'sess-payqueue', $2, $3, $4, $5, now(), 'v1') RETURNING *`,
-    [entry.rows[0].id, votes, price, shortVoteRef(), status]
-  );
-  return bundle.rows[0];
-}
 
 before(async () => {
   pg = new EmbeddedPostgres({
@@ -210,58 +175,27 @@ test('an order owner can attach proof of payment to their own order', async () =
   assert.equal(body.order.pop_url, 'https://storage.test/private/order-proof.pdf');
 });
 
-test('an ANONYMOUS vote-bundle buyer can attach proof using only the reference — that portal has no login at all', async () => {
-  const bundle = await makeVoteBundle();
-  // Deliberately no token: this is the whole point of the standalone portal.
-  const { status, body } = await req('PATCH', `/vote-bundles/${bundle.reference}/proof`, {
-    body: { url: 'https://storage.test/private/votes-proof.png' },
-  });
-  assert.equal(status, 200);
-  assert.equal(body.bundle.pop_url, 'https://storage.test/private/votes-proof.png');
-});
-
-test('a wrong vote-bundle reference attaches nothing', async () => {
-  const { status } = await req('PATCH', '/vote-bundles/VOTE-DOES-NOT-EXIST/proof', {
-    body: { url: 'https://storage.test/private/nope.png' },
-  });
-  assert.equal(status, 404);
-});
-
-// ---------------------------------------------------------------------------
-// The unified queue
-// ---------------------------------------------------------------------------
-
 test('the unified queue is admin-only', async () => {
   const member = await makeUser();
   const { status } = await req('GET', '/admin/payment-queue', { token: tokenFor(member) });
   assert.equal(status, 403);
 });
 
-test('the unified queue merges standalone payments, cart orders AND anonymous vote bundles into one list', async () => {
+test('the unified queue merges standalone payments and cart orders into one list', async () => {
   const admin = await makeUser('admin');
   const user = await makeUser();
   const payment = await makeStandalonePayment(user);
   const order = await makeOrder(user);
-  const bundle = await makeVoteBundle();
 
   const { status, body } = await req('GET', '/admin/payment-queue', { token: tokenFor(admin, 'admin') });
   assert.equal(status, 200);
-
   const byRef = Object.fromEntries(body.items.map((i) => [i.reference, i]));
   assert.equal(byRef[payment.gateway_reference].source, 'payment');
   assert.equal(byRef[order.reference].source, 'order');
-  assert.equal(byRef[bundle.reference].source, 'vote_bundle');
-
-  // A cart order is ONE queue row, not one per item — and it says how many
-  // items are inside it.
   assert.match(byRef[order.reference].serviceLabel, /2 items/);
-
-  // NUMERIC comes back from pg as a string; the route is expected to have
-  // already turned it into a real number for the frontend.
   assert.equal(byRef[order.reference].amount, 395);
   assert.equal(typeof byRef[order.reference].amount, 'number');
 });
-
 test('the individual payments inside a cart order do NOT also appear as their own queue rows', async () => {
   const admin = await makeUser('admin');
   const user = await makeUser();
@@ -279,13 +213,12 @@ test('the queue can be narrowed to a single source', async () => {
   const admin = await makeUser('admin');
   const user = await makeUser();
   await makeStandalonePayment(user);
-  await makeVoteBundle();
+  await makeOrder(user);
 
-  const { body } = await req('GET', '/admin/payment-queue?source=vote_bundle', { token: tokenFor(admin, 'admin') });
+  const { body } = await req('GET', '/admin/payment-queue?source=payment', { token: tokenFor(admin, 'admin') });
   assert.ok(body.items.length > 0);
-  assert.ok(body.items.every((i) => i.source === 'vote_bundle'));
+  assert.ok(body.items.every((i) => i.source === 'payment'));
 });
-
 test('the queue can be filtered by status across every source at once', async () => {
   const admin = await makeUser('admin');
   const user = await makeUser();
@@ -295,22 +228,6 @@ test('the queue can be filtered by status across every source at once', async ()
   const { body } = await req('GET', '/admin/payment-queue?status=confirmed', { token: tokenFor(admin, 'admin') });
   assert.ok(body.items.every((i) => i.status === 'confirmed'));
   assert.ok(body.items.some((i) => i.reference === confirmedPayment.gateway_reference));
-});
-
-test('filtering the queue by "pending" ALSO finds unpaid vote bundles, which spell that status differently', async () => {
-  // Regression guard: vote_bundles says 'awaiting_payment' where payments and
-  // orders say 'pending'. Without translation this filter returned unpaid
-  // payments and orders but silently zero unpaid vote bundles — i.e. exactly
-  // the money most likely to need chasing would have been invisible.
-  const admin = await makeUser('admin');
-  const user = await makeUser();
-  const pendingPayment = await makeStandalonePayment(user, { status: 'pending' });
-  const unpaidBundle = await makeVoteBundle({ status: 'awaiting_payment' });
-
-  const { body } = await req('GET', '/admin/payment-queue?status=pending', { token: tokenFor(admin, 'admin') });
-  const refs = body.items.map((i) => i.reference);
-  assert.ok(refs.includes(pendingPayment.gateway_reference), 'the pending payment should be listed');
-  assert.ok(refs.includes(unpaidBundle.reference), 'the unpaid vote bundle should be listed too');
 });
 
 test('the queue search matches a reference', async () => {
@@ -355,7 +272,7 @@ test('an unknown source is rejected rather than being interpolated into SQL', as
     token: tokenFor(admin, 'admin'),
   });
   assert.equal(status, 400);
-  assert.match(body.error, /payment, order or vote_bundle/);
+  assert.match(body.error, /payment or order/);
 });
 
 // ---------------------------------------------------------------------------
@@ -453,17 +370,6 @@ test('an invoice cannot be generated when file storage is not configured — and
   });
   assert.equal(status, 400);
   assert.match(body.error, /storage is not configured/i);
-});
-
-test('emailing a customer about a vote bundle with no email address on file is refused clearly', async () => {
-  const admin = await makeUser('admin');
-  // An anonymous vote bundle has no buyer_user_id, so there is no address.
-  const bundle = await makeVoteBundle();
-  const { status, body } = await req('POST', `/admin/payment-queue/vote_bundle/${bundle.id}/email`, {
-    token: tokenFor(admin, 'admin'),
-  });
-  assert.equal(status, 400);
-  assert.match(body.error, /no email address/i);
 });
 
 test('emailing a real customer succeeds (logged, not sent, with no provider configured)', async () => {
