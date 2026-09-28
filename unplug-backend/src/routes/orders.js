@@ -1,5 +1,27 @@
 // Payment Portal Redevelopment — Phase 3: Unplug Services Payment Portal,
-// multi-service cart checkout. Members-only (requireAuth throughout),
+// multi-service cart checkout. Members-only (requireAuth throughout).
+//
+// Reuses the shared payment pricing and fulfilment helpers rather than
+// duplicating service checkout logic.
+
+const express = require('express');
+const crypto = require('crypto');
+const { attributeConsultant } = require('../utils/consultantAttribution');
+const pool = require('../db');
+const { generateUnique } = require('../utils/reference');
+const { serviceLabel } = require('../utils/submissionReference');
+const { paymentStatusLabel, loadOrderServiceStatuses, summariseServiceStatuses } = require('../utils/orderServiceStatus');
+const { issueForOrder } = require('../utils/invoices');
+const { requireAuth, requireRole } = require('../middleware/auth');
+const { spendCredit, balanceFor } = require('../utils/accountCredit');
+const { eftInstructions } = require('../utils/eftDetails');
+const { logActivity } = require('./activityLog');
+const paymentsRouter = require('./payments');
+const { resolveAmount, applyVoucher, recordVoucherRedemption, applyPaymentEffectTracked, TERMS_VERSION, gatewayIsLive } = paymentsRouter;
+const { assertPurchasableByUser } = require('../utils/purchaseOwnership');
+
+const router = express.Router();
+
 // Member services cart checkout.
 const CART_ELIGIBLE_TYPES = [
   'profile_package', 'profile_upgrade', 'competition_entry', 'highlight',
