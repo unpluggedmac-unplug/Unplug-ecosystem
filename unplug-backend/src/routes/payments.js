@@ -1337,8 +1337,7 @@ router.get('/pending-eft', requireRole('admin'), async (req, res, next) => {
 // working unchanged, while orders.js (Payment Portal Redevelopment Phase 3
 // — the multi-service cart) can reuse the exact same per-service pricing,
 // voucher and "what actually happens once paid" logic rather than
-// re-implementing an 11-branch (now 12, with vote_bundle excluded — see
-// 095) copy that could drift from this one. Same pattern already used by
+// re-implementing the per-service payment logic in a second place. Same pattern already used by
 // interactions.js's notifyProfileOwner.
 router.resolveAmount = resolveAmount;
 router.applyVoucher = applyVoucher;
