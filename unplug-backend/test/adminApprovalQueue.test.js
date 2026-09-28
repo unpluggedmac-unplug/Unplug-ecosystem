@@ -447,8 +447,8 @@ test('EVERY SPINE SERVICE IN THE QUEUE SELECTS resubmitted', () => {
   // than being typed out here and left to drift.
   //
   // The queue also serves flows that are NOT part of the spine — orders,
-  // payments and vote_bundles use payment vocabularies (pending/confirmed/
-  // failed), and share_cards, shoutout_nominations and profile_claims are
+  // payments use payment vocabularies (pending/confirmed/failed), and
+  // share_cards, shoutout_nominations and profile_claims are
   // separate review flows with their own statuses. `resubmitted` has no meaning
   // in any of them, so requiring it there would be wrong rather than thorough.
   //
