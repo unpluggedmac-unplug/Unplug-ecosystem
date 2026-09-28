@@ -133,6 +133,15 @@ function withSecurityHeaders(response, env) {
 }
 
 export async function onRequest(context) {
+  const url = new URL(context.request.url);
+  const retiredBulkCheckout =
+    (url.pathname === '/unplug-checkout.html' || url.pathname === '/unplug-checkout') &&
+    url.searchParams.get('type') === 'vote_bundle';
+
+  if (retiredBulkCheckout || url.pathname === '/unplug-vote.html' || url.pathname === '/unplug-vote') {
+    return withSecurityHeaders(new Response('Not Found', { status: 404 }), context.env || {});
+  }
+
   const response = await context.next();
   return withSecurityHeaders(response, context.env || {});
 }
