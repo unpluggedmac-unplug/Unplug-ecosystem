@@ -1215,24 +1215,7 @@ router.delete('/hall-of-fame/:id', requireRole('admin'), async (req, res, next) 
 });
 
 // ---------------------------------------------------------------------------
-// Bulk Votes admin queue (Payment Portal Redevelopment Phase 2) — its own
-// dedicated approve/reject/reverse, independent of the shared /payments
-// admin routes, matching the standalone EFT flow above.
-// ---------------------------------------------------------------------------
-
-// GET /admin/vote-bundles?status=&q=&from=&to= — search by contestant name,
-// reference or entry code, filter by status and/or date range.
-// POST /admin/entries/:id/adjust-votes — corrects an entry's vote total.
-//
-// Recorded as a votes row rather than by rewriting a stored total, because
-// there is no stored total: every count on the site is SUM(bundle_size) over
-// votes. Writing an adjustment row keeps that one source of truth, keeps the
-// correction reversible, and leaves it visible in the same history as every
-// real vote instead of a number silently changing overnight.
-//
-// The votes table requires a voter or a session, so each adjustment carries
-// its own unique synthetic session id — which also means the per-voter unique
-// indexes from 098 can never collide with an admin correction.
+// Administrative vote adjustment for correcting verified totals.
 router.post('/admin/entries/:id/adjust-votes', requireRole('admin'), async (req, res, next) => {
   try {
     const id = Number(req.params.id);
