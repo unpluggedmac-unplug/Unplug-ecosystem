@@ -6,6 +6,7 @@ const { eftInstructions } = require('../utils/eftDetails');
 const { logActivity, logSubmission } = require('./activityLog');
 const { recordParticipationAsync } = require('../utils/participation');
 const { captureMonth, currentPeriod, previousPeriod } = require('../utils/top10MonthlyCapture');
+const contestantDashboard = require('../utils/contestantDashboard');
 
 const router = express.Router();
 
@@ -1244,11 +1245,9 @@ router.delete('/hall-of-fame/:id', requireRole('admin'), async (req, res, next) 
 });
 
 // ---------------------------------------------------------------------------
-// dedicated approve/reject/reverse, independent of the shared /payments
-// admin routes, matching the standalone EFT flow above.
+// Admin vote adjustment — normal voting support only.
 // ---------------------------------------------------------------------------
 
-// reference or entry code, filter by status and/or date range.
 // POST /admin/entries/:id/adjust-votes — corrects an entry's vote total.
 //
 // Recorded as a votes row rather than by rewriting a stored total, because
