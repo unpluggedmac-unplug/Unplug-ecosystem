@@ -71,24 +71,14 @@ UPDATE votes
 
 -- Remove notification rows whose sole purpose was the retired purchase before
 -- deleting their referenced payment rows (the FK is restrictive). Some older
--- databases/test fixtures predate notifications.related_payment_id, so guard
--- this cleanup instead of making the whole migration depend on that later
--- shared-schema column.
-DO $
-BEGIN
-  IF EXISTS (
-    SELECT 1
-      FROM information_schema.columns
-     WHERE table_schema = 'public'
-       AND table_name = 'notifications'
-       AND column_name = 'related_payment_id'
-  ) THEN
-    DELETE FROM notifications
-     WHERE related_payment_id IN (
-       SELECT id FROM payments WHERE linked_type = 'vote_bundle'
-     );
-  END IF;
-END $;
+-- databases/test fixtures predate notifications.related_payment_id, so access
+-- it through to_jsonb() instead of referencing a potentially missing column.
+-- This keeps the migration valid on both older fixtures and current production
+-- without a procedural DO block.
+DELETE FROM notifications n
+ WHERE (to_jsonb(n) ->> 'related_payment_id') IN (
+   SELECT id::text FROM payments WHERE linked_type = 'vote_bundle'
+ );
 
 -- Shared financial infrastructure remains; only records belonging to the
 -- retired service are removed.
