@@ -34,11 +34,7 @@ async function ownerFor(linkedType, linkedId) {
     }
     return null;
   }
-
-  // vote_bundle is intentionally not owner-scoped: it represents votes a buyer
-  // purchases for an entry, not a service record the buyer owns.
-  // edition_download is similarly a public product purchase.
-  if (linkedType === 'vote_bundle' || linkedType === 'edition_download') return undefined;
+  if (linkedType === 'edition_download') return undefined;
 
   const sql = queries[linkedType];
   if (!sql) return undefined;
