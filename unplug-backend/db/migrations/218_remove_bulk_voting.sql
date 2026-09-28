@@ -70,9 +70,25 @@ UPDATE votes
  WHERE payment_id IN (SELECT id FROM payments WHERE linked_type = 'vote_bundle');
 
 -- Remove notification rows whose sole purpose was the retired purchase before
--- deleting their referenced payment rows (the FK is restrictive).
-DELETE FROM notifications
- WHERE related_payment_id IN (SELECT id FROM payments WHERE linked_type = 'vote_bundle');
+-- deleting their referenced payment rows (the FK is restrictive). Some older
+-- databases/test fixtures predate notifications.related_payment_id, so guard
+-- this cleanup instead of making the whole migration depend on that later
+-- shared-schema column.
+DO $
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'notifications'
+       AND column_name = 'related_payment_id'
+  ) THEN
+    DELETE FROM notifications
+     WHERE related_payment_id IN (
+       SELECT id FROM payments WHERE linked_type = 'vote_bundle'
+     );
+  END IF;
+END $;
 
 -- Shared financial infrastructure remains; only records belonging to the
 -- retired service are removed.
