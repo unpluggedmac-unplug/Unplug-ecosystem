@@ -36,7 +36,6 @@ Payment-side is a separate, smaller story:
 |---|---|
 | `payments` | `pending, confirmed, failed` |
 | `orders` | `pending, confirmed, failed` |
-| `vote_bundles` | `awaiting_payment, confirmed, rejected, reversed` |
 | `competitions` | `draft, open, closed` |
 
 `users` and `votes` have **no status column at all**, and there is no `services` table — a
