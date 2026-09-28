@@ -19,9 +19,7 @@ const SERVICE_LABELS = {
   agreement_payment: 'Agreement',
 };
 
-// Every payments/orders status maps onto a small shared vocabulary for the
-// unified list; vote_bundles additionally has 'rejected' and 'reversed',
-// which pass through unchanged since they're already human-readable.
+// Payments and orders already use the statuses displayed by the unified queue.
 function normalizeStatus(status) {
   return status;
 }
@@ -111,60 +109,6 @@ async function queryOrders({ q, status, from, to }) {
   }));
 }
 
-async function queryVoteBundles({ q, status, from, to }) {
-  const conditions = [];
-  const values = [];
-  if (status) {
-    // vote_bundles calls an unpaid bundle 'awaiting_payment', where payments
-    // and orders both call it 'pending' (095_vote_bundle_standalone_portal.sql
-    // vs 003_payments.sql). Without translating, an admin filtering the queue
-    // to "pending" would be shown every unpaid payment and order but silently
-    // no unpaid vote bundles at all — the exact money most likely to be
-    // chased up. Accept either spelling here.
-    values.push(status === 'pending' ? 'awaiting_payment' : status);
-    conditions.push(`vb.status = $${values.length}`);
-  }
-  if (from) { values.push(from); conditions.push(`vb.created_at >= $${values.length}`); }
-  if (to) { values.push(to); conditions.push(`vb.created_at <= $${values.length}`); }
-  if (q) {
-    values.push(`%${q}%`);
-    conditions.push(`(vb.reference ILIKE $${values.length} OR ce.entry_code ILIKE $${values.length} OR COALESCE(p.display_name, ce.manual_name) ILIKE $${values.length})`);
-  }
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const result = await pool.query(
-    `SELECT vb.id, vb.reference, vb.vote_count, vb.price, vb.status, vb.pop_url, vb.invoice_url,
-            vb.receipt_url, vb.created_at, vb.confirmed_at, vb.buyer_user_id,
-            ce.entry_code, COALESCE(p.display_name, ce.manual_name) AS contestant_name, u.email AS buyer_email
-       FROM vote_bundles vb
-       JOIN competition_entries ce ON ce.id = vb.entry_id
-       LEFT JOIN profiles p ON p.id = ce.profile_id
-       LEFT JOIN users u ON u.id = vb.buyer_user_id
-       ${where}
-      ORDER BY vb.created_at DESC
-      LIMIT 500`,
-    values
-  );
-  return result.rows.map((vb) => ({
-    source: 'vote_bundle',
-    id: vb.id,
-    reference: vb.reference,
-    // No name field at all for a fully anonymous buyer — the contestant's
-    // name is shown instead so the row is still identifiable at a glance.
-    customerName: vb.buyer_email || `Vote for ${vb.contestant_name}`,
-    customerEmail: vb.buyer_email,
-    userId: vb.buyer_user_id,
-    serviceLabel: `${vb.vote_count} votes — ${vb.contestant_name} (${vb.entry_code})`,
-    amount: Number(vb.price),
-    status: normalizeStatus(vb.status),
-    method: 'eft',
-    createdAt: vb.created_at,
-    confirmedAt: vb.confirmed_at,
-    popUrl: vb.pop_url,
-    invoiceUrl: vb.invoice_url,
-    receiptUrl: vb.receipt_url,
-  }));
-}
-
 // GET /admin/payment-queue — the merged list. q/status/from/to apply to
 // every source queried; source narrows to just one when given.
 router.get('/', requireRole('admin'), async (req, res, next) => {
@@ -187,7 +131,7 @@ router.get('/', requireRole('admin'), async (req, res, next) => {
 
 // Loads one record fully — everything generate-invoice/receipt and email
 // need: customer details, a reference, a status, and line items (an order
-// has several; a payment or vote bundle is always exactly one).
+// has several; a standalone payment is exactly one).
 async function loadRecord(source, id) {
   if (source === 'payment') {
     const r = await pool.query(
