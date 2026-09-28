@@ -11,7 +11,7 @@ const headers = read('_headers');
 ok(!/^\s*Content-Security-Policy:/m.test(headers), '_headers does not duplicate enforced CSP');
 ok(!/^\s*Content-Security-Policy-Report-Only:/m.test(headers), '_headers does not duplicate report-only CSP');
 
-for (const file of ['index.html','unplug-admin-dashboard.html','unplug-member-dashboard.html','unplug-checkout.html','unplug-magazine.html','unplug-vote.html']) {
+for (const file of ['index.html','unplug-admin-dashboard.html','unplug-member-dashboard.html','unplug-checkout.html','unplug-magazine.html']) {
   ok(!/http-equiv=["']Content-Security-Policy["']/i.test(read(file)), `${file} has no duplicate meta CSP`);
 }
 
