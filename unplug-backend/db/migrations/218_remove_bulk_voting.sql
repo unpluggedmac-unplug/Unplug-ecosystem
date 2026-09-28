@@ -1,13 +1,82 @@
 -- Remove the retired bulk-voting purchase system while preserving normal individual votes.
--- Normal votes are the rows not associated with vote_bundles. Bulk-only vote rows
--- are removed before the bulk schema is dropped; ordinary vote rows are untouched.
+--
+-- Two historical storage shapes exist:
+--   1) newer paid-vote rows own vote_bundle_id and can be deleted exactly;
+--   2) older purchases were merged into a normal vote row's bundle_size.
+--      For those rows we subtract ONLY the confirmed purchased quantity. If a
+--      normal individual vote was present before the purchase, its residual
+--      value and row survive.
 
--- Remove financial rows for the retired product before tightening the linked-type constraint.
-DELETE FROM payments WHERE linked_type = 'vote_bundle';
+-- First unwind legacy confirmed purchases that do NOT have their own dedicated
+-- vote_bundle_id row. Do this before deleting dedicated rows so the NOT EXISTS
+-- test can distinguish the two historical shapes correctly.
+WITH legacy_bulk AS (
+  SELECT vb.entry_id,
+         vb.buyer_user_id,
+         vb.session_id,
+         SUM(vb.vote_count)::integer AS bulk_count
+    FROM vote_bundles vb
+   WHERE vb.status = 'confirmed'
+     AND NOT EXISTS (
+       SELECT 1 FROM votes owned WHERE owned.vote_bundle_id = vb.id
+     )
+   GROUP BY vb.entry_id, vb.buyer_user_id, vb.session_id
+)
+DELETE FROM votes v
+USING legacy_bulk lb
+WHERE v.entry_id = lb.entry_id
+  AND v.vote_bundle_id IS NULL
+  AND v.vote_day IS NULL
+  AND (
+    (lb.buyer_user_id IS NOT NULL AND v.voter_user_id = lb.buyer_user_id)
+    OR
+    (lb.buyer_user_id IS NULL AND v.voter_user_id IS NULL AND v.session_id = lb.session_id)
+  )
+  AND v.bundle_size <= lb.bulk_count;
 
--- Remove only vote rows created by a bulk purchase. Normal individual votes have
--- vote_bundle_id IS NULL and are intentionally preserved.
+WITH legacy_bulk AS (
+  SELECT vb.entry_id,
+         vb.buyer_user_id,
+         vb.session_id,
+         SUM(vb.vote_count)::integer AS bulk_count
+    FROM vote_bundles vb
+   WHERE vb.status = 'confirmed'
+     AND NOT EXISTS (
+       SELECT 1 FROM votes owned WHERE owned.vote_bundle_id = vb.id
+     )
+   GROUP BY vb.entry_id, vb.buyer_user_id, vb.session_id
+)
+UPDATE votes v
+   SET bundle_size = v.bundle_size - lb.bulk_count,
+       payment_id = NULL
+  FROM legacy_bulk lb
+ WHERE v.entry_id = lb.entry_id
+   AND v.vote_bundle_id IS NULL
+   AND v.vote_day IS NULL
+   AND v.bundle_size > lb.bulk_count
+   AND (
+     (lb.buyer_user_id IS NOT NULL AND v.voter_user_id = lb.buyer_user_id)
+     OR
+     (lb.buyer_user_id IS NULL AND v.voter_user_id IS NULL AND v.session_id = lb.session_id)
+   );
+
+-- Newer paid purchases have a dedicated row and can be removed exactly.
 DELETE FROM votes WHERE vote_bundle_id IS NOT NULL;
+
+-- Any remaining vote row carrying a bulk-payment foreign key is an individual
+-- vote record that must survive; detach only the retired financial reference.
+UPDATE votes
+   SET payment_id = NULL
+ WHERE payment_id IN (SELECT id FROM payments WHERE linked_type = 'vote_bundle');
+
+-- Remove notification rows whose sole purpose was the retired purchase before
+-- deleting their referenced payment rows (the FK is restrictive).
+DELETE FROM notifications
+ WHERE related_payment_id IN (SELECT id FROM payments WHERE linked_type = 'vote_bundle');
+
+-- Shared financial infrastructure remains; only records belonging to the
+-- retired service are removed.
+DELETE FROM payments WHERE linked_type = 'vote_bundle';
 
 -- Rebuild normal-vote uniqueness/rate-limit indexes without a bulk-only predicate.
 DROP INDEX IF EXISTS idx_votes_bundle;
