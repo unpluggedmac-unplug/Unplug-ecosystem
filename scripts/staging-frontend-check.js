@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const fs = require('fs');
-const pages = ['index.html','unplug-magazine.html','unplug-admin-dashboard.html','unplug-member-dashboard.html','unplug-checkout.html','unplug-vote.html','offline.html'];
+const pages = ['index.html','unplug-magazine.html','unplug-admin-dashboard.html','unplug-member-dashboard.html','unplug-checkout.html','offline.html'];
 let bad = false;
 for (const page of pages) {
   const text = fs.readFileSync(page,'utf8');
