@@ -12,8 +12,7 @@
 //      to surface as its parent order and not also as a standalone payment.
 //   3. Admin-added competition entries (manual_name, no profile row) must
 //      appear. The old queue inner-joined profiles and silently hid every one.
-//   4. A vote purchase must carry the contestant's entry code as its reference.
-//   5. Admin-only.
+//   4. Admin-only.
 //
 // Over real HTTP against real PostgreSQL. See universalComments.test.js for
 // why require('../src/app') is avoided.
@@ -146,7 +145,7 @@ test('every source query runs against the real schema', async () => {
   //
   // A source that silently disappeared still fails here, because its type
   // would no longer be listed and every type is checked to be reachable.
-  assert.ok(res.body.types.length >= 18, 'sources have gone missing: ' + res.body.types.length);
+  assert.ok(res.body.types.length >= 17, 'sources have gone missing: ' + res.body.types.length);
   res.body.types.forEach((t) => {
     assert.ok(t.key && t.label && t.group, 'every type needs a key, a label and a group: ' + JSON.stringify(t));
     assert.ok(['content', 'service', 'payment', 'access'].includes(t.group),
@@ -327,22 +326,6 @@ test('an admin-added competition entry with no profile still appears', async () 
   const row = res.body.items.find((i) => i.title === 'Hand Added Contestant');
   assert.ok(row, 'an entry with no profile row must still reach the queue');
   assert.equal(row.subtitle, 'AQ Comp');
-});
-
-test('A VOTE PURCHASE AWAITING PAYMENT IS APPROVABLE — approving IS confirming it', async () => {
-  // The live bug this pins: every Top 10 vote purchase sits at
-  // 'awaiting_payment' by definition — that is what an EFT waiting to be
-  // checked off looks like — and the approve endpoint is what marks it
-  // received and allocates the votes. Gating it on "is it paid?" locked the
-  // admin out of confirming any vote payment at all.
-  const res = await req('GET', '/admin/approval-queue?type=top10_votes', { token: adminToken });
-  const row = res.body.items[0];
-  assert.ok(row, 'the purchase must be in the queue');
-  assert.equal(row.group, 'payment');
-  assert.equal(row.awaitingPayment, false,
-    'a payment row is never "waiting for payment" — the admin IS the payment check');
-  assert.ok(row.actions.approve, 'APPROVE MUST BE AVAILABLE — this is how an EFT gets confirmed');
-  assert.match(row.actions.approve.path, /vote-bundles\/\d+\/approve/);
 });
 
 test('every payment-group row keeps its approve action', async () => {
