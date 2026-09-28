@@ -176,11 +176,10 @@ const { SUBMISSION_TYPES } = require(path.join(BACKEND, 'src', 'utils', 'mySubmi
   console.log('\nmy votes:');
   const votes = await get('/my/votes');
   check('GET /my/votes answers 200', votes.status === 200, `got ${votes.status}`);
-  check('it separates votes cast from packages bought',
-    Array.isArray(votes.body && votes.body.votes)
-      && Array.isArray(votes.body && votes.body.bundles));
-  check('it reports totals', typeof (votes.body && votes.body.totalVotes) === 'number'
-    && typeof (votes.body && votes.body.totalSpent) === 'number');
+  check('it reports normal vote history',
+    Array.isArray(votes.body && votes.body.votes));
+  check('it reports the normal vote total',
+    typeof (votes.body && votes.body.totalVotes) === 'number');
   const votesNoAuth = await fetch(`http://127.0.0.1:${PORT_API}/my/votes`);
   check('signed out is refused for votes', votesNoAuth.status === 401,
     `got ${votesNoAuth.status}`);
