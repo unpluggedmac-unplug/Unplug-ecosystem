@@ -1,36 +1,6 @@
 // Payment Portal Redevelopment — Phase 3: Unplug Services Payment Portal,
 // multi-service cart checkout. Members-only (requireAuth throughout),
-// separate from the anonymous Bulk Votes portal (routes/competitions.js,
-// Phase 2) — the two "must never interfere with each other".
-//
-// Reuses payments.js's resolveAmount/applyVoucher/applyPaymentEffect
-// completely unchanged (see the exports added there) rather than
-// re-implementing per-service pricing and payment-effect logic for a
-// second time. See 096_orders_cart_checkout.sql for why each cart item
-// is a real row in the existing `payments` table (grouped by order_id)
-// instead of a new parallel table.
-
-const express = require('express');
-const crypto = require('crypto');
-const { attributeConsultant } = require('../utils/consultantAttribution');
-const pool = require('../db');
-const { generateUnique } = require('../utils/reference');
-const { serviceLabel } = require('../utils/submissionReference');
-const { paymentStatusLabel, loadOrderServiceStatuses, summariseServiceStatuses } = require('../utils/orderServiceStatus');
-const { issueForOrder } = require('../utils/invoices');
-const { requireAuth, requireRole } = require('../middleware/auth');
-const { spendCredit, balanceFor } = require('../utils/accountCredit');
-const { eftInstructions } = require('../utils/eftDetails');
-const { logActivity } = require('./activityLog');
-const paymentsRouter = require('./payments');
-const { resolveAmount, applyVoucher, recordVoucherRedemption, applyPaymentEffectTracked, TERMS_VERSION, gatewayIsLive } = paymentsRouter;
-const { assertPurchasableByUser } = require('../utils/purchaseOwnership');
-
-const router = express.Router();
-
-// The 10 services the brief's Portal 1 Step 2 actually lists as
-// cart-selectable. edition_download and vote_bundle are deliberately
-// absent — see the migration's header comment for why.
+// Member services cart checkout.
 const CART_ELIGIBLE_TYPES = [
   'profile_package', 'profile_upgrade', 'competition_entry', 'highlight',
   'marketplace_listing', 'article_publish', 'event_listing', 'gallery_bundle',
