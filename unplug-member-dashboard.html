@@ -352,8 +352,8 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
     <div class="field" style="display:none;"><label for="registerApiBaseInput">API Base URL</label><input id="registerApiBaseInput" value="https://unplug-ecosystem.onrender.com"></div>
     <div class="field"><label id="registerNameLabel">Full Name</label><input id="registerName" autocomplete="name"></div>
     <div class="field-row">
-      <div class="field"><label for="registerEmail">Email Address</label><input id="registerEmail" type="email" autocomplete="email"></div>
-      <div class="field"><label for="registerPhone">Mobile Number</label><input id="registerPhone" type="tel" autocomplete="tel" placeholder="e.g. 082 000 0000"></div>
+      <div class="field"><label for="registerEmail">Email Address <span aria-hidden="true">*</span></label><input id="registerEmail" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="registerPhone">Cell Number <span aria-hidden="true">*</span></label><input id="registerPhone" type="tel" autocomplete="tel" inputmode="tel" required placeholder="e.g. 082 000 0000"></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Password (8+ characters)</label>
@@ -1954,7 +1954,7 @@ document.getElementById('registerBtn').addEventListener('click', async () => {
 
   if (!fullName) return fail(isBiz ? 'Please enter your business name.' : 'Please enter your full name.');
   if (!email) return fail('Please enter your email address.');
-  if (!phone) return fail('Please enter your mobile number.');
+  if (!phone) return fail('Please enter your cell number.');
   if (password.length < 8) return fail('Password must be at least 8 characters.');
   if (password !== password2) return fail('The two passwords do not match.');
   if (!accepted) return fail('Please accept the Terms & Policies to continue.');
