@@ -28,7 +28,7 @@ function creditsForTier(type, tier) {
 // how every other /admin/* route from the Backend Spec (Section 3) should be
 // wired: requireRole('admin') first, then the actual query.
 //
-// Search moved server-side (matching email or full_name) rather than the
+// Search moved server-side (matching email, phone or full_name) rather than the
 // dashboard filtering a client-cached full list — that pattern only worked
 // because the endpoint used to return every account unconditionally, which
 // does not scale as the member base grows.
@@ -40,7 +40,7 @@ router.get('/users', requireRole('admin'), async (req, res, next) => {
 
     const visibilityClause = `u.is_system_account = false`;
     const whereClause = q
-      ? `WHERE ${visibilityClause} AND (u.email ILIKE $1 OR u.full_name ILIKE $1)`
+      ? `WHERE ${visibilityClause} AND (u.email ILIKE $1 OR u.full_name ILIKE $1 OR u.phone ILIKE $1)`
       : `WHERE ${visibilityClause}`;
     const searchParams = q ? [`%${q}%`] : [];
 
