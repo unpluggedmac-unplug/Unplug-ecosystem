@@ -144,9 +144,9 @@ test('a huge limit is clamped rather than trusted, and a nonsense offset does no
   assert.equal(r.body.offset, 0); // non-numeric offset falls back to 0
 });
 
-test('q searches by email or name, server-side, and only matching accounts are returned', async () => {
+test('q searches by email, name or cell number, server-side, and only matching accounts are returned', async () => {
   await pool.query(
-    `INSERT INTO users (id, email, password_hash, role, full_name) VALUES (300, 'searchable@test.com', 'x', 'member', 'Zanele Unique Name') ON CONFLICT DO NOTHING`
+    `INSERT INTO users (id, email, password_hash, role, full_name, phone) VALUES (300, 'searchable@test.com', 'x', 'member', 'Zanele Unique Name', '0825551234') ON CONFLICT DO NOTHING`
   );
   const byEmail = await req('GET', '/admin/users?q=searchable', { token: adminToken });
   assert.ok(byEmail.body.users.some((u) => u.id === 300));
@@ -154,6 +154,12 @@ test('q searches by email or name, server-side, and only matching accounts are r
 
   const byName = await req('GET', '/admin/users?q=Zanele%20Unique', { token: adminToken });
   assert.ok(byName.body.users.some((u) => u.id === 300));
+
+  const byPhone = await req('GET', '/admin/users?q=0825551234', { token: adminToken });
+  const phoneMatch = byPhone.body.users.find((u) => u.id === 300);
+  assert.ok(phoneMatch, 'registered cell number should be searchable by admin');
+  assert.equal(phoneMatch.email, 'searchable@test.com');
+  assert.equal(phoneMatch.phone, '0825551234');
 
   const noMatch = await req('GET', '/admin/users?q=definitely-nobody-has-this-string', { token: adminToken });
   assert.equal(noMatch.body.users.length, 0);
