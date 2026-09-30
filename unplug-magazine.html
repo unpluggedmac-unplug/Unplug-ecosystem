@@ -3215,7 +3215,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   <section class="wrap" style="padding-top:32px; padding-bottom:32px;">
     <div class="section-head">
       <div><span class="eyebrow">Cast your vote</span><h2>Voting Poll</h2></div>
-      <button class="btn btn-line" style="border-color:var(--red); color:var(--red);">Bundle Vote</button>
     </div>
     <p style="font-size:13px; color:var(--slate); margin-bottom:20px; margin-top:-16px;">Every current entrant, ranked live by votes — this is the same list and the same votes shown in the Top 10 above.</p>
     <div class="voting-poll" id="votingPoll"></div>
@@ -7776,7 +7775,6 @@ function renderPoll(sorted){
   }
   const votedEntryId = localStorage.getItem(votedEntryKey());
   const maxVotes = sorted[0] ? sorted[0].vote_count : 1;
-  const tierSummary = voteBundleTierSummary();
   el.innerHTML = sorted.map((p) => {
     const pct = Math.max(4, Math.round((p.vote_count / (maxVotes || 1)) * 100));
     const voted = String(votedEntryId) === String(p.id);
@@ -7794,11 +7792,6 @@ function renderPoll(sorted){
       ${p.entry_code ? `
       <div style="flex-basis:100%;">
         <span style="display:inline-block; font-size:12px; font-weight:700; letter-spacing:0.04em; color:var(--ink); font-family:monospace; background:var(--paper); border:1px solid var(--paper-line); border-radius:4px; padding:4px 9px;">Entry Code: ${escapeHtml(p.entry_code)}</span>
-      </div>` : ''}
-      ${p.entry_code ? `
-      <div style="flex-basis:100%; display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; padding-top:6px; border-top:1px dashed var(--paper-line);">
-        <button class="btn btn-solid" style="width:auto; padding:7px 14px; background:var(--red); border-color:var(--red);" onclick="buyVotesFor(${p.id})">Buy Bulk Votes</button>
-        ${tierSummary ? `<span style="font-size:11.5px; color:var(--slate);">${escapeHtml(tierSummary)}</span>` : ''}
       </div>` : ''}
     </div>`;
   }).join('');
@@ -7873,43 +7866,9 @@ async function loadTop10(showLoading){
         ], 'top10Breadcrumb'),
       ]);
     }
-    loadVoteBundleTiers(); // independent of entries loading; cached after first call
   } catch (err) {
     document.getElementById('top10List').innerHTML = '<div class="dir-empty-state">Couldn\'t load the Top 10 right now. Please try again shortly.</div>';
   }
-}
-
-// ---------------------------------------------------------------------------
-// Bulk Vote — the paid vote_bundle tiers, shown next to every entry so a
-// voter can see the options right where they're deciding who to support. The
-// actual purchase happens at the payment portal (unplug-checkout.html), which
-// shows the same tiers again — fetched from the same endpoint, so the two
-// screens can never disagree on price.
-// ---------------------------------------------------------------------------
-let VOTE_BUNDLE_TIERS = null; // [{votes, price}, ...], fetched once and cached
-async function loadVoteBundleTiers() {
-  if (VOTE_BUNDLE_TIERS) { renderAll(); return; }
-  try {
-    const data = await api('/vote-bundle-tiers');
-    VOTE_BUNDLE_TIERS = data.tiers || [];
-  } catch (err) {
-    VOTE_BUNDLE_TIERS = []; // fail quietly — the free Vote button still works
-  }
-  renderAll();
-}
-
-// A compact "10 votes R10 · 50 votes R20 · ..." line — the actual selection
-// happens at checkout, this is so the options are visible without leaving
-// the Top 10 page first.
-function voteBundleTierSummary() {
-  if (!VOTE_BUNDLE_TIERS || VOTE_BUNDLE_TIERS.length === 0) return '';
-  return VOTE_BUNDLE_TIERS.map((t) => `${t.votes} votes — R${Number(t.price).toFixed(0)}`).join(' · ');
-}
-
-function buyVotesFor(entryId) {
-  // Its own standalone, anonymous portal — see 095_vote_bundle_standalone_portal.sql
-  // for why this is deliberately not unplug-checkout.html.
-  window.location.href = 'unplug-vote.html?id=' + entryId;
 }
 
 // ---------------------------------------------------------------------------
