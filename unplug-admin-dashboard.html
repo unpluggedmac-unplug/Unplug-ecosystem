@@ -989,10 +989,10 @@ td{ padding:10px; border-bottom:1px solid var(--paper-line); }
 
     <!-- USERS -->
     <div class="admin-section" id="section-users">
-      <div class="main-head"><div><h1>Users &amp; Members</h1><p>Everyone with an account. Change a name, phone, role or member type, and add or take back account credit. An account's <strong>email address can't be changed</strong> — it's how they sign in and how their purchases are matched to them. Accounts that own published content can't be deleted; that content would go with them.</p></div></div>
+      <div class="main-head"><div><h1>Users &amp; Members</h1><p>Everyone with an account. Each member's registered email address and cell number are shown here. Change a name, cell number, role or member type, and add or take back account credit. An account's <strong>email address can't be changed</strong> — it's how they sign in and how their purchases are matched to them. Accounts that own published content can't be deleted; that content would go with them.</p></div></div>
       <div class="panel">
         <div class="panel-body" style="padding-bottom:0;">
-          <div class="field" style="margin-bottom:4px;"><label for="userSearch">Find someone</label><input id="userSearch" placeholder="Search by name or email…"></div>
+          <div class="field" style="margin-bottom:4px;"><label for="userSearch">Find someone</label><input id="userSearch" placeholder="Search by name, email or cell number…"></div>
           <div id="usersCount" style="font-size:11.5px; color:#666; margin-bottom:8px;"></div>
         </div>
         <div class="panel-body" id="usersBody" style="padding:0; border-top:1px solid var(--paper-line);"></div>
@@ -10480,14 +10480,14 @@ function userRowHtml(u) {
         ${u.is_suspended ? `<span style="font-weight:400; font-size:11px; color:#fff; background:var(--red); padding:1px 6px; margin-left:6px;" title="${escapeAttrAdmin(u.suspended_reason || '')}">Suspended</span>` : ''}
       </div>
       <div style="font-size:12px; color:#666;">
-        ${escapeHtmlAdmin(u.email)} · joined ${new Date(u.created_at).toLocaleDateString()} · ${escapeHtmlAdmin(ownsLabel)}
+        <strong>Email:</strong> ${escapeHtmlAdmin(u.email)} · <strong>Cell:</strong> ${escapeHtmlAdmin(u.phone || "—")} · joined ${new Date(u.created_at).toLocaleDateString()} · ${escapeHtmlAdmin(ownsLabel)}
         · Representative: ${u.sales_consultant_name ? escapeHtmlAdmin(u.sales_consultant_name) : '<span style="color:var(--slate);">none</span>'}
         ${canManageMembers ? `<a href="#" onclick="event.preventDefault(); linkUserConsultant(${u.id}, ${u.sales_consultant_id || 'null'})" style="margin-left:4px;">${u.sales_consultant_name ? 'change' : 'link'}</a>` : ''}
       </div>
     </div>
     <div class="grid-2">
       <div class="field"><label>Full name</label><input class="u-name" value="${escapeAttrAdmin(u.full_name || '')}"${canManageMembers ? '' : ' disabled'}></div>
-      <div class="field"><label>Phone</label><input class="u-phone" value="${escapeAttrAdmin(u.phone || '')}"${canManageMembers ? '' : ' disabled'}></div>
+      <div class="field"><label>Cell number</label><input class="u-phone" value="${escapeAttrAdmin(u.phone || '')}"${canManageMembers ? '' : ' disabled'}></div>
       <div class="field"><label>Role${isSelf ? ' — you cannot change your own' : (u.role === 'staff' ? ' — managed in Staff & Permissions' : '')}</label>
         <select class="u-role"${roleLocked ? ' disabled style="opacity:0.6;"' : ''}>${roleOpts}</select></div>
       <div class="field"><label>Member type</label><select class="u-type"${canManageMembers ? '' : ' disabled'}>${typeOpts}</select></div>
