@@ -8033,7 +8033,7 @@ function renderPoll(sorted){
         ${voted?'✓ Voted today':'Vote'}
       </button>
       ${p.entry_code ? `
-      <div style="flex-basis:100%;">
+      <div class="poll-entry-code">
         <span style="display:inline-block; font-size:12px; font-weight:700; letter-spacing:0.04em; color:var(--ink); font-family:monospace; background:var(--paper); border:1px solid var(--paper-line); border-radius:4px; padding:4px 9px;">Entry Code: ${escapeHtml(p.entry_code)}</span>
       </div>` : ''}
     </div>`;
