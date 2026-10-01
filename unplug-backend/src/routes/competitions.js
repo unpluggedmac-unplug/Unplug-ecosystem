@@ -5,6 +5,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { logActivity, logSubmission } = require('./activityLog');
 const { recordParticipationAsync } = require('../utils/participation');
 const { captureMonth, currentPeriod, previousPeriod } = require('../utils/top10MonthlyCapture');
+const contestantDashboard = require('../utils/contestantDashboard');
 
 const router = express.Router();
 

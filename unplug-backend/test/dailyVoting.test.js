@@ -2,12 +2,10 @@
 //
 // The two things that actually matter and are easy to get wrong:
 //   - a voter can vote again on a NEW day, but not twice on the same day;
-//   - the running total never resets — it accumulates across days, and
-//     across free + paid votes together.
+//   - supported normal votes accumulate across days.
 //
 // Also guards the blast radius: the Arena must keep its one-vote-per-person
-// rule, and paid bundles must still allocate and reverse correctly now that
-// they own their votes row instead of merging into the voter's.
+// rule, while retired bulk-voting routes remain unavailable.
 //
 // Over real HTTP against real PostgreSQL. See universalComments.test.js for
 // why require('../src/app') is avoided.
@@ -230,7 +228,7 @@ test('an Arena entry still allows only ONE vote per voter, ever — not one a da
 // What the public leaderboard reports
 // ---------------------------------------------------------------------------
 
-test('the public entry list reports the accumulated multi-day total', async () => {
+test('the public Top 10 board reports the accumulated multi-day normal-vote total', async () => {
   const entry = await makeApprovedEntry('Leaderboard Check');
   const a = await makeUser();
   const b = await makeUser();
@@ -239,13 +237,12 @@ test('the public entry list reports the accumulated multi-day total', async () =
   await req('POST', `/entries/${entry}/vote`, { token: tokenFor(b) });
   await backdateVotes(entry, 1);
   await req('POST', `/entries/${entry}/vote`, { token: tokenFor(a) });
-  await makeConfirmedBundle(entry, b, 20);
 
-  const { status, body } = await req('GET', '/entries/search?q=Leaderboard&competitionSlug=top-10');
+  const { status, body } = await req('GET', '/competitions/top-10');
   assert.equal(status, 200);
   const found = body.entries.find((e) => e.id === entry);
-  assert.ok(found, 'entry missing from search results');
-  assert.equal(found.vote_count, 23, '2 votes day one + 1 day two + 20 purchased');
+  assert.ok(found, 'entry missing from the public Top 10 board');
+  assert.equal(found.vote_count, 3, '2 votes day one + 1 vote day two');
 });
 
 test('re-running every migration is idempotent — the voting rules and indexes survive', async () => {
