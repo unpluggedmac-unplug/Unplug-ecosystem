@@ -1966,6 +1966,249 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .get-app-body p{ margin-left:auto; margin-right:auto; }
   .get-app-actions{ justify-content:center; }
 }
+
+/* ==========================================================================
+   TOP 10 — responsive voting + ranking cards (2026-10-01)
+   Mobile is a deliberately different composition, not a shrunken desktop row.
+   All rules are page-scoped so article/directory share controls remain unchanged.
+   ========================================================================== */
+#page-top10,
+#page-top10 *{ box-sizing:border-box; }
+#page-top10{ overflow-x:clip; }
+#page-top10 .wrap{ width:min(100%, 1240px); min-width:0; }
+#page-top10 .rank-list,
+#page-top10 .voting-poll,
+#page-top10 .rank-row,
+#page-top10 .poll-row{ min-width:0; max-width:100%; }
+
+/* Ranking rows: balanced desktop grid, with every flexible child allowed to shrink. */
+#page-top10 .rank-row{
+  grid-template-columns:64px 88px minmax(0,1fr) auto;
+  gap:20px;
+  padding:22px 18px;
+}
+#page-top10 .rank-row > *{ min-width:0; }
+#page-top10 .rank-photo{ width:88px; height:88px; flex:none; overflow:hidden; }
+#page-top10 .rank-name{
+  overflow-wrap:anywhere;
+  word-break:normal;
+  line-height:1.25;
+}
+#page-top10 .rank-cause{ overflow-wrap:anywhere; }
+#page-top10 .rank-badge{
+  justify-self:end;
+  max-width:100%;
+}
+#page-top10 .rank-row .share-row{
+  max-width:100%;
+  gap:8px;
+}
+#page-top10 .rank-row .share-btn{
+  flex:0 0 34px;
+  width:34px;
+  height:34px;
+}
+#page-top10 .rank-row .share-label{ flex:0 0 100%; margin-bottom:1px; }
+
+/* Voting rows: a true information/action grid rather than fixed-width flex children. */
+#page-top10 .voting-poll{ gap:14px; }
+#page-top10 .poll-row{
+  display:grid;
+  grid-template-columns:56px minmax(150px,0.85fr) minmax(180px,1.5fr) auto;
+  grid-template-areas:
+    "photo name votes action"
+    ". code code action";
+  align-items:center;
+  gap:10px 16px;
+  padding:16px 18px;
+  border:1px solid var(--paper-line);
+  background:var(--cream);
+}
+#page-top10 .poll-row > *{ min-width:0; }
+#page-top10 .poll-photo{
+  grid-area:photo;
+  width:52px;
+  height:52px;
+  overflow:hidden;
+}
+#page-top10 .poll-name{
+  grid-area:name;
+  width:auto;
+  min-width:0;
+  flex:none;
+  overflow-wrap:anywhere;
+  line-height:1.3;
+}
+#page-top10 .poll-bar-wrap{
+  grid-area:votes;
+  min-width:0;
+  width:100%;
+  height:38px;
+  border-radius:3px;
+  overflow:hidden;
+}
+#page-top10 .poll-pct{
+  right:12px;
+  max-width:calc(100% - 24px);
+  white-space:nowrap;
+}
+#page-top10 .poll-vote-btn{
+  grid-area:action;
+  min-width:96px;
+  min-height:44px;
+  justify-self:end;
+}
+#page-top10 .poll-entry-code{
+  grid-area:code;
+  min-width:0;
+}
+#page-top10 .poll-entry-code span{
+  display:inline-block;
+  max-width:100%;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+/* Tablet: let the action drop below the vote meter before space becomes cramped. */
+@media (max-width:900px){
+  #page-top10 .rank-row{
+    grid-template-columns:56px 78px minmax(0,1fr) auto;
+    gap:16px;
+  }
+  #page-top10 .rank-photo{ width:78px; height:78px; }
+  #page-top10 .poll-row{
+    grid-template-columns:52px minmax(0,1fr) minmax(160px,1fr);
+    grid-template-areas:
+      "photo name votes"
+      "photo code action";
+  }
+  #page-top10 .poll-vote-btn{ width:100%; justify-self:stretch; }
+}
+
+/* Phone: ranking and voting become intentional stacked cards. */
+@media (max-width:640px){
+  #page-top10 > .wrap,
+  #page-top10 section.wrap{
+    padding-left:max(16px, env(safe-area-inset-left));
+    padding-right:max(16px, env(safe-area-inset-right));
+  }
+
+  #page-top10 .rank-list{ gap:14px; }
+  #page-top10 .rank-row{
+    grid-template-columns:58px minmax(0,1fr);
+    grid-template-areas:
+      "rank photo"
+      "rank info"
+      "rank status";
+    align-items:start;
+    gap:12px 16px;
+    padding:18px;
+    border:1px solid var(--paper-line) !important;
+    background:var(--cream);
+  }
+  #page-top10 .rank-row > .rank-num{
+    grid-area:rank;
+    align-self:start;
+    font-size:32px;
+    line-height:1;
+    padding-top:4px;
+  }
+  #page-top10 .rank-row > .rank-photo{
+    grid-area:photo;
+    width:76px;
+    height:76px;
+  }
+  #page-top10 .rank-row > div:nth-of-type(2){
+    grid-area:info;
+    width:100%;
+    min-width:0;
+  }
+  #page-top10 .rank-name{
+    font-size:18px;
+    white-space:normal;
+  }
+  #page-top10 .rank-row .share-row{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(44px,1fr));
+    gap:8px;
+    width:100%;
+    margin-top:12px;
+  }
+  #page-top10 .rank-row .share-label{
+    grid-column:1/-1;
+    width:100%;
+  }
+  #page-top10 .rank-row .share-btn{
+    width:100%;
+    height:44px;
+    min-width:0;
+    border-radius:8px;
+  }
+  #page-top10 .rank-row > .rank-badge{
+    grid-area:status;
+    justify-self:stretch;
+    text-align:center;
+    padding:10px 12px;
+    white-space:normal;
+  }
+
+  #page-top10 .voting-poll{ gap:14px; }
+  #page-top10 .poll-row{
+    grid-template-columns:72px minmax(0,1fr);
+    grid-template-areas:
+      "photo name"
+      "photo votes"
+      "code code"
+      "action action";
+    gap:12px 14px;
+    padding:16px;
+    border-radius:4px;
+  }
+  #page-top10 .poll-photo{
+    width:64px;
+    height:64px;
+    align-self:start;
+  }
+  #page-top10 .poll-name{
+    font-size:16px;
+    font-weight:700;
+    align-self:end;
+  }
+  #page-top10 .poll-bar-wrap{
+    height:40px;
+    align-self:start;
+  }
+  #page-top10 .poll-entry-code{ width:100%; }
+  #page-top10 .poll-entry-code span{
+    display:block !important;
+    width:100%;
+    padding:8px 10px !important;
+    line-height:1.35;
+  }
+  #page-top10 .poll-vote-btn{
+    width:100%;
+    min-width:0;
+    min-height:48px;
+    justify-self:stretch;
+    font-size:12px;
+  }
+
+  /* Give fixed utilities breathing room from the last actionable card. */
+  #page-top10{ padding-bottom:calc(84px + env(safe-area-inset-bottom)); }
+}
+
+/* Extra-small phones: retain readable type/tap targets, only tighten structure. */
+@media (max-width:360px){
+  #page-top10 .rank-row,
+  #page-top10 .poll-row{ padding:14px; }
+  #page-top10 .rank-row{ grid-template-columns:50px minmax(0,1fr); gap:10px 12px; }
+  #page-top10 .rank-row > .rank-num{ font-size:29px; }
+  #page-top10 .rank-row > .rank-photo{ width:68px; height:68px; }
+  #page-top10 .rank-row .share-row{ grid-template-columns:repeat(2, minmax(44px,1fr)); }
+  #page-top10 .poll-row{ grid-template-columns:64px minmax(0,1fr); gap:10px 12px; }
+  #page-top10 .poll-photo{ width:58px; height:58px; }
+}
+
 </style>
 </head>
 <body>
@@ -7785,7 +8028,7 @@ function renderPoll(sorted){
         ${voted?'✓ Voted today':'Vote'}
       </button>
       ${p.entry_code ? `
-      <div style="flex-basis:100%;">
+      <div class="poll-entry-code">
         <span style="display:inline-block; font-size:12px; font-weight:700; letter-spacing:0.04em; color:var(--ink); font-family:monospace; background:var(--paper); border:1px solid var(--paper-line); border-radius:4px; padding:4px 9px;">Entry Code: ${escapeHtml(p.entry_code)}</span>
       </div>` : ''}
     </div>`;
