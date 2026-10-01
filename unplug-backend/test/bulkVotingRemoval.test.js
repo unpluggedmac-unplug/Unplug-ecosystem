@@ -28,7 +28,7 @@ before(async () => {
 
   const dir = path.join(__dirname, '..', 'db', 'migrations');
   const files = fs.readdirSync(dir).filter((x) => x.endsWith('.sql')).sort();
-  for (const file of files.filter((x) => x !== '218_remove_bulk_voting.sql')) {
+  for (const file of files.filter((x) => x !== '220_remove_bulk_voting.sql')) {
     await pool.query(fs.readFileSync(path.join(dir, file), 'utf8'));
   }
 
@@ -85,7 +85,7 @@ before(async () => {
     VALUES (998801, 20, 'eft', 'REMOVE-BULK-1', 'confirmed', 'vote_bundle', $1)
   `, [legacy.rows[0].id]);
 
-  await pool.query(fs.readFileSync(path.join(dir, '218_remove_bulk_voting.sql'), 'utf8'));
+  await pool.query(fs.readFileSync(path.join(dir, '220_remove_bulk_voting.sql'), 'utf8'));
 });
 
 after(async () => {
