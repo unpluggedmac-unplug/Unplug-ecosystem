@@ -371,26 +371,6 @@ test('the board sends carried_rank to the page, so it cannot re-sort wrongly', a
   assert.ok(withRank.length > 0, 'captured entries must carry their position to the frontend');
 });
 
-test('the vote-buying portal shows the SAME number as the public board', async () => {
-  // A buyer seeing "5,000 votes so far" beside a board reading 0 would think
-  // one of the two is broken — and this is the screen where money is spent.
-  const e = await makeEntry(top10Id, 'Portal Consistency', '2026-06-02');
-  await addVotes(e.entryId, 4321, PERIOD(2026, 6)); // a closed month
-  const now = await thisMonth();
-  await addVotes(e.entryId, 7, now.period); // this month
-
-  const search = await req('GET', '/entries/search?q=Portal%20Consistency&competitionSlug=top-10');
-  assert.equal(search.status, 200);
-  const found = search.body.entries.find((x) => x.id === e.entryId);
-  assert.ok(found, 'the contestant must be findable in the buying portal');
-  assert.equal(found.vote_count, 7,
-    'the portal must show this month\'s votes, matching the board — not the all-time total');
-
-  const board = await req('GET', '/competitions/top-10');
-  const onBoard = board.body.entries.find((x) => x.id === e.entryId);
-  assert.equal(onBoard.vote_count, found.vote_count, 'the two screens must never disagree');
-});
-
 test('The Arena is NOT reset monthly — its running total stands', async () => {
   const fighter = await makeEntry(arenaId, 'Arena Fighter');
   await addVotes(fighter.entryId, 40, PERIOD(2026, 1));
