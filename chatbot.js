@@ -177,7 +177,22 @@
   .ub-input{ display:flex; border-top:1px solid rgba(0,0,0,0.12); background:#fff; }
   .ub-input input{ flex:1; border:none; padding:13px 14px; font-size:14px; font-family:inherit; outline:none; }
   .ub-input button{ border:none; background:#d20709; color:#fff; padding:0 18px; font-weight:700; cursor:pointer; font-family:inherit; }
-  @media(max-width:600px){ .ub-fab{ right:14px; bottom:14px; } .ub-win{ right:10px; left:10px; width:auto; } }
+  @media(max-width:600px){
+    .ub-fab{
+      right:max(14px, env(safe-area-inset-right));
+      bottom:max(14px, env(safe-area-inset-bottom));
+      height:48px;
+      padding:0 16px;
+    }
+    .ub-win{
+      right:max(10px, env(safe-area-inset-right));
+      left:max(10px, env(safe-area-inset-left));
+      bottom:calc(74px + env(safe-area-inset-bottom));
+      width:auto;
+      max-width:none;
+      max-height:calc(100dvh - 110px - env(safe-area-inset-bottom));
+    }
+  }
   @media print{ .ub-fab,.ub-win{ display:none !important; } }
   `;
   var styleEl = document.createElement('style');
