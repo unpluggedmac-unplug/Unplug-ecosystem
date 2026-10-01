@@ -56,9 +56,10 @@ async function makeUser(role = 'member') {
 let _slug = 0;
 async function makeArticle(userId, over = {}) {
   const r = await pool.query(
-    `INSERT INTO articles (title, body, author_user_id, status, published_at, scheduled_for)
-     VALUES ($1, 'body', $2, $3, now(), $4) RETURNING id`,
-    [over.title || 'A Story', userId, over.status || 'approved', over.scheduledFor || null]);
+    `INSERT INTO articles (title, slug, body, author_user_id, status, published_at, scheduled_for)
+     VALUES ($1, $2, 'body', $3, $4, now(), $5) RETURNING id, slug`,
+    [over.title || 'A Story', over.slug || `seo-article-${_slug++}`, userId,
+      over.status || 'approved', over.scheduledFor || null]);
   return r.rows[0].id;
 }
 
@@ -128,17 +129,16 @@ after(async () => {
 // The XML has to be valid
 // ---------------------------------------------------------------------------
 
-test('THE AMPERSAND IN EVERY URL IS ESCAPED', async () => {
-  // Every article URL on this site is "?p=article&id=5". A raw & makes the
-  // entire sitemap unparseable — not one bad entry, the whole document
-  // rejected — and Search Console reports that as a vague fetch error.
-  const uid = await makeUser();
-  await makeArticle(uid);
+test('THE AMPERSAND IN QUERY-STRING URLS IS ESCAPED', async () => {
+  // Articles now use clean /articles/<slug> URLs, while projects still use a
+  // query string. A raw & makes the entire sitemap unparseable — not one bad
+  // entry, the whole document rejected.
+  await pool.query(`INSERT INTO projects (title, status) VALUES ('Ampersand Project', 'published')`);
 
   const xml = await req('GET', '/sitemap.xml');
   assert.equal(xml.status, 200);
   assert.match(xml.type, /xml/);
-  assert.match(xml.text, /&amp;id=/, 'the & is escaped');
+  assert.match(xml.text, /p=project&amp;id=/, 'the & is escaped');
   assert.ok(!/&(?!amp;|lt;|gt;|quot;|apos;)/.test(xml.text),
     'no unescaped ampersand survives anywhere in the document');
 });
@@ -179,9 +179,13 @@ test('DRAFTS, PENDING AND REJECTED ARTICLES ARE NOT LISTED', async () => {
   const rejected = await makeArticle(uid, { title: 'Rejected One', status: 'rejected' });
 
   const r = await req('GET', '/sitemap.xml');
-  assert.ok(r.text.includes(`id=${live}`), 'the published one is there');
-  assert.ok(!r.text.includes(`id=${pending}`), 'pending is not');
-  assert.ok(!r.text.includes(`id=${rejected}`), 'rejected is not');
+  assert.ok(r.text.includes('/articles/seo-article-'), 'the published article is listed by slug');
+  const listed = [...r.text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  assert.equal(listed.filter((l) => l.includes('/articles/')).length >= 1, true, 'published article URL is present');
+  const pendingRow = await pool.query('SELECT slug FROM articles WHERE id = $1', [pending]);
+  const rejectedRow = await pool.query('SELECT slug FROM articles WHERE id = $1', [rejected]);
+  assert.ok(!r.text.includes('/articles/' + pendingRow.rows[0].slug), 'pending is not');
+  assert.ok(!r.text.includes('/articles/' + rejectedRow.rows[0].slug), 'rejected is not');
 });
 
 test('AN ARTICLE SCHEDULED FOR NEXT WEEK IS NOT LISTED', async () => {
@@ -192,7 +196,8 @@ test('AN ARTICLE SCHEDULED FOR NEXT WEEK IS NOT LISTED', async () => {
   const id = await makeArticle(uid, { title: 'Next Week', scheduledFor: future });
 
   const r = await req('GET', '/sitemap.xml');
-  assert.ok(!r.text.includes(`id=${id}`), 'a future-dated article stays out until it is live');
+  const row = await pool.query('SELECT slug FROM articles WHERE id = $1', [id]);
+  assert.ok(!r.text.includes('/articles/' + row.rows[0].slug), 'a future-dated article stays out until it is live');
 });
 
 test('only approved directory profiles are listed', async () => {

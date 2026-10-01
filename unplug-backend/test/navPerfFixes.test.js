@@ -50,8 +50,9 @@ test('NAV-002: THE ARTICLE PAYWALL GATE\'S SIGN-UP LINK CARRIES signup=1, SAME A
 test('NAV-002: THE "ALREADY HAVE ONE" LINK DOES NOT CARRY signup=1 — IT SHOULD LAND ON THE GENERIC SIGN-IN CHOICE, NOT SKIP TO SIGN-UP', () => {
   const src = readFile('unplug-magazine.html');
   const idx = src.indexOf('function articleGateHtml(a)');
-  const body = src.slice(idx, idx + 900);
+  const body = src.slice(idx, idx + 1600);
   assert.match(body, /joinSignin = MEMBER_DASHBOARD_URL \+ '\?next=' \+ back/);
+  assert.doesNotMatch(body, /joinSignin = MEMBER_DASHBOARD_URL \+ '\?signup=1/);
 });
 
 // ------------------------------------------------------------- PERF-002
