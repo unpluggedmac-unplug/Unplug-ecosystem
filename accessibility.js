@@ -102,7 +102,18 @@
   html.a11y-simple .wrap, html.a11y-simple .youtube-inner{ max-width:760px !important; }
   html.a11y-simple p, html.a11y-simple li{ font-size:17px !important; line-height:1.75 !important; }
 
-  @media(max-width:600px){ .a11y-fab{ left:14px; bottom:14px; } .a11y-panel{ left:14px; } }
+  @media(max-width:600px){
+    .a11y-fab{
+      left:max(14px, env(safe-area-inset-left));
+      bottom:max(14px, env(safe-area-inset-bottom));
+      width:50px; height:50px; font-size:23px;
+    }
+    .a11y-panel{
+      left:max(14px, env(safe-area-inset-left));
+      bottom:calc(76px + env(safe-area-inset-bottom));
+      max-width:calc(100vw - max(28px, env(safe-area-inset-left) + env(safe-area-inset-right)));
+    }
+  }
   @media print{ .a11y-fab,.a11y-panel,.a11y-sasl-note{ display:none !important; } }
   `;
   var styleEl = document.createElement('style');
