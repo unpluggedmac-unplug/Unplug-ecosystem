@@ -134,10 +134,14 @@ async function findUserByLoginIdentifier(identifier) {
          FROM users
         WHERE regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') = ANY($1::text[])
         ORDER BY id ASC
-        LIMIT 1`,
+        LIMIT 2`,
       [candidates]
     );
-    return { user: result.rows[0] || null, attemptKey: `phone:${candidates[0] || raw}` };
+    return {
+      user: result.rows.length === 1 ? result.rows[0] : null,
+      attemptKey: `phone:${candidates[0] || raw}`,
+      ambiguousPhone: result.rows.length > 1,
+    };
   }
 
   return { user: null, attemptKey: raw.toLowerCase() };
@@ -156,7 +160,7 @@ router.post('/register', registerLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     }
     if (!isValidPhone(phone)) {
-      return res.status(400).json({ error: 'Please enter a valid cell number.' });
+      return res.status(400).json({ error: 'A valid contact number (cell number) is required.' });
     }
     if (altEmail && !isValidEmail(altEmail)) {
       return res.status(400).json({ error: 'The alternative email address is not valid.' });
@@ -212,7 +216,6 @@ router.post('/register', registerLimiter, async (req, res, next) => {
     });
 
     const { emailSent } = await sendVerificationCode(user, user.email);
-
     recordConversionAsync({ userId: user.id, eventName: 'signup', entityType: 'user', entityId: user.id });
 
     try {
@@ -255,7 +258,7 @@ router.post('/verify-email', emailActionLimiter, async (req, res, next) => {
     }
     const user = userResult.rows[0];
     if (user.email_verified) {
-      return res.json({ message: 'Your email is already verified. You can sign in.' });
+      return res.status(400).json({ error: 'This account is already verified. You can sign in.' });
     }
 
     const codeResult = await pool.query(
@@ -318,6 +321,11 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         error: `Too many failed sign-in attempts. Please wait ${gate.retryAfterSeconds} second${gate.retryAfterSeconds === 1 ? '' : 's'} and try again, or reset your password.`,
         retryAfterSeconds: gate.retryAfterSeconds,
       });
+    }
+
+    if (found.ambiguousPhone) {
+      await loginAttempts.recordFailure(found.attemptKey, req.ip);
+      return res.status(401).json({ error: 'More than one account uses that cell number. Please sign in with your email address instead.' });
     }
 
     const user = found.user;
