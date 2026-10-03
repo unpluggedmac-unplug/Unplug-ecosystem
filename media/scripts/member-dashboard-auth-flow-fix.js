@@ -20,6 +20,9 @@ function showOnlyCard(id){
   document.querySelectorAll('.wrap > .card').forEach(function(card){card.classList.add('section-hidden')});
   var target=byId(id);if(target)target.classList.remove('section-hidden');
 }
+function navigateCard(id){
+  if(typeof window.showCard==='function')window.showCard(id);else showOnlyCard(id);
+}
 function addPasswordToggle(inputId){
   var input=byId(inputId);if(!input||input.parentElement.classList.contains('pw-wrap'))return;
   var wrap=document.createElement('div');wrap.className='pw-wrap';
@@ -79,6 +82,27 @@ if(loginError&&window.MutationObserver){
   }).observe(loginError,{childList:true,characterData:true,subtree:true});
 }
 
+// If somebody registered before but never verified, the backend now sends a
+// fresh code instead of creating a duplicate. The old inline registration
+// handler sees the 409; this observer converts that known recovery response
+// into the verification step automatically.
+var registerError=byId('registerError');
+if(registerError&&window.MutationObserver){
+  var recovering=false;
+  new MutationObserver(function(){
+    if(recovering)return;
+    var message=String(registerError.textContent||'');
+    if(message.indexOf('still needs email verification')===-1)return;
+    recovering=true;
+    var email=String((byId('registerEmail')||{}).value||'').trim().toLowerCase();
+    try{PENDING_VERIFY_EMAIL=email}catch(_){}
+    var verifySub=byId('verifySub');
+    if(verifySub)verifySub.textContent='We sent a fresh 6-digit code to '+email+'. Enter it below to activate your account.';
+    hideError(registerError);
+    setTimeout(function(){navigateCard('verifyCard');recovering=false},0);
+  }).observe(registerError,{childList:true,characterData:true,subtree:true});
+}
+
 // Replace only the reset submission step so a 6-digit code is paired with the
 // email address that requested it. The old inline handler is stopped before it
 // can submit a code without its email identifier.
@@ -106,7 +130,7 @@ if(submitResetBtn){
       var step=byId('resetStep2');if(step)step.classList.add('section-hidden');
       var sub=byId('forgotSub');if(sub)sub.textContent='Password updated successfully. You can sign in with your new password.';
       if(typeof window.showToast==='function')window.showToast('Password updated — sign in with your new password.');
-      if(typeof window.showCard==='function')window.showCard('loginCard');else showOnlyCard('loginCard');
+      navigateCard('loginCard');
     }catch(ex){showError(err,ex.message)}
     finally{submitResetBtn.disabled=false;submitResetBtn.textContent='Set New Password'}
   },true);
@@ -118,18 +142,16 @@ bindEnter(['verifyCode'],'verifyBtn');
 bindEnter(['forgotEmail'],'requestResetBtn');
 bindEnter(['resetToken','resetNewPassword'],'submitResetBtn');
 
-// Give members an obvious way back to registration/sign-in without restarting
-// the whole page journey.
 var loginCard=byId('loginCard');
 if(loginCard&&!byId('authCreateAccountShortcut')){
   var create=document.createElement('button');create.type='button';create.id='authCreateAccountShortcut';create.className='btn btn-line';create.style.marginTop='10px';create.textContent='Create a Free Account';
-  create.addEventListener('click',function(){if(typeof window.showCard==='function')window.showCard('typeCard');else showOnlyCard('typeCard')});
+  create.addEventListener('click',function(){navigateCard('typeCard')});
   loginCard.appendChild(create);
 }
 var registerCard=byId('registerCard');
 if(registerCard&&!byId('authSignInShortcut')){
   var signin=document.createElement('button');signin.type='button';signin.id='authSignInShortcut';signin.className='btn btn-line';signin.style.marginTop='10px';signin.textContent='Already a Member? Sign In';
-  signin.addEventListener('click',function(){if(typeof window.showCard==='function')window.showCard('loginCard');else showOnlyCard('loginCard')});
+  signin.addEventListener('click',function(){navigateCard('loginCard')});
   registerCard.appendChild(signin);
 }
 })();
