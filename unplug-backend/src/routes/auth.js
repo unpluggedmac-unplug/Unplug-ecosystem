@@ -1,4 +1,4 @@
-// Authentication routes are implemented in auth-v2.js.
-// Keeping this file as the stable import path avoids changing app.js and any
-// existing tests/utilities that require ./routes/auth directly.
-module.exports = require('./auth-v2');
+// Stable authentication import path.
+// auth-entry handles repeated-unverified-signup recovery, then delegates the
+// full authentication surface to auth-v2.
+module.exports = require('./auth-entry');
