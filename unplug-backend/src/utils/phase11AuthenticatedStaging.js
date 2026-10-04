@@ -237,7 +237,7 @@ async function run() {
   );
   must(resetRow.rowCount, 'password reset token was not persisted');
   const newMemberPassword = randomPassword();
-  await request(base, 'POST', '/auth/reset-password', { body: { token: resetRow.rows[0].token, newPassword: newMemberPassword } });
+  await request(base, 'POST', '/auth/reset-password', { body: { email: memberEmail, token: resetRow.rows[0].token, newPassword: newMemberPassword } });
   memberLogin = await login(base, memberEmail, newMemberPassword);
   memberToken = memberLogin.body.token;
   markPass('member-register-verify-login-logout-reset');
