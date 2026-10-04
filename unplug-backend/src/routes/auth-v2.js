@@ -184,14 +184,15 @@ router.post('/register', registerLimiter, async (req, res, next) => {
       }
 
       const { emailSent } = await sendVerificationCode(existing, existing.email);
-      return res.status(200).json({
+      return res.status(409).json({
         user: { id: existing.id, email: existing.email, role: existing.role, created_at: existing.created_at },
+        email: existing.email,
         emailSent,
         existingUnverified: true,
         needsVerification: true,
-        message: emailSent
-          ? 'Your account already exists but still needs verification. We sent you a fresh 6-digit verification code.'
-          : 'Your account already exists but still needs verification. We could not send the email just now; use Resend Code in a moment.',
+        error: emailSent
+          ? 'This account already exists but still needs email verification. We sent you a fresh 6-digit verification code.'
+          : 'This account already exists but still needs email verification. We could not send the email just now; use Resend Code in a moment.',
       });
     }
 
