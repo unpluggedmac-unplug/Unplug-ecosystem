@@ -37,7 +37,9 @@ css('/media/styles/member-dashboard-control-centre-help.css?v=20260920-2','data-
 
 script('/media/scripts/member-dashboard-control-centre.js?v=20260920-2','data-unplug-member-control-centre',function(){
   script('/media/scripts/member-dashboard-control-centre-polish.js?v=20260920-2','data-unplug-member-control-centre-polish',function(){
-    script('/media/scripts/member-dashboard-service-shortcuts.js?v=20260920-2','data-unplug-member-service-shortcuts');
+    script('/media/scripts/member-dashboard-service-shortcuts.js?v=20260920-2','data-unplug-member-service-shortcuts',function(){
+      script('/media/scripts/member-dashboard-auth-flow-fix.js?v=20261003-1','data-unplug-member-auth-flow-fix');
+    });
   });
 });
 })();
