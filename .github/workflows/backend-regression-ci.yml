@@ -49,13 +49,4 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          find test -name '*.test.js' -print0 | sort -z | xargs -0 node --test --test-concurrency=1 2>&1 | tee backend-test.log
-
-      - name: Preserve backend regression output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-regression-output
-          path: unplug-backend/backend-test.log
-          if-no-files-found: warn
-          retention-days: 1
+          find test -name '*.test.js' -print0 | sort -z | xargs -0 node --test --test-concurrency=1
