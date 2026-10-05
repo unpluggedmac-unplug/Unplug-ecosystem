@@ -78,6 +78,30 @@ router.post('/register', async (req, res, next) => {
   }
 });
 
+// Keep the stable auth contract explicit for older clients and regression
+// checks: an unverified sign-in must clearly tell the member to VERIFY their
+// email. auth-v2 also returns structured recovery fields; preserve all of them
+// while making the human-facing instruction unambiguous.
+router.use('/login', (req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (
+      res.statusCode === 403
+      && body
+      && body.needsVerification === true
+      && typeof body.error === 'string'
+      && !/verify/i.test(body.error)
+    ) {
+      return originalJson({
+        ...body,
+        error: `Please verify your email before signing in. ${body.error}`,
+      });
+    }
+    return originalJson(body);
+  };
+  next();
+});
+
 router.use(auth);
 
 module.exports = router;
