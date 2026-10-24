@@ -78,7 +78,9 @@ router.get('/business-status/:profileId', async (req, res, next) => {
 router.get('/discovery', async (req, res, next) => {
   try {
     const [articles, members, businesses] = await Promise.all([
-      pool.query('SELECT * FROM get_discovery_articles(6)'),
+      pool.query(`SELECT d.*, a.slug
+                    FROM get_discovery_articles(6) d
+                    JOIN articles a ON a.id = d.id`),
       pool.query('SELECT * FROM get_discovery_members(6)'),
       pool.query('SELECT * FROM get_discovery_businesses(6)'),
     ]);

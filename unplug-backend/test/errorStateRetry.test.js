@@ -42,7 +42,9 @@ test('errorStateHtml RENDERS A RETRY BUTTON THAT CALLS BACK THE EXACT SUPPLIED E
 // name here — so a future refactor that quietly drops the retry call fails
 // this test instead of shipping a silent regression.
 const RETRY_SITES = [
-  { label: 'Article detail', call: "loadArticleDetail(window.__currentArticleId)" },
+  // A clean /articles/<slug> fetch can fail before __currentArticleId is set,
+  // so retry from the URL router rather than a stale/null numeric id.
+  { label: 'Article detail', call: "routeFromUrl()" },
   { label: 'Featured slider', call: 'loadFeaturedSlider()' },
   { label: 'New Stories', call: 'loadNewStories()' },
   { label: 'Highlighted profiles', call: 'loadHighlightedProfiles()' },

@@ -72,7 +72,7 @@ router.get('/sitemap.xml', async (req, res, next) => {
       // scheduled_for matters: an approved article dated next week is not
       // readable yet, and listing it invites a crawl that 404s — which is how
       // a site teaches Google its sitemap cannot be trusted.
-      pool.query(`SELECT id, published_at, created_at FROM articles
+      pool.query(`SELECT id, slug, published_at, created_at FROM articles
                    WHERE status = 'approved'
                      AND (scheduled_for IS NULL OR scheduled_for <= CURRENT_DATE)
                    ORDER BY id`),
@@ -86,7 +86,7 @@ router.get('/sitemap.xml', async (req, res, next) => {
     const entries = [
       ...STATIC_PAGES.map((p) => urlEntry(SITE_URL + p.path, null, p.freq, p.priority)),
       ...articles.rows.map((a) => urlEntry(
-        `${SITE_URL}/?p=article&id=${a.id}`,
+        a.slug ? `${SITE_URL}/articles/${encodeURIComponent(a.slug)}` : `${SITE_URL}/?p=article&id=${a.id}`,
         a.published_at || a.created_at, 'monthly', '0.8'
       )),
       ...profiles.rows.map((p) => urlEntry(
